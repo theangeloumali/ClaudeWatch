@@ -60,29 +60,95 @@ struct WidgetStatsPayload: Codable {
     /// Whether the data is considered stale (older than 5 minutes)
     var isStale: Bool { staleness > 300 }
 
-    /// Read stats.json from the App Group shared container
+    /// Read stats from the App Group shared container using a 3-strategy fallback chain.
+    /// Strategy 1: containerURL (works when provisioning profiles are embedded)
+    /// Strategy 2: UserDefaults shared suite (works without provisioning profiles)
+    /// Strategy 3: Manual filesystem path (may be blocked by sandbox, but gracefully handled)
     static func load() -> WidgetStatsPayload? {
+        if let payload = loadViaContainerURL() {
+            logger.info("Strategy 1 (containerURL) succeeded")
+            return payload
+        }
+
+        if let payload = loadViaUserDefaults() {
+            logger.info("Strategy 2 (UserDefaults) succeeded")
+            return payload
+        }
+
+        if let payload = loadViaManualPath() {
+            logger.info("Strategy 3 (manual path) succeeded")
+            return payload
+        }
+
+        logger.error("All 3 load strategies failed — no data available")
+        return nil
+    }
+
+    /// Strategy 1: Use FileManager.containerURL (standard App Group approach)
+    private static func loadViaContainerURL() -> WidgetStatsPayload? {
+        logger.info("Trying Strategy 1: containerURL")
         guard let containerURL = FileManager.default.containerURL(
             forSecurityApplicationGroupIdentifier: "group.com.zkidzdev.claudewatch"
         ) else {
-            logger.error("containerURL returned nil — App Group access denied (signing mismatch?)")
+            logger.warning("Strategy 1: containerURL returned nil (no provisioning profile?)")
             return nil
         }
 
         let fileURL = containerURL.appendingPathComponent("stats.json")
-        logger.info("Reading stats from: \(fileURL.path)")
+        logger.info("Strategy 1: reading from \(fileURL.path)")
+        return decodeStatsFile(at: fileURL)
+    }
 
+    /// Strategy 2: Read JSON string from UserDefaults shared suite
+    private static func loadViaUserDefaults() -> WidgetStatsPayload? {
+        logger.info("Trying Strategy 2: UserDefaults shared suite")
+        guard let defaults = UserDefaults(suiteName: "group.com.zkidzdev.claudewatch") else {
+            logger.warning("Strategy 2: UserDefaults suite returned nil")
+            return nil
+        }
+
+        guard let jsonString = defaults.string(forKey: "statsJson") else {
+            logger.warning("Strategy 2: no statsJson key in UserDefaults")
+            return nil
+        }
+
+        guard let data = jsonString.data(using: .utf8) else {
+            logger.error("Strategy 2: failed to convert statsJson string to Data")
+            return nil
+        }
+
+        return decodeStatsData(data, label: "Strategy 2")
+    }
+
+    /// Strategy 3: Construct the path manually via home directory
+    private static func loadViaManualPath() -> WidgetStatsPayload? {
+        logger.info("Trying Strategy 3: manual path")
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        let fileURL = home
+            .appendingPathComponent("Library/Group Containers")
+            .appendingPathComponent("group.com.zkidzdev.claudewatch")
+            .appendingPathComponent("stats.json")
+
+        logger.info("Strategy 3: reading from \(fileURL.path)")
+        return decodeStatsFile(at: fileURL)
+    }
+
+    /// Decode stats.json from a file URL
+    private static func decodeStatsFile(at fileURL: URL) -> WidgetStatsPayload? {
         guard let data = try? Data(contentsOf: fileURL) else {
-            logger.warning("stats.json not found or unreadable at: \(fileURL.path)")
+            logger.warning("File not found or unreadable at: \(fileURL.path)")
             return nil
         }
+        return decodeStatsData(data, label: fileURL.lastPathComponent)
+    }
 
+    /// Decode a WidgetStatsPayload from raw Data
+    private static func decodeStatsData(_ data: Data, label: String) -> WidgetStatsPayload? {
         guard let payload = try? JSONDecoder().decode(WidgetStatsPayload.self, from: data) else {
-            logger.error("Failed to decode stats.json (\(data.count) bytes)")
+            logger.error("Failed to decode stats (\(label), \(data.count) bytes)")
             return nil
         }
-
-        logger.info("Loaded stats: \(payload.stats.total) total, \(payload.stats.active) active")
+        logger.info("Loaded stats via \(label): \(payload.stats.total) total, \(payload.stats.active) active")
         return payload
     }
 

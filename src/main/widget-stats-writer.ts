@@ -1,6 +1,7 @@
 import { writeFile, mkdir, rename } from 'fs/promises'
 import { join } from 'path'
 import { homedir } from 'os'
+import { execFile } from 'child_process'
 import type { ClaudeInstance, InstanceUpdate, UsageStats, PromoStatus } from '../renderer/lib/types'
 
 const APP_GROUP_ID = 'group.com.zkidzdev.claudewatch'
@@ -8,7 +9,7 @@ const APP_GROUP_ID = 'group.com.zkidzdev.claudewatch'
 export interface WidgetInstanceData {
   pid: number
   projectName: string
-  status: 'active' | 'idle' | 'exited'
+  status: 'active' | 'idle' | 'stale' | 'exited'
   cpuPercent: number
   memPercent: number
   elapsedSeconds: number
@@ -35,6 +36,7 @@ export interface WidgetStatsPayload {
     total: number
     active: number
     idle: number
+    stale: number
     exited: number
   }
   instances: WidgetInstanceData[]
@@ -103,6 +105,7 @@ export class WidgetStatsWriter {
         total: stats.total,
         active: stats.active,
         idle: stats.idle,
+        stale: stats.stale,
         exited: stats.exited
       },
       instances: instances
@@ -127,8 +130,33 @@ export class WidgetStatsWriter {
 
     // Atomic write: temp file in same directory to avoid cross-filesystem rename failures
     const tmpPath = join(this.containerPath, `.stats-${process.pid}.tmp`)
-    await writeFile(tmpPath, JSON.stringify(payload, null, 2), 'utf-8')
+    const jsonString = JSON.stringify(payload, null, 2)
+    await writeFile(tmpPath, jsonString, 'utf-8')
     await rename(tmpPath, this.statsPath)
+
+    // Also write to UserDefaults shared suite as a fallback for sandboxed widget
+    this.writeToUserDefaults(jsonString)
+  }
+
+  /**
+   * Write JSON payload to UserDefaults shared suite via `defaults write`.
+   * Fire-and-forget — failures are logged but don't block the file write.
+   * Uses execFile (not exec) to avoid shell injection.
+   */
+  writeToUserDefaults(jsonString: string): void {
+    const child = execFile(
+      'defaults',
+      ['write', APP_GROUP_ID, 'statsJson', '-string', jsonString],
+      { timeout: 5000 },
+      (error) => {
+        if (error) {
+          console.warn('[WidgetStatsWriter] defaults write failed:', error.message)
+        }
+      }
+    )
+
+    // Ensure child process doesn't prevent app exit
+    child.unref?.()
   }
 }
 

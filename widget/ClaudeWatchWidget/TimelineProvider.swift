@@ -1,5 +1,6 @@
 import WidgetKit
 import SwiftUI
+import os.log
 
 /// Timeline entry carrying the stats payload
 struct ClaudeWatchEntry: TimelineEntry {
@@ -10,6 +11,11 @@ struct ClaudeWatchEntry: TimelineEntry {
 /// Provides timeline entries by reading stats.json from the App Group container
 struct ClaudeWatchTimelineProvider: TimelineProvider {
 
+    private static let logger = Logger(
+        subsystem: "com.zkidzdev.claudewatch.widget",
+        category: "TimelineProvider"
+    )
+
     func placeholder(in context: Context) -> ClaudeWatchEntry {
         ClaudeWatchEntry(
             date: Date(),
@@ -18,17 +24,23 @@ struct ClaudeWatchTimelineProvider: TimelineProvider {
     }
 
     func getSnapshot(in context: Context, completion: @escaping (ClaudeWatchEntry) -> Void) {
+        Self.logger.info("getSnapshot called (isPreview: \(context.isPreview))")
         let data = WidgetStatsPayload.load() ?? .empty
+        Self.logger.info("getSnapshot result: \(data.stats.total) total, \(data.stats.active) active")
         completion(ClaudeWatchEntry(date: Date(), data: data))
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<ClaudeWatchEntry>) -> Void) {
+        Self.logger.info("getTimeline called (family: \(String(describing: context.family)))")
         let data = WidgetStatsPayload.load() ?? .empty
         let entry = ClaudeWatchEntry(date: Date(), data: data)
+
+        Self.logger.info("getTimeline result: \(data.stats.total) total, \(data.stats.active) active, stale: \(data.isStale)")
 
         // Refresh every 5 minutes (WidgetKit's minimum practical interval)
         let nextUpdate = Calendar.current.date(byAdding: .minute, value: 5, to: Date())!
         let timeline = Timeline(entries: [entry], policy: .after(nextUpdate))
+        Self.logger.info("Next timeline update scheduled at: \(nextUpdate)")
         completion(timeline)
     }
 }
