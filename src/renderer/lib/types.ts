@@ -74,3 +74,4 @@ export type IpcChannels =
   | 'history:clear'
   | 'app:open-dashboard'
   | 'app:quit'
+  | 'terminal:open'

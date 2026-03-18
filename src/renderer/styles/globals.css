@@ -48,15 +48,55 @@
 }
 
 @layer components {
-  .glass-card {
-    @apply rounded-card border border-border bg-surface-card backdrop-blur-glass;
+  .card {
+    @apply rounded-card border border-border bg-surface-raised;
   }
 
-  .glass-card-hover {
-    @apply glass-card transition-colors duration-150 hover:border-border-hover hover:bg-surface-hover;
+  .card-interactive {
+    @apply card transition-all duration-150 hover:border-border-hover hover:bg-surface-hover;
   }
 
   .stat-card {
-    @apply glass-card flex flex-col items-center justify-center px-4 py-3;
+    @apply card flex flex-col gap-1 px-4 py-3;
+  }
+
+  .filter-btn {
+    @apply rounded-full px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-hover hover:text-text-primary;
+  }
+
+  .filter-btn-active {
+    @apply rounded-full bg-accent/15 px-3 py-1.5 text-xs font-medium text-accent;
+  }
+
+  /* Staggered fade-in for list items */
+  [role='listitem']:nth-child(1) {
+    animation-delay: 0ms;
+  }
+  [role='listitem']:nth-child(2) {
+    animation-delay: 30ms;
+  }
+  [role='listitem']:nth-child(3) {
+    animation-delay: 60ms;
+  }
+  [role='listitem']:nth-child(4) {
+    animation-delay: 90ms;
+  }
+  [role='listitem']:nth-child(5) {
+    animation-delay: 120ms;
+  }
+  [role='listitem']:nth-child(6) {
+    animation-delay: 150ms;
+  }
+  [role='listitem']:nth-child(7) {
+    animation-delay: 180ms;
+  }
+  [role='listitem']:nth-child(8) {
+    animation-delay: 210ms;
+  }
+  [role='listitem']:nth-child(9) {
+    animation-delay: 240ms;
+  }
+  [role='listitem']:nth-child(10) {
+    animation-delay: 270ms;
   }
 }
