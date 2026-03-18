@@ -89,93 +89,95 @@ export function Dashboard() {
   const showGrouped = filter === 'all'
 
   return (
-    <div className="flex h-full flex-col gap-5 overflow-hidden p-5">
-      {/* Promo banner */}
-      {promo?.promoActive && <PromoBanner promo={promo} />}
+    <div className="no-drag flex h-full min-h-0 flex-col overflow-hidden p-5">
+      <div className="no-drag min-h-0 flex-1 overflow-y-auto" data-testid="dashboard-scroll-region">
+        <div className="flex min-h-full flex-col gap-5 pr-1">
+          {/* Promo banner */}
+          {promo?.promoActive && <PromoBanner promo={promo} />}
 
-      {/* Instance stats row */}
-      <div>
-        <div
-          className="mb-2 text-caption uppercase tracking-wider text-text-tertiary"
-          aria-hidden="true"
-        >
-          Instances
-        </div>
-        <div className="grid grid-cols-5 gap-3" role="region" aria-label="Instance statistics">
-          {statCards.map(({ key, label, icon: Icon, colorClass }) => (
-            <div key={key} className={cn('stat-card border-l-2', statusBorderColors[key])}>
-              <div className="flex items-center gap-1.5">
-                <Icon className={cn('h-3.5 w-3.5', colorClass)} aria-hidden="true" />
-                <span className="text-caption uppercase tracking-wider text-text-secondary">
-                  {label}
-                </span>
-              </div>
-              <span
-                className="text-stat tabular-nums text-text-primary"
-                aria-label={`${label}: ${stats[key]}`}
-              >
-                {stats[key]}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Usage stats row */}
-      <UsageSection
-        usage={usage}
-        showModelBreakdown={showModelBreakdown}
-        onToggleBreakdown={() => setShowModelBreakdown(!showModelBreakdown)}
-      />
-
-      {/* Filter bar */}
-      <div className="flex items-center gap-2">
-        <div
-          className="flex gap-1 rounded-full bg-surface-raised p-1"
-          role="group"
-          aria-label="Filter by status"
-        >
-          {filterButtons.map(({ filter: f, label }) => (
-            <button
-              key={f}
-              type="button"
-              onClick={() => setFilter(f)}
-              className={cn(filter === f ? 'filter-btn-active' : 'filter-btn')}
-              aria-pressed={filter === f}
+          {/* Instance stats row */}
+          <div>
+            <div
+              className="mb-2 text-caption uppercase tracking-wider text-text-tertiary"
+              aria-hidden="true"
             >
-              {label}
-            </button>
-          ))}
-        </div>
+              Instances
+            </div>
+            <div className="grid grid-cols-5 gap-3" role="region" aria-label="Instance statistics">
+              {statCards.map(({ key, label, icon: Icon, colorClass }) => (
+                <div key={key} className={cn('stat-card border-l-2', statusBorderColors[key])}>
+                  <div className="flex items-center gap-1.5">
+                    <Icon className={cn('h-3.5 w-3.5', colorClass)} aria-hidden="true" />
+                    <span className="text-caption uppercase tracking-wider text-text-secondary">
+                      {label}
+                    </span>
+                  </div>
+                  <span
+                    className="text-stat tabular-nums text-text-primary"
+                    aria-label={`${label}: ${stats[key]}`}
+                  >
+                    {stats[key]}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
 
-        <div className="relative ml-auto">
-          <Search
-            className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-tertiary"
-            aria-hidden="true"
+          {/* Usage stats row */}
+          <UsageSection
+            usage={usage}
+            showModelBreakdown={showModelBreakdown}
+            onToggleBreakdown={() => setShowModelBreakdown(!showModelBreakdown)}
           />
-          <input
-            type="search"
-            placeholder="Search instances..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="h-9 w-64 rounded-card border border-border bg-surface-raised pl-8 pr-3 text-xs text-text-primary placeholder:text-text-tertiary focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent-ring"
-            aria-label="Search instances"
-          />
-        </div>
-      </div>
 
-      {/* Instance list */}
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        {showGrouped ? (
-          <GroupedInstanceList
-            recentlyCompleted={groupedInstances.recentlyCompleted}
-            inProgress={groupedInstances.inProgress}
-            waiting={groupedInstances.waiting}
-            stale={groupedInstances.stale}
-          />
-        ) : (
-          <InstanceList instances={filteredInstances} />
-        )}
+          {/* Filter bar */}
+          <div className="flex items-center gap-2">
+            <div
+              className="flex gap-1 rounded-full bg-surface-raised p-1"
+              role="group"
+              aria-label="Filter by status"
+            >
+              {filterButtons.map(({ filter: f, label }) => (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => setFilter(f)}
+                  className={cn(filter === f ? 'filter-btn-active' : 'filter-btn')}
+                  aria-pressed={filter === f}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            <div className="relative ml-auto">
+              <Search
+                className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-tertiary"
+                aria-hidden="true"
+              />
+              <input
+                type="search"
+                placeholder="Search instances..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="h-9 w-64 rounded-card border border-border bg-surface-raised pl-8 pr-3 text-xs text-text-primary placeholder:text-text-tertiary focus:border-accent/50 focus:outline-none focus:ring-1 focus:ring-accent-ring"
+                aria-label="Search instances"
+              />
+            </div>
+          </div>
+
+          {/* Instance list */}
+          {showGrouped ? (
+            <GroupedInstanceList
+              recentlyCompleted={groupedInstances.recentlyCompleted}
+              inProgress={groupedInstances.inProgress}
+              waiting={groupedInstances.waiting}
+              stale={groupedInstances.stale}
+            />
+          ) : (
+            <InstanceList instances={filteredInstances} />
+          )}
+        </div>
       </div>
     </div>
   )

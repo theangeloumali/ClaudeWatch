@@ -17,7 +17,7 @@ export default function App() {
   return (
     <div className="flex h-screen flex-col overflow-hidden">
       <Header currentView={currentView} onViewChange={setCurrentView} />
-      <main className="min-h-0 flex-1 overflow-hidden">
+      <main className="no-drag min-h-0 flex-1 overflow-hidden">
         {currentView === 'dashboard' && <Dashboard />}
         {currentView === 'history' && <SessionHistory />}
         {currentView === 'settings' && <Settings />}

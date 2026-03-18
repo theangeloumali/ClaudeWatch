@@ -14,7 +14,10 @@
       -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, 'Segoe UI', sans-serif;
     overflow: hidden;
     user-select: none;
-    -webkit-app-region: drag;
+  }
+
+  #root {
+    height: 100%;
   }
 
   /* Allow interaction on all interactive elements */
@@ -26,6 +29,10 @@
   [role='button'],
   .no-drag {
     -webkit-app-region: no-drag;
+  }
+
+  .drag-region {
+    -webkit-app-region: drag;
   }
 
   /* Custom scrollbar */

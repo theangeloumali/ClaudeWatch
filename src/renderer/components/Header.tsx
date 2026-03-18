@@ -40,7 +40,10 @@ export function Header({ currentView, onViewChange }: HeaderProps) {
   const hasActive = stats.active > 0
 
   return (
-    <header className="flex h-12 shrink-0 items-center border-b border-border px-4" role="banner">
+    <header
+      className="drag-region flex h-12 shrink-0 items-center border-b border-border px-4"
+      role="banner"
+    >
       {/* macOS traffic light spacer — left */}
       <div className="w-[78px] shrink-0" aria-hidden="true" />
 
