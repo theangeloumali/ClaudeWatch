@@ -17,7 +17,7 @@ let mainWindow: BrowserWindow | null = null
 let trayManager: TrayManager | null = null
 let tracker: SessionTracker | null = null
 
-function createWindow(): BrowserWindow {
+function createWindow(store: SettingsStore): BrowserWindow {
   const win = new BrowserWindow({
     width: 900,
     height: 700,
@@ -40,6 +40,15 @@ function createWindow(): BrowserWindow {
   // Hide instead of close (tray app behavior)
   win.on('close', (event) => {
     if (!app.isQuitting) {
+      event.preventDefault()
+      win.hide()
+    }
+  })
+
+  // Hide to tray instead of minimizing to dock (when enabled)
+  win.on('minimize', (event) => {
+    const settings = store.getSettings()
+    if (settings.minimizeToTray) {
       event.preventDefault()
       win.hide()
     }
@@ -70,7 +79,8 @@ app.whenReady().then(() => {
   // Initialize process monitor and session tracker
   const monitor = new ProcessMonitor()
   tracker = new SessionTracker(monitor, {
-    maxHistoryEntries: settings.maxHistoryEntries
+    maxHistoryEntries: settings.maxHistoryEntries,
+    staleThresholdMinutes: settings.staleThresholdMinutes
   })
 
   // Initialize notifications and sound player
@@ -78,7 +88,7 @@ app.whenReady().then(() => {
   const soundPlayer = new SoundPlayer()
 
   // Create window (hidden by default)
-  mainWindow = createWindow()
+  mainWindow = createWindow(store)
 
   // Initialize auto-updater
   const updater = new AutoUpdaterManager([
@@ -103,6 +113,7 @@ app.whenReady().then(() => {
     () => trayManager?.getPopoverWindow() ?? null
   ]
   const usageReader = new UsageStatsReader(windowGetters)
+  usageReader.setWeeklyTokenTarget(settings.weeklyTokenTarget)
   const promoChecker = new PromoChecker(windowGetters)
 
   // Setup IPC bridge
