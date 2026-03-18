@@ -192,6 +192,12 @@ app.whenReady().then(() => {
   updater.startAutoCheck()
 })
 
+// Clean up tray before quitting to prevent "Object has been destroyed" errors
+app.on('before-quit', () => {
+  trayManager?.destroy()
+  trayManager = null
+})
+
 // macOS: keep app running when all windows are closed (tray app)
 app.on('window-all-closed', () => {
   // Do nothing -- tray keeps the app alive

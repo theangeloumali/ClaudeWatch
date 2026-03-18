@@ -113,7 +113,7 @@ export class TrayManager {
   }
 
   private togglePopover(): void {
-    if (!this.popover) return
+    if (!this.popover || this.popover.isDestroyed()) return
 
     if (this.popover.isVisible()) {
       this.hidePopover()
@@ -123,7 +123,7 @@ export class TrayManager {
   }
 
   private showPopover(): void {
-    if (!this.popover || !this.tray) return
+    if (!this.popover || this.popover.isDestroyed() || !this.tray) return
 
     const trayBounds = this.tray.getBounds()
     const display = screen.getDisplayNearestPoint({
@@ -146,7 +146,7 @@ export class TrayManager {
   }
 
   private hidePopover(): void {
-    if (this.popover?.isVisible()) {
+    if (this.popover && !this.popover.isDestroyed() && this.popover.isVisible()) {
       this.popover.hide()
     }
   }
