@@ -40,7 +40,11 @@ describe('SessionTracker', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     monitor = createMockMonitor()
-    tracker = new SessionTracker(monitor, { maxHistoryEntries: 5, staleThresholdMinutes: 30 })
+    tracker = new SessionTracker(monitor, {
+      maxHistoryEntries: 5,
+      staleThresholdMinutes: 30,
+      requiredConfirmations: 1
+    })
   })
 
   afterEach(() => {
@@ -175,6 +179,32 @@ describe('SessionTracker', () => {
       expect(entry.durationSeconds).toBeGreaterThanOrEqual(0)
     })
 
+    it("should include terminal fields in 'instance-exited' entry", async () => {
+      const handler = vi.fn()
+      tracker.on('instance-exited', handler)
+
+      const instance = makeInstance({
+        pid: 750,
+        terminalApp: 'iTerm2',
+        terminalType: 'iterm2',
+        sessionType: 'cli'
+      })
+      monitor._setPollResult([instance])
+
+      tracker.start(1000)
+      await vi.advanceTimersByTimeAsync(1000)
+
+      // Instance disappears
+      monitor._setPollResult([])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      expect(handler).toHaveBeenCalledTimes(1)
+      const entry: SessionHistoryEntry = handler.mock.calls[0][0]
+      expect(entry.terminalApp).toBe('iTerm2')
+      expect(entry.terminalType).toBe('iterm2')
+      expect(entry.sessionType).toBe('cli')
+    })
+
     it("should emit 'instance-status-changed' when status changes", async () => {
       const handler = vi.fn()
       tracker.on('instance-status-changed', handler)
@@ -206,7 +236,7 @@ describe('SessionTracker', () => {
       await vi.advanceTimersByTimeAsync(1000)
       await vi.advanceTimersByTimeAsync(1000)
 
-      expect(handler).toHaveBeenCalledTimes(2)
+      expect(handler).toHaveBeenCalledTimes(3)
     })
 
     it('should include stats in update event', async () => {
@@ -290,7 +320,7 @@ describe('SessionTracker', () => {
       expect(tracker.getInstances()[0].lastBecameIdleAt).toBeUndefined()
     })
 
-    it('should fire status-changed on each active→idle transition (rapid flapping)', async () => {
+    it('should suppress rapid active→idle flapping within cooldown window', async () => {
       const handler = vi.fn()
       tracker.on('instance-status-changed', handler)
 
@@ -300,16 +330,73 @@ describe('SessionTracker', () => {
       monitor._setPollResult([makeInstance({ pid: 880, status: 'active' })])
       await vi.advanceTimersByTimeAsync(1000)
 
-      // idle (1st)
+      // idle (1st) — should fire
       monitor._setPollResult([makeInstance({ pid: 880, status: 'idle' })])
       await vi.advanceTimersByTimeAsync(1000)
 
-      // active again
+      // active again (quick flicker)
       monitor._setPollResult([makeInstance({ pid: 880, status: 'active' })])
       await vi.advanceTimersByTimeAsync(1000)
 
-      // idle (2nd)
+      // idle (2nd) — should be suppressed (within cooldown)
       monitor._setPollResult([makeInstance({ pid: 880, status: 'idle' })])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      const taskCompletes = handler.mock.calls.filter(
+        (c) => c[0].previousStatus === 'active' && c[0].instance.status === 'idle'
+      )
+      expect(taskCompletes).toHaveLength(1) // Only the first one fires
+    })
+
+    it('should allow active→idle after cooldown window expires', async () => {
+      const handler = vi.fn()
+      tracker.on('instance-status-changed', handler)
+
+      tracker.start(1000)
+
+      // active
+      monitor._setPollResult([makeInstance({ pid: 881, status: 'active' })])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      // idle (1st) — fires
+      monitor._setPollResult([makeInstance({ pid: 881, status: 'idle' })])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      // active again
+      monitor._setPollResult([makeInstance({ pid: 881, status: 'active' })])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      // Wait past the 60s cooldown AND 30s min active duration
+      await vi.advanceTimersByTimeAsync(60_000)
+
+      // idle (2nd) — should fire because cooldown expired and active duration met
+      monitor._setPollResult([makeInstance({ pid: 881, status: 'idle' })])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      const taskCompletes = handler.mock.calls.filter(
+        (c) => c[0].previousStatus === 'active' && c[0].instance.status === 'idle'
+      )
+      expect(taskCompletes).toHaveLength(2)
+    })
+
+    it('should track cooldowns independently per PID', async () => {
+      const handler = vi.fn()
+      tracker.on('instance-status-changed', handler)
+
+      tracker.start(1000)
+
+      // Both active
+      monitor._setPollResult([
+        makeInstance({ pid: 882, status: 'active' }),
+        makeInstance({ pid: 883, status: 'active' })
+      ])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      // Both go idle — both should fire
+      monitor._setPollResult([
+        makeInstance({ pid: 882, status: 'idle' }),
+        makeInstance({ pid: 883, status: 'idle' })
+      ])
       await vi.advanceTimersByTimeAsync(1000)
 
       const taskCompletes = handler.mock.calls.filter(
@@ -396,6 +483,17 @@ describe('SessionTracker', () => {
   })
 
   describe('start() and stop()', () => {
+    it('should poll immediately when start() is called', async () => {
+      monitor._setPollResult([makeInstance({ pid: 1200 })])
+
+      tracker.start(1000)
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(monitor.poll).toHaveBeenCalledTimes(1)
+      expect(tracker.getInstances()).toHaveLength(1)
+      expect(tracker.getInstances()[0].pid).toBe(1200)
+    })
+
     it('should stop polling when stop() is called', async () => {
       const handler = vi.fn()
       tracker.on('update', handler)
@@ -404,11 +502,11 @@ describe('SessionTracker', () => {
 
       tracker.start(1000)
       await vi.advanceTimersByTimeAsync(1000)
-      expect(handler).toHaveBeenCalledTimes(1)
+      expect(handler).toHaveBeenCalledTimes(2)
 
       tracker.stop()
       await vi.advanceTimersByTimeAsync(5000)
-      expect(handler).toHaveBeenCalledTimes(1) // no more calls
+      expect(handler).toHaveBeenCalledTimes(2) // no more calls
     })
 
     it('should be safe to call stop() multiple times', () => {
@@ -454,7 +552,11 @@ describe('SessionTracker', () => {
     it('should mark idle instance as stale after threshold', async () => {
       // Use a short threshold for testing (5 minutes)
       tracker.stop()
-      tracker = new SessionTracker(monitor, { maxHistoryEntries: 5, staleThresholdMinutes: 5 })
+      tracker = new SessionTracker(monitor, {
+        maxHistoryEntries: 5,
+        staleThresholdMinutes: 5,
+        requiredConfirmations: 1
+      })
 
       // Instance starts active
       const activeInstance = makeInstance({ pid: 2000, status: 'active' })
@@ -479,7 +581,11 @@ describe('SessionTracker', () => {
 
     it('should exclude stale instances from stats.total', async () => {
       tracker.stop()
-      tracker = new SessionTracker(monitor, { maxHistoryEntries: 5, staleThresholdMinutes: 5 })
+      tracker = new SessionTracker(monitor, {
+        maxHistoryEntries: 5,
+        staleThresholdMinutes: 5,
+        requiredConfirmations: 1
+      })
 
       // One active, one idle instance
       monitor._setPollResult([
@@ -514,7 +620,11 @@ describe('SessionTracker', () => {
 
     it('should un-stale an instance that becomes active again', async () => {
       tracker.stop()
-      tracker = new SessionTracker(monitor, { maxHistoryEntries: 5, staleThresholdMinutes: 5 })
+      tracker = new SessionTracker(monitor, {
+        maxHistoryEntries: 5,
+        staleThresholdMinutes: 5,
+        requiredConfirmations: 1
+      })
 
       // Instance starts active
       monitor._setPollResult([makeInstance({ pid: 2200, status: 'active' })])
@@ -543,7 +653,11 @@ describe('SessionTracker', () => {
 
     it('should preserve lastActiveAt across polls', async () => {
       tracker.stop()
-      tracker = new SessionTracker(monitor, { maxHistoryEntries: 5, staleThresholdMinutes: 30 })
+      tracker = new SessionTracker(monitor, {
+        maxHistoryEntries: 5,
+        staleThresholdMinutes: 30,
+        requiredConfirmations: 1
+      })
 
       // Instance starts active
       monitor._setPollResult([makeInstance({ pid: 2300, status: 'active' })])
@@ -564,7 +678,11 @@ describe('SessionTracker', () => {
 
     it('should use startedAt as reference for instances that were never active', async () => {
       tracker.stop()
-      tracker = new SessionTracker(monitor, { maxHistoryEntries: 5, staleThresholdMinutes: 5 })
+      tracker = new SessionTracker(monitor, {
+        maxHistoryEntries: 5,
+        staleThresholdMinutes: 5,
+        requiredConfirmations: 1
+      })
 
       // Instance starts idle (never active)
       const startedAt = new Date()
@@ -585,7 +703,11 @@ describe('SessionTracker', () => {
 
     it('should not emit spurious status-changed events for idle→stale transitions', async () => {
       tracker.stop()
-      tracker = new SessionTracker(monitor, { maxHistoryEntries: 5, staleThresholdMinutes: 5 })
+      tracker = new SessionTracker(monitor, {
+        maxHistoryEntries: 5,
+        staleThresholdMinutes: 5,
+        requiredConfirmations: 1
+      })
 
       const handler = vi.fn()
       tracker.on('instance-status-changed', handler)
@@ -608,6 +730,370 @@ describe('SessionTracker', () => {
 
       // No additional status-changed events for idle→stale
       expect(handler).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe('hysteresis (requiredConfirmations: 2)', () => {
+    let hTracker: SessionTracker
+    let hMonitor: ReturnType<typeof createMockMonitor>
+
+    beforeEach(() => {
+      hMonitor = createMockMonitor()
+      hTracker = new SessionTracker(hMonitor, {
+        maxHistoryEntries: 5,
+        staleThresholdMinutes: 30,
+        requiredConfirmations: 2
+      })
+    })
+
+    afterEach(() => {
+      hTracker.stop()
+    })
+
+    it('should NOT transition active→idle on a single idle poll', async () => {
+      const handler = vi.fn()
+      hTracker.on('instance-status-changed', handler)
+
+      // First poll: active
+      hMonitor._setPollResult([makeInstance({ pid: 3000, status: 'active' })])
+      hTracker.start(1000)
+      await vi.advanceTimersByTimeAsync(1000)
+
+      // Second poll: idle (1st idle reading — not yet confirmed)
+      hMonitor._setPollResult([makeInstance({ pid: 3000, status: 'idle' })])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      // Status should still be active (suppressed)
+      expect(hTracker.getInstances()[0].status).toBe('active')
+      const statusChanges = handler.mock.calls.filter(
+        (c) => c[0].previousStatus === 'active' && c[0].instance.status === 'idle'
+      )
+      expect(statusChanges).toHaveLength(0)
+    })
+
+    it('should transition active→idle after 2 consecutive idle polls', async () => {
+      const handler = vi.fn()
+      hTracker.on('instance-status-changed', handler)
+
+      // First poll: active
+      hMonitor._setPollResult([makeInstance({ pid: 3001, status: 'active' })])
+      hTracker.start(1000)
+      await vi.advanceTimersByTimeAsync(1000)
+
+      // Second poll: idle (1st idle reading)
+      hMonitor._setPollResult([makeInstance({ pid: 3001, status: 'idle' })])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      // Third poll: idle (2nd idle reading — confirmed!)
+      hMonitor._setPollResult([makeInstance({ pid: 3001, status: 'idle' })])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      expect(hTracker.getInstances()[0].status).toBe('idle')
+      const statusChanges = handler.mock.calls.filter(
+        (c) => c[0].previousStatus === 'active' && c[0].instance.status === 'idle'
+      )
+      expect(statusChanges).toHaveLength(1)
+    })
+
+    it('should reset confirmation counter when status flips back mid-confirmation', async () => {
+      const handler = vi.fn()
+      hTracker.on('instance-status-changed', handler)
+
+      // active
+      hMonitor._setPollResult([makeInstance({ pid: 3002, status: 'active' })])
+      hTracker.start(1000)
+      await vi.advanceTimersByTimeAsync(1000)
+
+      // idle (1st reading)
+      hMonitor._setPollResult([makeInstance({ pid: 3002, status: 'idle' })])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      // active again — resets counter
+      hMonitor._setPollResult([makeInstance({ pid: 3002, status: 'active' })])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      // idle (1st reading again, counter was reset)
+      hMonitor._setPollResult([makeInstance({ pid: 3002, status: 'idle' })])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      // Still active because we need 2 consecutive idle polls
+      expect(hTracker.getInstances()[0].status).toBe('active')
+
+      // 2nd consecutive idle
+      hMonitor._setPollResult([makeInstance({ pid: 3002, status: 'idle' })])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      expect(hTracker.getInstances()[0].status).toBe('idle')
+    })
+
+    it('should NOT show idle session as active from a single CPU spike', async () => {
+      const handler = vi.fn()
+      hTracker.on('instance-status-changed', handler)
+
+      // Start active, then go idle (confirmed after 2 polls)
+      hMonitor._setPollResult([makeInstance({ pid: 3003, status: 'active' })])
+      hTracker.start(1000)
+      await vi.advanceTimersByTimeAsync(1000)
+
+      hMonitor._setPollResult([makeInstance({ pid: 3003, status: 'idle' })])
+      await vi.advanceTimersByTimeAsync(1000)
+      hMonitor._setPollResult([makeInstance({ pid: 3003, status: 'idle' })])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      expect(hTracker.getInstances()[0].status).toBe('idle')
+
+      // Single active spike — should NOT transition
+      hMonitor._setPollResult([makeInstance({ pid: 3003, status: 'active' })])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      expect(hTracker.getInstances()[0].status).toBe('idle')
+    })
+
+    it('should transition idle→active after 2 consecutive active polls', async () => {
+      const handler = vi.fn()
+      hTracker.on('instance-status-changed', handler)
+
+      // Start active, confirm idle
+      hMonitor._setPollResult([makeInstance({ pid: 3004, status: 'active' })])
+      hTracker.start(1000)
+      await vi.advanceTimersByTimeAsync(1000)
+
+      hMonitor._setPollResult([makeInstance({ pid: 3004, status: 'idle' })])
+      await vi.advanceTimersByTimeAsync(1000)
+      hMonitor._setPollResult([makeInstance({ pid: 3004, status: 'idle' })])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      expect(hTracker.getInstances()[0].status).toBe('idle')
+
+      // 1st active reading
+      hMonitor._setPollResult([makeInstance({ pid: 3004, status: 'active' })])
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(hTracker.getInstances()[0].status).toBe('idle')
+
+      // 2nd active reading — confirmed!
+      hMonitor._setPollResult([makeInstance({ pid: 3004, status: 'active' })])
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(hTracker.getInstances()[0].status).toBe('active')
+    })
+
+    it('should accept new instances without confirmation', async () => {
+      // New PID appears as active — should be accepted immediately
+      hMonitor._setPollResult([makeInstance({ pid: 3005, status: 'active' })])
+      hTracker.start(1000)
+      await vi.advanceTimersByTimeAsync(1000)
+
+      expect(hTracker.getInstances()[0].status).toBe('active')
+
+      // New PID appears as idle — should also be accepted immediately
+      hMonitor._setPollResult([
+        makeInstance({ pid: 3005, status: 'active' }),
+        makeInstance({ pid: 3006, status: 'idle' })
+      ])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      const instances = hTracker.getInstances()
+      const idle = instances.find((i) => i.pid === 3006)
+      expect(idle?.status).toBe('idle')
+    })
+
+    it('should track confirmations independently per PID', async () => {
+      // Two active instances
+      hMonitor._setPollResult([
+        makeInstance({ pid: 3007, status: 'active' }),
+        makeInstance({ pid: 3008, status: 'active' })
+      ])
+      hTracker.start(1000)
+      await vi.advanceTimersByTimeAsync(1000)
+
+      // PID 3007 goes idle, PID 3008 stays active
+      hMonitor._setPollResult([
+        makeInstance({ pid: 3007, status: 'idle' }),
+        makeInstance({ pid: 3008, status: 'active' })
+      ])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      // PID 3007: 2nd idle (confirmed), PID 3008 goes idle (1st reading)
+      hMonitor._setPollResult([
+        makeInstance({ pid: 3007, status: 'idle' }),
+        makeInstance({ pid: 3008, status: 'idle' })
+      ])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      const instances = hTracker.getInstances()
+      expect(instances.find((i) => i.pid === 3007)?.status).toBe('idle')
+      expect(instances.find((i) => i.pid === 3008)?.status).toBe('active') // not yet confirmed
+    })
+
+    it('should clean up confirmations for exited PIDs', async () => {
+      hMonitor._setPollResult([makeInstance({ pid: 3009, status: 'active' })])
+      hTracker.start(1000)
+      await vi.advanceTimersByTimeAsync(1000)
+
+      // Start confirming idle
+      hMonitor._setPollResult([makeInstance({ pid: 3009, status: 'idle' })])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      // PID exits
+      hMonitor._setPollResult([])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      // Verify it's in history (exited) and tracker has no instances
+      expect(hTracker.getInstances()).toHaveLength(0)
+      expect(hTracker.getHistory()).toHaveLength(1)
+      expect(hTracker.getHistory()[0].pid).toBe(3009)
+    })
+  })
+
+  describe('increased cooldown (60s)', () => {
+    it('should suppress active→idle emission within 60s cooldown', async () => {
+      const handler = vi.fn()
+      tracker.on('instance-status-changed', handler)
+
+      tracker.start(1000)
+
+      // active
+      monitor._setPollResult([makeInstance({ pid: 4000, status: 'active' })])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      // idle (1st) — fires
+      monitor._setPollResult([makeInstance({ pid: 4000, status: 'idle' })])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      // active again
+      monitor._setPollResult([makeInstance({ pid: 4000, status: 'active' })])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      // Advance 45s (past old 30s cooldown, within new 60s)
+      await vi.advanceTimersByTimeAsync(45_000)
+
+      // idle (2nd) — should be suppressed under 60s cooldown
+      monitor._setPollResult([makeInstance({ pid: 4000, status: 'idle' })])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      const taskCompletes = handler.mock.calls.filter(
+        (c) => c[0].previousStatus === 'active' && c[0].instance.status === 'idle'
+      )
+      expect(taskCompletes).toHaveLength(1) // Only the first one
+    })
+
+    it('should allow active→idle after 60s cooldown expires', async () => {
+      const handler = vi.fn()
+      tracker.on('instance-status-changed', handler)
+
+      tracker.start(1000)
+
+      // active
+      monitor._setPollResult([makeInstance({ pid: 4001, status: 'active' })])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      // idle (1st) — fires
+      monitor._setPollResult([makeInstance({ pid: 4001, status: 'idle' })])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      // active again
+      monitor._setPollResult([makeInstance({ pid: 4001, status: 'active' })])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      // Wait past 60s cooldown
+      await vi.advanceTimersByTimeAsync(60_000)
+
+      // idle (2nd) — should fire because cooldown expired
+      monitor._setPollResult([makeInstance({ pid: 4001, status: 'idle' })])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      const taskCompletes = handler.mock.calls.filter(
+        (c) => c[0].previousStatus === 'active' && c[0].instance.status === 'idle'
+      )
+      expect(taskCompletes).toHaveLength(2)
+    })
+  })
+
+  describe('minimum active duration', () => {
+    it('should suppress active→idle ping if active for less than 30s (after first ping)', async () => {
+      const handler = vi.fn()
+      tracker.on('instance-status-changed', handler)
+
+      tracker.start(1000)
+
+      // First cycle: active for 30s+ then idle (establishes cooldown entry)
+      monitor._setPollResult([makeInstance({ pid: 5000, status: 'active' })])
+      await vi.advanceTimersByTimeAsync(1000)
+      await vi.advanceTimersByTimeAsync(30_000) // 30s+ active
+
+      monitor._setPollResult([makeInstance({ pid: 5000, status: 'idle' })])
+      await vi.advanceTimersByTimeAsync(1000) // 1st ping fires
+
+      // Wait past 60s cooldown
+      await vi.advanceTimersByTimeAsync(60_000)
+
+      // Second cycle: active for only 5s then idle
+      monitor._setPollResult([makeInstance({ pid: 5000, status: 'active' })])
+      await vi.advanceTimersByTimeAsync(1000)
+      await vi.advanceTimersByTimeAsync(4000) // ~5s total active
+
+      monitor._setPollResult([makeInstance({ pid: 5000, status: 'idle' })])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      // Should have only 1 ping (the first one), second suppressed due to brief active
+      const taskCompletes = handler.mock.calls.filter(
+        (c) => c[0].previousStatus === 'active' && c[0].instance.status === 'idle'
+      )
+      expect(taskCompletes).toHaveLength(1)
+    })
+
+    it('should allow active→idle ping if active for 30s or more (after first ping)', async () => {
+      const handler = vi.fn()
+      tracker.on('instance-status-changed', handler)
+
+      tracker.start(1000)
+
+      // First cycle: establish cooldown
+      monitor._setPollResult([makeInstance({ pid: 5001, status: 'active' })])
+      await vi.advanceTimersByTimeAsync(1000)
+      await vi.advanceTimersByTimeAsync(30_000)
+      monitor._setPollResult([makeInstance({ pid: 5001, status: 'idle' })])
+      await vi.advanceTimersByTimeAsync(1000) // 1st ping fires
+
+      // Wait past 60s cooldown
+      await vi.advanceTimersByTimeAsync(60_000)
+
+      // Second cycle: active for 30+ seconds
+      monitor._setPollResult([makeInstance({ pid: 5001, status: 'active' })])
+      await vi.advanceTimersByTimeAsync(1000)
+      await vi.advanceTimersByTimeAsync(30_000)
+
+      // idle — should fire (active long enough + past cooldown)
+      monitor._setPollResult([makeInstance({ pid: 5001, status: 'idle' })])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      const taskCompletes = handler.mock.calls.filter(
+        (c) => c[0].previousStatus === 'active' && c[0].instance.status === 'idle'
+      )
+      expect(taskCompletes).toHaveLength(2) // Both pings fire
+    })
+
+    it('should still update internal status even when ping is suppressed', async () => {
+      tracker.start(1000)
+
+      // First cycle: establish cooldown
+      monitor._setPollResult([makeInstance({ pid: 5002, status: 'active' })])
+      await vi.advanceTimersByTimeAsync(1000)
+      await vi.advanceTimersByTimeAsync(30_000)
+      monitor._setPollResult([makeInstance({ pid: 5002, status: 'idle' })])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      // Wait past cooldown
+      await vi.advanceTimersByTimeAsync(60_000)
+
+      // Second cycle: brief active (5s) then idle — suppressed
+      monitor._setPollResult([makeInstance({ pid: 5002, status: 'active' })])
+      await vi.advanceTimersByTimeAsync(1000)
+      await vi.advanceTimersByTimeAsync(4000)
+      monitor._setPollResult([makeInstance({ pid: 5002, status: 'idle' })])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      // Internal status should be idle even though event was suppressed
+      expect(tracker.getInstances()[0].status).toBe('idle')
     })
   })
 })
