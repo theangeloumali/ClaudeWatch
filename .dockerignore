@@ -1,0 +1,15 @@
+node_modules/
+out/
+dist/
+.git/
+*.dmg
+*.exe
+*.AppImage
+*.log
+.env
+.env.local
+.DS_Store
+coverage/
+widget-build/
+build/widget/
+widget/

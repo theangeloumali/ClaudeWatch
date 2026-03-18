@@ -1,0 +1,16 @@
+services:
+  build-linux:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder          # stop at the builder stage so dist/ is accessible
+    volumes:
+      # Mount dist/ so the AppImage lands on the host after the build
+      - ./dist:/app/dist
+    environment:
+      # Suppress code-signing — unnecessary for development builds
+      - CSC_IDENTITY_AUTO_DISCOVERY=false
+      # electron-builder uses /tmp for intermediate files; give it more space
+      - TMPDIR=/tmp
+    # Run the build command directly; container exits when done
+    command: npm run build:linux
