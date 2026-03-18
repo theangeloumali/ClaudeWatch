@@ -1,5 +1,5 @@
-appId: com.zkidz.claude-tracker
-productName: Claude Tracker
+appId: com.zkidz.claudewatch
+productName: ClaudeWatch
 directories:
   buildResources: build
   output: dist

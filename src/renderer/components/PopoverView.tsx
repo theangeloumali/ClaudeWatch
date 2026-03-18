@@ -48,7 +48,7 @@ export function PopoverView() {
     <div className="flex h-screen flex-col overflow-hidden bg-surface">
       {/* Compact header */}
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <span className="text-heading text-text-primary">Claude Tracker</span>
+        <span className="text-heading text-text-primary">ClaudeWatch</span>
         <div className="flex items-center gap-3 text-mono-sm tabular-nums">
           <span className="inline-flex items-center gap-1.5">
             <span className="inline-block h-2 w-2 rounded-full bg-status-active" />

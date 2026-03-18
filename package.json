@@ -1,5 +1,5 @@
 {
-  "name": "mac-claude-tracker",
+  "name": "claudewatch",
   "version": "1.0.0",
   "description": "Cross-platform Electron app to monitor Claude Code CLI instances",
   "main": "./out/main/index.js",

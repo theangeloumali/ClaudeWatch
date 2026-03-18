@@ -46,7 +46,7 @@ export class TrayManager {
     const icon = nativeImage.createEmpty()
     this.tray = new Tray(icon)
     this.tray.setTitle('\u25CF 0')
-    this.tray.setToolTip('Claude Tracker')
+    this.tray.setToolTip('ClaudeWatch')
 
     // Hover → show popover
     this.tray.on('mouse-enter', () => {
@@ -145,7 +145,7 @@ export class TrayManager {
     const menuItems: MenuItemConstructorOptions[] = []
 
     menuItems.push({
-      label: `Claude Tracker \u2014 ${this.stats.total} instance${this.stats.total !== 1 ? 's' : ''}`,
+      label: `ClaudeWatch \u2014 ${this.stats.total} instance${this.stats.total !== 1 ? 's' : ''}`,
       enabled: false
     })
     menuItems.push({ type: 'separator' })

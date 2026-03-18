@@ -13,7 +13,7 @@ export class SettingsStore {
 
   constructor() {
     this.store = new Store({
-      name: 'mac-claude-tracker',
+      name: 'claudewatch',
       defaults: {
         settings: DEFAULT_SETTINGS,
         history: [] as SessionHistoryEntry[]

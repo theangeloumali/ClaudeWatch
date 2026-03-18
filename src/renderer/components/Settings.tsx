@@ -252,7 +252,7 @@ export function Settings() {
           System
         </h3>
 
-        <SettingRow label="Launch at Login" description="Start Claude Tracker when you log in">
+        <SettingRow label="Launch at Login" description="Start ClaudeWatch when you log in">
           <ToggleSwitch
             checked={settings.launchAtLogin}
             onChange={(val) => updateSettings({ launchAtLogin: val })}
