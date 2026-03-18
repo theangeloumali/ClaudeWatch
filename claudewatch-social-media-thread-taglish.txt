@@ -1,0 +1,105 @@
+ClaudeWatch — Social Media Thread (X/Twitter) — TAGLISH VERSION
+================================================================
+
+TWEET 1 (Hook)
+--------------
+Nag-rurun ako ng 15-20 Claude Code CLI sessions sabay-sabay.
+
+Walang way para malaman kung alin yung active, idle, o tapos na.
+
+Kaya ginawa ko ClaudeWatch — free, open-source desktop app na nagmo-monitor ng lahat ng Claude Code sessions mo in real time.
+
+Ito yung kwento (thread)
+
+
+TWEET 2 (The Problem)
+---------------------
+Yung problema:
+
+Deep ka sa project. Claude nag-wowork sa multiple terminals.
+
+Alin yung tapos na? Alin yung nag-iisip pa? Alin yung nag-crash 10 minutes ago?
+
+Zero visibility. Puro terminal tabs lang nakikita mo.
+
+
+TWEET 3 (The Solution)
+----------------------
+ClaudeWatch naka-upo sa menu bar mo at nagbabantay ng every Claude CLI process sa machine mo.
+
+- Live status: active, idle, finished
+- CPU & memory per session
+- Working directory ng bawat instance
+- Session elapsed time
+
+Isang tingin lang. Kumpleto na.
+
+
+TWEET 4 (How It Works)
+----------------------
+Walang API keys. Walang Claude account access. Walang network calls.
+
+Nagbabasa lang siya ng local system processes (ps/lsof sa Mac, tasklist sa Windows) para ma-detect yung Claude CLI instances.
+
+100% local. 100% private. Zero config.
+
+
+TWEET 5 (Features)
+------------------
+Anong makukuha mo:
+
+- Menu bar tray icon na may hover popover
+- Full dashboard with filters and stats
+- Session history log
+- Native notifications pag tapos na o nag-idle yung session
+- Dark UI inspired by Warp terminal
+- Configurable polling interval
+
+Lahat ng kailangan mo, nandyan na.
+
+
+TWEET 6 (Tech Stack)
+--------------------
+Tech stack niya:
+
+- Electron + React 19 + TypeScript
+- Tailwind CSS + Lucide icons
+- electron-vite for builds
+- Vitest for testing
+- Cross-platform: Mac primary, may Windows support
+
+Buong codebase, open source. Libre.
+
+
+TWEET 7 (Who It's For)
+----------------------
+Para sa'yo 'to kung:
+
+- Sabay-sabay kang nag-rurun ng maraming Claude Code sessions
+- Gumagamit ka ng Warp, iTerm, o kahit anong multi-tab terminal
+- Pagod ka na mag-check manually kung "tumatakbo pa ba si Claude?"
+- Gusto mo ng notification pag tapos na para ma-review mo agad yung output
+
+
+TWEET 8 (CTA)
+-------------
+ClaudeWatch — free at open source.
+
+Star, fork, contribute. Lahat welcome.
+
+GitHub: [LINK]
+
+Kung heavy user ka ng Claude Code, makakatipid ka ng oras araw-araw dito.
+
+Gawa ni @[HANDLE] — open sa feedback!
+
+
+TWEET 9 (Shoutout to Anthropic)
+-------------------------------
+Shoutout din sa @AnthropicAI for the x2 Claude usage this month.
+
+Dahil dun, natapos ko 'tong buong app — from concept to open source — gamit ang Claude Code.
+
+Yung tool na nagmo-monitor ng Claude, ginawa gamit si Claude mismo.
+
+Salamat sa extra usage. Ginamit namin nang husto. LFG!

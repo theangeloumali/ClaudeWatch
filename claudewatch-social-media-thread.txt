@@ -1,0 +1,103 @@
+ClaudeWatch — Social Media Thread (X/Twitter)
+================================================
+
+TWEET 1 (Hook)
+--------------
+I run 15-20 Claude Code CLI sessions at once.
+
+No way to know which ones are active, idle, or done.
+
+So I built ClaudeWatch — a free, open-source desktop app that monitors all your Claude Code sessions in real time.
+
+Here's how it works (thread)
+
+
+TWEET 2 (The Problem)
+---------------------
+The problem:
+
+You're deep in a project. Claude is working across multiple terminals.
+
+Which session just finished? Which one is still thinking? Which one crashed 10 minutes ago?
+
+You have zero visibility. Just a wall of terminal tabs.
+
+
+TWEET 3 (The Solution)
+----------------------
+ClaudeWatch sits in your menu bar and watches every Claude CLI process on your machine.
+
+- Live status: active, idle, finished
+- CPU & memory per session
+- Working directory for each instance
+- Session elapsed time
+
+One glance. Full picture.
+
+
+TWEET 4 (How It Works)
+----------------------
+No API keys. No Claude account access. No network calls.
+
+It reads your local system processes (ps/lsof on Mac, tasklist on Windows) to detect Claude CLI instances.
+
+Completely local. Completely private. Zero config.
+
+
+TWEET 5 (Features)
+------------------
+What you get:
+
+- Menu bar tray icon with hover popover
+- Full dashboard with filters and stats
+- Session history log
+- Native notifications when sessions finish or go idle
+- Dark UI inspired by Warp terminal
+- Configurable polling interval
+
+
+TWEET 6 (Tech Stack)
+--------------------
+Built with:
+
+- Electron + React 19 + TypeScript
+- Tailwind CSS + Lucide icons
+- electron-vite for builds
+- Vitest for testing
+- Cross-platform: Mac primary, Windows support
+
+The entire codebase is open source.
+
+
+TWEET 7 (Who It's For)
+----------------------
+This is for you if:
+
+- You run multiple Claude Code sessions simultaneously
+- You use Warp, iTerm, or any multi-tab terminal
+- You want to stop manually checking "is Claude still running?"
+- You want notifications when a session finishes so you can review the output
+
+
+TWEET 8 (CTA)
+-------------
+ClaudeWatch is free and open source.
+
+Star it, fork it, contribute.
+
+GitHub: [LINK]
+
+If you're running Claude Code at scale, this will save you time every single day.
+
+Built by @[HANDLE] — feedback welcome.
+
+
+TWEET 9 (Shoutout to Anthropic)
+-------------------------------
+Shoutout to @AnthropicAI for the x2 Claude usage this month.
+
+Because of that, I was able to build this entire app — from concept to open source — using Claude Code.
+
+The tool that monitors Claude was built by Claude itself.
+
+Thanks for the extra usage. We put it to good work. LFG!
