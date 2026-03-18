@@ -16,6 +16,7 @@ mac:
       arch:
         - universal
   entitlementsInherit: build/entitlements.mac.plist
+  x64ArchFiles: Contents/PlugIns/**/*
   extraFiles:
     - from: build/widget/ClaudeWatchWidgetExtension.appex
       to: PlugIns/ClaudeWatchWidgetExtension.appex
