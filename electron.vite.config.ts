@@ -20,11 +20,6 @@ export default defineConfig({
         '@renderer': resolve('src/renderer')
       }
     },
-    plugins: [react()],
-    css: {
-      postcss: {
-        plugins: []
-      }
-    }
+    plugins: [react()]
   }
 })
