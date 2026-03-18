@@ -16,7 +16,7 @@ function makeInstance(overrides: Partial<ClaudeInstance> = {}): ClaudeInstance {
     projectPath: '/Users/test/project',
     projectName: 'test/project',
     flags: [],
-    startedAt: new Date('2026-03-18T10:00:00Z'),
+    startedAt: new Date(),
     ...overrides
   }
 }
@@ -40,7 +40,7 @@ describe('SessionTracker', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     monitor = createMockMonitor()
-    tracker = new SessionTracker(monitor, { maxHistoryEntries: 5 })
+    tracker = new SessionTracker(monitor, { maxHistoryEntries: 5, staleThresholdMinutes: 30 })
   })
 
   afterEach(() => {
@@ -447,6 +447,167 @@ describe('SessionTracker', () => {
       await vi.advanceTimersByTimeAsync(1000)
 
       expect(handler).toHaveBeenCalled()
+    })
+  })
+
+  describe('stale detection', () => {
+    it('should mark idle instance as stale after threshold', async () => {
+      // Use a short threshold for testing (5 minutes)
+      tracker.stop()
+      tracker = new SessionTracker(monitor, { maxHistoryEntries: 5, staleThresholdMinutes: 5 })
+
+      // Instance starts active
+      const activeInstance = makeInstance({ pid: 2000, status: 'active' })
+      monitor._setPollResult([activeInstance])
+
+      tracker.start(1000)
+      await vi.advanceTimersByTimeAsync(1000)
+
+      // Instance goes idle
+      monitor._setPollResult([makeInstance({ pid: 2000, status: 'idle' })])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      // Should be idle, not stale yet
+      expect(tracker.getInstances()[0].status).toBe('idle')
+
+      // Advance past the 5-minute stale threshold
+      await vi.advanceTimersByTimeAsync(6 * 60 * 1000)
+
+      // Should now be stale
+      expect(tracker.getInstances()[0].status).toBe('stale')
+    })
+
+    it('should exclude stale instances from stats.total', async () => {
+      tracker.stop()
+      tracker = new SessionTracker(monitor, { maxHistoryEntries: 5, staleThresholdMinutes: 5 })
+
+      // One active, one idle instance
+      monitor._setPollResult([
+        makeInstance({ pid: 2100, status: 'active' }),
+        makeInstance({ pid: 2101, status: 'idle' })
+      ])
+
+      tracker.start(1000)
+      await vi.advanceTimersByTimeAsync(1000)
+
+      // Active goes idle, so now both are idle with lastActiveAt set
+      monitor._setPollResult([
+        makeInstance({ pid: 2100, status: 'idle' }),
+        makeInstance({ pid: 2101, status: 'idle' })
+      ])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      // Before stale: total = 2
+      expect(tracker.getStats().total).toBe(2)
+      expect(tracker.getStats().stale).toBe(0)
+
+      // Advance past threshold
+      await vi.advanceTimersByTimeAsync(6 * 60 * 1000)
+
+      // After stale: both should be stale, total = 0
+      const stats = tracker.getStats()
+      expect(stats.stale).toBe(2)
+      expect(stats.total).toBe(0)
+      expect(stats.active).toBe(0)
+      expect(stats.idle).toBe(0)
+    })
+
+    it('should un-stale an instance that becomes active again', async () => {
+      tracker.stop()
+      tracker = new SessionTracker(monitor, { maxHistoryEntries: 5, staleThresholdMinutes: 5 })
+
+      // Instance starts active
+      monitor._setPollResult([makeInstance({ pid: 2200, status: 'active' })])
+
+      tracker.start(1000)
+      await vi.advanceTimersByTimeAsync(1000)
+
+      // Goes idle
+      monitor._setPollResult([makeInstance({ pid: 2200, status: 'idle' })])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      // Advance past threshold — becomes stale
+      await vi.advanceTimersByTimeAsync(6 * 60 * 1000)
+      expect(tracker.getInstances()[0].status).toBe('stale')
+
+      // Instance becomes active again (CPU spike)
+      monitor._setPollResult([makeInstance({ pid: 2200, status: 'active' })])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      // Should be active, not stale
+      expect(tracker.getInstances()[0].status).toBe('active')
+      expect(tracker.getStats().total).toBe(1)
+      expect(tracker.getStats().active).toBe(1)
+      expect(tracker.getStats().stale).toBe(0)
+    })
+
+    it('should preserve lastActiveAt across polls', async () => {
+      tracker.stop()
+      tracker = new SessionTracker(monitor, { maxHistoryEntries: 5, staleThresholdMinutes: 30 })
+
+      // Instance starts active
+      monitor._setPollResult([makeInstance({ pid: 2300, status: 'active' })])
+
+      tracker.start(1000)
+      await vi.advanceTimersByTimeAsync(1000)
+
+      const firstActiveAt = tracker.getInstances()[0].lastActiveAt
+      expect(firstActiveAt).toBeInstanceOf(Date)
+
+      // Goes idle — lastActiveAt should be preserved
+      monitor._setPollResult([makeInstance({ pid: 2300, status: 'idle' })])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      const preserved = tracker.getInstances()[0].lastActiveAt
+      expect(preserved).toEqual(firstActiveAt)
+    })
+
+    it('should use startedAt as reference for instances that were never active', async () => {
+      tracker.stop()
+      tracker = new SessionTracker(monitor, { maxHistoryEntries: 5, staleThresholdMinutes: 5 })
+
+      // Instance starts idle (never active)
+      const startedAt = new Date()
+      monitor._setPollResult([makeInstance({ pid: 2400, status: 'idle', startedAt })])
+
+      tracker.start(1000)
+      await vi.advanceTimersByTimeAsync(1000)
+
+      // Not stale yet
+      expect(tracker.getInstances()[0].status).toBe('idle')
+
+      // Advance past threshold from startedAt
+      await vi.advanceTimersByTimeAsync(6 * 60 * 1000)
+
+      // Should be stale now (never had CPU activity, using startedAt as reference)
+      expect(tracker.getInstances()[0].status).toBe('stale')
+    })
+
+    it('should not emit spurious status-changed events for idle→stale transitions', async () => {
+      tracker.stop()
+      tracker = new SessionTracker(monitor, { maxHistoryEntries: 5, staleThresholdMinutes: 5 })
+
+      const handler = vi.fn()
+      tracker.on('instance-status-changed', handler)
+
+      // Instance starts active
+      monitor._setPollResult([makeInstance({ pid: 2500, status: 'active' })])
+
+      tracker.start(1000)
+      await vi.advanceTimersByTimeAsync(1000)
+
+      // Goes idle — one status change event
+      monitor._setPollResult([makeInstance({ pid: 2500, status: 'idle' })])
+      await vi.advanceTimersByTimeAsync(1000)
+
+      expect(handler).toHaveBeenCalledTimes(1)
+
+      // Advance past threshold — becomes stale silently (no event)
+      await vi.advanceTimersByTimeAsync(6 * 60 * 1000)
+      expect(tracker.getInstances()[0].status).toBe('stale')
+
+      // No additional status-changed events for idle→stale
+      expect(handler).toHaveBeenCalledTimes(1)
     })
   })
 })

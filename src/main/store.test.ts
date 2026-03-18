@@ -96,6 +96,25 @@ describe('SettingsStore', () => {
     })
   })
 
+  describe('settings migration for minimizeToTray', () => {
+    it('should provide default minimizeToTray (true) when missing from stored settings', () => {
+      const settings = store.getSettings()
+      expect(settings.minimizeToTray).toBe(true)
+    })
+
+    it('should preserve minimizeToTray when explicitly set to false', () => {
+      store.setSettings({ minimizeToTray: false })
+      const settings = store.getSettings()
+      expect(settings.minimizeToTray).toBe(false)
+    })
+
+    it('should preserve minimizeToTray when explicitly set to true', () => {
+      store.setSettings({ minimizeToTray: true })
+      const settings = store.getSettings()
+      expect(settings.minimizeToTray).toBe(true)
+    })
+  })
+
   describe('getHistory()', () => {
     it('should return empty array when no history exists', () => {
       expect(store.getHistory()).toEqual([])

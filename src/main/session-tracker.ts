@@ -5,15 +5,20 @@ import type { ProcessMonitor } from './process-monitor'
 export class SessionTracker extends EventEmitter {
   private monitor: ProcessMonitor
   private maxHistoryEntries: number
+  private staleThresholdMinutes: number
   private instances: Map<number, ClaudeInstance> = new Map()
   private history: SessionHistoryEntry[] = []
   private intervalId: ReturnType<typeof setInterval> | null = null
   private polling = false
 
-  constructor(monitor: ProcessMonitor, settings: { maxHistoryEntries: number }) {
+  constructor(
+    monitor: ProcessMonitor,
+    settings: { maxHistoryEntries: number; staleThresholdMinutes: number }
+  ) {
     super()
     this.monitor = monitor
     this.maxHistoryEntries = settings.maxHistoryEntries
+    this.staleThresholdMinutes = settings.staleThresholdMinutes
   }
 
   start(intervalMs: number): void {
@@ -32,6 +37,10 @@ export class SessionTracker extends EventEmitter {
     }
   }
 
+  setStaleThreshold(minutes: number): void {
+    this.staleThresholdMinutes = minutes
+  }
+
   getInstances(): ClaudeInstance[] {
     return Array.from(this.instances.values())
   }
@@ -44,18 +53,21 @@ export class SessionTracker extends EventEmitter {
     total: number
     active: number
     idle: number
+    stale: number
     exited: number
     recentlyCompleted: number
   } {
     const instanceList = this.getInstances()
+    const nonStale = instanceList.filter((i) => i.status !== 'stale')
     const now = Date.now()
     const RECENT_WINDOW = 10 * 60 * 1000 // 10 minutes
     return {
-      total: instanceList.length,
-      active: instanceList.filter((i) => i.status === 'active').length,
-      idle: instanceList.filter((i) => i.status === 'idle').length,
+      total: nonStale.length,
+      active: nonStale.filter((i) => i.status === 'active').length,
+      idle: nonStale.filter((i) => i.status === 'idle').length,
+      stale: instanceList.filter((i) => i.status === 'stale').length,
       exited: this.history.length,
-      recentlyCompleted: instanceList.filter(
+      recentlyCompleted: nonStale.filter(
         (i) =>
           i.status === 'idle' &&
           i.lastBecameIdleAt &&
@@ -92,17 +104,23 @@ export class SessionTracker extends EventEmitter {
     }
 
     // Detect status changes for existing instances
+    // Note: stale is a derived state from idle, so treat stale↔idle as equivalent
+    // for status change detection purposes
     for (const proc of currentProcesses) {
       const prev = this.instances.get(proc.pid)
-      if (prev && prev.status !== proc.status) {
-        // Stamp lastBecameIdleAt when instance transitions active → idle
-        if (prev.status === 'active' && proc.status === 'idle') {
-          proc.lastBecameIdleAt = new Date()
+      if (prev) {
+        const prevBase = prev.status === 'stale' ? 'idle' : prev.status
+        const currBase = proc.status // proc.status is always active|idle from monitor
+        if (prevBase !== currBase) {
+          // Stamp lastBecameIdleAt when instance transitions active → idle
+          if (prevBase === 'active' && currBase === 'idle') {
+            proc.lastBecameIdleAt = new Date()
+          }
+          this.emit('instance-status-changed', {
+            instance: proc,
+            previousStatus: prev.status
+          })
         }
-        this.emit('instance-status-changed', {
-          instance: proc,
-          previousStatus: prev.status
-        })
       }
     }
 
@@ -130,19 +148,42 @@ export class SessionTracker extends EventEmitter {
       }
     }
 
-    // Update current instances map — preserve startedAt and lastBecameIdleAt from previous polls
+    // Update current instances map — preserve startedAt, lastBecameIdleAt, lastActiveAt from previous polls
     const previousInstances = new Map(this.instances)
     this.instances.clear()
+    const now = Date.now()
+    const staleThresholdMs = this.staleThresholdMinutes * 60 * 1000
+
     for (const proc of currentProcesses) {
-      const prev = previousInstances.get(proc.pid)
+      // Clone to avoid mutating the monitor's cached objects
+      const instance: ClaudeInstance = { ...proc }
+      const prev = previousInstances.get(instance.pid)
       if (prev) {
-        proc.startedAt = prev.startedAt
+        instance.startedAt = prev.startedAt
         // Preserve idle timestamp unless status changed back to active
-        if (prev.lastBecameIdleAt && proc.status === 'idle') {
-          proc.lastBecameIdleAt = prev.lastBecameIdleAt
+        if (prev.lastBecameIdleAt && instance.status === 'idle') {
+          instance.lastBecameIdleAt = prev.lastBecameIdleAt
+        }
+        // Preserve lastActiveAt from previous poll
+        instance.lastActiveAt = prev.lastActiveAt
+      }
+
+      // Track lastActiveAt: stamp when instance is active (has CPU activity)
+      if (instance.status === 'active') {
+        instance.lastActiveAt = new Date()
+      }
+
+      // Mark stale: idle instances that haven't been active for longer than threshold
+      if (instance.status === 'idle') {
+        const referenceTime = instance.lastActiveAt
+          ? new Date(instance.lastActiveAt).getTime()
+          : new Date(instance.startedAt).getTime()
+        if (now - referenceTime > staleThresholdMs) {
+          instance.status = 'stale'
         }
       }
-      this.instances.set(proc.pid, proc)
+
+      this.instances.set(instance.pid, instance)
     }
 
     // Emit update event

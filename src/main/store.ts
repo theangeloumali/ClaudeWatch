@@ -24,6 +24,14 @@ export class SettingsStore {
     if (stored.notifications.pingSound === undefined) {
       stored.notifications.pingSound = DEFAULT_SETTINGS.notifications.pingSound
     }
+    // Ensure minimizeToTray exists for users upgrading from older versions
+    if (stored.minimizeToTray === undefined) {
+      stored.minimizeToTray = DEFAULT_SETTINGS.minimizeToTray
+    }
+    // Ensure weeklyTokenTarget exists for users upgrading from older versions
+    if (stored.weeklyTokenTarget === undefined) {
+      stored.weeklyTokenTarget = DEFAULT_SETTINGS.weeklyTokenTarget
+    }
     return stored
   }
 
