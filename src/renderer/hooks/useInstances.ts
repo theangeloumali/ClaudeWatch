@@ -9,6 +9,7 @@ export interface GroupedInstances {
   recentlyCompleted: ClaudeInstance[]
   inProgress: ClaudeInstance[]
   waiting: ClaudeInstance[]
+  stale: ClaudeInstance[]
 }
 
 interface UseInstancesReturn {
@@ -26,6 +27,7 @@ const emptyStats: InstanceUpdate['stats'] = {
   total: 0,
   active: 0,
   idle: 0,
+  stale: 0,
   exited: 0,
   recentlyCompleted: 0
 }
@@ -69,8 +71,8 @@ export function useInstances(): UseInstancesReturn {
       )
     }
 
-    // Sort by activity: active (by CPU desc) → idle (by CPU desc) → exited
-    const statusOrder: Record<string, number> = { active: 0, idle: 1, exited: 2 }
+    // Sort by activity: active (by CPU desc) → idle (by CPU desc) → stale → exited
+    const statusOrder: Record<string, number> = { active: 0, idle: 1, stale: 2, exited: 3 }
     result = [...result].sort((a, b) => {
       const statusDiff = (statusOrder[a.status] ?? 3) - (statusOrder[b.status] ?? 3)
       if (statusDiff !== 0) return statusDiff
@@ -80,15 +82,23 @@ export function useInstances(): UseInstancesReturn {
     return result
   }, [instances, filter, searchQuery])
 
-  const groupedInstances = useMemo((): GroupedInstances => {
-    const now = Date.now()
+  // Tick every 30s so items age out of "Recently Completed" without waiting for a poll
+  const [now, setNow] = useState(Date.now())
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 30_000)
+    return () => clearInterval(interval)
+  }, [])
 
+  const groupedInstances = useMemo((): GroupedInstances => {
     const recentlyCompleted: ClaudeInstance[] = []
     const inProgress: ClaudeInstance[] = []
     const waiting: ClaudeInstance[] = []
+    const stale: ClaudeInstance[] = []
 
     for (const inst of filteredInstances) {
-      if (inst.status === 'active') {
+      if (inst.status === 'stale') {
+        stale.push(inst)
+      } else if (inst.status === 'active') {
         inProgress.push(inst)
       } else if (
         inst.status === 'idle' &&
@@ -101,8 +111,8 @@ export function useInstances(): UseInstancesReturn {
       }
     }
 
-    return { recentlyCompleted, inProgress, waiting }
-  }, [filteredInstances])
+    return { recentlyCompleted, inProgress, waiting, stale }
+  }, [filteredInstances, now])
 
   return {
     instances,
