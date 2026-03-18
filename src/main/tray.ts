@@ -78,19 +78,23 @@ export class TrayManager {
   }
 
   private buildTrayImage(activeCount: number, is2x: boolean): NativeImage {
-    const size = 18
-    const ringStroke = is2x ? 2.3 : 1.9
+    const size = 20
+    const isLinux = process.platform === 'linux'
+
+    const activeColor = isLinux ? '#22c55e' : 'black'
+    const idleColor = isLinux ? '#f59e0b' : 'black'
+    const staleColor = isLinux ? '#ef4444' : 'black'
 
     const content =
       activeCount > 0
-        ? '<circle cx="9" cy="9" r="5" fill="black" />'
-        : `<circle cx="9" cy="9" r="5" fill="none" stroke="black" stroke-width="${ringStroke}" /><rect x="6.4" y="8.2" width="5.2" height="1.6" rx="0.8" fill="black" />`
+        ? `<circle cx="10" cy="10" r="5.4" fill="${activeColor}" />`
+        : `<circle cx="10" cy="10" r="5.4" fill="none" stroke="${idleColor}" stroke-width="2.1" /><rect x="6.6" y="9.1" width="6.8" height="1.8" rx="0.9" fill="${idleColor}" />`
 
     const boostBadge = is2x
-      ? '<path d="M13.8 2.4L11.5 6h2l-1.1 3.6 3.1-4.1h-2.1l0.4-3.1z" fill="black" />'
+      ? `<circle cx="15.6" cy="4.4" r="2.7" fill="${staleColor}" /><path d="M15.7 2.3L14.7 4.1h1l-0.6 1.9 1.7-2.1h-1.1l0.1-1.6z" fill="white" />`
       : ''
 
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 18 18">${content}${boostBadge}</svg>`
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 20 20">${content}${boostBadge}</svg>`
     const image = nativeImage.createFromDataURL(
       `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`
     )
