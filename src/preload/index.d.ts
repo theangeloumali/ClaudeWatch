@@ -8,6 +8,7 @@ export interface ElectronAPI {
   clearHistory: () => Promise<{ success: boolean }>
   openDashboard: () => Promise<{ success: boolean }>
   quit: () => Promise<void>
+  openTerminal: (path: string) => Promise<{ success: boolean }>
   onInstancesUpdate: (callback: (data: InstanceUpdate) => void) => () => void
 }
 

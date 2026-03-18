@@ -17,6 +17,9 @@ const api = {
 
   quit: (): Promise<void> => ipcRenderer.invoke('app:quit'),
 
+  openTerminal: (path: string): Promise<{ success: boolean }> =>
+    ipcRenderer.invoke('terminal:open', path),
+
   onInstancesUpdate: (callback: (data: InstanceUpdate) => void): (() => void) => {
     const handler = (_event: Electron.IpcRendererEvent, data: InstanceUpdate): void =>
       callback(data)

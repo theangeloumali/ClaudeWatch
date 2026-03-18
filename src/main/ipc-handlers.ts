@@ -1,4 +1,5 @@
 import { ipcMain, BrowserWindow, app } from 'electron'
+import { execFile } from 'child_process'
 import type { SessionTracker } from './session-tracker'
 import type { SettingsStore } from './store'
 import type { AppSettings } from '../renderer/lib/types'
@@ -65,16 +66,29 @@ export function setupIpcHandlers(options: IpcHandlerOptions): void {
   ipcMain.handle('app:quit', () => {
     app.quit()
   })
+
+  ipcMain.handle('terminal:open', (_event: Electron.IpcMainInvokeEvent, _projectPath: string) => {
+    // Just activate Warp without creating a new tab.
+    // Warp doesn't expose tab-level control via AppleScript,
+    // so we bring it to front and let the user pick their tab.
+    return new Promise<{ success: boolean }>((resolve) => {
+      execFile('open', ['-a', 'Warp'], (error) => {
+        resolve({ success: !error })
+      })
+    })
+  })
 }
 
 export function forwardUpdatesToRenderer(
   tracker: SessionTracker,
-  getWindow: () => BrowserWindow | null
+  ...getWindows: (() => BrowserWindow | null)[]
 ): void {
   tracker.on('update', (data) => {
-    const win = getWindow()
-    if (win && !win.isDestroyed()) {
-      win.webContents.send('instances:update', data)
+    for (const getWindow of getWindows) {
+      const win = getWindow()
+      if (win && !win.isDestroyed()) {
+        win.webContents.send('instances:update', data)
+      }
     }
   })
 }
