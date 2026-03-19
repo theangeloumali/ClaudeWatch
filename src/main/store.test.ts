@@ -36,7 +36,7 @@ describe('SettingsStore', () => {
     it('should return default settings when no settings are stored', () => {
       const settings = store.getSettings()
       expect(settings.pollingIntervalMs).toBe(3000)
-      expect(settings.cpuIdleThreshold).toBe(1.0)
+      expect(settings.cpuIdleThreshold).toBe(3.0)
       expect(settings.launchAtLogin).toBe(false)
       expect(settings.notifications.onIdle).toBe(true)
       expect(settings.theme).toBe('dark')
@@ -49,7 +49,7 @@ describe('SettingsStore', () => {
       const updated = store.setSettings({ pollingIntervalMs: 5000 })
       expect(updated.pollingIntervalMs).toBe(5000)
       // Other defaults preserved
-      expect(updated.cpuIdleThreshold).toBe(1.0)
+      expect(updated.cpuIdleThreshold).toBe(3.0)
       expect(updated.theme).toBe('dark')
     })
 

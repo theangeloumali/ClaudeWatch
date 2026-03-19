@@ -32,6 +32,11 @@ export class SettingsStore {
     if (stored.weeklyTokenTarget === undefined) {
       stored.weeklyTokenTarget = DEFAULT_SETTINGS.weeklyTokenTarget
     }
+    // Migrate cpuIdleThreshold from old default (1.0) to new default (3.0)
+    if (stored.cpuIdleThreshold === 1.0) {
+      stored.cpuIdleThreshold = DEFAULT_SETTINGS.cpuIdleThreshold
+      this.store.set('settings', stored)
+    }
     return stored
   }
 
