@@ -38,6 +38,14 @@ export class SoundPlayer {
       })
     }
 
-    // Linux and other platforms: no-op
+    if (process.platform === 'linux') {
+      return new Promise<void>((res) => {
+        // Try paplay (PulseAudio/PipeWire) first, fall back to aplay (ALSA)
+        execFile('paplay', [this.soundPath], (err) => {
+          if (!err) return res()
+          execFile('aplay', [this.soundPath], () => res())
+        })
+      })
+    }
   }
 }

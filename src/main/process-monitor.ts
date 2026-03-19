@@ -3,7 +3,7 @@ import { parseElapsedTime, getProjectName } from '../renderer/lib/utils'
 import type { PlatformDetector, RawProcessInfo } from './platform/darwin'
 import { DarwinDetector } from './platform/darwin'
 import { Win32Detector } from './platform/win32'
-import type { TerminalResolver } from './terminal-resolver'
+import { LinuxDetector } from './platform/linux'
 
 const KNOWN_FLAGS = [
   '--resume',
@@ -59,6 +59,9 @@ function determineStatus(
 export function getPlatformDetector(): PlatformDetector {
   if (process.platform === 'win32') {
     return new Win32Detector()
+  }
+  if (process.platform === 'linux') {
+    return new LinuxDetector()
   }
   return new DarwinDetector()
 }
