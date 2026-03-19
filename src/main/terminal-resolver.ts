@@ -17,6 +17,12 @@ const TERMINAL_SIGNATURES: Record<string, TerminalSignature> = {
   ghostty: { terminalType: 'ghostty', displayName: 'Ghostty' }
 }
 
+const EXECUTABLE_ALIASES: Record<string, string> = {
+  stable: 'Warp'
+}
+
+const APP_BUNDLE_RE = /\/([^/]+)\.app\//
+
 const MULTIPLEXER_SIGNATURES: Record<string, 'tmux' | 'screen'> = {
   tmux: 'tmux',
   'tmux: server': 'tmux',
@@ -103,7 +109,26 @@ export class TerminalResolver {
   }
 
   private matchTerminal(comm: string): TerminalSignature | undefined {
-    return TERMINAL_SIGNATURES[comm]
+    // 1. Exact match (fast path)
+    const exact = TERMINAL_SIGNATURES[comm]
+    if (exact) return exact
+
+    // 2. App bundle extraction: /Applications/Warp.app/Contents/MacOS/stable → "Warp"
+    const bundleMatch = APP_BUNDLE_RE.exec(comm)
+    if (bundleMatch) {
+      const bundleName = bundleMatch[1]
+      const bundleSig = TERMINAL_SIGNATURES[bundleName]
+      if (bundleSig) return bundleSig
+    }
+
+    // 3. Executable alias fallback: "stable" → "Warp"
+    const basename = comm.includes('/') ? comm.split('/').pop()! : comm
+    const aliasedName = EXECUTABLE_ALIASES[basename]
+    if (aliasedName) {
+      return TERMINAL_SIGNATURES[aliasedName]
+    }
+
+    return undefined
   }
 
   private matchMultiplexer(comm: string): 'tmux' | 'screen' | undefined {

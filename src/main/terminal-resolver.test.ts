@@ -242,6 +242,78 @@ describe('TerminalResolver', () => {
     expect(result.terminalPid).toBe(0)
   })
 
+  it('resolves Warp via full .app bundle path (PID → zsh → /Applications/Warp.app/.../stable)', async () => {
+    setupProcessChain([
+      { pid: 100, ppid: 200, comm: 'claude' },
+      { pid: 200, ppid: 300, comm: 'zsh' },
+      { pid: 300, ppid: 1, comm: '/Applications/Warp.app/Contents/MacOS/stable' }
+    ])
+
+    const result = await resolver.resolve(100)
+
+    expect(result.terminalApp).toBe('Warp')
+    expect(result.terminalType).toBe('warp')
+    expect(result.terminalPid).toBe(300)
+  })
+
+  it('resolves Warp via non-standard install path (~/Applications/Warp.app/...)', async () => {
+    setupProcessChain([
+      { pid: 100, ppid: 200, comm: 'claude' },
+      { pid: 200, ppid: 300, comm: 'zsh' },
+      { pid: 300, ppid: 1, comm: '/Users/x/Applications/Warp.app/Contents/MacOS/stable' }
+    ])
+
+    const result = await resolver.resolve(100)
+
+    expect(result.terminalApp).toBe('Warp')
+    expect(result.terminalType).toBe('warp')
+    expect(result.terminalPid).toBe(300)
+  })
+
+  it('resolves iTerm2 via full .app bundle path', async () => {
+    setupProcessChain([
+      { pid: 100, ppid: 200, comm: 'claude' },
+      { pid: 200, ppid: 300, comm: 'zsh' },
+      { pid: 300, ppid: 1, comm: '/Applications/iTerm2.app/Contents/MacOS/iTerm2' }
+    ])
+
+    const result = await resolver.resolve(100)
+
+    expect(result.terminalApp).toBe('iTerm2')
+    expect(result.terminalType).toBe('iterm2')
+    expect(result.terminalPid).toBe(300)
+  })
+
+  it('resolves Warp via bare "stable" executable alias', async () => {
+    setupProcessChain([
+      { pid: 100, ppid: 200, comm: 'claude' },
+      { pid: 200, ppid: 300, comm: 'zsh' },
+      { pid: 300, ppid: 1, comm: 'stable' }
+    ])
+
+    const result = await resolver.resolve(100)
+
+    expect(result.terminalApp).toBe('Warp')
+    expect(result.terminalType).toBe('warp')
+    expect(result.terminalPid).toBe(300)
+  })
+
+  it('resolves Warp + tmux via full .app path with multiplexer', async () => {
+    setupProcessChain([
+      { pid: 100, ppid: 200, comm: 'claude' },
+      { pid: 200, ppid: 300, comm: 'zsh' },
+      { pid: 300, ppid: 400, comm: 'tmux' },
+      { pid: 400, ppid: 1, comm: '/Applications/Warp.app/Contents/MacOS/stable' }
+    ])
+
+    const result = await resolver.resolve(100)
+
+    expect(result.terminalApp).toBe('Warp')
+    expect(result.terminalType).toBe('warp')
+    expect(result.terminalPid).toBe(400)
+    expect(result.multiplexer).toBe('tmux')
+  })
+
   it('handles ?? TTY (background process) — still walks parent chain', async () => {
     // Background processes have ?? TTY but the resolver doesn't care about TTY,
     // it just walks PIDs regardless

@@ -78,6 +78,10 @@ export function setupIpcHandlers(options: IpcHandlerOptions): void {
       if (validated.weeklyTokenTarget !== undefined && usageReader) {
         usageReader.setWeeklyTokenTarget(updated.weeklyTokenTarget)
       }
+      // Propagate launch-at-login to OS
+      if (validated.launchAtLogin !== undefined) {
+        app.setLoginItemSettings({ openAtLogin: validated.launchAtLogin })
+      }
       // Propagate stale threshold to session tracker
       if (validated.staleThresholdMinutes !== undefined) {
         tracker.setStaleThreshold(updated.staleThresholdMinutes)

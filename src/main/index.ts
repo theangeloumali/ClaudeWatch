@@ -78,6 +78,9 @@ app.whenReady().then(() => {
   const store = new SettingsStore()
   const settings = store.getSettings()
 
+  // Sync launch-at-login with OS
+  app.setLoginItemSettings({ openAtLogin: settings.launchAtLogin })
+
   // Initialize terminal resolver and process monitor
   const terminalResolver = new TerminalResolver()
   const monitor = new ProcessMonitor({ terminalResolver })
