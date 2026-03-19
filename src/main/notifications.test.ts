@@ -3,14 +3,16 @@ import type { AppSettings, ClaudeInstance, SessionHistoryEntry } from '../render
 import { DEFAULT_SETTINGS } from '../renderer/lib/types'
 
 // Use vi.hoisted so mocks are available in the factory
-const { mockShow, MockNotification } = vi.hoisted(() => {
+const { mockShow, mockIsSupported, MockNotification } = vi.hoisted(() => {
   const mockShow = vi.fn()
+  const mockIsSupported = vi.fn().mockReturnValue(true)
   const MockNotification = vi.fn().mockImplementation(() => ({
     show: mockShow,
     on: vi.fn(),
     close: vi.fn()
   }))
-  return { mockShow, MockNotification }
+  MockNotification.isSupported = mockIsSupported
+  return { mockShow, mockIsSupported, MockNotification }
 })
 
 vi.mock('electron', () => ({
@@ -301,6 +303,138 @@ describe('NotificationManager', () => {
           body: expect.stringContaining('2m 5s')
         })
       )
+    })
+  })
+
+  describe('isSupported()', () => {
+    it('should return true when Notification.isSupported() returns true', () => {
+      mockIsSupported.mockReturnValue(true)
+      expect(manager.isSupported()).toBe(true)
+    })
+
+    it('should return false when Notification.isSupported() returns false', () => {
+      mockIsSupported.mockReturnValue(false)
+      expect(manager.isSupported()).toBe(false)
+    })
+  })
+
+  describe('sendTest', () => {
+    it('should return { sent: true } when supported', () => {
+      mockIsSupported.mockReturnValue(true)
+      const result = manager.sendTest()
+      expect(result).toEqual({ sent: true })
+      expect(MockNotification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: expect.stringContaining('Test notification'),
+          body: 'ClaudeWatch notifications are working!'
+        })
+      )
+      expect(mockShow).toHaveBeenCalled()
+    })
+
+    it('should return { sent: false, reason: "..." } when not supported', () => {
+      mockIsSupported.mockReturnValue(false)
+      const result = manager.sendTest()
+      expect(result).toEqual({
+        sent: false,
+        reason: 'Notifications not supported — check macOS settings'
+      })
+      expect(MockNotification).not.toHaveBeenCalled()
+      expect(mockShow).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('muted projects', () => {
+    it('notifyTaskComplete should skip muted projects', () => {
+      settings.notifications.onTaskComplete = true
+      settings.notifications.doNotDisturb = false
+      settings.notifications.mutedProjects = ['/Users/test/my-project']
+
+      manager.notifyTaskComplete(makeInstance({ projectPath: '/Users/test/my-project' }))
+
+      expect(MockNotification).not.toHaveBeenCalled()
+      expect(mockShow).not.toHaveBeenCalled()
+    })
+
+    it('notifyIdle should skip muted projects', () => {
+      settings.notifications.onIdle = true
+      settings.notifications.doNotDisturb = false
+      settings.notifications.mutedProjects = ['/Users/test/my-project']
+
+      manager.notifyIdle(makeInstance({ projectPath: '/Users/test/my-project' }))
+
+      expect(MockNotification).not.toHaveBeenCalled()
+      expect(mockShow).not.toHaveBeenCalled()
+    })
+
+    it('notifyExited should skip muted projects', () => {
+      settings.notifications.onExited = true
+      settings.notifications.doNotDisturb = false
+      settings.notifications.mutedProjects = ['/Users/test/my-project']
+
+      manager.notifyExited(makeHistoryEntry({ projectPath: '/Users/test/my-project' }))
+
+      expect(MockNotification).not.toHaveBeenCalled()
+      expect(mockShow).not.toHaveBeenCalled()
+    })
+
+    it('should still notify for non-muted projects', () => {
+      mockIsSupported.mockReturnValue(true)
+      settings.notifications.onTaskComplete = true
+      settings.notifications.doNotDisturb = false
+      settings.notifications.mutedProjects = ['/Users/test/other-project']
+
+      manager.notifyTaskComplete(makeInstance({ projectPath: '/Users/test/my-project' }))
+
+      expect(MockNotification).toHaveBeenCalled()
+      expect(mockShow).toHaveBeenCalled()
+    })
+  })
+
+  describe('permission guard (Notification.isSupported)', () => {
+    beforeEach(() => {
+      mockIsSupported.mockReturnValue(false)
+    })
+
+    it('should NOT show task-complete notification when isSupported is false', () => {
+      settings.notifications.onTaskComplete = true
+      settings.notifications.doNotDisturb = false
+
+      manager.notifyTaskComplete(makeInstance())
+
+      expect(MockNotification).not.toHaveBeenCalled()
+      expect(mockShow).not.toHaveBeenCalled()
+    })
+
+    it('should NOT show idle notification when isSupported is false', () => {
+      settings.notifications.onIdle = true
+      settings.notifications.doNotDisturb = false
+
+      manager.notifyIdle(makeInstance())
+
+      expect(MockNotification).not.toHaveBeenCalled()
+      expect(mockShow).not.toHaveBeenCalled()
+    })
+
+    it('should NOT show exited notification when isSupported is false', () => {
+      settings.notifications.onExited = true
+      settings.notifications.doNotDisturb = false
+
+      manager.notifyExited(makeHistoryEntry())
+
+      expect(MockNotification).not.toHaveBeenCalled()
+      expect(mockShow).not.toHaveBeenCalled()
+    })
+
+    it('should show notifications normally when isSupported is true', () => {
+      mockIsSupported.mockReturnValue(true)
+      settings.notifications.onTaskComplete = true
+      settings.notifications.doNotDisturb = false
+
+      manager.notifyTaskComplete(makeInstance())
+
+      expect(MockNotification).toHaveBeenCalled()
+      expect(mockShow).toHaveBeenCalled()
     })
   })
 })

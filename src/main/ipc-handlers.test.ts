@@ -16,6 +16,9 @@ vi.mock('electron', () => ({
     handle: mockHandle
   },
   app: mockApp,
+  shell: {
+    openExternal: vi.fn()
+  },
   BrowserWindow: vi.fn()
 }))
 
@@ -28,6 +31,7 @@ import type { SessionTracker } from './session-tracker'
 import type { SettingsStore } from './store'
 import type { UsageStatsReader } from './usage-stats'
 import type { PromoChecker } from './promo-checker'
+import type { NotificationManager } from './notifications'
 
 function makeTracker(overrides: Partial<SessionTracker> = {}): SessionTracker {
   return {
@@ -116,6 +120,11 @@ describe('setupIpcHandlers', () => {
         'usage:get',
         'usage:refresh',
         'promo:get',
+        'notifications:check-permission',
+        'notifications:open-settings',
+        'notifications:send-test',
+        'notifications:mute-project',
+        'notifications:unmute-project',
         'terminal:open'
       ]
 
@@ -282,6 +291,85 @@ describe('setupIpcHandlers', () => {
 
       expect(handlers['terminal:open'](fakeEvent, undefined)).toEqual({ success: false })
       expect(handlers['terminal:open'](fakeEvent, null)).toEqual({ success: false })
+    })
+  })
+
+  describe('notifications:mute-project', () => {
+    it('should add project to muted list', () => {
+      const mockNotifications = {
+        isSupported: vi.fn().mockReturnValue(true),
+        sendTest: vi.fn()
+      } as unknown as NotificationManager
+
+      const currentSettings = {
+        pollingIntervalMs: 3000,
+        notifications: { mutedProjects: [], onTaskComplete: true }
+      }
+      const storeWithMuted = makeStore({
+        getSettings: vi.fn().mockReturnValue(currentSettings),
+        setSettings: vi.fn().mockReturnValue(currentSettings)
+      })
+
+      setupIpcHandlers({
+        tracker,
+        store: storeWithMuted,
+        usageReader,
+        promoChecker,
+        notifications: mockNotifications,
+        onOpenDashboard
+      })
+
+      const fakeEvent = {} as Electron.IpcMainInvokeEvent
+      handlers['notifications:mute-project'](fakeEvent, '/Users/test/my-project')
+
+      expect(storeWithMuted.setSettings).toHaveBeenCalledWith(
+        expect.objectContaining({
+          notifications: expect.objectContaining({
+            mutedProjects: ['/Users/test/my-project']
+          })
+        })
+      )
+    })
+  })
+
+  describe('notifications:unmute-project', () => {
+    it('should remove project from muted list', () => {
+      const mockNotifications = {
+        isSupported: vi.fn().mockReturnValue(true),
+        sendTest: vi.fn()
+      } as unknown as NotificationManager
+
+      const currentSettings = {
+        pollingIntervalMs: 3000,
+        notifications: {
+          mutedProjects: ['/Users/test/my-project', '/Users/test/other'],
+          onTaskComplete: true
+        }
+      }
+      const storeWithMuted = makeStore({
+        getSettings: vi.fn().mockReturnValue(currentSettings),
+        setSettings: vi.fn().mockReturnValue(currentSettings)
+      })
+
+      setupIpcHandlers({
+        tracker,
+        store: storeWithMuted,
+        usageReader,
+        promoChecker,
+        notifications: mockNotifications,
+        onOpenDashboard
+      })
+
+      const fakeEvent = {} as Electron.IpcMainInvokeEvent
+      handlers['notifications:unmute-project'](fakeEvent, '/Users/test/my-project')
+
+      expect(storeWithMuted.setSettings).toHaveBeenCalledWith(
+        expect.objectContaining({
+          notifications: expect.objectContaining({
+            mutedProjects: ['/Users/test/other']
+          })
+        })
+      )
     })
   })
 })
