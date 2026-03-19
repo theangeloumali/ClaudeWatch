@@ -2,6 +2,7 @@ import { app, BrowserWindow } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import { ProcessMonitor } from './process-monitor'
+import { TerminalResolver } from './terminal-resolver'
 import { SessionTracker } from './session-tracker'
 import { SettingsStore } from './store'
 import { TrayManager } from './tray'
@@ -12,6 +13,7 @@ import { PromoChecker } from './promo-checker'
 import { setupIpcHandlers, forwardUpdatesToRenderer } from './ipc-handlers'
 import { createWidgetStatsWriter } from './widget-stats-writer'
 import { SoundPlayer } from './sound-player'
+import { setupWidgetSync } from './widget-sync'
 
 let mainWindow: BrowserWindow | null = null
 let trayManager: TrayManager | null = null
@@ -76,8 +78,9 @@ app.whenReady().then(() => {
   const store = new SettingsStore()
   const settings = store.getSettings()
 
-  // Initialize process monitor and session tracker
-  const monitor = new ProcessMonitor()
+  // Initialize terminal resolver and process monitor
+  const terminalResolver = new TerminalResolver()
+  const monitor = new ProcessMonitor({ terminalResolver })
   tracker = new SessionTracker(monitor, {
     maxHistoryEntries: settings.maxHistoryEntries,
     staleThresholdMinutes: settings.staleThresholdMinutes
@@ -141,13 +144,11 @@ app.whenReady().then(() => {
 
   tracker.on('update', (data) => {
     trayManager?.update(data.instances, data.stats)
-    // Write stats for macOS WidgetKit widget (include usage + promo data)
-    widgetWriter
-      ?.write(data.instances, data.stats, usageReader.getLastData(), promoChecker.getLastData())
-      .catch(() => {
-        // Silently ignore widget write errors — widget is optional
-      })
   })
+
+  if (widgetWriter) {
+    setupWidgetSync({ tracker, usageReader, promoChecker, writer: widgetWriter })
+  }
 
   // Wire notification events
   tracker.on('instance-status-changed', ({ instance, previousStatus }) => {
@@ -168,6 +169,7 @@ app.whenReady().then(() => {
   tracker.on('instance-exited', (entry) => {
     store.addHistoryEntry(entry)
     notifications.notifyExited(entry)
+    terminalResolver.evict(entry.pid)
   })
 
   // Forward promo updates to tray
