@@ -70,6 +70,8 @@ export interface AppSettings {
     sound: boolean
     pingSound: boolean
     doNotDisturb: boolean
+    cooldownSeconds: number
+    mutedProjects: string[]
   }
   theme: 'dark' | 'light' | 'system'
   maxHistoryEntries: number
@@ -89,7 +91,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
     onError: true,
     sound: true,
     pingSound: true,
-    doNotDisturb: false
+    doNotDisturb: false,
+    cooldownSeconds: 60,
+    mutedProjects: []
   },
   theme: 'dark',
   maxHistoryEntries: 100,
@@ -187,3 +191,8 @@ export type IpcChannels =
   | 'usage:update'
   | 'promo:get'
   | 'promo:update'
+  | 'notifications:check-permission'
+  | 'notifications:open-settings'
+  | 'notifications:send-test'
+  | 'notifications:mute-project'
+  | 'notifications:unmute-project'

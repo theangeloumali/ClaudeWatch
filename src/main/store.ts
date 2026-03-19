@@ -32,6 +32,10 @@ export class SettingsStore {
     if (stored.weeklyTokenTarget === undefined) {
       stored.weeklyTokenTarget = DEFAULT_SETTINGS.weeklyTokenTarget
     }
+    // Ensure mutedProjects exists for users upgrading from older versions
+    if (stored.notifications.mutedProjects === undefined) {
+      stored.notifications.mutedProjects = DEFAULT_SETTINGS.notifications.mutedProjects
+    }
     // Migrate cpuIdleThreshold from old default (1.0) to new default (3.0)
     if (stored.cpuIdleThreshold === 1.0) {
       stored.cpuIdleThreshold = DEFAULT_SETTINGS.cpuIdleThreshold
