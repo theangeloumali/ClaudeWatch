@@ -60,11 +60,20 @@ struct WidgetStatsPayload: Codable {
     /// Whether the data is considered stale (older than 5 minutes)
     var isStale: Bool { staleness > 300 }
 
-    /// Read stats from the App Group shared container using a 3-strategy fallback chain.
+    /// The non-scoped App Group ID suffix used to match directories.
+    private static let appGroupSuffix = "group.com.zkidzdev.claudewatch"
+
+    /// Read stats from the App Group shared container using a 4-strategy fallback chain.
+    /// Strategy 0: Scan Group Containers for any directory matching our App Group (handles Team ID scoping)
     /// Strategy 1: containerURL (works when provisioning profiles are embedded)
     /// Strategy 2: UserDefaults shared suite (works without provisioning profiles)
-    /// Strategy 3: Manual filesystem path (may be blocked by sandbox, but gracefully handled)
+    /// Strategy 3: Manual filesystem path (legacy fallback)
     static func load() -> WidgetStatsPayload? {
+        if let payload = loadViaScanGroupContainers() {
+            logger.info("Strategy 0 (scan) succeeded")
+            return payload
+        }
+
         if let payload = loadViaContainerURL() {
             logger.info("Strategy 1 (containerURL) succeeded")
             return payload
@@ -80,7 +89,58 @@ struct WidgetStatsPayload: Codable {
             return payload
         }
 
-        logger.error("All 3 load strategies failed — no data available")
+        logger.error("All 4 load strategies failed — no data available")
+        return nil
+    }
+
+    /// Strategy 0: Scan ~/Library/Group Containers/ for any directory whose name
+    /// ends with our App Group ID. This handles the Team ID scoping mismatch:
+    /// - The Electron app writes to: group.com.zkidzdev.claudewatch/
+    /// - A sandboxed widget may resolve to: {TEAM_ID}.group.com.zkidzdev.claudewatch/
+    /// By scanning, we find stats.json regardless of which variant has it.
+    private static func loadViaScanGroupContainers() -> WidgetStatsPayload? {
+        logger.info("Trying Strategy 0: scan Group Containers")
+
+        // Try multiple ways to get the real home directory
+        let homeDir: String
+        if let envHome = ProcessInfo.processInfo.environment["HOME"] {
+            homeDir = envHome
+        } else {
+            homeDir = NSHomeDirectory()
+        }
+
+        let groupContainersPath = "\(homeDir)/Library/Group Containers"
+        let groupContainersURL = URL(fileURLWithPath: groupContainersPath)
+
+        logger.info("Strategy 0: scanning \(groupContainersPath)")
+
+        guard let entries = try? FileManager.default.contentsOfDirectory(
+            at: groupContainersURL,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        ) else {
+            logger.warning("Strategy 0: could not list Group Containers directory")
+            return nil
+        }
+
+        // Find all directories matching *group.com.zkidzdev.claudewatch
+        let matchingDirs = entries.filter { url in
+            url.lastPathComponent == appGroupSuffix ||
+            url.lastPathComponent.hasSuffix(".\(appGroupSuffix)")
+        }
+
+        logger.info("Strategy 0: found \(matchingDirs.count) matching directories")
+
+        // Try each matching directory for stats.json
+        for dir in matchingDirs {
+            let statsURL = dir.appendingPathComponent("stats.json")
+            logger.info("Strategy 0: trying \(statsURL.path)")
+            if let payload = decodeStatsFile(at: statsURL) {
+                return payload
+            }
+        }
+
+        logger.warning("Strategy 0: no stats.json found in any matching directory")
         return nil
     }
 

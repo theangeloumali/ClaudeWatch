@@ -1,7 +1,8 @@
 import SwiftUI
+import WidgetKit
 
 /// Minimal host app that exists to register the WidgetKit extension with macOS.
-/// In production, the Electron app serves as the host — this is for development only.
+/// Also handles URL scheme triggers from the Electron app to force widget timeline reloads.
 @main
 struct ClaudeWatchHostApp: App {
     var body: some Scene {
@@ -23,5 +24,17 @@ struct ClaudeWatchHostApp: App {
             .frame(width: 360, height: 240)
         }
         .windowResizability(.contentSize)
+        .handlesExternalEvents(matching: ["*"])
+    }
+
+    init() {
+        // Check for reload argument passed via command line
+        if CommandLine.arguments.contains("--reload-widget") {
+            WidgetCenter.shared.reloadAllTimelines()
+            // Exit after triggering reload — don't show the window
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                NSApplication.shared.terminate(nil)
+            }
+        }
     }
 }

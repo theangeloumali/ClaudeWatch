@@ -37,8 +37,8 @@ struct ClaudeWatchTimelineProvider: TimelineProvider {
 
         Self.logger.info("getTimeline result: \(data.stats.total) total, \(data.stats.active) active, stale: \(data.isStale)")
 
-        // Refresh every 5 minutes (WidgetKit's minimum practical interval)
-        let nextUpdate = Calendar.current.date(byAdding: .minute, value: 5, to: Date())!
+        // Refresh every 1 minute for near-real-time data updates
+        let nextUpdate = Calendar.current.date(byAdding: .minute, value: 1, to: Date())!
         let timeline = Timeline(entries: [entry], policy: .after(nextUpdate))
         Self.logger.info("Next timeline update scheduled at: \(nextUpdate)")
         completion(timeline)
