@@ -78,32 +78,104 @@ export class TrayManager {
   }
 
   private buildTrayImage(activeCount: number, is2x: boolean): NativeImage {
-    const size = 20
     const isLinux = process.platform === 'linux'
 
-    const activeColor = isLinux ? '#22c55e' : 'black'
-    const idleColor = isLinux ? '#f59e0b' : 'black'
-    const staleColor = isLinux ? '#ef4444' : 'black'
+    if (isLinux) {
+      return this.buildLinuxTrayImage(activeCount, is2x)
+    }
 
+    // macOS: monochrome SVG template image (adapts to light/dark menu bar)
+    const size = 18
+    const stroke = is2x ? 2.3 : 1.9
     const content =
       activeCount > 0
-        ? `<circle cx="10" cy="10" r="5.4" fill="${activeColor}" />`
-        : `<circle cx="10" cy="10" r="5.4" fill="none" stroke="${idleColor}" stroke-width="2.1" /><rect x="6.6" y="9.1" width="6.8" height="1.8" rx="0.9" fill="${idleColor}" />`
-
-    const boostBadge = is2x
-      ? `<circle cx="15.6" cy="4.4" r="2.7" fill="${staleColor}" /><path d="M15.7 2.3L14.7 4.1h1l-0.6 1.9 1.7-2.1h-1.1l0.1-1.6z" fill="white" />`
+        ? '<circle cx="9" cy="9" r="5" fill="black" />'
+        : `<circle cx="9" cy="9" r="5" fill="none" stroke="black" stroke-width="${stroke}" /><rect x="6.4" y="8.2" width="5.2" height="1.6" rx="0.8" fill="black" />`
+    const badge = is2x
+      ? '<path d="M13.8 2.4L11.5 6h2l-1.1 3.6 3.1-4.1h-2.1l0.4-3.1z" fill="black" />'
       : ''
-
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 20 20">${content}${boostBadge}</svg>`
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 18 18">${content}${badge}</svg>`
     const image = nativeImage.createFromDataURL(
       `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`
     )
+    image.setTemplateImage(true)
+    return image
+  }
 
-    if (process.platform === 'darwin') {
-      image.setTemplateImage(true)
+  /**
+   * Linux tray icon built as a raw RGBA PNG using only Node.js built-ins —
+   * no native rasterizer needed, no SVG dataURL (unsupported on Linux Electron).
+   */
+  private buildLinuxTrayImage(activeCount: number, is2x: boolean): NativeImage {
+    const SIZE = 22
+    const CX = 11
+    const CY = 11
+    const R = 6
+
+    // RGBA pixel buffer
+    const buf = Buffer.alloc(SIZE * SIZE * 4, 0)
+
+    // Color: green when active, amber when idle
+    const [fr, fg, fb] =
+      activeCount > 0 ? [0x22, 0xc5, 0x5e] : [0xf5, 0x9e, 0x0b]
+
+    const set = (x: number, y: number, r: number, g: number, b: number, a: number): void => {
+      if (x < 0 || x >= SIZE || y < 0 || y >= SIZE) return
+      const i = (y * SIZE + x) * 4
+      buf[i] = r; buf[i + 1] = g; buf[i + 2] = b; buf[i + 3] = a
     }
 
-    return image
+    if (activeCount > 0) {
+      // Filled circle
+      for (let y = 0; y < SIZE; y++) {
+        for (let x = 0; x < SIZE; x++) {
+          const dx = x - CX + 0.5
+          const dy = y - CY + 0.5
+          const dist = Math.sqrt(dx * dx + dy * dy)
+          const alpha = Math.max(0, Math.min(1, R + 0.5 - dist))
+          set(x, y, fr, fg, fb, Math.round(alpha * 255))
+        }
+      }
+    } else {
+      // Outlined ring + horizontal dash (idle)
+      const RING = 1.7
+      for (let y = 0; y < SIZE; y++) {
+        for (let x = 0; x < SIZE; x++) {
+          const dx = x - CX + 0.5
+          const dy = y - CY + 0.5
+          const dist = Math.sqrt(dx * dx + dy * dy)
+          // Anti-aliased ring
+          const outer = R + 0.5 - dist
+          const inner = dist - (R - RING) - 0.5
+          const alpha = Math.max(0, Math.min(1, outer), Math.min(1, inner)) > 0
+            ? Math.min(Math.max(0, Math.min(1, outer)), Math.max(0, Math.min(1, inner)))
+            : 0
+          if (alpha > 0) set(x, y, fr, fg, fb, Math.round(alpha * 255))
+        }
+      }
+      // Center dash (3×1 rounded rect)
+      for (let x = CX - 3; x <= CX + 3; x++) {
+        set(x, CY, fr, fg, fb, 255)
+        set(x, CY - 1, fr, fg, fb, 200)
+      }
+    }
+
+    // 2× badge: small red dot in top-right corner
+    if (is2x) {
+      const BX = SIZE - 4
+      const BY = 3
+      for (let y = 0; y < SIZE; y++) {
+        for (let x = 0; x < SIZE; x++) {
+          const dx = x - BX + 0.5
+          const dy = y - BY + 0.5
+          const dist = Math.sqrt(dx * dx + dy * dy)
+          const alpha = Math.max(0, Math.min(1, 2.8 - dist))
+          if (alpha > 0) set(x, y, 0xef, 0x44, 0x44, Math.round(alpha * 255))
+        }
+      }
+    }
+
+    return nativeImage.createFromBuffer(buf, { width: SIZE, height: SIZE })
   }
 
   private createPopover(): void {

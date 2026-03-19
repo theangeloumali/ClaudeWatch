@@ -90,14 +90,30 @@ app.whenReady().then(() => {
   const notifications = new NotificationManager(() => store.getSettings())
   const soundPlayer = new SoundPlayer()
 
-  // Create window (hidden by default)
-  mainWindow = createWindow(store)
-
-  // Initialize auto-updater
-  const updater = new AutoUpdaterManager([
+  // Initialize usage stats reader and promo checker
+  const windowGetters: (() => Electron.BrowserWindow | null)[] = [
     () => mainWindow,
     () => trayManager?.getPopoverWindow() ?? null
-  ])
+  ]
+  const usageReader = new UsageStatsReader(windowGetters)
+  usageReader.setWeeklyTokenTarget(settings.weeklyTokenTarget)
+  const promoChecker = new PromoChecker(windowGetters)
+
+  // Initialize auto-updater
+  const updater = new AutoUpdaterManager(windowGetters)
+
+  // Setup IPC bridge
+  setupIpcHandlers({
+    tracker,
+    store,
+    updater,
+    usageReader,
+    promoChecker,
+    onOpenDashboard: showDashboard
+  })
+
+  // Create window (hidden by default)
+  mainWindow = createWindow(store)
 
   // Create tray with popover support
   trayManager = new TrayManager({
@@ -108,25 +124,6 @@ app.whenReady().then(() => {
     },
     onCheckForUpdates: () => updater.checkForUpdates(),
     preloadPath: join(__dirname, '../preload/index.js')
-  })
-
-  // Initialize usage stats reader and promo checker
-  const windowGetters: (() => Electron.BrowserWindow | null)[] = [
-    () => mainWindow,
-    () => trayManager?.getPopoverWindow() ?? null
-  ]
-  const usageReader = new UsageStatsReader(windowGetters)
-  usageReader.setWeeklyTokenTarget(settings.weeklyTokenTarget)
-  const promoChecker = new PromoChecker(windowGetters)
-
-  // Setup IPC bridge
-  setupIpcHandlers({
-    tracker,
-    store,
-    updater,
-    usageReader,
-    promoChecker,
-    onOpenDashboard: showDashboard
   })
 
   // Forward tracker updates to renderer windows (main + popover) and tray
