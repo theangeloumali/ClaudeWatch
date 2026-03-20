@@ -31,6 +31,7 @@ import type { SessionTracker } from './session-tracker'
 import type { SettingsStore } from './store'
 import type { UsageStatsReader } from './usage-stats'
 import type { PromoChecker } from './promo-checker'
+import type { RateLimitReader } from './rate-limit-reader'
 import type { NotificationManager } from './notifications'
 
 function makeTracker(overrides: Partial<SessionTracker> = {}): SessionTracker {
@@ -80,11 +81,24 @@ function makePromoChecker(overrides = {}): PromoChecker {
   } as unknown as PromoChecker
 }
 
+function makeRateLimitReader(overrides = {}): RateLimitReader {
+  return {
+    getLastData: vi.fn().mockReturnValue({
+      window_5h: { used_percentage: 45, resets_at: '2026-03-20T20:00:00Z' },
+      window_7d: { used_percentage: 62, resets_at: '2026-03-27T00:00:00Z' },
+      updated_at: '2026-03-20T15:00:00Z',
+      dataAvailable: true
+    }),
+    ...overrides
+  } as unknown as RateLimitReader
+}
+
 describe('setupIpcHandlers', () => {
   let tracker: ReturnType<typeof makeTracker>
   let store: ReturnType<typeof makeStore>
   let usageReader: ReturnType<typeof makeUsageReader>
   let promoChecker: ReturnType<typeof makePromoChecker>
+  let rateLimitReader: ReturnType<typeof makeRateLimitReader>
   let onOpenDashboard: ReturnType<typeof vi.fn>
   let handlers: Record<string, (...args: unknown[]) => unknown>
 
@@ -100,8 +114,16 @@ describe('setupIpcHandlers', () => {
     store = makeStore()
     usageReader = makeUsageReader()
     promoChecker = makePromoChecker()
+    rateLimitReader = makeRateLimitReader()
     onOpenDashboard = vi.fn()
-    setupIpcHandlers({ tracker, store, usageReader, promoChecker, onOpenDashboard })
+    setupIpcHandlers({
+      tracker,
+      store,
+      usageReader,
+      promoChecker,
+      rateLimitReader,
+      onOpenDashboard
+    })
   })
 
   describe('handler registration', () => {
@@ -120,6 +142,7 @@ describe('setupIpcHandlers', () => {
         'usage:get',
         'usage:refresh',
         'promo:get',
+        'ratelimits:get',
         'notifications:check-permission',
         'notifications:open-settings',
         'notifications:send-test',
@@ -268,6 +291,30 @@ describe('setupIpcHandlers', () => {
 
       expect(promoChecker.getLastData).toHaveBeenCalledOnce()
       expect(result).toEqual(expect.objectContaining({ is2x: true, promoActive: true }))
+    })
+  })
+
+  describe('ratelimits:get', () => {
+    it('should return last rate limit data from reader', () => {
+      const result = handlers['ratelimits:get']()
+
+      expect(rateLimitReader.getLastData).toHaveBeenCalledOnce()
+      expect(result).toEqual(
+        expect.objectContaining({
+          dataAvailable: true,
+          window_5h: expect.objectContaining({ used_percentage: 45 })
+        })
+      )
+    })
+
+    it('should return null when rateLimitReader is not provided', () => {
+      const localHandlers: Record<string, (...args: unknown[]) => unknown> = {}
+      mockHandle.mockImplementation((channel: string, handler: (...args: unknown[]) => unknown) => {
+        localHandlers[channel] = handler
+      })
+      setupIpcHandlers({ tracker, store, onOpenDashboard })
+      const result = localHandlers['ratelimits:get']()
+      expect(result).toBeNull()
     })
   })
 
