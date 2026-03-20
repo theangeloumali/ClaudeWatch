@@ -26,16 +26,27 @@ describe('setupWidgetSync', () => {
       getLastData: vi.fn(() => null)
     }
 
+    const rateLimitReader = {
+      getLastData: vi.fn(() => null),
+      onUpdate: vi.fn(() => () => {})
+    }
+
     const writer = {
       write: vi.fn().mockResolvedValue(undefined)
     }
 
-    setupWidgetSync({ tracker, usageReader, promoChecker, writer })
+    setupWidgetSync({ tracker, usageReader, promoChecker, rateLimitReader, writer })
 
     usageListener?.({ dataAvailable: true })
     await Promise.resolve()
 
     expect(writer.write).toHaveBeenCalledTimes(1)
-    expect(writer.write).toHaveBeenCalledWith([], tracker.getStats(), { dataAvailable: true }, null)
+    expect(writer.write).toHaveBeenCalledWith(
+      [],
+      tracker.getStats(),
+      { dataAvailable: true },
+      null,
+      null
+    )
   })
 })

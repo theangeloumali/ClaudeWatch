@@ -10,6 +10,7 @@ import { NotificationManager } from './notifications'
 import { AutoUpdaterManager } from './auto-updater'
 import { UsageStatsReader } from './usage-stats'
 import { PromoChecker } from './promo-checker'
+import { RateLimitReader } from './rate-limit-reader'
 import { setupIpcHandlers, forwardUpdatesToRenderer } from './ipc-handlers'
 import { createWidgetStatsWriter } from './widget-stats-writer'
 import { SoundPlayer } from './sound-player'
@@ -143,6 +144,7 @@ app.whenReady().then(() => {
   const usageReader = new UsageStatsReader(windowGetters)
   usageReader.setWeeklyTokenTarget(settings.weeklyTokenTarget)
   const promoChecker = new PromoChecker(windowGetters)
+  const rateLimitReader = new RateLimitReader(windowGetters)
 
   // Setup IPC bridge
   setupIpcHandlers({
@@ -151,6 +153,7 @@ app.whenReady().then(() => {
     updater,
     usageReader,
     promoChecker,
+    rateLimitReader,
     notifications,
     onOpenDashboard: showDashboard
   })
@@ -173,7 +176,7 @@ app.whenReady().then(() => {
   })
 
   if (widgetWriter) {
-    setupWidgetSync({ tracker, usageReader, promoChecker, writer: widgetWriter })
+    setupWidgetSync({ tracker, usageReader, promoChecker, rateLimitReader, writer: widgetWriter })
   }
 
   // Wire notification events
@@ -216,6 +219,9 @@ app.whenReady().then(() => {
 
   // Start usage stats polling (every 30s)
   usageReader.startPolling(30_000)
+
+  // Start rate limit polling (every 15s)
+  rateLimitReader.startPolling(15_000)
 
   // Start polling
   tracker.start(settings.pollingIntervalMs)

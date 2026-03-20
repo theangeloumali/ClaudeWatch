@@ -2,7 +2,13 @@ import { writeFile, mkdir, rename } from 'fs/promises'
 import { join } from 'path'
 import { homedir } from 'os'
 import { execFile } from 'child_process'
-import type { ClaudeInstance, InstanceUpdate, UsageStats, PromoStatus } from '../renderer/lib/types'
+import type {
+  ClaudeInstance,
+  InstanceUpdate,
+  UsageStats,
+  PromoStatus,
+  RateLimits
+} from '../renderer/lib/types'
 
 const APP_GROUP_ID = 'group.com.zkidzdev.claudewatch'
 
@@ -44,6 +50,14 @@ export interface WidgetPromoData {
   promoPeriod: string
 }
 
+export interface WidgetRateLimitData {
+  window5hPercent: number
+  window7dPercent: number
+  window5hResetsAt: string | null
+  window7dResetsAt: string | null
+  dataAvailable: boolean
+}
+
 export interface WidgetStatsPayload {
   updatedAt: string
   stats: {
@@ -56,6 +70,7 @@ export interface WidgetStatsPayload {
   instances: WidgetInstanceData[]
   usage: WidgetUsageData | null
   promo: WidgetPromoData | null
+  rateLimits: WidgetRateLimitData | null
 }
 
 export class WidgetStatsWriter {
@@ -94,7 +109,8 @@ export class WidgetStatsWriter {
     instances: ClaudeInstance[],
     stats: InstanceUpdate['stats'],
     usageStats?: UsageStats | null,
-    promoStatus?: PromoStatus | null
+    promoStatus?: PromoStatus | null,
+    rateLimitData?: RateLimits | null
   ): Promise<void> {
     this.writeChain = this.writeChain
       .catch(() => undefined)
@@ -117,6 +133,16 @@ export class WidgetStatsWriter {
               promoActive: promoStatus.promoActive,
               expiresInSeconds: promoStatus.expiresInSeconds,
               promoPeriod: promoStatus.promoPeriod
+            }
+          : null
+
+        const rateLimits: WidgetRateLimitData | null = rateLimitData?.dataAvailable
+          ? {
+              window5hPercent: rateLimitData.window_5h.used_percentage,
+              window7dPercent: rateLimitData.window_7d.used_percentage,
+              window5hResetsAt: rateLimitData.window_5h.resets_at,
+              window7dResetsAt: rateLimitData.window_7d.resets_at,
+              dataAvailable: true
             }
           : null
 
@@ -146,7 +172,8 @@ export class WidgetStatsWriter {
               elapsedSeconds: i.elapsedSeconds
             })),
           usage,
-          promo
+          promo,
+          rateLimits
         }
 
         const tmpPath = join(
