@@ -19,7 +19,9 @@
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
     "typecheck": "tsc --noEmit",
     "clean:dist-temp": "rm -rf dist/mac-universal-*-temp",
-    "publish:local": "npm run build && npm run build:widget && npm run clean:dist-temp && CSC_IDENTITY_AUTO_DISCOVERY=true node scripts/build-mac.js",
+    "changelog": "node scripts/generate-changelog.js",
+    "changelog:write": "node scripts/generate-changelog.js --write",
+    "publish:local": "npm run changelog && npm run build && npm run build:widget && npm run clean:dist-temp && CSC_IDENTITY_AUTO_DISCOVERY=true node scripts/build-mac.js",
     "release:patch": "npm version patch && npm run publish:local",
     "release:minor": "npm version minor && npm run publish:local",
     "release:major": "npm version major && npm run publish:local"

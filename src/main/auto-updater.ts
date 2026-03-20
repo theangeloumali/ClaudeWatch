@@ -20,9 +20,16 @@ export class AutoUpdaterManager {
     })
 
     autoUpdater.on('update-available', (info) => {
+      // releaseNotes can be a string or an array of { version, note } objects
+      let notes: string | undefined
+      if (typeof info.releaseNotes === 'string') {
+        notes = info.releaseNotes
+      } else if (Array.isArray(info.releaseNotes)) {
+        notes = info.releaseNotes.map((n) => n.note).join('\n\n')
+      }
       this.send('available', {
         version: info.version,
-        releaseNotes: info.releaseNotes
+        releaseNotes: notes
       })
     })
 

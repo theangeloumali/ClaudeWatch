@@ -56,3 +56,5 @@ publish:
   owner: theangeloumali
   repo: ClaudeWatch
   releaseType: release
+releaseInfo:
+  releaseNotesFile: release-notes.md
