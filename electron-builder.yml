@@ -17,6 +17,8 @@ files:
   - '!**/node_modules/**/LICENSE*'
   - '!**/node_modules/**/.github/**'
 afterPack: scripts/afterSign.js
+dmg:
+  writeUpdateInfo: false
 mac:
   artifactName: '${name}-${version}-${arch}.${ext}'
   target:
