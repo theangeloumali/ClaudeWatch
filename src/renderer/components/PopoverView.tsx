@@ -160,14 +160,14 @@ export function PopoverView() {
               weeklyTokenTarget={usage.weeklyTokenTarget}
             />
           )}
-          {rateLimits?.dataAvailable && <PopoverRateLimitPills rateLimits={rateLimits} />}
+          {rateLimits?.dataAvailable && <PopoverRateLimitBars rateLimits={rateLimits} />}
         </div>
       )}
 
       {/* Rate limits standalone (when usage unavailable) */}
       {!usage?.dataAvailable && rateLimits?.dataAvailable && (
         <div className="border-b border-border px-4 py-2">
-          <PopoverRateLimitPills rateLimits={rateLimits} />
+          <PopoverRateLimitBars rateLimits={rateLimits} />
         </div>
       )}
 
@@ -376,27 +376,49 @@ function PopoverWeeklyBar({
   )
 }
 
-function rateLimitColor(percent: number): string {
+function rateLimitBarColor(percent: number): string {
+  if (percent >= 80) return 'bg-red-400'
+  if (percent >= 50) return 'bg-amber-400'
+  return 'bg-status-active'
+}
+
+function rateLimitTextColor(percent: number): string {
   if (percent >= 80) return 'text-red-400'
   if (percent >= 50) return 'text-amber-400'
   return 'text-text-tertiary'
 }
 
-function PopoverRateLimitPills({ rateLimits }: { rateLimits: RateLimits }) {
+function PopoverRateLimitBars({ rateLimits }: { rateLimits: RateLimits }) {
   if (rateLimits.isVeryStale) return null
-
-  const p5h = Math.round(Math.min(100, rateLimits.window_5h.used_percentage))
-  const p7d = Math.round(Math.min(100, rateLimits.window_7d.used_percentage))
 
   return (
     <div
       className={cn(
-        'mt-1.5 flex items-center gap-3 text-[10px] tabular-nums',
+        'mt-1.5 flex flex-col gap-1.5 text-[10px] tabular-nums',
         rateLimits.isStale && 'opacity-60'
       )}
     >
-      <span className={rateLimitColor(p5h)}>5h: {p5h}%</span>
-      <span className={rateLimitColor(p7d)}>7d: {p7d}%</span>
+      <PopoverMiniBar label="5h" percent={rateLimits.window_5h.used_percentage} />
+      <PopoverMiniBar label="7d" percent={rateLimits.window_7d.used_percentage} />
+    </div>
+  )
+}
+
+function PopoverMiniBar({ label, percent: raw }: { label: string; percent: number }) {
+  const percent = Math.round(Math.min(100, raw))
+  return (
+    <div className="flex items-center gap-2">
+      <span className={cn('w-5 shrink-0', rateLimitTextColor(percent))}>{label}</span>
+      <div className="h-1 flex-1 overflow-hidden rounded-full bg-border">
+        <div
+          className={cn(
+            'h-full rounded-full transition-all duration-500',
+            rateLimitBarColor(percent)
+          )}
+          style={{ width: `${percent}%` }}
+        />
+      </div>
+      <span className={cn('w-7 text-right', rateLimitTextColor(percent))}>{percent}%</span>
     </div>
   )
 }
