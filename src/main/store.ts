@@ -66,4 +66,20 @@ export class SettingsStore {
   clearHistory(): void {
     this.store.set('history', [])
   }
+
+  getPopoverPinned(): boolean {
+    return this.store.get('popoverPinned', false) as boolean
+  }
+
+  setPopoverPinned(pinned: boolean): void {
+    this.store.set('popoverPinned', pinned)
+  }
+
+  getPopoverPosition(): { x: number; y: number } | null {
+    return this.store.get('popoverPosition', null) as { x: number; y: number } | null
+  }
+
+  setPopoverPosition(position: { x: number; y: number } | null): void {
+    this.store.set('popoverPosition', position)
+  }
 }

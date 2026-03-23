@@ -1,5 +1,15 @@
-import { useState, useEffect, useMemo } from 'react'
-import { Activity, Moon, XCircle, CheckCircle, Cpu, MemoryStick } from 'lucide-react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import {
+  Activity,
+  Moon,
+  XCircle,
+  CheckCircle,
+  Cpu,
+  MemoryStick,
+  Pin,
+  PinOff,
+  X
+} from 'lucide-react'
 import { cn, formatElapsedTime, formatCompactNumber, formatCurrency, timeAgo } from '../lib/utils'
 import { useUsage } from '../hooks/useUsage'
 import { usePromoStatus } from '../hooks/usePromoStatus'
@@ -41,6 +51,7 @@ interface GroupedInstances {
 export function PopoverView() {
   const [instances, setInstances] = useState<ClaudeInstance[]>([])
   const [stats, setStats] = useState(emptyStats)
+  const [isPinned, setIsPinned] = useState(false)
   const { usage } = useUsage()
   const { promo } = usePromoStatus()
   const { rateLimits } = useRateLimits()
@@ -53,12 +64,32 @@ export function PopoverView() {
       setStats(data.stats)
     })
 
+    // Load initial pin state
+    window.api.getPopoverPinned?.().then(setIsPinned)
+
     const unsubscribe = window.api.onInstancesUpdate((data) => {
       setInstances(data.instances)
       setStats(data.stats)
     })
 
-    return unsubscribe
+    // Listen for pin state changes from main process
+    const unsubscribePin = window.api.onPopoverPinChanged?.((pinned) => {
+      setIsPinned(pinned)
+    })
+
+    return () => {
+      unsubscribe()
+      unsubscribePin?.()
+    }
+  }, [])
+
+  const handleTogglePin = useCallback(() => {
+    const newPinned = !isPinned
+    window.api?.setPopoverPinned(newPinned)
+  }, [isPinned])
+
+  const handleClose = useCallback(() => {
+    window.api?.closePopover()
   }, [])
 
   const sorted = [...instances].sort((a, b) => {
@@ -107,7 +138,12 @@ export function PopoverView() {
     grouped.stale.length > 0
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-surface">
+    <div
+      className={cn(
+        'flex h-screen flex-col overflow-hidden bg-surface',
+        isPinned && 'drag-region ring-1 ring-accent/40 rounded-lg'
+      )}
+    >
       {/* Compact header */}
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="flex items-center gap-2">
@@ -118,31 +154,58 @@ export function PopoverView() {
             </span>
           )}
         </div>
-        <div className="flex items-center gap-3 text-mono-sm tabular-nums">
-          <span className="inline-flex items-center gap-1.5">
-            <span className="inline-block h-2 w-2 rounded-full bg-status-active" />
-            <span className="text-status-active">{stats.active}</span>
-          </span>
-          {stats.recentlyCompleted > 0 && (
+        <div className="no-drag flex items-center gap-2">
+          <div className="flex items-center gap-3 text-mono-sm tabular-nums">
             <span className="inline-flex items-center gap-1.5">
-              <span className="inline-block h-2 w-2 rounded-full bg-emerald-400" />
-              <span className="text-emerald-400">{stats.recentlyCompleted}</span>
+              <span className="inline-block h-2 w-2 rounded-full bg-status-active" />
+              <span className="text-status-active">{stats.active}</span>
             </span>
-          )}
-          <span className="inline-flex items-center gap-1.5">
-            <span className="inline-block h-2 w-2 rounded-full bg-status-idle" />
-            <span className="text-status-idle">{stats.idle}</span>
-          </span>
-          {stats.stale > 0 && (
+            {stats.recentlyCompleted > 0 && (
+              <span className="inline-flex items-center gap-1.5">
+                <span className="inline-block h-2 w-2 rounded-full bg-emerald-400" />
+                <span className="text-emerald-400">{stats.recentlyCompleted}</span>
+              </span>
+            )}
             <span className="inline-flex items-center gap-1.5">
-              <span className="inline-block h-2 w-2 rounded-full bg-text-tertiary" />
-              <span className="text-text-tertiary">{stats.stale}</span>
+              <span className="inline-block h-2 w-2 rounded-full bg-status-idle" />
+              <span className="text-status-idle">{stats.idle}</span>
             </span>
-          )}
-          <span className="inline-flex items-center gap-1.5">
-            <span className="inline-block h-2 w-2 rounded-full bg-status-exited" />
-            <span className="text-status-exited">{stats.exited}</span>
-          </span>
+            {stats.stale > 0 && (
+              <span className="inline-flex items-center gap-1.5">
+                <span className="inline-block h-2 w-2 rounded-full bg-text-tertiary" />
+                <span className="text-text-tertiary">{stats.stale}</span>
+              </span>
+            )}
+            <span className="inline-flex items-center gap-1.5">
+              <span className="inline-block h-2 w-2 rounded-full bg-status-exited" />
+              <span className="text-status-exited">{stats.exited}</span>
+            </span>
+          </div>
+          <div className="ml-1 flex items-center gap-0.5">
+            <button
+              type="button"
+              onClick={handleTogglePin}
+              className={cn(
+                'rounded p-1 transition-colors',
+                isPinned
+                  ? 'text-accent hover:bg-accent/15'
+                  : 'text-text-tertiary hover:bg-surface-hover hover:text-text-secondary'
+              )}
+              aria-label={isPinned ? 'Unpin window' : 'Pin window'}
+              title={isPinned ? 'Unpin window' : 'Pin window (always on top)'}
+            >
+              {isPinned ? <Pin className="h-3 w-3" /> : <PinOff className="h-3 w-3" />}
+            </button>
+            <button
+              type="button"
+              onClick={handleClose}
+              className="rounded p-1 text-text-tertiary transition-colors hover:bg-surface-hover hover:text-text-secondary"
+              aria-label="Close popover"
+              title="Close"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -172,7 +235,7 @@ export function PopoverView() {
       )}
 
       {/* Instance list with groups */}
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="no-drag min-h-0 flex-1 overflow-y-auto">
         {!hasGroupedContent ? (
           <div className="flex h-full items-center justify-center px-4 py-8">
             <span className="text-body text-text-tertiary">No instances detected</span>
@@ -215,7 +278,7 @@ export function PopoverView() {
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-2 border-t border-border px-4 py-3">
+      <div className="no-drag flex items-center gap-2 border-t border-border px-4 py-3">
         <button
           type="button"
           onClick={() => window.api?.openDashboard()}

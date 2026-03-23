@@ -9,6 +9,7 @@ import type { PromoChecker } from './promo-checker'
 import type { RateLimitReader } from './rate-limit-reader'
 import type { NotificationManager } from './notifications'
 import type { AppSettings } from '../renderer/lib/types'
+import type { TrayManager } from './tray'
 
 export function validateSettings(data: Partial<AppSettings>): Partial<AppSettings> {
   const validated = { ...data }
@@ -50,6 +51,7 @@ interface IpcHandlerOptions {
   rateLimitReader?: RateLimitReader
   notifications?: NotificationManager
   onOpenDashboard: () => void
+  getTrayManager?: () => TrayManager | null
 }
 
 export function setupIpcHandlers(options: IpcHandlerOptions): void {
@@ -61,7 +63,8 @@ export function setupIpcHandlers(options: IpcHandlerOptions): void {
     promoChecker,
     rateLimitReader,
     notifications,
-    onOpenDashboard
+    onOpenDashboard,
+    getTrayManager
   } = options
 
   const beginQuit = (): void => {
@@ -223,6 +226,26 @@ export function setupIpcHandlers(options: IpcHandlerOptions): void {
       )
     }
   )
+
+  // Popover pin controls
+  ipcMain.handle('popover:set-pinned', (_event: Electron.IpcMainInvokeEvent, pinned: boolean) => {
+    const tray = getTrayManager?.()
+    if (!tray) return { success: false }
+    tray.setPinned(pinned)
+    return { success: true }
+  })
+
+  ipcMain.handle('popover:get-pinned', () => {
+    const tray = getTrayManager?.()
+    return tray?.isPinned() ?? false
+  })
+
+  ipcMain.handle('popover:close', () => {
+    const tray = getTrayManager?.()
+    if (!tray) return { success: false }
+    tray.closePopover()
+    return { success: true }
+  })
 }
 
 export function forwardUpdatesToRenderer(

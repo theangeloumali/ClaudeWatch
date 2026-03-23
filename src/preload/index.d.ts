@@ -29,6 +29,10 @@ export interface ElectronAPI {
   onPromoUpdate: (callback: (data: PromoStatus) => void) => () => void
   getRateLimits: () => Promise<RateLimits | null>
   onRateLimitsUpdate: (callback: (data: RateLimits) => void) => () => void
+  setPopoverPinned: (pinned: boolean) => Promise<{ success: boolean }>
+  getPopoverPinned: () => Promise<boolean>
+  closePopover: () => Promise<{ success: boolean }>
+  onPopoverPinChanged: (callback: (pinned: boolean) => void) => () => void
 }
 
 declare global {

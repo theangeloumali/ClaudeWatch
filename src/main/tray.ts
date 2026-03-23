@@ -9,12 +9,14 @@ import {
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import type { ClaudeInstance, InstanceUpdate, PromoStatus } from '../renderer/lib/types'
+import type { SettingsStore } from './store'
 
 interface TrayManagerOptions {
   onOpenDashboard: () => void
   onQuit: () => void
   onCheckForUpdates?: () => void
   preloadPath: string
+  store: SettingsStore
 }
 
 const STATUS_EMOJI: Record<ClaudeInstance['status'], string> = {
@@ -34,6 +36,9 @@ export class TrayManager {
   private onQuit: () => void
   private onCheckForUpdates?: () => void
   private preloadPath: string
+  private store: SettingsStore
+  private pinned = false
+  private positionSaveTimeout: ReturnType<typeof setTimeout> | null = null
   private instances: ClaudeInstance[] = []
   private stats: InstanceUpdate['stats'] = {
     total: 0,
@@ -50,6 +55,8 @@ export class TrayManager {
     this.onQuit = options.onQuit
     this.onCheckForUpdates = options.onCheckForUpdates
     this.preloadPath = options.preloadPath
+    this.store = options.store
+    this.pinned = this.store.getPopoverPinned()
     this.createTray()
     this.createPopover()
   }
@@ -83,7 +90,7 @@ export class TrayManager {
       show: false,
       frame: false,
       resizable: false,
-      movable: false,
+      movable: this.pinned,
       minimizable: false,
       maximizable: false,
       fullscreenable: false,
@@ -92,6 +99,7 @@ export class TrayManager {
       vibrancy: 'popover',
       visualEffectState: 'active',
       roundedCorners: true,
+      alwaysOnTop: this.pinned,
       webPreferences: {
         preload: this.preloadPath,
         sandbox: false,
@@ -99,9 +107,27 @@ export class TrayManager {
       }
     })
 
-    // Hide on blur
+    if (this.pinned) {
+      this.popover.setAlwaysOnTop(true, 'floating')
+    }
+
+    // Hide on blur (only when not pinned)
     this.popover.on('blur', () => {
-      this.hidePopover()
+      if (!this.pinned) {
+        this.hidePopover()
+      }
+    })
+
+    // Save position when moved (debounced, only when pinned)
+    this.popover.on('moved', () => {
+      if (!this.pinned || !this.popover || this.popover.isDestroyed()) return
+      if (this.positionSaveTimeout) clearTimeout(this.positionSaveTimeout)
+      this.positionSaveTimeout = setTimeout(() => {
+        if (this.popover && !this.popover.isDestroyed()) {
+          const [x, y] = this.popover.getPosition()
+          this.store.setPopoverPosition({ x, y })
+        }
+      }, 300)
     })
 
     // Load the renderer with #popover hash
@@ -125,23 +151,16 @@ export class TrayManager {
   private showPopover(): void {
     if (!this.popover || this.popover.isDestroyed() || !this.tray) return
 
-    const trayBounds = this.tray.getBounds()
-    const display = screen.getDisplayNearestPoint({
-      x: trayBounds.x,
-      y: trayBounds.y
-    })
+    if (this.pinned) {
+      const savedPos = this.store.getPopoverPosition()
+      if (savedPos && this.isPositionOnScreen(savedPos.x, savedPos.y)) {
+        this.popover.setPosition(savedPos.x, savedPos.y)
+        this.popover.show()
+        return
+      }
+    }
 
-    // Position below tray icon, centered horizontally
-    const x = Math.round(trayBounds.x + trayBounds.width / 2 - POPOVER_WIDTH / 2)
-    const y = trayBounds.y + trayBounds.height + 4
-
-    // Clamp to screen bounds
-    const clampedX = Math.max(
-      display.workArea.x,
-      Math.min(x, display.workArea.x + display.workArea.width - POPOVER_WIDTH)
-    )
-
-    this.popover.setPosition(clampedX, y)
+    this.positionPopoverAtTray()
     this.popover.show()
   }
 
@@ -149,6 +168,61 @@ export class TrayManager {
     if (this.popover && !this.popover.isDestroyed() && this.popover.isVisible()) {
       this.popover.hide()
     }
+  }
+
+  /** Position the popover below the tray icon, clamped to screen bounds */
+  private positionPopoverAtTray(): void {
+    if (!this.popover || this.popover.isDestroyed() || !this.tray) return
+
+    const trayBounds = this.tray.getBounds()
+    const display = screen.getDisplayNearestPoint({
+      x: trayBounds.x,
+      y: trayBounds.y
+    })
+
+    const x = Math.round(trayBounds.x + trayBounds.width / 2 - POPOVER_WIDTH / 2)
+    const y = trayBounds.y + trayBounds.height + 4
+    const clampedX = Math.max(
+      display.workArea.x,
+      Math.min(x, display.workArea.x + display.workArea.width - POPOVER_WIDTH)
+    )
+
+    this.popover.setPosition(clampedX, y)
+  }
+
+  private isPositionOnScreen(x: number, y: number): boolean {
+    const displays = screen.getAllDisplays()
+    return displays.some((display) => {
+      const { x: dx, y: dy, width, height } = display.workArea
+      return x + 50 > dx && x < dx + width && y + 50 > dy && y < dy + height
+    })
+  }
+
+  setPinned(pinned: boolean): void {
+    if (!this.popover || this.popover.isDestroyed()) return
+
+    this.pinned = pinned
+    this.popover.setAlwaysOnTop(pinned, pinned ? 'floating' : 'normal')
+    this.popover.setMovable(pinned)
+    this.store.setPopoverPinned(pinned)
+    this.popover.webContents.send('popover:pin-changed', pinned)
+
+    if (!pinned) {
+      this.store.setPopoverPosition(null)
+      if (this.popover.isVisible()) {
+        this.positionPopoverAtTray()
+      }
+    }
+  }
+
+  isPinned(): boolean {
+    return this.pinned
+  }
+
+  /** Close the popover (unpin + hide) */
+  closePopover(): void {
+    this.setPinned(false)
+    this.hidePopover()
   }
 
   private showContextMenu(): void {
@@ -244,6 +318,10 @@ export class TrayManager {
   }
 
   destroy(): void {
+    if (this.positionSaveTimeout) {
+      clearTimeout(this.positionSaveTimeout)
+      this.positionSaveTimeout = null
+    }
     if (this.popover) {
       this.popover.destroy()
       this.popover = null

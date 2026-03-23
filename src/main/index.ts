@@ -133,7 +133,8 @@ app.whenReady().then(() => {
       app.quit()
     },
     onCheckForUpdates: () => updater.checkForUpdates(),
-    preloadPath: join(__dirname, '../preload/index.js')
+    preloadPath: join(__dirname, '../preload/index.js'),
+    store
   })
 
   // Initialize usage stats reader and promo checker
@@ -155,7 +156,8 @@ app.whenReady().then(() => {
     promoChecker,
     rateLimitReader,
     notifications,
-    onOpenDashboard: showDashboard
+    onOpenDashboard: showDashboard,
+    getTrayManager: () => trayManager
   })
 
   // Forward tracker updates to renderer windows (main + popover) and tray

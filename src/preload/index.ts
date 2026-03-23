@@ -101,7 +101,23 @@ const api = {
   isStatuslineConfigured: (): Promise<boolean> =>
     ipcRenderer.invoke('ratelimits:statusline-status'),
 
-  setupRateLimitSync: (): Promise<boolean> => ipcRenderer.invoke('ratelimits:setup-statusline')
+  setupRateLimitSync: (): Promise<boolean> => ipcRenderer.invoke('ratelimits:setup-statusline'),
+
+  // Popover pin controls
+  setPopoverPinned: (pinned: boolean): Promise<{ success: boolean }> =>
+    ipcRenderer.invoke('popover:set-pinned', pinned),
+
+  getPopoverPinned: (): Promise<boolean> => ipcRenderer.invoke('popover:get-pinned'),
+
+  closePopover: (): Promise<{ success: boolean }> => ipcRenderer.invoke('popover:close'),
+
+  onPopoverPinChanged: (callback: (pinned: boolean) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, pinned: boolean): void => callback(pinned)
+    ipcRenderer.on('popover:pin-changed', handler)
+    return () => {
+      ipcRenderer.removeListener('popover:pin-changed', handler)
+    }
+  }
 }
 
 export type ElectronAPI = typeof api
