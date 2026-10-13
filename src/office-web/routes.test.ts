@@ -144,7 +144,8 @@ describe('createApi', () => {
       socket.resume()
 
       await closed
-      expect(listeners.size).toBe(0)
+      // The client can see the socket close before the server runs its own close handler.
+      await vi.waitFor(() => expect(listeners.size).toBe(0))
     })
 
     it('answers 405 to anything but a GET', async () => {

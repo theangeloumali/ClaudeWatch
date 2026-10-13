@@ -22,6 +22,10 @@ describe('launch token', () => {
   })
 })
 
+// Windows has no POSIX modes (stat reports 0o666); the file's privacy there comes from the
+// profile folder's ACL, so only the content is checked.
+const hasPosixModes = process.platform !== 'win32'
+
 describe('writeLaunchFile', () => {
   const token = createLaunchToken()
   let home: string
@@ -38,6 +42,7 @@ describe('writeLaunchFile', () => {
     const path = await writeLaunchFile(folder, 5199, token, true)
 
     expect(path).toBe(join(folder, 'launch-5199.html'))
+    if (!hasPosixModes) return
     expect((await stat(path)).mode & 0o777).toBe(0o600)
     expect((await stat(folder)).mode & 0o777).toBe(0o700)
   })
@@ -65,7 +70,7 @@ describe('writeLaunchFile', () => {
 
     await writeLaunchFile(folder, 5199, token, true)
 
-    expect((await stat(path)).mode & 0o777).toBe(0o600)
     expect(await readFile(path, 'utf8')).not.toContain('stale')
+    if (hasPosixModes) expect((await stat(path)).mode & 0o777).toBe(0o600)
   })
 })

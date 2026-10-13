@@ -24,6 +24,7 @@ import { setupOffice } from './office-setup'
 import { paceBridgeByWindows } from './bridge-pace'
 import { opensOfficeOnStart } from './office-window'
 import { createAccountLedger } from './accounts'
+import { dashboardChrome } from './window-chrome'
 
 // Prevent "write EIO" crashes when stdout/stderr pipe is broken
 // (e.g., launching terminal closed, or running packaged without a TTY)
@@ -45,12 +46,7 @@ function createWindow(store: SettingsStore): BrowserWindow {
     minWidth: 600,
     minHeight: 400,
     show: false,
-    frame: false,
-    transparent: true,
-    vibrancy: 'under-window',
-    visualEffectState: 'active',
-    titleBarStyle: 'hiddenInset',
-    trafficLightPosition: { x: 15, y: 15 },
+    ...dashboardChrome(),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js')
     }
@@ -100,6 +96,9 @@ function showDashboard(): void {
     mainWindow.focus()
   }
 }
+
+// Windows attributes toasts to this id; without it a packaged app's notifications never show.
+if (process.platform === 'win32') app.setAppUserModelId('com.zkidzdev.claudewatch')
 
 // One copy only: a login item plus a manual start would otherwise run two Offices and two
 // bridges. Development runs are left alone so they can sit beside the installed app.

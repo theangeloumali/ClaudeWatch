@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join, relative, resolve, sep } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { loadStaticFiles } from './static-files'
 
@@ -38,7 +38,8 @@ describe('sync-office-to-framework', () => {
   const listed = async (folder: string): Promise<string[]> =>
     (await readdir(folder, { recursive: true, withFileTypes: true }))
       .filter((entry) => entry.isFile())
-      .map((entry) => join(entry.parentPath, entry.name).slice(folder.length + 1))
+      // Listed the way the manifest names files: relative, with forward slashes on every platform.
+      .map((entry) => relative(folder, join(entry.parentPath, entry.name)).split(sep).join('/'))
       .sort()
 
   beforeEach(async () => {

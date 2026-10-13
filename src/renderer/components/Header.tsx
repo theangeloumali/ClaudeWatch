@@ -17,13 +17,19 @@ const pages: { view: ViewType; label: string }[] = [
 ]
 
 export function Header({ currentView, onViewChange }: HeaderProps) {
+  const platform = window.api?.platform
+  const isMac = platform === 'darwin'
   return (
     <header
-      className="drag-region flex h-11 shrink-0 items-stretch gap-4 bg-surface-rail pr-3"
+      className={cn(
+        'drag-region flex h-11 shrink-0 items-stretch gap-4 bg-surface-rail pr-3',
+        !isMac && 'pl-4'
+      )}
       role="banner"
     >
-      {/* Room for the macOS traffic lights. */}
-      <div className="w-[78px] shrink-0" aria-hidden="true" />
+      {isMac && (
+        <div data-testid="traffic-light-space" className="w-[78px] shrink-0" aria-hidden="true" />
+      )}
 
       <div className="flex items-center gap-1.5 pt-[3px] font-plate text-[19px] font-bold leading-none">
         <Lamp className="-mt-[3px] size-4 text-gold" aria-hidden="true" />
@@ -51,6 +57,15 @@ export function Header({ currentView, onViewChange }: HeaderProps) {
           )
         })}
       </nav>
+
+      {/* Three 46 px native caption buttons sit over this corner (titleBarOverlay). */}
+      {platform === 'win32' && (
+        <div
+          data-testid="caption-button-space"
+          className="ml-auto w-[138px] shrink-0"
+          aria-hidden="true"
+        />
+      )}
     </header>
   )
 }

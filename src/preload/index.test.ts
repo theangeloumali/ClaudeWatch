@@ -28,6 +28,10 @@ describe('dashboard preload', () => {
     api = exposed.api as ElectronAPI
   })
 
+  it('tells the renderer which platform it runs on, for its window chrome', () => {
+    expect(api.platform).toBe(process.platform)
+  })
+
   it('asks main to focus a session by pid and returns where it landed', async () => {
     const landedOnApp = { success: false, reason: 'terminal-not-found', target: 'app' }
     ipcRenderer.invoke.mockResolvedValue(landedOnApp)
