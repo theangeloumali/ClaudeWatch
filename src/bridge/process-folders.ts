@@ -20,14 +20,17 @@ export function isAppFolder(folder: string, platform: NodeJS.Platform = process.
   return WINDOWS_INSTALL_ROOT.test(folderKey(folder, platform))
 }
 
+// `kind`, where known, is what began a conversation and what a process can begin.
 export interface WrittenConversation {
   folder: string
   createdAtMs: number | null
   writtenAtMs: number
+  kind?: string
 }
 interface LiveProcess {
   pid: number
   startedAtMs: number
+  kind?: string
 }
 
 // Windows names no process's folder, so a process waiting for one is placed in the folder of a
@@ -51,8 +54,12 @@ export function claimFolders(
       return process.startedAtMs <= conversation.writtenAtMs
     })
     const { createdAtMs } = conversation
+    const canBegin = ({ kind }: LiveProcess): boolean =>
+      kind === undefined || conversation.kind === undefined || kind === conversation.kind
     const creators =
-      createdAtMs === null ? [] : writers.filter(({ startedAtMs }) => startedAtMs <= createdAtMs)
+      createdAtMs === null
+        ? []
+        : writers.filter((process) => process.startedAtMs <= createdAtMs && canBegin(process))
     const candidates = creators.length ? creators : writers
     const [owner] = candidates
     if (candidates.length === 1 && folderOf(owner) === undefined)

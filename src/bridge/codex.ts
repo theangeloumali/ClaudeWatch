@@ -11,7 +11,7 @@ import { programName } from '../shared/platform-process'
 import { claimFolders, folderKey, isAppFolder } from './process-folders'
 import { type BridgeIo, folderName, isLabel, isMissing, jsonObject, object } from './io'
 import { placementOf, resolveProject } from './project-root'
-import { findRollouts, type Rollout } from './codex-rollouts'
+import { type CodexKind, findRollouts, type Rollout } from './codex-rollouts'
 import { parseCodexUsage } from './codex-usage'
 import { NEXT_STEP_MS } from './opencode-activity'
 import { isStillWorking, OPEN_TOOL_HOLD_MS, quietFor } from './liveness'
@@ -33,18 +33,26 @@ function isAppServer({ argv }: ProcessRow): boolean {
   return programName(argv[0]) === 'codex' && argv.includes('app-server', 1)
 }
 
-export function codexProcesses(rows: ProcessRow[]): { pid: number; startedAtMs: number }[] {
+const sessionCommandOf = (argv: string[]): number =>
+  argv.findIndex((arg) => /^(exec|e|resume|fork)$/.test(arg))
+
+export function codexProcesses(
+  rows: ProcessRow[]
+): { pid: number; startedAtMs: number; kind: CodexKind }[] {
   return rows
     .filter(({ argv }) => {
       if (programName(argv[0]) !== 'codex') return false
-      const sessionCommand = argv.findIndex((arg) => /^(exec|e|resume|fork)$/.test(arg))
+      const sessionCommand = sessionCommandOf(argv)
       // An exec prompt may mention a helper; only command arguments precede it.
       const commandArgs = argv.slice(1, sessionCommand < 0 ? undefined : sessionCommand)
       return !commandArgs.some((arg) =>
         /^(app-server|exec-server|mcp-server|sandbox|helper)(?:$|-)/.test(arg)
       )
     })
-    .map(({ pid, startedAtMs }) => ({ pid, startedAtMs }))
+    .map(({ pid, startedAtMs, argv }) => {
+      const command = argv[sessionCommandOf(argv)]
+      return { pid, startedAtMs, kind: command === 'exec' || command === 'e' ? 'exec' : 'terminal' }
+    })
 }
 
 const CALLS = new Set(['function_call', 'custom_tool_call', 'local_shell_call'])
@@ -294,15 +302,16 @@ export async function collectCodex(
     }
     if (platform === 'win32') {
       const threads = rollouts.filter(
-        ({ cliStarted, cwd }) => cliStarted && !isAppFolder(cwd, platform)
+        ({ startedBy, cwd }) => startedBy !== null && !isAppFolder(cwd, platform)
       )
       claimFolders(
         processes,
         folders,
-        threads.map(({ cwd, startedAtMs, mtimeMs }) => ({
+        threads.map(({ cwd, startedAtMs, mtimeMs, startedBy }) => ({
           folder: cwd,
           createdAtMs: startedAtMs,
-          writtenAtMs: mtimeMs
+          writtenAtMs: mtimeMs,
+          kind: startedBy === 'cli' ? undefined : (startedBy ?? undefined)
         }))
       )
     }

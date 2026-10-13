@@ -172,6 +172,33 @@ it('gives a Windows process that has written nothing yet no other process’s th
   expect(sessions.map(({ pid, sessionId }) => [pid, sessionId])).toEqual([[43, 'theirs']])
 })
 
+it.each([
+  ['a `codex exec` beside an idle terminal', 'exec', `${VENDOR_CODEX} exec hi`, VENDOR_CODEX],
+  ['a terminal beside an idle `codex exec`', 'cli', VENDOR_CODEX, `${VENDOR_CODEX} exec hi`]
+])('places %s by the kind of thread it writes', async (_, source, writer, idle) => {
+  const io = codexHome({
+    theirs: {
+      header: meta('theirs', 'C:\\Users\\a\\repo', { source, ...createdAt(70_000) }),
+      mtimeMs: STARTED_MS + 75_000
+    }
+  })
+  const rows = [row(42, idle), row(43, writer, STARTED_MS + 60_000)]
+  const { sessions } = await collect(io, rows, STARTED_MS + 80_000)
+  expect(sessions.map(({ pid, sessionId }) => [pid, sessionId])).toEqual([[43, 'theirs']])
+})
+
+it('places a Windows terminal at a thread `codex exec` began, which it resumed', async () => {
+  const io = codexHome({
+    resumed: {
+      header: meta('resumed', 'C:\\Users\\a\\repo', { source: 'exec', ...createdAt(-86_400_000) }),
+      mtimeMs: STARTED_MS + 30_000
+    }
+  })
+  const rows = [row(42, `${VENDOR_CODEX} resume`)]
+  const [session] = (await collect(io, rows, STARTED_MS + 40_000)).sessions
+  expect(session).toMatchObject({ pid: 42, sessionId: 'resumed' })
+})
+
 it('places a Windows process at the thread it resumed, begun before it started', async () => {
   const io = codexHome({
     resumed: {

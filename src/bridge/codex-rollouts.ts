@@ -13,8 +13,9 @@ export interface Rollout {
   startedAtMs: number | null
   // The account the session was created under, hashed here so its id never leaves this file.
   accountKey: string | null
-  // Started by a CLI process, not by an app-server or as another thread's subagent.
-  cliStarted: boolean
+  // The CLI as a terminal or `codex exec` (just 'cli' when Codex recorded no source), or null
+  // for an app-server's thread or another thread's subagent.
+  startedBy: CodexKind | 'cli' | null
 }
 interface CachedRollout {
   mtimeMs: number
@@ -22,9 +23,13 @@ interface CachedRollout {
   derived: boolean
   rollout: Rollout | null
 }
+export type CodexKind = 'terminal' | 'exec'
 // Rollouts written before Codex recorded a source came from the CLI.
-const isCliSource = (source: unknown): boolean =>
-  source === undefined || source === 'cli' || source === 'exec'
+function startedBy(source: unknown): Rollout['startedBy'] {
+  if (source === 'cli') return 'terminal'
+  if (source === 'exec') return 'exec'
+  return source === undefined ? 'cli' : null
+}
 const caches = new WeakMap<BridgeIo, Map<string, Map<string, CachedRollout>>>()
 
 // An account key is derived only when asked for: with accounts unwatched, no identity value is.
@@ -92,7 +97,7 @@ export async function findRollouts(
               derivesAccounts && typeof creator === 'string' && creator
                 ? accountKey('codex', creator)
                 : null,
-            cliStarted: isCliSource(meta.source)
+            startedBy: startedBy(meta.source)
           }
           rollouts.push(rollout)
         }
