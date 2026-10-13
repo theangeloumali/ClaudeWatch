@@ -1,7 +1,7 @@
 import { join, win32 } from 'node:path'
 import type { SessionRef, SourceHealth, SubagentRef, TokenCounts } from '../shared/office/types'
 import { zeroCounts } from '../shared/office/token-counts'
-import { isAppFolder, isFolderPath, ownConversation } from './process-folders'
+import { claimFolders, isAppFolder, isFolderPath } from './process-folders'
 import { type BridgeIo, displayName, folderName, isLabel } from './io'
 import {
   OPENCODE_IDLE,
@@ -104,26 +104,24 @@ type AgentProcess = OpencodeProcess & { cwd: string }
 // A Windows process whose folder is not yet known has none.
 type LocatedProcess = OpencodeProcess & { cwd: string | null }
 
-// The folder of the session a Windows process began; remembered, as `lsof`'s answer is elsewhere.
-function claimedFolder(
+// Places the Windows processes still waiting for a folder, from the root sessions written since
+// the first of them started.
+function claimOpencodeFolders(
   query: OpencodeQuery,
-  process: OpencodeProcess,
-  taken: Set<string>,
+  located: LocatedProcess[],
   folders: Map<string, string>
-): string | undefined {
-  const written = query('recentRootSessions', process.startedAtMs).flatMap((row) => {
-    const { id, directory, time_created: createdAtMs } = row
-    if (typeof id !== 'string' || taken.has(id) || typeof directory !== 'string') return []
+): void {
+  const waiting = located.filter(({ cwd }) => cwd === null)
+  if (!waiting.length) return
+  const since = Math.min(...waiting.map(({ startedAtMs }) => startedAtMs))
+  const sessions = query('recentRootSessions', since).flatMap((row) => {
+    const { directory, time_created: createdAtMs, time_updated: writtenAtMs } = row
+    if (typeof directory !== 'string' || typeof writtenAtMs !== 'number') return []
     if (!isFolderPath(directory, 'win32') || isAppFolder(directory, 'win32')) return []
-    return [{ directory, createdAtMs: typeof createdAtMs === 'number' ? createdAtMs : null }]
+    const created = typeof createdAtMs === 'number' ? createdAtMs : null
+    return [{ folder: directory, createdAtMs: created, writtenAtMs }]
   })
-  const cwd = ownConversation(
-    written,
-    process.startedAtMs,
-    ({ createdAtMs }) => createdAtMs
-  )?.directory
-  if (cwd) folders.set(identityOf(process), cwd)
-  return cwd
+  claimFolders(located, folders, sessions)
 }
 
 // The newest session in the process's folder that it can have written: one last touched before
@@ -207,10 +205,11 @@ export async function collectOpencode(
     if (!running.length) return { sessions: [], sources: [health] }
 
     const taken = new Set<string>()
-    const conversations = await io.readOpencode(join(root, 'opencode.db'), (query) =>
-      running.map((located) => {
+    const conversations = await io.readOpencode(join(root, 'opencode.db'), (query) => {
+      if (platform === 'win32') claimOpencodeFolders(query, running, folders)
+      return running.map((located) => {
         try {
-          const cwd = located.cwd ?? claimedFolder(query, located, taken, folders)
+          const cwd = located.cwd ?? folders.get(identityOf(located))
           if (!cwd) return null
           const process = { ...located, cwd }
           return { process, conversation: readConversation(query, process, taken, now) }
@@ -222,7 +221,7 @@ export async function collectOpencode(
           return null
         }
       })
-    )
+    })
     const sessions: SessionRef[] = []
     for (const found of conversations) {
       if (!found) continue
