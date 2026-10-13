@@ -15,7 +15,15 @@ function fnv1a64(text: string): string {
 // Floor identity for a project. Callers pass the resolved project root (the bridge
 // resolves the git common dir); this stays pure so the renderer can import it.
 export function projectKey(projectRoot: string): string {
-  return `p_${fnv1a64(withoutTrailingSeparators(projectRoot))}`
+  return `p_${fnv1a64(withoutTrailingSeparators(windowsFolded(projectRoot)))}`
+}
+
+// A drive-letter or UNC root names one folder whatever its case or slash direction; POSIX
+// roots stay byte-for-byte, so macOS keys never change.
+const WINDOWS_ROOT = /^(?:[A-Za-z]:(?:[\\/]|$)|\\\\[^\\/])/
+
+function windowsFolded(path: string): string {
+  return WINDOWS_ROOT.test(path) ? path.replace(/\//g, '\\').toLowerCase() : path
 }
 
 // A bare root keeps one separator: '/' must not hash as '', nor 'C:\' as the drive-relative 'C:'.

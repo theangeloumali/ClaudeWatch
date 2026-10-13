@@ -38,6 +38,9 @@ const STATUS_EMOJI: Record<ClaudeInstance['status'], string> = {
 
 const POPOVER_WIDTH = 320
 const POPOVER_HEIGHT = 420
+// Clicking the tray blurs the popover before the click event arrives (Windows); a click this
+// soon after a blur-hide is that same gesture, so it dismisses instead of reopening.
+const BLUR_CLICK_WINDOW_MS = 300
 
 export class TrayManager {
   private tray: Tray | null = null
@@ -51,6 +54,7 @@ export class TrayManager {
   private platform: NodeJS.Platform
   private store: TrayManagerOptions['store']
   private pinned = false
+  private blurHiddenAt: number | null = null
   private positionSaveTimeout: ReturnType<typeof setTimeout> | null = null
   private instances: ClaudeInstance[] = []
   private stats: InstanceUpdate['stats'] = {
@@ -135,7 +139,8 @@ export class TrayManager {
 
     // Hide on blur (only when not pinned)
     this.popover.on('blur', () => {
-      if (!this.pinned) {
+      if (!this.pinned && this.popover?.isVisible()) {
+        this.blurHiddenAt = Date.now()
         this.hidePopover()
       }
     })
@@ -162,6 +167,11 @@ export class TrayManager {
 
   private togglePopover(): void {
     if (!this.popover || this.popover.isDestroyed()) return
+
+    const hiddenByThisClick =
+      this.blurHiddenAt !== null && Date.now() - this.blurHiddenAt < BLUR_CLICK_WINDOW_MS
+    this.blurHiddenAt = null
+    if (hiddenByThisClick) return
 
     if (this.popover.isVisible()) {
       this.hidePopover()

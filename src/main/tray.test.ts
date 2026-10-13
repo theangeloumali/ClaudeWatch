@@ -1,39 +1,56 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MenuItemConstructorOptions } from 'electron'
 import type { ClaudeInstance, PromoStatus } from '../renderer/lib/types'
 
-const { trayListeners, buildFromTemplate, trayMock, TrayCtor, nativeImage, popover, windows } =
-  vi.hoisted(() => {
-    const trayMock = {
-      setTitle: vi.fn(),
-      setToolTip: vi.fn(),
-      popUpContextMenu: vi.fn(),
-      destroy: vi.fn(),
-      getBounds: vi.fn(() => ({ x: 0, y: 0, width: 0, height: 0 })),
-      on: vi.fn()
-    }
-    const popover = {
-      on: vi.fn(),
-      loadFile: vi.fn(),
-      isDestroyed: () => false,
-      isVisible: vi.fn(() => false),
-      setPosition: vi.fn(),
-      show: vi.fn(),
-      hide: vi.fn()
-    }
-    return {
-      trayListeners: new Map<string, () => void>(),
-      buildFromTemplate: vi.fn((template: unknown) => template),
-      trayMock,
-      TrayCtor: vi.fn(() => trayMock),
-      nativeImage: {
-        createEmpty: vi.fn(() => ({ kind: 'empty' })),
-        createFromPath: vi.fn((path: string) => ({ path }))
-      },
-      popover,
-      windows: vi.fn((_options: unknown) => popover)
-    }
-  })
+const {
+  trayListeners,
+  popoverListeners,
+  popoverState,
+  buildFromTemplate,
+  trayMock,
+  TrayCtor,
+  nativeImage,
+  popover,
+  windows
+} = vi.hoisted(() => {
+  const popoverListeners = new Map<string, () => void>()
+  const popoverState = { visible: false }
+  const trayMock = {
+    setTitle: vi.fn(),
+    setToolTip: vi.fn(),
+    popUpContextMenu: vi.fn(),
+    destroy: vi.fn(),
+    getBounds: vi.fn(() => ({ x: 0, y: 0, width: 0, height: 0 })),
+    on: vi.fn()
+  }
+  const popover = {
+    on: vi.fn((event: string, listener: () => void) => popoverListeners.set(event, listener)),
+    loadFile: vi.fn(),
+    isDestroyed: () => false,
+    isVisible: () => popoverState.visible,
+    setPosition: vi.fn(),
+    show: vi.fn(() => {
+      popoverState.visible = true
+    }),
+    hide: vi.fn(() => {
+      popoverState.visible = false
+    })
+  }
+  return {
+    trayListeners: new Map<string, () => void>(),
+    popoverListeners,
+    popoverState,
+    buildFromTemplate: vi.fn((template: unknown) => template),
+    trayMock,
+    TrayCtor: vi.fn(() => trayMock),
+    nativeImage: {
+      createEmpty: vi.fn(() => ({ kind: 'empty' })),
+      createFromPath: vi.fn((path: string) => ({ path }))
+    },
+    popover,
+    windows: vi.fn((_options: unknown) => popover)
+  }
+})
 vi.mock('electron', () => ({
   Tray: TrayCtor,
   Menu: { buildFromTemplate },
@@ -93,6 +110,8 @@ const createTray = (platform: NodeJS.Platform = 'darwin'): TrayManager =>
 beforeEach(() => {
   vi.clearAllMocks()
   trayListeners.clear()
+  popoverListeners.clear()
+  popoverState.visible = false
   trayMock.on.mockImplementation((event: string, listener: () => void) =>
     trayListeners.set(event, listener)
   )
@@ -196,5 +215,49 @@ describe('TrayManager on Windows', () => {
     expect(options).not.toHaveProperty('transparent')
     expect(options).not.toHaveProperty('vibrancy')
     expect(options).not.toHaveProperty('visualEffectState')
+  })
+})
+
+describe('TrayManager tray click while the popover is open', () => {
+  const clickTray = (): void => trayListeners.get('click')?.()
+  const blurPopover = (): void => popoverListeners.get('blur')?.()
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    createTray('win32')
+    clickTray()
+    expect(popoverState.visible).toBe(true)
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('closes it when the popover loses focus first, as clicking the taskbar does on Windows', () => {
+    blurPopover()
+    vi.advanceTimersByTime(120)
+    clickTray()
+    expect(popoverState.visible).toBe(false)
+    expect(popover.show).toHaveBeenCalledOnce()
+  })
+
+  it('closes it when the click arrives before the popover loses focus', () => {
+    clickTray()
+    blurPopover()
+    expect(popoverState.visible).toBe(false)
+    expect(popover.show).toHaveBeenCalledOnce()
+  })
+
+  it('opens it again on a later click, once the dismiss has passed', () => {
+    blurPopover()
+    vi.advanceTimersByTime(400)
+    clickTray()
+    expect(popoverState.visible).toBe(true)
+  })
+
+  it('opens it on the next click after a dismissing one', () => {
+    blurPopover()
+    clickTray()
+    clickTray()
+    expect(popoverState.visible).toBe(true)
   })
 })
