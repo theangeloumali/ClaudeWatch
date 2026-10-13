@@ -37,9 +37,25 @@ describe('liveness on Windows', () => {
     const io = fixtureIo()
     const exec = vi.fn(async () => entry.procStart)
     io.exec = exec
-    expect(await isLive(entry, io, [row(42, '134361197520000001')], 'win32')).toBe(false)
     expect(await isLive(entry, io, [row(42, entry.procStart)], 'win32')).toBe(true)
+    expect(await isLive(entry, io, [row(42, '134361197520000001')], 'win32')).toBe(false)
     expect(exec).not.toHaveBeenCalled()
+  })
+  it('remembers a start proven gone, and asks nothing of it again', async () => {
+    const io = fixtureIo()
+    const exec = vi.fn(async () => '134361197520000009\r\n')
+    io.exec = exec
+    expect(await isLive(entry, io, [], 'win32')).toBe(false)
+    expect(await isLive(entry, io, [], 'win32')).toBe(false)
+    expect(exec).toHaveBeenCalledOnce()
+  })
+  it('asks again of a start it was answered nothing for, which proves nothing', async () => {
+    const io = fixtureIo()
+    const exec = vi.fn(async () => '')
+    io.exec = exec
+    await isLive(entry, io, [], 'win32')
+    await isLive(entry, io, [], 'win32')
+    expect(exec).toHaveBeenCalledTimes(2)
   })
   it('takes a pid PowerShell answers no process for as dead', async () => {
     const io = fixtureIo()

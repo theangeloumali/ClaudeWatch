@@ -89,6 +89,11 @@ describe('the process table on Windows', () => {
     const [second] = await readProcessTable(io, 'win32')
     expect(second).toBe(first)
   })
+  it('lets go of each process it looks at, rather than holding hundreds of handles a poll', () => {
+    expect(WINDOWS_PROCESS_TABLE_SCRIPT).toMatch(
+      /foreach \(\$process in \[Diagnostics\.Process\]::GetProcesses\(\)\) \{[^]*?finally \{ \$process\.Dispose\(\) \}/
+    )
+  })
   it('names no working folder, and runs nothing to find one', async () => {
     const io = fixtureIo()
     const exec = vi.fn(async () => 'n/repo\n')

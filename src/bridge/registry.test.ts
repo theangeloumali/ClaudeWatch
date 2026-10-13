@@ -554,6 +554,45 @@ describe('a Windows registry', () => {
     collectClaude([root], io, now, undefined, undefined, 'win32')
 
   it.each([
+    ['a FILETIME', filetime, '134361197520000009\r\n', 'GetProcessById(42)'],
+    ['a CreationDate ticks', ticks, '', '"ProcessId=42"']
+  ])(
+    'asks about %s record proven gone only once, until its file goes',
+    async (_format, start, answer, query) => {
+      const tree: Record<string, string | null> = files(start)
+      const io = fixtureIo(tree)
+      const asked = vi.fn(async (_program: string, args: string[]) =>
+        args.at(-1) === WINDOWS_PROCESS_TABLE_SCRIPT ? '' : answer
+      )
+      io.exec = asked
+      const queries = () => asked.mock.calls.filter(([, args]) => args.at(-1)?.includes(query))
+      expect((await collect(io, 1000)).sessions).toEqual([])
+      expect((await collect(io, 3000)).sessions).toEqual([])
+      expect(queries()).toHaveLength(1)
+      const record = `${root}\\sessions\\42.json`
+      const content = tree[record]
+      delete tree[record]
+      await collect(io, 5000)
+      tree[record] = content
+      await collect(io, 7000)
+      expect(queries()).toHaveLength(2)
+    }
+  )
+  it('asks again about a record it could not prove gone', async () => {
+    const io = fixtureIo(files(filetime))
+    const asked = vi.fn(async (_program: string, args: string[]) => {
+      if (args.at(-1) === WINDOWS_PROCESS_TABLE_SCRIPT) return ''
+      throw timedOut()
+    })
+    io.exec = asked
+    await collect(io, 1000)
+    await collect(io, 3000)
+    expect(
+      asked.mock.calls.filter(([, args]) => args.at(-1)?.includes('GetProcessById(42)'))
+    ).toHaveLength(2)
+  })
+
+  it.each([
     ['a FILETIME', filetime],
     ['a CreationDate ticks', ticks]
   ])('dates a session from %s record by when its process started', async (_format, start) => {
