@@ -20,7 +20,7 @@ import type { AgentCommand, OrcaTerminals, PaneTerminal } from './orca-terminals
 interface OfficeInteractionsDeps {
   snapshot: () => OfficeSnapshot | null
   orca: Pick<OrcaTerminals, 'handleFor' | 'sendPrompt' | 'sendKey' | 'screen' | 'create' | 'focus'>
-  openTerminalRunning: (path: string, command: AgentCommand) => Promise<{ success: boolean }>
+  openTerminalRunning: (path: string, command: AgentCommand) => Promise<InteractionResult>
   // When the process with this pid started (epoch ms), or null when no such process runs.
   processStart: (pid: number) => Promise<number | null>
   // Brings Orca's window forward; false when it could not.

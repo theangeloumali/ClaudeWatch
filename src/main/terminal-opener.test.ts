@@ -317,6 +317,14 @@ describe('on Windows', () => {
     expect(mockExecFile).not.toHaveBeenCalled()
   })
 
+  it('passes on why an agent could not be started', async () => {
+    openWindowsFolder.mockResolvedValueOnce({ success: false, reason: 'agent-not-found' })
+    expect(await openTerminalRunning('C:\\repo\\app', 'codex', 'win32')).toEqual({
+      success: false,
+      reason: 'agent-not-found'
+    })
+  })
+
   it('starts an agent in a new window when Orca is not running', async () => {
     expect(await openTerminalRunning('C:\\repo\\app', 'claude', 'win32')).toEqual({ success: true })
     expect(openWindowsFolder).toHaveBeenCalledExactlyOnceWith('C:\\repo\\app', 'claude')

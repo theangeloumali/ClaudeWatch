@@ -1,5 +1,6 @@
 import { execFilePromise } from './platform/exec'
 import type { TerminalType } from '../renderer/lib/types'
+import type { InteractionResult } from '../shared/office/types'
 import type { AgentCommand } from './orca-terminals'
 import { openWindowsFolder } from './windows-terminals'
 
@@ -161,7 +162,7 @@ export function openTerminalRunning(
   projectPath: string,
   command: AgentCommand,
   platform: NodeJS.Platform = process.platform
-): Promise<{ success: boolean }> {
+): Promise<InteractionResult> {
   if (platform === 'win32') return openWindowsFolder(projectPath, command)
   const script = `
     tell application "Terminal"

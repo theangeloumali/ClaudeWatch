@@ -79,7 +79,10 @@ describe('openWindowsFolder', () => {
 
   it('never runs an agent that sits only in the project folder or a relative PATH entry', async () => {
     files(`${FOLDER}\\claude.cmd`, '.\\claude.cmd', 'relative\\bin\\claude.exe')
-    expect(await openWindowsFolder(FOLDER, 'claude')).toEqual({ success: false })
+    expect(await openWindowsFolder(FOLDER, 'claude')).toEqual({
+      success: false,
+      reason: 'agent-not-found'
+    })
     expect(spawn).not.toHaveBeenCalled()
     expect(execFilePromise).not.toHaveBeenCalled()
   })
@@ -87,7 +90,10 @@ describe('openWindowsFolder', () => {
   it('refuses an agent whose path cmd.exe would read as more than a path', async () => {
     vi.stubEnv('PATH', 'C:\\a&b;C:\\p%x%;C:\\Program Files (x86)\\n')
     files('C:\\a&b\\codex.exe', 'C:\\p%x%\\codex.exe', 'C:\\Program Files (x86)\\n\\codex.exe')
-    expect(await openWindowsFolder(FOLDER, 'codex')).toEqual({ success: false })
+    expect(await openWindowsFolder(FOLDER, 'codex')).toEqual({
+      success: false,
+      reason: 'agent-not-found'
+    })
     expect(spawn).not.toHaveBeenCalled()
   })
 
