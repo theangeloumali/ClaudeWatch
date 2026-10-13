@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ProcessMonitor, detectSessionType } from './process-monitor'
+import type { PlatformDetector, RawProcessInfo } from './platform/darwin'
 import { runPowerShell } from '../shared/powershell-host'
 
 // We mock child_process used by platform detectors
@@ -430,15 +431,10 @@ describe('poll() on win32', () => {
   })
 
   // A cold powershell.exe costs about a fifth of a core per 3 s poll; the kept one does not.
-  it('lists Claude Code through one CIM query in the kept PowerShell, starting no process', async () => {
-    const row = {
-      pid: 4242,
-      command: 'C:\\bin\\claude.exe --continue',
-      startedAt: '',
-      cpuTicks: '0',
-      workingSet: '0'
-    }
-    vi.mocked(runPowerShell).mockResolvedValue(JSON.stringify([row]))
+  it('lists Claude Code through the kept PowerShell, starting no process', async () => {
+    // pid, start FILETIME, CPU ticks, working set, CreationDate ticks, command line in base64.
+    const command = Buffer.from('C:\\bin\\claude.exe --continue').toString('base64')
+    vi.mocked(runPowerShell).mockResolvedValue(`4242 134363332085558537 0 0 1 ${command}`)
 
     const instances = await new ProcessMonitor({ platform: 'win32' }).poll()
 
@@ -509,6 +505,35 @@ describe('terminal enrichment', () => {
     expect(instances).toHaveLength(1)
     expect(instances[0].terminalApp).toBeUndefined()
     expect(instances[0].terminalType).toBeUndefined()
+  })
+})
+
+describe('working folders', () => {
+  const rawProcess = (pid: number): RawProcessInfo => ({
+    pid,
+    stat: 'S',
+    cpuPercent: 0,
+    memPercent: 0,
+    elapsedTime: '00:01',
+    tty: 'console',
+    command: 'claude'
+  })
+
+  it('asks for every folder at once and gives each process its own', async () => {
+    const pending = new Map<number, (folder: string) => void>()
+    const detector: PlatformDetector = {
+      getClaudeProcesses: async () => [rawProcess(1), rawProcess(2)],
+      getWorkingDirectory: (pid) => new Promise((resolve) => pending.set(pid, resolve))
+    }
+    const polled = new ProcessMonitor({ detector }).poll()
+    await vi.waitFor(() => expect([...pending.keys()]).toEqual([1, 2]))
+    pending.get(2)!('/two')
+    pending.get(1)!('/one')
+
+    expect((await polled).map((instance) => [instance.pid, instance.projectPath])).toEqual([
+      [1, '/one'],
+      [2, '/two']
+    ])
   })
 })
 

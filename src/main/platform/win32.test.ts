@@ -3,7 +3,7 @@ import { join } from 'path'
 import { runPowerShell } from '../../shared/powershell-host'
 import { Win32Detector, formatElapsed } from './win32'
 
-// No test here may start a real PowerShell.
+// No test here may start a real PowerShell; win32.script.test.ts runs the script itself.
 vi.mock('../../shared/powershell-host', () => ({ runPowerShell: vi.fn() }))
 
 const NOW = Date.UTC(2026, 9, 13, 12, 0, 0)
@@ -35,10 +35,21 @@ function row(overrides: Partial<Row> = {}): Row {
     ...overrides
   }
 }
+// One line as the script prints it, the command line in base64.
+const line = (process: Row): string =>
+  [
+    process.pid,
+    process.startedAt,
+    process.cpuTicks,
+    process.workingSet,
+    process.startedTicks,
+    Buffer.from(process.command, 'utf8').toString('base64')
+  ].join(' ')
+const table = (rows: Row[]): string => rows.map(line).join('\n')
 
-function detectorOver(rowsPerPoll: unknown[][], files: Record<string, string> = {}) {
+function detectorOver(rowsPerPoll: Row[][], files: Record<string, string> = {}) {
   let now = NOW
-  const runScript = vi.fn(async (_script: string) => JSON.stringify(rowsPerPoll.shift() ?? []))
+  const runScript = vi.fn(async (_script: string) => table(rowsPerPoll.shift() ?? []))
   const readText = vi.fn(async (path: string) => {
     if (!(path in files)) throw Object.assign(new Error('missing'), { code: 'ENOENT' })
     return files[path]
@@ -56,24 +67,26 @@ const registryPath = (pid: number): string =>
   join('C:\\Users\\ada', '.claude', 'sessions', `${pid}.json`)
 
 describe('Win32Detector.getClaudeProcesses', () => {
-  it('runs one CIM query per poll, over claude.exe only, and never wmic', async () => {
+  it('reads claude processes from .NET and asks CIM only about ones it has not seen', async () => {
     const { detector, runScript } = detectorOver([[row()]])
     await detector.getClaudeProcesses()
 
     expect(runScript).toHaveBeenCalledTimes(1)
     const [script] = runScript.mock.calls[0]
-    expect(script).toContain('Get-CimInstance Win32_Process')
-    expect(script).toContain('-Filter "Name=\'claude.exe\'"')
-    expect(script).not.toMatch(/wmic/i)
-  })
-
-  it('takes each start from .NET at full precision, not from CIM', async () => {
-    const { detector, runScript } = detectorOver([[row()]])
-    await detector.getClaudeProcesses()
-    const [script] = runScript.mock.calls[0]
     expect(script).toContain("[Diagnostics.Process]::GetProcessesByName('claude')")
     expect(script).toContain('StartTime.ToFileTimeUtc()')
-    expect(script).not.toContain('CreationDate.ToFileTimeUtc()')
+    expect(script).toContain('.Dispose()')
+    expect(script).toContain('$global:')
+    expect(script).toContain("'ProcessId='")
+    expect(script).not.toContain("Name='claude.exe'")
+    expect(script).not.toMatch(/ConvertTo-Json|wmic/i)
+  })
+
+  it('runs the same script on every poll, so the kept host can reuse what it learned', async () => {
+    const { detector, runScript } = detectorOver([[row()], [row()]])
+    await detector.getClaudeProcesses()
+    await detector.getClaudeProcesses()
+    expect(runScript.mock.calls[1][0]).toBe(runScript.mock.calls[0][0])
   })
 
   it('reports each Claude Code process with its memory share and age', async () => {
@@ -88,6 +101,13 @@ describe('Win32Detector.getClaudeProcesses', () => {
         tty: 'console',
         command: `${CLAUDE} --resume abc123 --dangerously-skip-permissions`
       }
+    ])
+  })
+
+  it('reads every line of the table', async () => {
+    const { detector } = detectorOver([[row(), row({ pid: 4343 })]])
+    expect((await detector.getClaudeProcesses()).map((process) => process.pid)).toEqual([
+      4242, 4343
     ])
   })
 
@@ -117,18 +137,17 @@ describe('Win32Detector.getClaudeProcesses', () => {
       'the desktop app installed from the Store',
       'C:\\Program Files\\WindowsApps\\Claude_1.0.0_x64__abc\\app\\claude.exe'
     ],
-    ['a process whose program is not claude', 'C:\\tools\\claude-helper.exe'],
-    ['a process with no command line', '']
+    ['a process whose program is not claude', 'C:\\tools\\claude-helper.exe']
   ])('leaves out %s', async (_case, command) => {
     const { detector } = detectorOver([[row({ command })]])
     expect(await detector.getClaudeProcesses()).toEqual([])
   })
 
   it.each([
-    ['output that is not JSON', 'not json'],
-    ['a row with no usable pid', JSON.stringify([{ ...row(), pid: -1 }])],
-    ['a row that is not an object', JSON.stringify([7])],
-    ['a row that is a list', JSON.stringify([[4242, 'claude.exe']])]
+    ['output that is not a table', 'not a table'],
+    ['a line with no usable pid', line(row()).replace(/^4242/, '-1')],
+    ['a line with no command line', line(row({ command: '' }))],
+    ['a line with a field missing', line(row()).split(' ').slice(1).join(' ')]
   ])('reports nothing for %s', async (_case, stdout) => {
     const { detector, runScript } = detectorOver([])
     runScript.mockResolvedValueOnce(stdout)
@@ -136,11 +155,9 @@ describe('Win32Detector.getClaudeProcesses', () => {
   })
 
   it('asks the kept PowerShell host when no runner is given', async () => {
-    vi.mocked(runPowerShell).mockResolvedValueOnce(JSON.stringify([row()]))
+    vi.mocked(runPowerShell).mockResolvedValueOnce(table([row()]))
     const [process] = await new Win32Detector({ totalMemoryBytes: GIB }).getClaudeProcesses()
-    expect(runPowerShell).toHaveBeenCalledWith(
-      expect.stringContaining('Get-CimInstance Win32_Process')
-    )
+    expect(runPowerShell).toHaveBeenCalledWith(expect.stringContaining('GetProcessesByName'))
     expect(process.pid).toBe(4242)
   })
 
@@ -148,13 +165,6 @@ describe('Win32Detector.getClaudeProcesses', () => {
     const { detector, runScript } = detectorOver([])
     runScript.mockRejectedValueOnce(new Error('timed out'))
     expect(await detector.getClaudeProcesses()).toEqual([])
-  })
-
-  it('reports an age of zero when the start time is not given', async () => {
-    const { detector } = detectorOver([[row({ startedAt: '' })]])
-    const [process] = await detector.getClaudeProcesses()
-    expect(process.elapsedTime).toBe('00:00')
-    expect(process.cpuPercent).toBe(0)
   })
 })
 
