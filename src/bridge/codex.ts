@@ -17,7 +17,7 @@ import {
 } from './process-folders'
 import { type BridgeIo, folderName, isLabel, isMissing, jsonObject, object } from './io'
 import { placementOf, resolveProject } from './project-root'
-import { type CodexKind, findRollouts, type Rollout } from './codex-rollouts'
+import { type CodexKind, findRollouts, recentDayFolders, type Rollout } from './codex-rollouts'
 import { parseCodexUsage } from './codex-usage'
 import { NEXT_STEP_MS } from './opencode-activity'
 import { isStillWorking, OPEN_TOOL_HOLD_MS, quietFor } from './liveness'
@@ -162,15 +162,12 @@ async function currentRollouts(
   now: number,
   platform: NodeJS.Platform
 ): Promise<Rollout[]> {
-  // A running process's folder: its rollout is followed however long it has been quiet.
-  const liveFolders = new Set([...memory.folders.values()].map((cwd) => folderKey(cwd, platform)))
   const key = processes.map(({ pid, startedAtMs }) => `${pid}:${startedAtMs}`).join(',')
   const last = memory.walk
   const isDue =
     !last ||
     last.processes !== key ||
     last.derived !== derivesAccounts ||
-    memory.isWaiting ||
     now < last.atMs ||
     now - last.atMs >= FULL_WALK_MS
   if (isDue) {
@@ -180,11 +177,8 @@ async function currentRollouts(
   }
   const refreshed = await Promise.all(
     last.rollouts.map(async (rollout): Promise<Rollout | null> => {
-      // Re-checked as long as a quiet thread with an open tool is held, so its next write is seen.
-      if (
-        now - rollout.mtimeMs >= OPEN_TOOL_HOLD_MS &&
-        !liveFolders.has(folderKey(rollout.cwd, platform))
-      )
+      // Shown last tick, or still within an open tool's hold: its next write must be seen.
+      if (now - rollout.mtimeMs >= OPEN_TOOL_HOLD_MS && !memory.tails.has(rollout.path))
         return rollout
       try {
         const { mtimeMs, size } = await io.stat(rollout.path)
@@ -195,9 +189,18 @@ async function currentRollouts(
       }
     })
   )
-  last.rollouts = refreshed
-    .filter((rollout) => rollout !== null)
-    .sort((a, b) => b.mtimeMs - a.mtimeMs || a.path.localeCompare(b.path))
+  const current = new Map(
+    refreshed.flatMap((rollout) => (rollout ? [[rollout.path, rollout] as const] : []))
+  )
+  // A process waiting for its first thread finds it among the last two days' rollouts alone.
+  if (memory.isWaiting) {
+    const days = recentDayFolders(now)
+    for (const rollout of await findRollouts(root, io, derivesAccounts, platform, days))
+      current.set(rollout.path, rollout)
+  }
+  last.rollouts = [...current.values()].sort(
+    (a, b) => b.mtimeMs - a.mtimeMs || a.path.localeCompare(b.path)
+  )
   return last.rollouts
 }
 

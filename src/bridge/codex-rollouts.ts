@@ -32,12 +32,24 @@ function startedBy(source: unknown): Rollout['startedBy'] {
 }
 const caches = new WeakMap<BridgeIo, Map<string, Map<string, CachedRollout>>>()
 
+// Codex files a new thread under the local date it began, sessions/YYYY/MM/DD: one that has just
+// begun is in today's folder, or yesterday's just after midnight.
+export function recentDayFolders(now: number): string[][] {
+  return [now, now - 86_400_000].map((atMs) => {
+    const day = new Date(atMs)
+    const two = (value: number): string => String(value).padStart(2, '0')
+    return [String(day.getFullYear()), two(day.getMonth() + 1), two(day.getDate())]
+  })
+}
+
 // An account key is derived only when asked for: with accounts unwatched, no identity value is.
+// Given `days`, only those day folders are walked, and what the last full walk found is kept.
 export async function findRollouts(
   root: string,
   io: BridgeIo,
   derivesAccounts = false,
-  platform: NodeJS.Platform = process.platform
+  platform: NodeJS.Platform = process.platform,
+  days?: string[][]
 ): Promise<Rollout[]> {
   let roots = caches.get(io)
   if (!roots) caches.set(io, (roots = new Map()))
@@ -54,10 +66,21 @@ export async function findRollouts(
       if (isMissing(error)) return
       throw error
     }
-    for (const file of files) {
-      const path = join(directory, file)
+    const found = await Promise.all(
+      files.map(async (file) => {
+        const path = join(directory, file)
+        try {
+          return { file, path, info: await io.stat(path) }
+        } catch (error) {
+          if (isMissing(error)) return null
+          throw error
+        }
+      })
+    )
+    for (const entry of found) {
+      if (!entry) continue
+      const { file, path, info } = entry
       try {
-        const info = await io.stat(path)
         if (info.directory) {
           await walk(path)
           continue
@@ -127,9 +150,11 @@ export async function findRollouts(
       }
     }
   }
-  await walk(join(root, 'sessions'))
-  for (const path of entries.keys()) {
-    if (!seen.has(path)) entries.delete(path)
+  const sessions = join(root, 'sessions')
+  if (days) for (const day of days) await walk(join(sessions, ...day))
+  else {
+    await walk(sessions)
+    for (const path of entries.keys()) if (!seen.has(path)) entries.delete(path)
   }
   return rollouts.sort((a, b) => b.mtimeMs - a.mtimeMs || a.path.localeCompare(b.path))
 }

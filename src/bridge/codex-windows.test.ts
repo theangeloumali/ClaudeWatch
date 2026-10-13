@@ -20,6 +20,12 @@ const STARTED_MS = Date.parse('2026-10-13T03:37:49Z')
 function row(pid: number, commandLine: string, startedAtMs = STARTED_MS): ProcessRow {
   return { pid, lstart: '0', startedAtMs, argv: splitCommandLine(commandLine) }
 }
+// Codex files a rollout under the local date it began: sessions/YYYY/MM/DD.
+function dayFolder(atMs: number): string {
+  const day = new Date(atMs)
+  const two = (value: number): string => String(value).padStart(2, '0')
+  return `${day.getFullYear()}/${two(day.getMonth() + 1)}/${two(day.getDate())}`
+}
 function meta(id: string, cwd: string, extra: object = {}): string {
   return JSON.stringify({ type: 'session_meta', payload: { id, cwd, source: 'cli', ...extra } })
 }
@@ -34,7 +40,8 @@ function codexHome(
   const files: Record<string, string | null> = { 'C:/Users/a/repo/.git': null }
   const add = (id: string, rollout: Written): void => {
     rollouts[id] = rollout
-    files[`C:/Users/a/.codex/sessions/2026/10/13/rollout-${id}.jsonl`] = rollout.header
+    files[`C:/Users/a/.codex/sessions/${dayFolder(STARTED_MS)}/rollout-${id}.jsonl`] =
+      rollout.header
   }
   for (const [id, rollout] of Object.entries(rollouts)) add(id, rollout)
   const io = fixtureIo(files)
@@ -100,6 +107,20 @@ it('looks for a waiting process’s first rollout on the next tick, not 30 s lat
   const walks = list.mock.calls.length
   await collect(io, rows, STARTED_MS + 6000)
   expect(list.mock.calls.length).toBe(walks)
+})
+
+it('looks only in today’s and yesterday’s folders while a process waits, between full walks', async () => {
+  const io = codexHome({})
+  io.add('history', { header: meta('history', 'C:\\Users\\a\\old'), mtimeMs: STARTED_MS - 1000 })
+  const rows = [row(42, VENDOR_CODEX)]
+  await collect(io, rows, STARTED_MS + 2000)
+  const list = vi.spyOn(io, 'list')
+  await collect(io, rows, STARTED_MS + 4000)
+  const listed = list.mock.calls.map(([path]) => path.replaceAll('\\', '/'))
+  const recent = [STARTED_MS + 4000, STARTED_MS + 4000 - 86_400_000].map(
+    (atMs) => `C:/Users/a/.codex/sessions/${dayFolder(atMs)}`
+  )
+  expect(listed.sort()).toEqual(recent.sort())
 })
 
 it('keeps a Windows process in its folder, whatever letter case or separator a later rollout uses', async () => {

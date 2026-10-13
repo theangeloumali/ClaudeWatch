@@ -9,6 +9,7 @@ import {
   type WrittenConversation
 } from './process-folders'
 import { type BridgeIo, displayName, folderName, isLabel } from './io'
+import { type Answers, readOrRecall } from './opencode-answers'
 import {
   OPENCODE_IDLE,
   opencodeProcesses,
@@ -162,6 +163,8 @@ interface Remembered {
   folders: Map<string, string>
   // The placeholder key a process without a session was first shown under, by pid and start time.
   placeholders: Map<string, string>
+  // Last tick's rows, for a tick that finds the database and its agents unchanged.
+  answers: Answers | null
 }
 const remembered = new WeakMap<BridgeIo, Remembered>()
 
@@ -209,41 +212,51 @@ export async function collectOpencode(
   try {
     const processes = opencodeProcesses(await readProcesses())
     let memory = remembered.get(io)
-    if (!memory) remembered.set(io, (memory = { folders: new Map(), placeholders: new Map() }))
+    if (!memory) {
+      remembered.set(io, (memory = { folders: new Map(), placeholders: new Map(), answers: null }))
+    }
     const { folders, placeholders } = memory
     forgetExited(processes, folders, placeholders)
     const running = newestFirst(await locate(io, folders, processes, health, platform))
     if (!running.length) return { sessions: [], sources: [health] }
 
-    const taken = new Set<string>()
-    const conversations = await io.readOpencode(join(root, 'opencode.db'), (query) => {
-      const recent = platform === 'win32' ? claimOpencodeFolders(query, running, folders) : []
-      const read = (process: AgentProcess) => {
-        try {
-          return { process, conversation: readConversation(query, process, taken, now) }
-        } catch (error) {
-          // One session's bad JSON costs that session; anything else is the whole database's.
-          if (!(error instanceof OpencodeDbError) || error.reason !== 'malformed') throw error
-          health.ok = false
-          health.detail = FAILURE_DETAIL.malformed
-          return null
+    const agents = running.map((agent) => `${identityOf(agent)}@${agent.cwd ?? ''}`).join(',')
+    const { result: conversations, answers } = await readOrRecall(
+      io,
+      join(root, 'opencode.db'),
+      agents,
+      memory.answers,
+      (query) => {
+        const taken = new Set<string>()
+        const recent = platform === 'win32' ? claimOpencodeFolders(query, running, folders) : []
+        const read = (process: AgentProcess) => {
+          try {
+            return { process, conversation: readConversation(query, process, taken, now) }
+          } catch (error) {
+            // One session's bad JSON costs that session; anything else is the whole database's.
+            if (!(error instanceof OpencodeDbError) || error.reason !== 'malformed') throw error
+            health.ok = false
+            health.detail = FAILURE_DETAIL.malformed
+            return null
+          }
         }
-      }
-      const placed = running.flatMap((located) => {
-        const cwd = located.cwd ?? folders.get(identityOf(located))
-        return cwd ? [read({ ...located, cwd })] : []
-      })
-      // A session no process can yet be told apart for is shown with none, as it was created.
-      const unclaimed = recent.filter(({ id }) => !taken.has(id))
-      const unplaced = unplacedConversations(running, folders, unclaimed).map((session) =>
-        read({
-          pid: null,
-          startedAtMs: session.createdAtMs ?? session.writtenAtMs,
-          cwd: session.folder
+        const placed = running.flatMap((located) => {
+          const cwd = located.cwd ?? folders.get(identityOf(located))
+          return cwd ? [read({ ...located, cwd })] : []
         })
-      )
-      return [...placed, ...unplaced]
-    })
+        // A session no process can yet be told apart for is shown with none, as it was created.
+        const unclaimed = recent.filter(({ id }) => !taken.has(id))
+        const unplaced = unplacedConversations(running, folders, unclaimed).map((session) =>
+          read({
+            pid: null,
+            startedAtMs: session.createdAtMs ?? session.writtenAtMs,
+            cwd: session.folder
+          })
+        )
+        return [...placed, ...unplaced]
+      }
+    )
+    memory.answers = answers
     const sessions: SessionRef[] = []
     for (const found of conversations) {
       if (!found) continue
