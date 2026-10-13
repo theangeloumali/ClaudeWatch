@@ -2,15 +2,22 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { BridgePoller } from './poller'
 import * as processTable from './process-table'
 import { fixtureIo, registryEntry } from './__fixtures__/helpers'
+import type { RegistryEntry } from './registry'
 import type { FeedMessage } from '../shared/office/types'
 
 // These cases print what `ps` and `lsof` print on macOS, in macOS paths.
 const ON_MAC = { platform: 'darwin' } as const
+// The registry a Mac writes: a POSIX folder and the start time `ps` prints.
+const macEntry = (): RegistryEntry => ({
+  ...registryEntry(),
+  cwd: '/repo',
+  procStart: 'Sat Oct 10 15:29:12 2026'
+})
 
 afterEach(() => vi.useRealTimers())
 it('posts hello followed by removal patches and stops scheduling', async () => {
   vi.useFakeTimers()
-  const entry = registryEntry()
+  const entry = macEntry()
   const files = { '/claude/sessions/42.json': JSON.stringify(entry), '/repo/.git': null }
   const io = fixtureIo(files)
   let live = true
@@ -82,7 +89,7 @@ it('keeps two-second cadence when collection takes time', async () => {
 
 it('posts no patch for a tick that changed nothing, only a keepalive when the feed has been quiet', async () => {
   vi.useFakeTimers()
-  const entry = registryEntry()
+  const entry = macEntry()
   const io = fixtureIo({ '/claude/sessions/42.json': JSON.stringify(entry), '/repo/.git': null })
   let live = true
   io.exec = async (_file, args) => (args.includes('lstart=') && live ? entry.procStart : '')
@@ -137,7 +144,7 @@ it('posts no usage for a transcript line older than the ledger keeps', async () 
       timestamp: new Date(Date.now() - ageMs).toISOString(),
       message: { id, usage: { input_tokens: 0, output_tokens: 10 } }
     })}\n`
-  const entry = registryEntry()
+  const entry = macEntry()
   const io = fixtureIo({
     '/claude/sessions/42.json': JSON.stringify(entry),
     '/repo/.git': null,
@@ -170,7 +177,7 @@ it('posts no usage for a transcript line older than the ledger keeps', async () 
 })
 
 it('prunes environment identities when their sessions disappear', async () => {
-  const entry = registryEntry()
+  const entry = macEntry()
   const io = fixtureIo({ '/claude/sessions/42.json': JSON.stringify(entry), '/repo/.git': null })
   let live = true
   let environmentReads = 0
@@ -214,7 +221,7 @@ const usageLine = (id: string, output: number): string =>
 
 it('sends hello before counting any tokens, then fills usage in with the next patch', async () => {
   vi.useFakeTimers()
-  const entry = registryEntry()
+  const entry = macEntry()
   const io = fixtureIo({
     '/claude/sessions/42.json': JSON.stringify(entry),
     '/repo/.git': null,
@@ -260,7 +267,7 @@ it('sends hello before counting any tokens, then fills usage in with the next pa
 
 it('re-sends a session for its token counters at most every ten seconds', async () => {
   vi.useFakeTimers()
-  const entry = registryEntry()
+  const entry = macEntry()
   const files: Record<string, string | null> = {
     '/claude/sessions/42.json': JSON.stringify(entry),
     '/repo/.git': null,
@@ -293,7 +300,7 @@ it('re-sends a session for its token counters at most every ten seconds', async 
 it('shows a teammate under its lead with its own pane, then its tokens', async () => {
   const lead = '6a654bca-1111-2222-3333-444444444444'
   const team = 'session-6a654bca'
-  const entry = { ...registryEntry(), sessionId: lead }
+  const entry = { ...macEntry(), sessionId: lead }
   const io = fixtureIo({
     '/claude/sessions/42.json': JSON.stringify(entry),
     '/repo/.git': null,
@@ -353,7 +360,7 @@ it('shows a teammate under its lead with its own pane, then its tokens', async (
 it('parses the process table once per tick, however many sources read it', async () => {
   const lead = '6a654bca-1111-2222-3333-444444444444'
   const team = 'session-6a654bca'
-  const entry = { ...registryEntry(), sessionId: lead }
+  const entry = { ...macEntry(), sessionId: lead }
   const io = fixtureIo({
     '/claude/sessions/42.json': JSON.stringify(entry),
     '/repo/.git': null,
@@ -382,7 +389,7 @@ it('parses the process table once per tick, however many sources read it', async
 })
 
 it('reads one process table per tick for the Claude and Codex sources together', async () => {
-  const entry = registryEntry()
+  const entry = macEntry()
   const io = fixtureIo({ '/claude/sessions/42.json': JSON.stringify(entry), '/repo/.git': null })
   const exec = vi.fn(async (_file: string, args: string[]) =>
     args.includes('lstart=') ? entry.procStart : ''
