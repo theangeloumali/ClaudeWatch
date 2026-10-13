@@ -118,8 +118,11 @@ export function buildOpencodeDb(
   const path = join(root, 'opencode.db')
   const db = new DatabaseSync(path)
   try {
+    // One transaction with no fsync: per-statement commits took over 5 s on a busy Windows disk.
+    db.exec('PRAGMA journal_mode = MEMORY; PRAGMA synchronous = OFF; BEGIN;')
     db.exec(schema)
     fill(db)
+    db.exec('COMMIT')
   } finally {
     db.close()
   }

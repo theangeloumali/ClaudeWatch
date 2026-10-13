@@ -1,0 +1,104 @@
+import { describe, expect, it, vi } from 'vitest'
+import { POWERSHELL, powershellArgs, startTimeQuery } from '../shared/platform-process'
+import { isLive } from './liveness'
+import { fixtureIo, missing, registryEntry } from './__fixtures__/helpers'
+
+const startedAtMs = Date.parse('Sat Oct 10 15:29:12 2026 UTC')
+const row = (pid: number, lstart: string) => ({ pid, lstart, startedAtMs, argv: ['claude'] })
+
+describe('liveness on macOS', () => {
+  const entry = { ...registryEntry(), cwd: '/repo', procStart: 'Sat Oct 10 15:29:12 2026' }
+
+  it('collapses whitespace in a start ps prints and treats a missing pid as dead', async () => {
+    const io = fixtureIo()
+    const exec = vi.fn(async () => 'Sat  Oct 10 15:29:12 2026\n')
+    io.exec = exec
+    expect(await isLive(entry, io, [], 'darwin')).toBe(true)
+    expect(exec).toHaveBeenCalledWith('/bin/ps', ['-o', 'lstart=', '-p', '42'])
+    io.exec = async () => {
+      throw missing()
+    }
+    expect(await isLive(entry, io, [], 'darwin')).toBe(false)
+  })
+})
+
+describe('liveness on Windows', () => {
+  const entry = { ...registryEntry(), cwd: 'C:\\repo', procStart: '134361197520000000' }
+
+  it('asks PowerShell for the FILETIME of a pid the table lacks', async () => {
+    const io = fixtureIo()
+    const exec = vi.fn(async () => '134361197520000000\r\n')
+    io.exec = exec
+    expect(await isLive(entry, io, [], 'win32')).toBe(true)
+    const { file, args } = startTimeQuery(42, 'win32')
+    expect(exec).toHaveBeenCalledWith(file, args)
+  })
+  it('takes a pid another process reuses, under another FILETIME, as dead without asking', async () => {
+    const io = fixtureIo()
+    const exec = vi.fn(async () => entry.procStart)
+    io.exec = exec
+    expect(await isLive(entry, io, [row(42, '134361197520000001')], 'win32')).toBe(false)
+    expect(await isLive(entry, io, [row(42, entry.procStart)], 'win32')).toBe(true)
+    expect(exec).not.toHaveBeenCalled()
+  })
+  it('takes a pid PowerShell answers no process for as dead', async () => {
+    const io = fixtureIo()
+    io.exec = async () => {
+      throw Object.assign(new Error('Command failed'), { code: 1 })
+    }
+    expect(await isLive(entry, io, [], 'win32')).toBe(false)
+  })
+  it('cannot tell when PowerShell does not answer at all', async () => {
+    const io = fixtureIo()
+    io.exec = async () => {
+      throw Object.assign(new Error('timed out'), { killed: true, code: null, signal: 'SIGTERM' })
+    }
+    await expect(isLive(entry, io, [], 'win32')).rejects.toThrow('timed out')
+    io.exec = async () => {
+      throw Object.assign(new Error('spawn powershell.exe ENOENT'), { code: 'ENOENT' })
+    }
+    await expect(isLive(entry, io, [], 'win32')).rejects.toThrow('ENOENT')
+  })
+})
+
+// Without its native call Claude Code records CIM's CreationDate.Ticks instead of a FILETIME.
+describe('liveness on Windows for a record in CreationDate ticks', () => {
+  const FILETIME = '134361197520000000'
+  const TICKS = '639287565520000000'
+  const ticksEntry = { ...registryEntry(), cwd: 'C:\\repo', procStart: TICKS }
+  const filetimeEntry = { ...ticksEntry, procStart: FILETIME }
+  const listed = (filetime: string, ticks: string) => ({
+    ...row(42, filetime),
+    creationTicks: ticks
+  })
+
+  it('proves either record live from the row of its process, by the start it carries', async () => {
+    const io = fixtureIo()
+    const exec = vi.fn(async () => '')
+    io.exec = exec
+    expect(await isLive(filetimeEntry, io, [listed(FILETIME, TICKS)], 'win32')).toBe(true)
+    expect(await isLive(ticksEntry, io, [listed(FILETIME, TICKS)], 'win32')).toBe(true)
+    expect(exec).not.toHaveBeenCalled()
+  })
+  it('takes either record as dead when its pid runs another process, started later', async () => {
+    const io = fixtureIo()
+    const reused = listed('134361197530000000', '639287565530000000')
+    expect(await isLive(filetimeEntry, io, [reused], 'win32')).toBe(false)
+    expect(await isLive(ticksEntry, io, [reused], 'win32')).toBe(false)
+  })
+  it('takes a record that matches neither start as dead', async () => {
+    const io = fixtureIo()
+    const stranger = { ...ticksEntry, procStart: '123' }
+    expect(await isLive(stranger, io, [listed(FILETIME, TICKS)], 'win32')).toBe(false)
+  })
+  it('asks CIM for the ticks of a pid the table lacks, as Claude Code itself did', async () => {
+    const io = fixtureIo()
+    const exec = vi.fn(async () => `${TICKS}\r\n`)
+    io.exec = exec
+    expect(await isLive(ticksEntry, io, [], 'win32')).toBe(true)
+    expect(exec).toHaveBeenCalledExactlyOnceWith(
+      POWERSHELL,
+      powershellArgs('(Get-CimInstance Win32_Process -Filter "ProcessId=42").CreationDate.Ticks')
+    )
+  })
+})

@@ -1,4 +1,4 @@
-import { basename, dirname, join, resolve } from 'node:path'
+import { basename, dirname, posix, win32 } from 'node:path'
 import { projectKey } from '../shared/office/project-key'
 import type { SessionRef } from '../shared/office/types'
 import { type BridgeIo, isDirectory, isMissing } from './io'
@@ -31,23 +31,34 @@ const projects = new WeakMap<BridgeIo, Map<string, { project: Promise<Project>; 
 
 // Every tick asks where each session's folder belongs, and the answer costs a stat per folder
 // level: it is kept for a minute. A failed look-up is not kept.
-export function resolveProject(cwd: string, io: BridgeIo, now = Date.now()): Promise<Project> {
+export function resolveProject(
+  cwd: string,
+  io: BridgeIo,
+  now = Date.now(),
+  platform: NodeJS.Platform = process.platform
+): Promise<Project> {
   let known = projects.get(io)
   if (!known) projects.set(io, (known = new Map()))
   const folders = known
-  const cached = folders.get(cwd)
+  const key = `${platform}:${cwd}`
+  const cached = folders.get(key)
   if (cached && now < cached.until) return cached.project
   // A folder whose sessions left is never asked for again, so it is dropped here.
   for (const [folder, { until }] of folders) if (now >= until) folders.delete(folder)
-  const project = findProject(cwd, io)
-  folders.set(cwd, { project, until: now + PROJECT_TTL_MS })
+  const project = findProject(cwd, io, platform === 'win32' ? win32 : posix)
+  folders.set(key, { project, until: now + PROJECT_TTL_MS })
   project.catch(() => {
-    if (folders.get(cwd)?.project === project) folders.delete(cwd)
+    if (folders.get(key)?.project === project) folders.delete(key)
   })
   return project
 }
 
-async function findProject(cwd: string, io: BridgeIo): Promise<Project> {
+// The folder's own platform's paths, whichever platform reads them.
+async function findProject(
+  cwd: string,
+  io: BridgeIo,
+  { dirname, join, resolve }: typeof posix
+): Promise<Project> {
   let directory = resolve(cwd)
   while (true) {
     const marker = join(directory, '.git')

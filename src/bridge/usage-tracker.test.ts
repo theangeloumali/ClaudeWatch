@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest'
 import { type SessionFiles, UsageTracker } from './usage-tracker'
 import { listAgentFiles } from './subagents'
-import { fixtureIo } from './__fixtures__/helpers'
+import { fixtureIo, hostPath } from './__fixtures__/helpers'
 
 const message = (id: string, input: number, output: number, cacheRead = 0): string =>
   `${JSON.stringify({
@@ -23,9 +23,9 @@ const counts = (input: number, output: number, cacheRead = 0) => ({
   cacheWrite: 0,
   cacheRead
 })
-const main = '/p/s.jsonl'
-const plain = '/p/s/subagents/agent-abc.jsonl'
-const workflow = '/p/s/subagents/workflows/wf_1/agent-def.jsonl'
+const main = hostPath('/p/s.jsonl')
+const plain = hostPath('/p/s/subagents/agent-abc.jsonl')
+const workflow = hostPath('/p/s/subagents/workflows/wf_1/agent-def.jsonl')
 
 async function sessionFiles(
   io: ReturnType<typeof fixtureIo>,
@@ -41,12 +41,12 @@ it('reports own, every agent including workflow agents and teammates, and how ma
     [main]: message('m1', 1, 10, 100) + message('m1', 1, 30, 100) + message('m2', 2, 5, 700),
     [plain]: message('a1', 3, 2) + message('a1', 3, 468),
     [workflow]: message('w1', 4, 50),
-    '/p/mate.jsonl': message('t1', 5, 6),
-    '/p/mate/subagents/agent-xyz.jsonl': message('x1', 100, 200)
+    [hostPath('/p/mate.jsonl')]: message('t1', 5, 6),
+    [hostPath('/p/mate/subagents/agent-xyz.jsonl')]: message('x1', 100, 200)
   })
   const tracker = new UsageTracker(io)
   // A teammate's entry is its own transcript followed by those of the agents it spawned.
-  const mate = ['/p/mate.jsonl', '/p/mate/subagents/agent-xyz.jsonl']
+  const mate = [hostPath('/p/mate.jsonl'), hostPath('/p/mate/subagents/agent-xyz.jsonl')]
   await tracker.scan(await sessionFiles(io, [['lena@session-s', mate]]))
   expect(tracker.usage('claude:s')).toEqual({
     own: counts(3, 35, 800),
@@ -161,7 +161,7 @@ it('reports an unreadable transcript as unknown and unhealthy, never as zero', a
 })
 
 it('keeps counting a teammate that finished, for as long as its lead session lives', async () => {
-  const mate = ['/p/mate.jsonl', '/p/mate/subagents/agent-xyz.jsonl']
+  const mate = [hostPath('/p/mate.jsonl'), hostPath('/p/mate/subagents/agent-xyz.jsonl')]
   const files: Record<string, string> = {
     [main]: message('m1', 10, 10),
     [mate[0]]: message('t1', 500, 500),
