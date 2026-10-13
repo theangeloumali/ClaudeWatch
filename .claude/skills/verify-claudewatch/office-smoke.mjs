@@ -1,4 +1,4 @@
-// Opens the built app's Office window on this Mac's real sessions and captures evidence.
+// Opens the built app's Office window on this machine's real sessions and captures evidence.
 // Run from the tooling dir so `playwright` resolves: node --input-type=module < this file
 import { _electron as electron } from 'playwright'
 import { mkdirSync } from 'node:fs'
@@ -7,8 +7,12 @@ import { dirname } from 'node:path'
 const repo = process.env.CW_REPO
 const shot = process.env.CW_SHOT
 const settleMs = Number(process.env.CW_SETTLE_MS ?? 15000)
+const executable =
+  process.platform === 'win32'
+    ? `${repo}/node_modules/electron/dist/electron.exe`
+    : `${repo}/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron`
 const app = await electron.launch({
-  executablePath: `${repo}/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron`,
+  executablePath: executable,
   args: [`${repo}/out/main/index.js`, '--open-office'],
   env: { ...process.env, NODE_ENV: 'production' }
 })
