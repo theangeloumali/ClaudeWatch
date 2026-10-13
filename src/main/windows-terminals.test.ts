@@ -1,14 +1,15 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { EventEmitter } from 'node:events'
 
-const { spawn, access, execFilePromise, runInteractivePowerShell } = vi.hoisted(() => ({
+const { spawn, access, stat, execFilePromise, runInteractivePowerShell } = vi.hoisted(() => ({
   spawn: vi.fn(),
   access: vi.fn(),
+  stat: vi.fn(),
   execFilePromise: vi.fn(),
   runInteractivePowerShell: vi.fn()
 }))
 vi.mock('child_process', () => ({ spawn }))
-vi.mock('fs/promises', () => ({ access }))
+vi.mock('fs/promises', () => ({ access, stat }))
 vi.mock('./platform/exec', () => ({ execFilePromise }))
 vi.mock('../shared/powershell-host', () => ({ runInteractivePowerShell }))
 
@@ -18,6 +19,7 @@ import {
   launchWindowsApp,
   openWindowsFolder,
   raiseProcessWindow,
+  WINDOWS_CMD,
   WINDOWS_TERMINAL
 } from './windows-terminals'
 
@@ -30,38 +32,86 @@ function child(error?: Error): EventEmitter & { unref: () => void } {
   return emitter
 }
 
+// The files that exist, as fs.stat sees them; everything else is missing.
+function files(...paths: string[]): void {
+  stat.mockImplementation(async (path: string) => {
+    if (paths.includes(path)) return { isFile: () => true }
+    throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+  })
+}
+
 describe('openWindowsFolder', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     access.mockResolvedValue(undefined)
     spawn.mockImplementation(() => child())
     execFilePromise.mockResolvedValue({ stdout: '', stderr: '' })
+    vi.stubEnv('PATH', 'C:\\tools;.;relative\\bin')
+    files('C:\\tools\\claude.cmd')
   })
+  afterEach(() => vi.unstubAllEnvs())
 
   it('starts Windows Terminal in the folder, which travels as the working folder, never as argv text', async () => {
     expect(await openWindowsFolder(FOLDER)).toEqual({ success: true })
     expect(spawn).toHaveBeenCalledExactlyOnceWith(WINDOWS_TERMINAL, ['-d', '.'], {
       cwd: FOLDER,
+      env: expect.objectContaining({ NoDefaultCurrentDirectoryInExePath: '1' }),
       detached: true,
       stdio: 'ignore'
     })
   })
 
-  it('runs a fixed agent command in the new tab', async () => {
-    await openWindowsFolder(FOLDER, 'codex')
-    expect(spawn.mock.calls[0][1]).toEqual(['-d', '.', 'cmd.exe', '/k', 'codex'])
+  it('runs the agent by its absolute path from PATH, through the absolute cmd.exe', async () => {
+    expect(await openWindowsFolder(FOLDER, 'claude')).toEqual({ success: true })
+    expect(spawn.mock.calls[0][1]).toEqual(['-d', '.', WINDOWS_CMD, '/k', 'C:\\tools\\claude.cmd'])
+    expect(WINDOWS_CMD).toMatch(/^[A-Za-z]:\\.*\\System32\\cmd\.exe$/i)
   })
 
-  it('falls back to a cmd.exe window, the folder passed in the environment', async () => {
+  it('gives the terminal the user’s own environment, with no search of the working folder', async () => {
+    vi.stubEnv('CLAUDEWATCH_PROBE', 'kept')
+    await openWindowsFolder(FOLDER, 'claude')
+    expect(spawn.mock.calls[0][2].env).toMatchObject({
+      PATH: 'C:\\tools;.;relative\\bin',
+      CLAUDEWATCH_PROBE: 'kept',
+      NoDefaultCurrentDirectoryInExePath: '1'
+    })
+  })
+
+  it('never runs an agent that sits only in the project folder or a relative PATH entry', async () => {
+    files(`${FOLDER}\\claude.cmd`, '.\\claude.cmd', 'relative\\bin\\claude.exe')
+    expect(await openWindowsFolder(FOLDER, 'claude')).toEqual({ success: false })
+    expect(spawn).not.toHaveBeenCalled()
+    expect(execFilePromise).not.toHaveBeenCalled()
+  })
+
+  it('refuses an agent whose path cmd.exe would read as more than a path', async () => {
+    vi.stubEnv('PATH', 'C:\\a&b;C:\\p%x%;C:\\Program Files (x86)\\n')
+    files('C:\\a&b\\codex.exe', 'C:\\p%x%\\codex.exe', 'C:\\Program Files (x86)\\n\\codex.exe')
+    expect(await openWindowsFolder(FOLDER, 'codex')).toEqual({ success: false })
+    expect(spawn).not.toHaveBeenCalled()
+  })
+
+  it('takes the first PATH entry that has the agent, in PATHEXT order', async () => {
+    vi.stubEnv('PATH', 'C:\\first;C:\\second')
+    files('C:\\first\\codex.cmd', 'C:\\first\\codex.exe', 'C:\\second\\codex.com')
+    await openWindowsFolder(FOLDER, 'codex')
+    expect(spawn.mock.calls[0][1].at(-1)).toBe('C:\\first\\codex.exe')
+  })
+
+  it('falls back to a cmd.exe window, the folder, shell and agent passed in the environment', async () => {
     access.mockRejectedValue(new Error('ENOENT'))
     expect(await openWindowsFolder(FOLDER, 'claude')).toEqual({ success: true })
     expect(spawn).not.toHaveBeenCalled()
     const [program, args, options] = execFilePromise.mock.calls[0]
     expect(program).toBe(POWERSHELL)
     expect(args.join(' ')).not.toContain(FOLDER)
+    expect(args.join(' ')).not.toContain('claude.cmd')
     expect(options.env).toMatchObject({
+      PATH: 'C:\\tools;.;relative\\bin',
+      NoDefaultCurrentDirectoryInExePath: '1',
+      CLAUDEWATCH_SHELL: WINDOWS_CMD,
       CLAUDEWATCH_FOLDER: FOLDER,
-      CLAUDEWATCH_ARGUMENTS: '/k claude'
+      CLAUDEWATCH_ARGUMENTS: '/k "C:\\tools\\claude.cmd"'
     })
   })
 

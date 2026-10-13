@@ -58,16 +58,26 @@ export const verifyArgs = (bundle: string): string[] => [
   `-R=${SIGNED_BY_ORCA}`,
   bundle
 ]
-// SignPath signs many projects, so the signer alone is not Orca: the company, which the signature
-// covers, must be too. The CLI says "Stably AI", the app "stablyai"; `-ne` ignores case.
+// SignPath's certificate signs many projects, and each sets its own version strings, so the
+// company and each binary's own names are pinned as well (the CLI says "Stably AI", the app
+// "stablyai"; `-ne` ignores case). Residual risk: unlike macOS's --deep --strict, this seals
+// only the two binaries. The CLI runs Orca.exe on the unsigned, user-writable
+// resources\app.asar.unpacked\out\cli\index.js, which nothing here checks.
 const AUTHENTICODE_SCRIPT = [
   "$ErrorActionPreference = 'Stop'",
-  'foreach ($path in $env:CLAUDEWATCH_ORCA_CLI, $env:CLAUDEWATCH_ORCA_APP) {',
-  '$signature = Get-AuthenticodeSignature -LiteralPath $path',
+  '$expected = @(',
+  "  @{ path = $env:CLAUDEWATCH_ORCA_CLI; original = 'orca.exe'; internal = 'orca.exe' },",
+  "  @{ path = $env:CLAUDEWATCH_ORCA_APP; original = ''; internal = 'Orca' }",
+  ')',
+  'foreach ($binary in $expected) {',
+  '$signature = Get-AuthenticodeSignature -LiteralPath $binary.path',
   "if ($signature.Status -ne 'Valid') { throw 'not validly signed' }",
   `if ($signature.SignerCertificate.Subject -cne '${ORCA_SIGNER}') { throw 'not signed for Orca' }`,
-  "$company = (Get-Item -LiteralPath $path).VersionInfo.CompanyName -replace '\\s', ''",
-  "if ($company -ne 'stablyai') { throw 'not Orca' }",
+  '$info = (Get-Item -LiteralPath $binary.path).VersionInfo',
+  "if (($info.CompanyName -replace '\\s', '') -ne 'stablyai') { throw 'not Orca' }",
+  "if ($info.ProductName -cne 'Orca') { throw 'not Orca' }",
+  "if ([string]$info.OriginalFilename -cne $binary.original) { throw 'not Orca' }",
+  "if ([string]$info.InternalName -cne $binary.internal) { throw 'not Orca' }",
   '}',
   "'trusted'"
 ].join('\n')
