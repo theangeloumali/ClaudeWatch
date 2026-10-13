@@ -149,13 +149,13 @@ export const placeholderId = ({ pid, startedAtMs }: SessionOwner): string =>
 export async function rememberedFolder(
   io: BridgeIo,
   folders: Map<string, string>,
-  process: RunningProcess,
-  platform: NodeJS.Platform = globalThis.process.platform
+  running: RunningProcess,
+  platform: NodeJS.Platform = process.platform
 ): Promise<string | undefined> {
-  const identity = identityOf(process)
+  const identity = identityOf(running)
   const known = folders.get(identity)
   if (known) return known
-  const cwd = await readWorkingFolder(io, process.pid, platform)
+  const cwd = await readWorkingFolder(io, running.pid, platform)
   if (cwd) folders.set(identity, cwd)
   return cwd
 }
