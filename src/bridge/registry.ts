@@ -19,7 +19,7 @@ import { join } from 'node:path'
 import { isAbsoluteFolder } from '../shared/platform-process'
 import type { SessionRef, SourceHealth } from '../shared/office/types'
 import { type BridgeIo, isMissing, jsonObject } from './io'
-import { isLive, startedAtOf } from './liveness'
+import { liveStartedAt } from './liveness'
 import { sessionFromRegistry, sessionFromTeammate } from './claude'
 import { resolveProject } from './project-root'
 import { pruneTranscripts, readTranscript, transcriptPath } from './transcript-tail'
@@ -76,7 +76,7 @@ interface Collected {
 
 // The records each root showed live last tick, so one PowerShell cannot vouch for this tick is
 // kept rather than dropped: the robot would otherwise leave its desk and come back.
-const liveLastTick = new WeakMap<BridgeIo, Map<string, Set<string>>>()
+const liveLastTick = new WeakMap<BridgeIo, Map<string, Map<string, number>>>()
 const recordOf = ({ pid, procStart, sessionId }: RegistryEntry): string =>
   `${pid}:${procStart}:${sessionId}`
 
@@ -140,8 +140,8 @@ export async function collectClaude(
   if (!lastTick) liveLastTick.set(io, (lastTick = new Map()))
   for (const root of uniqueRoots) {
     const health: SourceHealth = { id: `claude:${root}`, ok: true, detail: 'empty' }
-    const wasLive = lastTick.get(root) ?? new Set<string>()
-    const isLiveNow = new Set<string>()
+    const wasLive = lastTick.get(root) ?? new Map<string, number>()
+    const isLiveNow = new Map<string, number>()
     let isUnvouched = false
     try {
       const files = await io.list(join(root, 'sessions'))
@@ -154,15 +154,19 @@ export async function collectClaude(
           if (!entry) continue
           // An unreadable table proves nothing either way: each pid is then asked about.
           const rows = await table().catch(() => [])
-          const live = await isLive(entry, io, rows, platform).catch((error: unknown) => {
-            if (!wasLive.has(recordOf(entry))) throw error
-            isUnvouched = true
-            return true
-          })
-          if (!live) continue
-          isLiveNow.add(recordOf(entry))
+          const record = recordOf(entry)
+          const startedAtMs = await liveStartedAt(entry, io, rows, platform).catch(
+            (error: unknown) => {
+              const known = wasLive.get(record)
+              if (known === undefined) throw error
+              isUnvouched = true
+              return known
+            }
+          )
+          if (startedAtMs === null) continue
+          isLiveNow.set(record, startedAtMs)
           liveSessionIds.add(entry.sessionId)
-          reads.push(collectSession(root, entry, startedAtOf(entry, rows, platform)).catch(settled))
+          reads.push(collectSession(root, entry, startedAtMs).catch(settled))
         } catch (error) {
           reads.push(Promise.resolve(settled(error)))
         }

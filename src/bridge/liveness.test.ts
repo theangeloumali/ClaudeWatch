@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { POWERSHELL, powershellArgs, startTimeQuery } from '../shared/platform-process'
-import { isLive } from './liveness'
+import { creationTicksScript, isLive, liveStartedAt } from './liveness'
 import { fixtureIo, missing, registryEntry } from './__fixtures__/helpers'
 
 const startedAtMs = Date.parse('Sat Oct 10 15:29:12 2026 UTC')
@@ -96,14 +96,30 @@ describe('liveness on Windows for a record in CreationDate ticks', () => {
     io.exec = async () => ''
     expect(await isLive(ticksEntry, io, [], 'win32')).toBe(false)
   })
-  it('asks CIM for the ticks of a pid the table lacks, as Claude Code itself did', async () => {
+  it('asks CIM for the ticks of a pid the table lacks, with its start, as Claude Code did', async () => {
     const io = fixtureIo()
-    const exec = vi.fn(async () => `${TICKS}\r\n`)
+    const exec = vi.fn(async () => `${TICKS} ${FILETIME}\r\n`)
     io.exec = exec
-    expect(await isLive(ticksEntry, io, [], 'win32')).toBe(true)
+    expect(await liveStartedAt(ticksEntry, io, [], 'win32')).toBe(
+      Date.parse('Sat Oct 10 15:29:12 2026 UTC')
+    )
     expect(exec).toHaveBeenCalledExactlyOnceWith(
       POWERSHELL,
-      powershellArgs('(Get-CimInstance Win32_Process -Filter "ProcessId=42").CreationDate.Ticks')
+      powershellArgs(creationTicksScript(42))
     )
+    expect(creationTicksScript(42)).toContain(
+      'Get-CimInstance Win32_Process -Filter "ProcessId=42"'
+    )
+  })
+  it('gives the start of a live process, and null for a dead one, whatever it is asked through', async () => {
+    const io = fixtureIo()
+    io.exec = async () => '134361197520000000\r\n'
+    expect(await liveStartedAt(filetimeEntry, io, [], 'win32')).toBe(startedAtMs)
+    expect(await liveStartedAt(filetimeEntry, io, [listed(FILETIME, TICKS)], 'win32')).toBe(
+      startedAtMs
+    )
+    expect(
+      await liveStartedAt(filetimeEntry, io, [listed('134361197520000001', TICKS)], 'win32')
+    ).toBeNull()
   })
 })

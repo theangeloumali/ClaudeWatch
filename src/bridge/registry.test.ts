@@ -574,6 +574,14 @@ describe('a Windows registry', () => {
       startedAtMs
     ])
   })
+  it('dates a ticks session the table does not list by the start CIM gives with its ticks', async () => {
+    const io = fixtureIo(files(ticks))
+    io.exec = async (_program, args) =>
+      args.at(-1) === WINDOWS_PROCESS_TABLE_SCRIPT ? '' : `${ticks} ${filetime}\r\n`
+    expect((await collect(io, 1000)).sessions.map((session) => session.startedAtMs)).toEqual([
+      startedAtMs
+    ])
+  })
   it('keeps a session it saw live while PowerShell cannot answer, and says the check failed', async () => {
     const io = fixtureIo(files(filetime))
     let isAnswering = true
