@@ -32,7 +32,7 @@
 - [x] Phase 2: Integrate + gate chain
 - [x] Phase 3: Live Windows verification on this machine
 - [x] Phase 4: Wave 2 review (Maya + Kai)
-- [ ] Phase 5: Close — mandate steps, MP4, PR
+- [ ] Phase 5: Close — mandate steps, end-to-end check, PR
 
 ## Execution shape
 
@@ -48,7 +48,7 @@
  Phase 2  primary ─ merge 5 branches ─ office-window chrome hookup ─ STEP 6 gate chain
  Phase 3  primary ─ build:win ─ reinstall ─ LIVE Windows checks (this session visible)
  Phase 4  Wave 2 ─ @maya + @kai (risk 2) ─ fixes ─ codex-review
- Phase 5  primary ─ simplify · review · dead-code · checklist · MP4 · vault · PR Closes #4–#9
+ Phase 5  primary ─ simplify · review · dead-code · checklist · E2E · vault · PR Closes #4–#9
 ```
 
 Budget: `T3 active=5 total=12` → Wave 1 = 5, Wave 2 = 2, 1 reserved retry/domain-fix slot (8 of 12).
@@ -189,7 +189,7 @@ export function isAbsoluteFolder(path: string, platform?: NodeJS.Platform): bool
 
 - [ ] `/simplify` → code-review → reuse audit → `bash ~/.claude/hooks/dead-code-check.sh`
 - [ ] Feature checklist `~/Desktop/eor-feature-checklists/CLAUDEWATCH-9-review-checklist.md`, every row Pass or Blocked
-- [ ] Rebuild + reinstall the final build; E2E MP4 (ffmpeg `gdigrab`, H.264/AAC yuv420p) of tray → popover → dashboard with live sessions → Office → focus, frame-verified, saved to `recordings/` (never committed or referenced)
+- [ ] Rebuild + reinstall the final build; end-to-end walk of tray → popover → dashboard with live sessions → Office → focus on the installed build
 - [ ] `bash ~/.claude/hooks/vault-append.sh …`
 - [ ] Commit (Angelo identity; no assistant attribution), push `fix/windows-support`, `gh pr create` with `**Tickets — Closes #4, #5, #6, #7, #8, #9**`; comment status on each issue
       **Verify:** `gh pr view --json url,state` → OPEN; `git log @{upstream}..HEAD --format='%an <%ae>'` → only Angelo
