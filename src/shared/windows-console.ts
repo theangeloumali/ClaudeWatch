@@ -109,7 +109,7 @@ export function focusWindowScript(pid: number): string {
     '    }',
     '    $parent = $rows[[long]$row.ParentProcessId]',
     '    if ($parent -and $parent.CreationDate -le $row.CreationDate) { $id = [long]$row.ParentProcessId }',
-    '    elseif (-not $isConsoleUsed) { $isConsoleUsed = $true; $id = [long]$console[0] }',
+    '    elseif (-not $isConsoleUsed -and $console[0]) { $isConsoleUsed = $true; $id = [long]$console[0] }',
     '    else { break }',
     '  }',
     '}',
@@ -160,10 +160,11 @@ const MAX_DEPTH = 32
 
 // The process and its ancestors, nearest first. A parent that exited (Git Bash's forked shells)
 // or whose pid a newer process took ends the parent chain; it resumes once at the console.
+// Console 0 means none was attached: pid 0 is System Idle Process, never an ancestor.
 export function ancestry(tree: ProcessTree, pid: number): ProcessNode[] {
   const chain: ProcessNode[] = []
   let node = tree.processes.get(pid)
-  let isConsoleUsed = false
+  let isConsoleUsed = tree.consoleRoot === 0
   while (node && !chain.includes(node) && chain.length < MAX_DEPTH) {
     chain.push(node)
     const parent = tree.processes.get(node.ppid)

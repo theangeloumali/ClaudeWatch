@@ -1,16 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { EventEmitter } from 'node:events'
 
-const { spawn, access, execFilePromise } = vi.hoisted(() => ({
+const { spawn, access, execFilePromise, runInteractivePowerShell } = vi.hoisted(() => ({
   spawn: vi.fn(),
   access: vi.fn(),
-  execFilePromise: vi.fn()
+  execFilePromise: vi.fn(),
+  runInteractivePowerShell: vi.fn()
 }))
 vi.mock('child_process', () => ({ spawn }))
 vi.mock('fs/promises', () => ({ access }))
 vi.mock('./platform/exec', () => ({ execFilePromise }))
+vi.mock('../shared/powershell-host', () => ({ runInteractivePowerShell }))
 
-import { childEnv, POWERSHELL, powershellArgs } from '../shared/platform-process'
+import { POWERSHELL } from '../shared/platform-process'
 import { focusWindowScript } from '../shared/windows-console'
 import {
   launchWindowsApp,
@@ -91,14 +93,11 @@ describe('raiseProcessWindow', () => {
     expect(await raiseProcessWindow(42, runScript)).toBe(false)
   })
 
-  it('runs a fresh PowerShell by default, with the minimal environment', async () => {
-    execFilePromise.mockResolvedValue({ stdout: 'True\r\n', stderr: '' })
+  it('uses the kept PowerShell host when given no runner', async () => {
+    runInteractivePowerShell.mockResolvedValue('True\r\n')
     expect(await raiseProcessWindow(42)).toBe(true)
-    expect(execFilePromise).toHaveBeenCalledExactlyOnceWith(
-      POWERSHELL,
-      powershellArgs(focusWindowScript(42)),
-      { timeout: 20_000, env: childEnv('win32') }
-    )
+    expect(runInteractivePowerShell).toHaveBeenCalledExactlyOnceWith(focusWindowScript(42))
+    expect(execFilePromise).not.toHaveBeenCalled()
   })
 })
 

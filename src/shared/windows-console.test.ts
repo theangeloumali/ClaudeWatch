@@ -125,6 +125,17 @@ describe('ancestry', () => {
     expect(pids(tree, 10)).toEqual([10, 11])
   })
 
+  it('treats console 0 (no console could be attached) as none, not as System Idle Process', () => {
+    const tree = parseProcessTree(
+      listing(0, [
+        [10, 20, 'claude.exe', at(5)],
+        [0, 0, 'System Idle Process', '0']
+      ])
+    )
+    expect(pids(tree, 10)).toEqual([10])
+    expect(focusWindowScript(10)).toContain('elseif (-not $isConsoleUsed -and $console[0])')
+  })
+
   it('is empty for a process that is not listed', () => {
     expect(pids(parseProcessTree(ORCA_PANE), 1)).toEqual([])
   })

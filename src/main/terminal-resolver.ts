@@ -1,7 +1,8 @@
 import { execFilePromise } from './platform/exec'
 import type { TerminalInfo, TerminalType } from '../renderer/lib/types'
 import type { RunScript } from '../shared/windows-console'
-import { resolveWindowsTerminal, runColdScript } from './windows-terminals'
+import { runInteractivePowerShell } from '../shared/powershell-host'
+import { resolveWindowsTerminal } from './windows-terminals'
 
 interface TerminalSignature {
   terminalType: TerminalType
@@ -45,7 +46,7 @@ export class TerminalResolver {
 
   constructor(
     private readonly platform: NodeJS.Platform = process.platform,
-    private readonly runScript: RunScript = runColdScript
+    private readonly runScript: RunScript = runInteractivePowerShell
   ) {}
 
   async resolve(pid: number): Promise<TerminalInfo> {
