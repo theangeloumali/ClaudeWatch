@@ -12,7 +12,8 @@ export function sessionFromRegistry(
   transcript: TranscriptState,
   subagents: SubagentRef[],
   root: string,
-  worktree: string | null
+  worktree: string | null,
+  startedAtMs = Date.parse(`${entry.procStart} UTC`) || 0
 ): SessionRef {
   const waiting = entry.status === 'waiting'
   return {
@@ -47,7 +48,7 @@ export function sessionFromRegistry(
         : 'none',
     currentTool: transcript.tool,
     subagents,
-    startedAtMs: Date.parse(`${entry.procStart} UTC`) || 0,
+    startedAtMs,
     updatedAtMs: entry.updatedAtMs,
     usage: null
   }

@@ -1,6 +1,7 @@
 import { join, sep } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { POWERSHELL, startTimeQuery } from '../shared/platform-process'
+import { WINDOWS_PROCESS_TABLE_SCRIPT } from './process-table'
 import { collectClaude, parseRegistry } from './registry'
 import { listAgentFiles, liveSubagents } from './subagents'
 import { projectSlug } from './transcript-tail'
@@ -535,5 +536,66 @@ describe.each([
     io.exec = exec(table(42, `${start.slice(0, -1)}9`))
     const batch = await collectClaude([root], io, 1000, undefined, undefined, platform)
     expect(batch.sessions).toEqual([])
+  })
+})
+
+describe('a Windows registry', () => {
+  const root = 'C:\\claude-win'
+  const startedAtMs = Date.parse('Sat Oct 10 15:29:12 2026 UTC')
+  const filetime = '134361197520000000'
+  const ticks = '639272429520000000'
+  const files = (procStart: string) => ({
+    [`${root}\\sessions\\42.json`]: JSON.stringify({ ...registryEntry('win32'), procStart }),
+    'C:\\repo\\.git': null
+  })
+  const timedOut = (): Error =>
+    Object.assign(new Error('timed out'), { killed: true, code: null, signal: 'SIGTERM' })
+  const collect = (io: ReturnType<typeof fixtureIo>, now: number) =>
+    collectClaude([root], io, now, undefined, undefined, 'win32')
+
+  it.each([
+    ['a FILETIME', filetime],
+    ['a CreationDate ticks', ticks]
+  ])('dates a session from %s record by when its process started', async (_format, start) => {
+    const io = fixtureIo(files(start))
+    io.exec = async (_program, args) =>
+      args.at(-1) === WINDOWS_PROCESS_TABLE_SCRIPT
+        ? windowsTableLine(42, filetime, 'claude.exe', ticks)
+        : ''
+    expect((await collect(io, 1000)).sessions.map((session) => session.startedAtMs)).toEqual([
+      startedAtMs
+    ])
+  })
+  it('dates a session the table does not list from the FILETIME its record carries', async () => {
+    const io = fixtureIo(files(filetime))
+    io.exec = async (_program, args) =>
+      args.at(-1) === WINDOWS_PROCESS_TABLE_SCRIPT ? '' : `${filetime}\r\n`
+    expect((await collect(io, 1000)).sessions.map((session) => session.startedAtMs)).toEqual([
+      startedAtMs
+    ])
+  })
+  it('keeps a session it saw live while PowerShell cannot answer, and says the check failed', async () => {
+    const io = fixtureIo(files(filetime))
+    let isAnswering = true
+    io.exec = async (_program, args) => {
+      if (!isAnswering) throw timedOut()
+      return args.at(-1) === WINDOWS_PROCESS_TABLE_SCRIPT
+        ? windowsTableLine(42, filetime, 'claude.exe')
+        : ''
+    }
+    expect((await collect(io, 1000)).sessions).toHaveLength(1)
+    isAnswering = false
+    const batch = await collect(io, 3000)
+    expect(batch.sessions.map((session) => session.sessionId)).toEqual(['a'])
+    expect(batch.sources[0]).toMatchObject({ ok: false, detail: 'liveness unknown' })
+  })
+  it('shows no session it never saw live while PowerShell cannot answer', async () => {
+    const io = fixtureIo(files(filetime))
+    io.exec = async () => {
+      throw timedOut()
+    }
+    const batch = await collect(io, 1000)
+    expect(batch.sessions).toEqual([])
+    expect(batch.sources[0].ok).toBe(false)
   })
 })

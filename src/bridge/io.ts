@@ -3,15 +3,23 @@ import { open, readdir, realpath, stat } from 'node:fs/promises'
 import { basename } from 'node:path'
 import { isJsonObject } from '../shared/json-object'
 import { assertOrcaTrusted, ORCA_CLI, orcaCliEnv } from '../shared/orca-bundle'
-import { childEnv, POWERSHELL, powershellArgs } from '../shared/platform-process'
+import {
+  childEnv,
+  POWERSHELL,
+  powershellScriptOf,
+  startTimeQuery
+} from '../shared/platform-process'
 import { runPowerShell } from '../shared/powershell-host'
 import { UNSAFE_IN_A_NAME } from '../shared/unsafe-text'
+import { processTreeScript } from '../shared/windows-console'
+import { creationTicksScript } from './liveness'
 import {
   OPENCODE_STATEMENTS,
   OpencodeDbError,
   type OpencodeQuery,
   readOpencodeDb
 } from './opencode-db'
+import { WINDOWS_PROCESS_TABLE_SCRIPT } from './process-table'
 
 interface FileInfo {
   directory: boolean
@@ -105,13 +113,36 @@ const CREDENTIAL_STORE =
   /(^|[\\/])(\.credentials\.json|[\w.-]*auth\.json|\.orca-managed-claude-auth|orca-(runtime|e2ee-keypair|secret-protection)\.json|Cookies)$|\.key$/i
 const PROGRAMS = new Set(['/bin/ps', '/usr/sbin/lsof', POWERSHELL, ORCA_CLI])
 const forbidden = (what: string): Error => new Error(`forbidden: ${what}`)
-// PowerShell runs whatever follows -Command as code, appended arguments included: a script is
-// all a caller can hand it.
-function powershellScript(args: string[]): string {
-  const script = args.at(-1) ?? ''
-  const expected = powershellArgs(script)
-  if (args.some((arg, index) => arg !== expected[index]) || args.length !== expected.length)
+// Each PowerShell script the bridge runs, built for one pid at most. A script reaches PowerShell
+// only when it is one of them exactly, so no source can read through it what the guard refuses.
+const PID_SCRIPTS: ((pid: number) => string)[] = [
+  (pid) => startTimeQuery(pid, 'win32').args[3],
+  creationTicksScript,
+  processTreeScript
+]
+// The pid sits where the scripts for pids 1 and 2 first differ; the rest must rebuild exactly.
+function isPidScript(script: string, build: (pid: number) => string): boolean {
+  const [one, two] = [build(1), build(2)]
+  let at = 0
+  while (at < one.length && one[at] === two[at]) at++
+  const pid = /^[1-9]\d*/.exec(script.slice(at))?.[0]
+  try {
+    return pid !== undefined && build(Number(pid)) === script
+  } catch {
+    return false
+  }
+}
+function bridgeScript(args: string[]): string {
+  let script: string
+  try {
+    script = powershellScriptOf(args)
+  } catch {
     throw forbidden('program')
+  }
+  const isKnown =
+    script === WINDOWS_PROCESS_TABLE_SCRIPT ||
+    PID_SCRIPTS.some((build) => isPidScript(script, build))
+  if (!isKnown) throw forbidden('program')
   return script
 }
 const EXEC_TIMEOUT_MS = 5000
@@ -169,7 +200,7 @@ export const systemIo: BridgeIo = {
     // Orca's bundle is checked before anything in it runs, as in the main process.
     if (file === ORCA_CLI) await assertOrcaTrusted()
     if (file === POWERSHELL) {
-      const script = powershellScript(args)
+      const script = bridgeScript(args)
       if (process.platform === 'win32') return runPowerShell(script, timeoutMs)
     }
     // Orca's CLI cannot start without APPDATA on Windows; every other program gets the minimum.

@@ -114,6 +114,14 @@ describe('a PowerShell kept running', () => {
     expect(await run).toBe('fresh')
     expect(shells[0].killed).toBe(false)
   })
+  it('returns a script that printed nothing as an empty answer, keeping the shell', async () => {
+    const { host, shells } = harness()
+    const run = host.run('$null')
+    await settle()
+    shells[0].reply('')
+    expect(await run).toBe('')
+    expect(shells[0].killed).toBe(false)
+  })
   it('answers a reply the shell marks unchanged with its last output', async () => {
     const { host, shells } = harness()
     const first = host.run('table')

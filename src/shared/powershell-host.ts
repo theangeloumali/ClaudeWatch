@@ -156,7 +156,8 @@ export class PowerShellHost {
       return this.drop(failure('PowerShell reply too large', { code: null }))
     let newline: number
     while (this.shell && (newline = this.buffered.indexOf('\n')) >= 0) {
-      const line = this.buffered.slice(0, newline).trim()
+      // Only the CR goes: an empty output's reply ends in the space before its empty base64.
+      const line = this.buffered.slice(0, newline).replace(/\r$/, '')
       this.buffered = this.buffered.slice(newline + 1)
       this.answer(line)
     }

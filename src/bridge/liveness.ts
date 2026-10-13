@@ -1,4 +1,9 @@
-import { powershellArgs, startTimeQuery } from '../shared/platform-process'
+import {
+  checkedPid,
+  filetimeToMs,
+  powershellArgs,
+  startTimeQuery
+} from '../shared/platform-process'
 import type { BridgeIo } from './io'
 import type { ProcessRow } from './process-table'
 import type { RegistryEntry } from './registry'
@@ -33,12 +38,27 @@ const hasExitStatus = (error: unknown): boolean =>
 const isCreationTicks = (procStart: string, platform: NodeJS.Platform): boolean =>
   platform === 'win32' && Number(procStart) > 3e17
 
-// Asked of a pid as Claude Code asked when it wrote the record; the pid is a checked integer.
+// The ticks of a process as Claude Code asked for them when it wrote the record.
+export const creationTicksScript = (pid: number): string =>
+  `(Get-CimInstance Win32_Process -Filter "ProcessId=${checkedPid(pid)}").CreationDate.Ticks`
+
 function ownStartQuery(entry: RegistryEntry, platform: NodeJS.Platform) {
   const query = startTimeQuery(entry.pid, platform)
   if (!isCreationTicks(entry.procStart, platform)) return query
-  const script = `(Get-CimInstance Win32_Process -Filter "ProcessId=${entry.pid}").CreationDate.Ticks`
-  return { file: query.file, args: powershellArgs(script) }
+  return { file: query.file, args: powershellArgs(creationTicksScript(entry.pid)) }
+}
+
+// When a live record's process started. A Windows record holds a FILETIME or ticks, not a date:
+// the process's own row gives the .NET start for both, and a ticks record without one waits for it.
+export function startedAtOf(
+  entry: RegistryEntry,
+  table: ProcessRow[],
+  platform: NodeJS.Platform = process.platform
+): number {
+  if (platform !== 'win32') return Date.parse(`${entry.procStart} UTC`) || 0
+  const row = table.find(({ pid }) => pid === entry.pid)
+  if (row) return row.startedAtMs
+  return isCreationTicks(entry.procStart, platform) ? 0 : filetimeToMs(entry.procStart) || 0
 }
 
 // The owner's process table answers for a pid it lists. Only one it lacks is asked about,
