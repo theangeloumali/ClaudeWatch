@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { accountKey } from './account-key'
-import { type BridgeIo, isMissing, jsonObject, object } from './io'
+import { type BridgeIo, isForbidden, isMissing, jsonObject, object } from './io'
 import { isFolderPath } from './process-folders'
 
 export interface Rollout {
@@ -78,7 +78,7 @@ export async function findRollouts(
         try {
           firstLine = await io.readFirstLine(path)
         } catch (error) {
-          if (isMissing(error)) throw error
+          if (!isForbidden(error)) throw error
           // One the bridge may not read (Codex hard-links a rollout it archives) is no rollout
           // here, until it changes: the others are still found.
           entries.set(path, {

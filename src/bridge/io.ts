@@ -52,6 +52,10 @@ export function isMissing(error: unknown): boolean {
   return error instanceof Error && 'code' in error && error.code === 'ENOENT'
 }
 
+// A read this file's guard refused, as opposed to one the disk failed.
+export const isForbidden = (error: unknown): boolean =>
+  error instanceof Error && error.message.startsWith('forbidden: ')
+
 // realpath names a hard link by its own name, so a credential store linked under an innocent
 // one shows only in the open file's link count.
 async function openSoleName(path: string): Promise<FileHandle> {

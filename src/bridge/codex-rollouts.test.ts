@@ -114,6 +114,19 @@ it('says how the CLI started a thread, as against an app-server or a parent thre
   expect(started).toEqual({ a: 'terminal', b: 'exec', c: null, d: null, e: 'cli' })
 })
 
+it('still fails the walk on a real read error, which a skip would hide', async () => {
+  const io = fixtureIo({
+    '/codex/sessions/rollout-a.jsonl': JSON.stringify({
+      type: 'session_meta',
+      payload: { id: 'a', cwd: '/repo' }
+    })
+  })
+  io.readFirstLine = vi.fn(async () => {
+    throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' })
+  })
+  await expect(findRollouts('/codex', io, false, 'darwin')).rejects.toThrow('EACCES')
+})
+
 it('skips a rollout it may not read, such as one Codex hard-linked to archive it, and finds the rest', async () => {
   const meta = (id: string): string =>
     JSON.stringify({ type: 'session_meta', payload: { id, cwd: '/repo' } })
