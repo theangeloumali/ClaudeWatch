@@ -70,7 +70,8 @@ const FAILURE_COPY: Record<InteractionFailure, string> = {
     'Answering prompts from the office works for Claude agents. Focus the terminal for Codex and OpenCode.',
   'invalid-input': 'Type a message first (up to 4000 characters).',
   'unknown-session': 'This agent has left the office.',
-  'not-permitted': 'This page is view-only. Start it with --interactive to act on agents.'
+  'not-permitted': 'This page is view-only. Start it with --interactive to act on agents.',
+  'agent-not-found': "Couldn't find claude or codex on your PATH."
 }
 
 export function failureMessage(reason: InteractionFailure | undefined): string {

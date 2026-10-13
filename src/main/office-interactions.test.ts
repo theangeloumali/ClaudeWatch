@@ -640,6 +640,15 @@ describe('OfficeInteractions', () => {
       expect(openTerminalRunning).toHaveBeenCalledWith('/repo/app', 'claude')
     })
 
+    it('says why when the fallback terminal could not find the agent', async () => {
+      orca.create.mockRejectedValueOnce(new Error('runtime not running'))
+      openTerminalRunning.mockResolvedValueOnce({ success: false, reason: 'agent-not-found' })
+      expect(await interactions.start('p_app', 'codex')).toEqual({
+        success: false,
+        reason: 'agent-not-found'
+      })
+    })
+
     it('refuses an unknown project or provider', async () => {
       expect(await interactions.start('p_missing', 'claude')).toEqual({
         success: false,

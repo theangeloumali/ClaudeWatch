@@ -157,7 +157,9 @@ export const INTERACTION_FAILURES = [
   'prompt-changed',
   'unsupported-provider',
   'invalid-input',
-  'not-permitted'
+  'not-permitted',
+  // Start refused: the agent is not on PATH, and nothing in the project folder is run instead.
+  'agent-not-found'
 ] as const
 
 export type InteractionFailure = (typeof INTERACTION_FAILURES)[number]

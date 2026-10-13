@@ -54,6 +54,7 @@ describe('failureMessage', () => {
     )
     expect(failureMessage('invalid-input')).toBe('Type a message first (up to 4000 characters).')
     expect(failureMessage('unknown-session')).toBe('This agent has left the office.')
+    expect(failureMessage('agent-not-found')).toBe("Couldn't find claude or codex on your PATH.")
     expect(failureMessage('not-permitted')).toBe(
       'This page is view-only. Start it with --interactive to act on agents.'
     )

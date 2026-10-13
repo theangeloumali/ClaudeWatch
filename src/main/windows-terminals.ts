@@ -3,6 +3,7 @@ import { access, stat } from 'fs/promises'
 import { homedir } from 'os'
 import { win32 } from 'path'
 import type { TerminalInfo, TerminalType } from '../renderer/lib/types'
+import type { InteractionResult } from '../shared/office/types'
 import { childEnv, POWERSHELL, powershellArgs, programName } from '../shared/platform-process'
 import { runInteractivePowerShell } from '../shared/powershell-host'
 import {
@@ -128,9 +129,9 @@ async function startInFolder(folder: string, agent: string | null): Promise<void
 export async function openWindowsFolder(
   folder: string,
   command?: AgentCommand
-): Promise<{ success: boolean }> {
+): Promise<InteractionResult> {
   const agent = command ? await resolveAgent(command) : null
-  if (command && !agent) return { success: false }
+  if (command && !agent) return { success: false, reason: 'agent-not-found' }
   return startInFolder(folder, agent).then(
     () => ({ success: true }),
     () => ({ success: false })
