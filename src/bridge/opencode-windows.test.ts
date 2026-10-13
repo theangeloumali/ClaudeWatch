@@ -83,16 +83,59 @@ it('gives each of two Windows processes the session it began, however recently e
   expect(owners).toEqual({ 42: 'ses_older', 43: 'ses_newer' })
 })
 
-it('places neither of two Windows processes whose sessions both began after both started', async () => {
+it('shows the sessions of two Windows processes it cannot tell apart, with no process, until it can', async () => {
   const fixture = setup((db) => {
-    session(db, 'ses_one', 'C:/Users/a/one', STARTED_MS + 90_000, NOW - 1000)
-    session(db, 'ses_two', 'C:/Users/a/two', STARTED_MS + 100_000, NOW - 2000)
+    session(db, 'ses_one', 'C:/Users/a/one', STARTED_MS + 90_000, STARTED_MS + 92_000)
+    session(db, 'ses_two', 'C:/Users/a/two', STARTED_MS + 120_000, STARTED_MS + 122_000)
   })
   const both = [row(42, TUI), row(43, TUI, STARTED_MS + 60_000)]
-  expect((await collect(fixture, both)).sessions).toEqual([])
-  // Nothing was remembered from the guess it declined: alone, 42 takes the session only it began.
-  const [alone] = (await collect(fixture, [both[0]])).sessions
-  expect(alone).toMatchObject({ pid: 42, sessionId: 'ses_one', cwd: 'C:\\Users\\a\\one' })
+  const shown = async (atMs: number, rows = both) =>
+    (await collect(fixture, rows, STARTED_MS + atMs)).sessions.map(({ key, pid, cwd }) => [
+      key,
+      pid,
+      cwd
+    ])
+  expect(await shown(122_000)).toEqual([
+    ['opencode:ses_two', null, 'C:\\Users\\a\\two'],
+    ['opencode:ses_one', null, 'C:\\Users\\a\\one']
+  ])
+  // Nothing was remembered from the guess it declined: alone, 42 takes the session only it began,
+  // under the key it was shown with.
+  expect(await shown(200_000, [both[0]])).toEqual([['opencode:ses_one', 42, 'C:\\Users\\a\\one']])
+})
+
+it('shows no more sessions without a process than there are processes it cannot place', async () => {
+  const fixture = setup((db) => {
+    for (const [id, offsetMs] of [
+      ['a', 70_000],
+      ['b', 80_000],
+      ['c', 90_000]
+    ] as const)
+      session(
+        db,
+        `ses_${id}`,
+        `C:/Users/a/${id}`,
+        STARTED_MS + offsetMs,
+        STARTED_MS + offsetMs + 1000
+      )
+  })
+  const both = [row(42, TUI), row(43, TUI, STARTED_MS + 60_000)]
+  const { sessions } = await collect(fixture, both, STARTED_MS + 100_000)
+  expect(sessions.map(({ key, pid }) => [key, pid])).toEqual([
+    ['opencode:ses_c', null],
+    ['opencode:ses_b', null]
+  ])
+})
+
+it('shows the session of a prompted Windows terminal beside one never prompted', async () => {
+  const fixture = setup((db) => {
+    session(db, 'ses_prompted', 'C:/Users/a/repo', STARTED_MS + 70_000, STARTED_MS + 75_000)
+  })
+  const rows = [row(42, TUI), row(43, TUI, STARTED_MS + 60_000)]
+  const { sessions } = await collect(fixture, rows, STARTED_MS + 80_000)
+  expect(sessions).toMatchObject([
+    { key: 'opencode:ses_prompted', pid: null, cwd: 'C:\\Users\\a\\repo' }
+  ])
 })
 
 it('gives a Windows process that has written nothing yet no other process’s session', async () => {

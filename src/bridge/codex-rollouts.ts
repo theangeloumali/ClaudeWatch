@@ -74,7 +74,22 @@ export async function findRollouts(
           if (cached.rollout) rollouts.push(cached.rollout)
           continue
         }
-        const header = jsonObject(await io.readFirstLine(path))
+        let firstLine: string
+        try {
+          firstLine = await io.readFirstLine(path)
+        } catch (error) {
+          if (isMissing(error)) throw error
+          // One the bridge may not read (Codex hard-links a rollout it archives) is no rollout
+          // here, until it changes: the others are still found.
+          entries.set(path, {
+            mtimeMs: info.mtimeMs,
+            size: info.size,
+            derived: derivesAccounts,
+            rollout: null
+          })
+          continue
+        }
+        const header = jsonObject(firstLine)
         const meta = object(header?.payload)
         let rollout: Rollout | null = null
         if (

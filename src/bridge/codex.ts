@@ -8,7 +8,13 @@ import type {
 } from '../shared/office/types'
 import { type CodexTotal, codexTotalOf } from '../shared/accounts'
 import { programName } from '../shared/platform-process'
-import { claimFolders, folderKey, isAppFolder } from './process-folders'
+import {
+  claimFolders,
+  folderKey,
+  isAppFolder,
+  unplacedConversations,
+  type WrittenConversation
+} from './process-folders'
 import { type BridgeIo, folderName, isLabel, isMissing, jsonObject, object } from './io'
 import { placementOf, resolveProject } from './project-root'
 import { type CodexKind, findRollouts, type Rollout } from './codex-rollouts'
@@ -300,21 +306,19 @@ export async function collectCodex(
       if (tail) tail.session = session
       health.detail = 'live'
     }
-    if (platform === 'win32') {
-      const threads = rollouts.filter(
-        ({ startedBy, cwd }) => startedBy !== null && !isAppFolder(cwd, platform)
-      )
-      claimFolders(
-        processes,
-        folders,
-        threads.map(({ cwd, startedAtMs, mtimeMs, startedBy }) => ({
-          folder: cwd,
-          createdAtMs: startedAtMs,
-          writtenAtMs: mtimeMs,
-          kind: startedBy === 'cli' ? undefined : (startedBy ?? undefined)
-        }))
-      )
-    }
+    const threads: (WrittenConversation & { rollout: Rollout })[] =
+      platform === 'win32'
+        ? rollouts
+            .filter(({ startedBy, cwd }) => startedBy !== null && !isAppFolder(cwd, platform))
+            .map((rollout) => ({
+              rollout,
+              folder: rollout.cwd,
+              createdAtMs: rollout.startedAtMs,
+              writtenAtMs: rollout.mtimeMs,
+              kind: rollout.startedBy === 'cli' ? undefined : (rollout.startedBy ?? undefined)
+            }))
+        : []
+    claimFolders(processes, folders, threads)
     let isWaiting = false
     for (const process of newestFirst(processes)) {
       try {
@@ -335,6 +339,21 @@ export async function collectCodex(
       } catch {
         health.ok = false
         health.detail = 'process read failed'
+      }
+    }
+    // A thread no process can yet be told apart for is shown as an app-server's is, without one.
+    const unclaimed = threads.filter(({ rollout }) => !used.has(rollout.id))
+    for (const { rollout } of unplacedConversations(processes, folders, unclaimed)) {
+      used.add(rollout.id)
+      try {
+        await show(rollout, rollout.cwd, {
+          pid: null,
+          startedAtMs:
+            rollout.startedAtMs ?? tails.get(rollout.path)?.session?.startedAtMs ?? rollout.mtimeMs
+        })
+      } catch {
+        health.ok = false
+        health.detail = 'rollout read failed'
       }
     }
     // The desktop app, the IDE extension and plugins run their threads inside an app-server,

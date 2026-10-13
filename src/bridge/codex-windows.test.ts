@@ -136,22 +136,58 @@ const createdAt = (offsetMs: number): { timestamp: string } => ({
   timestamp: new Date(STARTED_MS + offsetMs).toISOString()
 })
 
-it('places neither of two Windows processes whose threads both began after both started', async () => {
+it('shows the threads of two Windows processes it cannot tell apart, with no process, until it can', async () => {
   const io = codexHome({
     one: {
       header: meta('one', 'C:\\Users\\a\\one', createdAt(90_000)),
-      mtimeMs: STARTED_MS + 95_000
-    },
-    two: {
-      header: meta('two', 'C:\\Users\\a\\two', createdAt(100_000)),
-      mtimeMs: STARTED_MS + 105_000
+      mtimeMs: STARTED_MS + 92_000
     }
   })
   const both = [row(42, VENDOR_CODEX), row(43, VENDOR_CODEX, STARTED_MS + 60_000)]
-  expect((await collect(io, both, STARTED_MS + 110_000)).sessions).toEqual([])
-  // Nothing was remembered from the guess it declined: alone, 42 takes the thread only it began.
-  const [alone] = (await collect(io, [both[0]], STARTED_MS + 112_000)).sessions
-  expect(alone).toMatchObject({ pid: 42, sessionId: 'one', cwd: 'C:\\Users\\a\\one' })
+  const shown = async (atMs: number, rows = both) =>
+    (await collect(io, rows, STARTED_MS + atMs)).sessions.map(({ key, pid, cwd }) => [
+      key,
+      pid,
+      cwd
+    ])
+  expect(await shown(92_000)).toEqual([['codex:one', null, 'C:\\Users\\a\\one']])
+  io.add('two', {
+    header: meta('two', 'C:\\Users\\a\\two', createdAt(120_000)),
+    mtimeMs: STARTED_MS + 122_000
+  })
+  expect(await shown(122_000)).toEqual([
+    ['codex:two', null, 'C:\\Users\\a\\two'],
+    ['codex:one', null, 'C:\\Users\\a\\one']
+  ])
+  // Nothing was remembered from the guess it declined: alone, 42 takes the thread only it began,
+  // under the key it was shown with.
+  expect(await shown(200_000, [both[0]])).toEqual([['codex:one', 42, 'C:\\Users\\a\\one']])
+})
+
+it('shows no more threads without a process than there are processes it cannot place', async () => {
+  const thread = (id: string, offsetMs: number) => ({
+    header: meta(id, `C:\\Users\\a\\${id}`, createdAt(offsetMs)),
+    mtimeMs: STARTED_MS + offsetMs + 1000
+  })
+  const io = codexHome({ a: thread('a', 70_000), b: thread('b', 80_000), c: thread('c', 90_000) })
+  const both = [row(42, VENDOR_CODEX), row(43, VENDOR_CODEX, STARTED_MS + 60_000)]
+  const { sessions } = await collect(io, both, STARTED_MS + 100_000)
+  expect(sessions.map(({ key, pid }) => [key, pid])).toEqual([
+    ['codex:c', null],
+    ['codex:b', null]
+  ])
+})
+
+it('shows the thread of a prompted Windows terminal beside one never prompted', async () => {
+  const io = codexHome({
+    prompted: {
+      header: meta('prompted', 'C:\\Users\\a\\repo', createdAt(70_000)),
+      mtimeMs: STARTED_MS + 75_000
+    }
+  })
+  const rows = [row(42, VENDOR_CODEX), row(43, VENDOR_CODEX, STARTED_MS + 60_000)]
+  const { sessions } = await collect(io, rows, STARTED_MS + 80_000)
+  expect(sessions).toMatchObject([{ key: 'codex:prompted', pid: null, cwd: 'C:\\Users\\a\\repo' }])
 })
 
 it('gives a Windows process that has written nothing yet no other process’s thread', async () => {

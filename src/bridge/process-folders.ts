@@ -33,6 +33,9 @@ interface LiveProcess {
   kind?: string
 }
 
+const canBegin = ({ kind }: LiveProcess, conversation: WrittenConversation): boolean =>
+  kind === undefined || conversation.kind === undefined || kind === conversation.kind
+
 // Windows names no process's folder, so a process waiting for one is placed in the folder of a
 // conversation only it can have begun, or failing that resumed. Two that either could have are
 // left for a later look, and nothing is remembered from them.
@@ -54,15 +57,37 @@ export function claimFolders(
       return process.startedAtMs <= conversation.writtenAtMs
     })
     const { createdAtMs } = conversation
-    const canBegin = ({ kind }: LiveProcess): boolean =>
-      kind === undefined || conversation.kind === undefined || kind === conversation.kind
     const creators =
       createdAtMs === null
         ? []
-        : writers.filter((process) => process.startedAtMs <= createdAtMs && canBegin(process))
+        : writers.filter(
+            (process) => process.startedAtMs <= createdAtMs && canBegin(process, conversation)
+          )
     const candidates = creators.length ? creators : writers
     const [owner] = candidates
     if (candidates.length === 1 && folderOf(owner) === undefined)
       folders.set(identityOf(owner), conversation.folder)
   }
+}
+
+// The conversations the processes still waiting for a folder may be writing, newest written first
+// and no more than there are of them: each is shown with no process until one is placed.
+export function unplacedConversations<Conversation extends WrittenConversation>(
+  processes: LiveProcess[],
+  folders: Map<string, string>,
+  conversations: Conversation[]
+): Conversation[] {
+  const waiting = processes.filter((process) => !folders.has(identityOf(process)))
+  const mayOwn = (conversation: Conversation): boolean =>
+    waiting.some(
+      (process) =>
+        process.startedAtMs <= conversation.writtenAtMs &&
+        (conversation.createdAtMs === null ||
+          conversation.createdAtMs < process.startedAtMs ||
+          canBegin(process, conversation))
+    )
+  return conversations
+    .filter(mayOwn)
+    .sort((a, b) => b.writtenAtMs - a.writtenAtMs)
+    .slice(0, waiting.length)
 }

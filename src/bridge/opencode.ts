@@ -1,7 +1,13 @@
 import { join, win32 } from 'node:path'
 import type { SessionRef, SourceHealth, SubagentRef, TokenCounts } from '../shared/office/types'
 import { zeroCounts } from '../shared/office/token-counts'
-import { claimFolders, isAppFolder, isFolderPath } from './process-folders'
+import {
+  claimFolders,
+  isAppFolder,
+  isFolderPath,
+  unplacedConversations,
+  type WrittenConversation
+} from './process-folders'
 import { type BridgeIo, displayName, folderName, isLabel } from './io'
 import {
   OPENCODE_IDLE,
@@ -23,7 +29,8 @@ import {
   placeholderId,
   type ProcessRow,
   readProcessTable,
-  rememberedFolder
+  rememberedFolder,
+  type SessionOwner
 } from './process-table'
 import { placementOf, resolveProject } from './project-root'
 import { isStillWorking, OPEN_TOOL_HOLD_MS, quietFor, SUBAGENT_FRESH_MS } from './liveness'
@@ -100,28 +107,32 @@ interface Conversation {
   subagents: SubagentRef[]
 }
 type OpencodeProcess = ReturnType<typeof opencodeProcesses>[number]
-type AgentProcess = OpencodeProcess & { cwd: string }
+// A session shown before its process can be told apart has no process: its pid is null.
+type AgentProcess = SessionOwner & { cwd: string }
 // A Windows process whose folder is not yet known has none.
 type LocatedProcess = OpencodeProcess & { cwd: string | null }
 
+type RecentSession = WrittenConversation & { id: string }
 // Places the Windows processes still waiting for a folder, from the root sessions written since
-// the first of them started.
+// the first of them started, and returns those sessions.
 function claimOpencodeFolders(
   query: OpencodeQuery,
   located: LocatedProcess[],
   folders: Map<string, string>
-): void {
+): RecentSession[] {
   const waiting = located.filter(({ cwd }) => cwd === null)
-  if (!waiting.length) return
+  if (!waiting.length) return []
   const since = Math.min(...waiting.map(({ startedAtMs }) => startedAtMs))
   const sessions = query('recentRootSessions', since).flatMap((row) => {
-    const { directory, time_created: createdAtMs, time_updated: writtenAtMs } = row
-    if (typeof directory !== 'string' || typeof writtenAtMs !== 'number') return []
+    const { id, directory, time_created: createdAtMs, time_updated: writtenAtMs } = row
+    if (typeof id !== 'string' || typeof directory !== 'string') return []
+    if (typeof writtenAtMs !== 'number') return []
     if (!isFolderPath(directory, 'win32') || isAppFolder(directory, 'win32')) return []
     const created = typeof createdAtMs === 'number' ? createdAtMs : null
-    return [{ folder: directory, createdAtMs: created, writtenAtMs }]
+    return [{ id, folder: directory, createdAtMs: created, writtenAtMs }]
   })
   claimFolders(located, folders, sessions)
+  return sessions
 }
 
 // The newest session in the process's folder that it can have written: one last touched before
@@ -206,12 +217,9 @@ export async function collectOpencode(
 
     const taken = new Set<string>()
     const conversations = await io.readOpencode(join(root, 'opencode.db'), (query) => {
-      if (platform === 'win32') claimOpencodeFolders(query, running, folders)
-      return running.map((located) => {
+      const recent = platform === 'win32' ? claimOpencodeFolders(query, running, folders) : []
+      const read = (process: AgentProcess) => {
         try {
-          const cwd = located.cwd ?? folders.get(identityOf(located))
-          if (!cwd) return null
-          const process = { ...located, cwd }
           return { process, conversation: readConversation(query, process, taken, now) }
         } catch (error) {
           // One session's bad JSON costs that session; anything else is the whole database's.
@@ -220,7 +228,21 @@ export async function collectOpencode(
           health.detail = FAILURE_DETAIL.malformed
           return null
         }
+      }
+      const placed = running.flatMap((located) => {
+        const cwd = located.cwd ?? folders.get(identityOf(located))
+        return cwd ? [read({ ...located, cwd })] : []
       })
+      // A session no process can yet be told apart for is shown with none, as it was created.
+      const unclaimed = recent.filter(({ id }) => !taken.has(id))
+      const unplaced = unplacedConversations(running, folders, unclaimed).map((session) =>
+        read({
+          pid: null,
+          startedAtMs: session.createdAtMs ?? session.writtenAtMs,
+          cwd: session.folder
+        })
+      )
+      return [...placed, ...unplaced]
     })
     const sessions: SessionRef[] = []
     for (const found of conversations) {
