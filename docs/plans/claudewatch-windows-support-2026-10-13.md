@@ -32,7 +32,7 @@
 - [x] Phase 2: Integrate + gate chain
 - [x] Phase 3: Live Windows verification on this machine
 - [x] Phase 4: Wave 2 review (Maya + Kai)
-- [ ] Phase 5: Close — mandate steps, end-to-end check, PR
+- [x] Phase 5: Close — mandate steps, end-to-end check, PR
 
 ## Execution shape
 
@@ -185,7 +185,7 @@ export function isAbsoluteFolder(path: string, platform?: NodeJS.Platform): bool
 - [ ] Fix findings at the root; `bash ~/.claude/hooks/codex-review.sh` (exit 2 → fix, re-run once)
       **Verify:** `npx eslint . && npm run typecheck && npx vitest run && npm run build`
 
-## - [ ] Phase 5 — Close (primary) · 1h | 4h
+## - [x] Phase 5 — Close (primary) · 1h | 4h
 
 - [ ] `/simplify` → code-review → reuse audit → `bash ~/.claude/hooks/dead-code-check.sh`
 - [ ] Feature checklist `~/Desktop/eor-feature-checklists/CLAUDEWATCH-9-review-checklist.md`, every row Pass or Blocked
