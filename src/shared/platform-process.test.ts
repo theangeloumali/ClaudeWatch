@@ -1,4 +1,4 @@
-import { describe, expect, expectTypeOf, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   POWERSHELL,
   POWERSHELL_CWD,
@@ -7,10 +7,7 @@ import {
   childEnv,
   filetimeToMs,
   isAbsoluteFolder,
-  type PowerShellArgs,
   powershellArgs,
-  type PowerShellScript,
-  powerShellScript,
   powershellScriptOf,
   programName,
   splitCommandLine,
@@ -46,16 +43,6 @@ describe('powershell', () => {
       '-Command',
       'Get-Date'
     ])
-  })
-
-  it('brands the scripts the bridge builds, so plain text is not one of them where it is typed', () => {
-    const script = powerShellScript('$PID')
-    expectTypeOf(script).toEqualTypeOf<PowerShellScript>()
-    expectTypeOf<string>().not.toMatchTypeOf<PowerShellScript>()
-    expectTypeOf(powershellArgs(script)).toEqualTypeOf<PowerShellArgs>()
-    expectTypeOf(powershellArgs('$PID')).toEqualTypeOf<string[]>()
-    expect(powershellArgs(script)).toEqual(powershellArgs('$PID'))
-    expectTypeOf(startTimeQuery(1, 'win32').args).toEqualTypeOf<string[]>()
   })
 
   it('gives back the one script of an exact powershellArgs call, and refuses anything else', () => {

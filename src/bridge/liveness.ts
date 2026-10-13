@@ -3,8 +3,6 @@ import {
   filetimeToMs,
   POWERSHELL,
   powershellArgs,
-  type PowerShellScript,
-  powerShellScript,
   startTimeQuery
 } from '../shared/platform-process'
 import type { BridgeIo } from './io'
@@ -43,11 +41,9 @@ const isCreationTicks = (procStart: string, platform: NodeJS.Platform): boolean 
 
 // The ticks of a process as Claude Code asked for them when it wrote the record, then its
 // FILETIME: a ticks record holds no date of its own.
-export const creationTicksScript = (pid: number): PowerShellScript =>
-  powerShellScript(
-    `$process = Get-CimInstance Win32_Process -Filter "ProcessId=${checkedPid(pid)}"
+export const creationTicksScript = (pid: number): string =>
+  `$process = Get-CimInstance Win32_Process -Filter "ProcessId=${checkedPid(pid)}"
 if ($process) { "$($process.CreationDate.Ticks) $($process.CreationDate.ToFileTimeUtc())" }`
-  )
 
 // The record's start as a process would print it, and when that process started; asked of a
 // pid the table lacks as Claude Code asked when it wrote the record.

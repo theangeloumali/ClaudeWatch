@@ -6,10 +6,10 @@ const SYSTEM_ROOT = process.env.SystemRoot ?? 'C:\\Windows'
 // The inbox Windows PowerShell by absolute path, never whichever `powershell` is first on PATH.
 export const POWERSHELL = `${SYSTEM_ROOT}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe`
 
-// Where every PowerShell runs: a folder only administrators write, never the launch folder.
 // Per-user installs (Orca, the Windows Terminal alias) live here.
 export const LOCAL_APP_DATA = process.env.LOCALAPPDATA ?? win32.join(homedir(), 'AppData', 'Local')
 
+// Where every PowerShell runs: a folder only administrators write, never the launch folder.
 export const POWERSHELL_CWD = `${SYSTEM_ROOT}\\System32`
 // How every PowerShell starts: from POWERSHELL_CWD, as part of its module path resolves against
 // the working folder, and with no console window. Each caller adds only its own env.
@@ -28,18 +28,12 @@ export function childEnv(platform: NodeJS.Platform = process.platform): Record<s
   }
 }
 
-// A script the bridge may hand PowerShell, minted only by its fixed scripts and pid builders.
-// The brand holds at compile time only: io.ts also checks each script's text before it runs.
-declare const POWERSHELL_SCRIPT: unique symbol
-export type PowerShellScript = string & { readonly [POWERSHELL_SCRIPT]: true }
-export const powerShellScript = (text: string): PowerShellScript => text as PowerShellScript
-export type PowerShellArgs = ['-NoProfile', '-NonInteractive', '-Command', PowerShellScript]
-
-export function powershellArgs(script: PowerShellScript): PowerShellArgs
-export function powershellArgs(script: string): string[]
-export function powershellArgs(script: string): string[] {
-  return ['-NoProfile', '-NonInteractive', '-Command', script]
-}
+export const powershellArgs = (script: string): string[] => [
+  '-NoProfile',
+  '-NonInteractive',
+  '-Command',
+  script
+]
 
 // PowerShell joins any argument after -Command into the script and runs it, so a call must be
 // exactly powershellArgs(script); values go in the child env instead.
@@ -67,9 +61,7 @@ export function startTimeQuery(
   return {
     file: POWERSHELL,
     args: powershellArgs(
-      powerShellScript(
-        `[Diagnostics.Process]::GetProcessById(${checked}).StartTime.ToFileTimeUtc()`
-      )
+      `[Diagnostics.Process]::GetProcessById(${checked}).StartTime.ToFileTimeUtc()`
     )
   }
 }
