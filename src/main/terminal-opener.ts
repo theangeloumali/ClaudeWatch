@@ -1,6 +1,7 @@
 import { execFilePromise } from './platform/exec'
 import type { TerminalType } from '../renderer/lib/types'
 import type { AgentCommand } from './orca-terminals'
+import { openWindowsFolder } from './windows-terminals'
 
 const EXEC_TIMEOUT = 10_000
 
@@ -136,10 +137,14 @@ const TERMINALS: Partial<Record<TerminalType, { app: string; open?: OpenerFn }>>
   cursor: { app: 'Cursor', open: openCursor }
 }
 
+// On Windows every host opens the folder in Windows Terminal (or cmd.exe): none of the macOS
+// apps' scripting exists there.
 export async function openTerminal(
   projectPath: string,
-  terminalType?: TerminalType
+  terminalType?: TerminalType,
+  platform: NodeJS.Platform = process.platform
 ): Promise<{ success: boolean }> {
+  if (platform === 'win32') return openWindowsFolder(projectPath)
   const opener = (terminalType && TERMINALS[terminalType]?.open) || openDefault
   return opener(projectPath)
 }
@@ -154,8 +159,10 @@ export function raiseTerminal(terminalType?: TerminalType): Promise<{ success: b
 // Fallback for starting an agent when Orca is not running: a Terminal.app window in the folder.
 export function openTerminalRunning(
   projectPath: string,
-  command: AgentCommand
+  command: AgentCommand,
+  platform: NodeJS.Platform = process.platform
 ): Promise<{ success: boolean }> {
+  if (platform === 'win32') return openWindowsFolder(projectPath, command)
   const script = `
     tell application "Terminal"
       activate

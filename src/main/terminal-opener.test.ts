@@ -1,10 +1,17 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { afterAll, beforeAll, describe, it, expect, vi, beforeEach } from 'vitest'
 
 const mockExecFile = vi.fn()
 
 vi.mock('child_process', () => ({
   execFile: (...args: unknown[]) => mockExecFile(...args)
 }))
+const openWindowsFolder = vi.hoisted(() => vi.fn())
+vi.mock('./windows-terminals', () => ({ openWindowsFolder }))
+
+// The openers below are macOS's, whatever this machine is; Windows has its own block at the end.
+const machinePlatform = process.platform
+beforeAll(() => Object.defineProperty(process, 'platform', { value: 'darwin' }))
+afterAll(() => Object.defineProperty(process, 'platform', { value: machinePlatform }))
 
 import { openTerminal, openTerminalRunning, raiseTerminal } from './terminal-opener'
 
@@ -293,5 +300,26 @@ describe('raiseTerminal', () => {
       (_cmd: string, _args: string[], _opts: unknown, cb: ExecCallback) => cb(new Error('no app'))
     )
     expect(await raiseTerminal('warp')).toEqual({ success: false })
+  })
+})
+
+describe('on Windows', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    openWindowsFolder.mockResolvedValue({ success: true })
+  })
+
+  it('opens every host type as a Windows Terminal window in the folder, with no AppleScript', async () => {
+    for (const type of ['warp', 'vscode', 'terminal-app', undefined] as const) {
+      expect(await openTerminal('C:\\repo\\app', type, 'win32')).toEqual({ success: true })
+    }
+    expect(openWindowsFolder.mock.calls).toEqual(Array(4).fill(['C:\\repo\\app']))
+    expect(mockExecFile).not.toHaveBeenCalled()
+  })
+
+  it('starts an agent in a new window when Orca is not running', async () => {
+    expect(await openTerminalRunning('C:\\repo\\app', 'claude', 'win32')).toEqual({ success: true })
+    expect(openWindowsFolder).toHaveBeenCalledExactlyOnceWith('C:\\repo\\app', 'claude')
+    expect(mockExecFile).not.toHaveBeenCalled()
   })
 })

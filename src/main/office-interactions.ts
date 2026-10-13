@@ -51,12 +51,19 @@ const fail = (reason: InteractionFailure): InteractionResult => ({ success: fals
 const fingerprintOf = (lines: string[]): string =>
   createHash('sha256').update(lines.join('\n')).digest('hex')
 const isPrintable = (text: string): boolean => !CONTROL_CHARACTER.test(text)
-const isWithin = (path: string, folder: string): boolean =>
-  path === folder || path.startsWith(`${folder.replace(/\/+$/, '')}/`)
+// A Windows path compares as Windows does (Orca writes `C:/x`, a process reports `C:\X`); a
+// POSIX path compares exactly.
+const comparable = (path: string): string =>
+  /^([A-Za-z]:[\\/]|\\\\)/.test(path) ? path.replace(/\\/g, '/').toLowerCase() : path
+const isWithin = (path: string, folder: string): boolean => {
+  const [inner, outer] = [comparable(path), comparable(folder)]
+  return inner === outer || inner.startsWith(`${outer.replace(/\/+$/, '')}/`)
+}
 // The pane must be in this session's folder and still running its agent: once the agent
 // exits the pane is a shell, and typed text would run as a command.
 const paneServes = (terminal: PaneTerminal, owner: PaneOwner): boolean =>
-  (terminal.worktreePath === owner.projectRoot || isWithin(owner.cwd, terminal.worktreePath)) &&
+  (comparable(terminal.worktreePath) === comparable(owner.projectRoot) ||
+    isWithin(owner.cwd, terminal.worktreePath)) &&
   terminal.agent !== null &&
   ORCA_AGENTS[owner.provider].includes(terminal.agent)
 

@@ -1,15 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { ORCA_APP, ORCA_CLI } from '../shared/orca-bundle'
+import { orcaBundle, ORCA_CLI } from '../shared/orca-bundle'
 import { createOrcaCli } from './orca-cli'
 
 describe('createOrcaCli', () => {
   const run = vi.fn()
   const assertTrusted = vi.fn()
+  const launch = vi.fn()
 
   beforeEach(() => {
     vi.resetAllMocks()
     run.mockResolvedValue({ stdout: '{"ok":true}', stderr: '' })
     assertTrusted.mockResolvedValue(undefined)
+    launch.mockResolvedValue(undefined)
   })
 
   const programsRun = (): string[] => run.mock.calls.map(([bin]) => bin)
@@ -35,9 +37,12 @@ describe('createOrcaCli', () => {
   })
 
   it('raises the bundle that was verified, not whichever app claims its bundle id', async () => {
-    expect(await createOrcaCli(run, assertTrusted).raise()).toBe(true)
+    expect(await createOrcaCli(run, assertTrusted, 'darwin').raise()).toBe(true)
     expect(assertTrusted).toHaveBeenCalledOnce()
-    expect(run.mock.calls.at(-1)?.slice(0, 2)).toEqual(['/usr/bin/open', ['-a', ORCA_APP]])
+    expect(run.mock.calls.at(-1)?.slice(0, 2)).toEqual([
+      '/usr/bin/open',
+      ['-a', orcaBundle('darwin').app]
+    ])
   })
 
   it('executes nothing from Orca, and raises nothing, when the bundle is not trusted', async () => {
@@ -51,6 +56,35 @@ describe('createOrcaCli', () => {
 
   it('reports a failed raise without throwing', async () => {
     run.mockRejectedValue(new Error('LSOpenURLsWithRole failed'))
-    expect(await createOrcaCli(run, assertTrusted).raise()).toBe(false)
+    expect(await createOrcaCli(run, assertTrusted, 'darwin').raise()).toBe(false)
+  })
+
+  describe('on Windows', () => {
+    const windows = orcaBundle('win32')
+
+    it('runs the native launcher with the environment it needs, never orca.cmd', async () => {
+      await createOrcaCli(run, assertTrusted, 'win32').exec(['terminal', 'list', '--json'])
+      const [program, args, options] = run.mock.calls[0]
+      expect([program, args]).toEqual([windows.cli, ['terminal', 'list', '--json']])
+      expect(program).toMatch(/\\orca\.exe$/)
+      expect(options.env).toHaveProperty('LC_ALL', 'C')
+    })
+
+    it('raises Orca by starting the verified Orca.exe itself', async () => {
+      expect(await createOrcaCli(run, assertTrusted, 'win32', launch).raise()).toBe(true)
+      expect(assertTrusted.mock.invocationCallOrder[0]).toBeLessThan(
+        launch.mock.invocationCallOrder[0]
+      )
+      expect(launch).toHaveBeenCalledExactlyOnceWith(windows.app)
+      expect(run).not.toHaveBeenCalled()
+    })
+
+    it('starts nothing when Orca is not trusted, and reports a failed start', async () => {
+      assertTrusted.mockRejectedValueOnce(new Error('not validly signed'))
+      expect(await createOrcaCli(run, assertTrusted, 'win32', launch).raise()).toBe(false)
+      expect(launch).not.toHaveBeenCalled()
+      launch.mockRejectedValueOnce(new Error('ENOENT'))
+      expect(await createOrcaCli(run, assertTrusted, 'win32', launch).raise()).toBe(false)
+    })
   })
 })

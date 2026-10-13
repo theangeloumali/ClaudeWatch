@@ -1,5 +1,6 @@
-import { assertOrcaTrusted, ORCA_APP, ORCA_CLI } from '../shared/orca-bundle'
+import { assertOrcaTrusted, orcaBundle, orcaCliEnv } from '../shared/orca-bundle'
 import type { OrcaExec } from './orca-terminals'
+import { launchWindowsApp } from './windows-terminals'
 
 const ORCA_TIMEOUT_MS = 15_000
 // Keystrokes follow a screen read and rely on what it showed. The read renews a check with
@@ -10,8 +11,10 @@ const isScreenRead = (args: string[]): boolean => args[0] === 'terminal' && args
 type RunProgram = (
   program: string,
   args: string[],
-  options: { timeout: number }
+  options: { timeout: number; env?: NodeJS.ProcessEnv }
 ) => Promise<{ stdout: string; stderr: string }>
+
+type LaunchApp = (program: string) => Promise<void>
 
 interface OrcaCli {
   exec: OrcaExec
@@ -22,18 +25,26 @@ interface OrcaCli {
 // Nothing in the bundle runs until its seal and signing team have been checked.
 export function createOrcaCli(
   run: RunProgram,
-  assertTrusted: (minLeftMs?: number) => Promise<void> = assertOrcaTrusted
+  assertTrusted: (minLeftMs?: number) => Promise<void> = assertOrcaTrusted,
+  platform: NodeJS.Platform = process.platform,
+  launch: LaunchApp = launchWindowsApp
 ): OrcaCli {
+  const bundle = orcaBundle(platform)
+  const isWindows = platform === 'win32'
+  const options = isWindows
+    ? { timeout: ORCA_TIMEOUT_MS, env: orcaCliEnv(platform) }
+    : { timeout: ORCA_TIMEOUT_MS }
   return {
     exec: async (args) => {
       await assertTrusted(isScreenRead(args) ? READ_TO_SEND_MS : 0)
-      return (await run(ORCA_CLI, args, { timeout: ORCA_TIMEOUT_MS })).stdout
+      return (await run(bundle.cli, args, options)).stdout
     },
     // By the path that was verified: a name or a bundle id could resolve to another copy.
     raise: async () => {
       try {
         await assertTrusted()
-        await run('/usr/bin/open', ['-a', ORCA_APP], { timeout: ORCA_TIMEOUT_MS })
+        if (isWindows) await launch(bundle.app)
+        else await run('/usr/bin/open', ['-a', bundle.app], { timeout: ORCA_TIMEOUT_MS })
         return true
       } catch {
         return false

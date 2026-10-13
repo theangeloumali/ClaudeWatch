@@ -1,6 +1,13 @@
 import type { SessionRef, SourceHealth, SubagentRef } from '../shared/office/types'
 import { ORCA_CLI } from '../shared/orca-bundle'
-import { type BridgeIo, jsonObject } from './io'
+import { POWERSHELL, powershellArgs, programName } from '../shared/platform-process'
+import {
+  ancestry,
+  parseProcessTree,
+  processTreeScript,
+  type RunScript
+} from '../shared/windows-console'
+import { type BridgeIo, jsonObject, object } from './io'
 
 export interface OrcaEnvironment {
   paneKey: string | null
@@ -37,6 +44,52 @@ export async function readOrcaEnvironment(
   if (!argv || !listing.startsWith(argv) || !/^(\s|$)/.test(environment))
     throw new Error('process arguments changed between reads')
   return parseOrcaEnvironment(environment)
+}
+
+// How a process is looked up: `exec` runs ps or the Orca CLI, `runScript` Windows PowerShell.
+interface OrcaLookup {
+  exec: (file: string, args: string[]) => Promise<string>
+  runScript: RunScript
+  platform: NodeJS.Platform
+}
+const NOT_IN_ORCA: OrcaEnvironment = { paneKey: null, worktreeId: null, jobDir: null }
+
+// `orca diagnostics memory` names each pane's first process: its shell.
+function panesByShell(diagnostics: string): Map<number, string> {
+  const envelope = jsonObject(diagnostics)
+  // A failed listing says nothing about panes: it must not be remembered as "none".
+  if (envelope?.ok !== true) throw new Error('Orca did not list its panes')
+  const panes = new Map<number, string>()
+  const worktrees = object(envelope.result)?.worktrees
+  for (const worktree of Array.isArray(worktrees) ? worktrees : []) {
+    const sessions = object(worktree)?.sessions
+    for (const pane of Array.isArray(sessions) ? sessions.map(object) : []) {
+      if (Number.isSafeInteger(pane?.pid) && typeof pane?.paneKey === 'string')
+        panes.set(Number(pane.pid), pane.paneKey)
+    }
+  }
+  return panes
+}
+
+// Windows lets no process read another's environment, so the pane is the one whose shell is
+// this process's ancestor. Orca, and its signature check, are asked only when an Orca process
+// is one: for any other session they would cost seconds and say nothing.
+async function readWindowsPaneKey(
+  pid: number,
+  { exec, runScript }: OrcaLookup
+): Promise<string | null> {
+  const chain = ancestry(parseProcessTree(await runScript(processTreeScript(pid))), pid)
+  if (!chain.some((node) => programName(node.name) === 'orca')) return null
+  const panes = panesByShell(await exec(ORCA_CLI, ['diagnostics', 'memory', '--json']))
+  const shell = chain.find((node) => panes.has(node.pid))
+  return shell ? (panes.get(shell.pid) ?? null) : null
+}
+
+// Where a process's Orca identifiers come from: its environment, or on Windows Orca's listing.
+export async function orcaEnvironmentOf(pid: number, lookup: OrcaLookup): Promise<OrcaEnvironment> {
+  if (lookup.platform !== 'win32')
+    return readOrcaEnvironment(pid, (args) => lookup.exec('/bin/ps', args))
+  return { ...NOT_IN_ORCA, paneKey: await readWindowsPaneKey(pid, lookup) }
 }
 
 const isTeammate = (agent: SubagentRef): boolean => agent.kind === 'teammate'
@@ -81,7 +134,11 @@ export class OrcaSource {
   private delay = FIRST_RETRY_MS
   private health: SourceHealth = { id: 'orca', ok: true, detail: 'not polled' }
   private environments = new Map<string, { value: OrcaEnvironment; retryAt: number }>()
-  constructor(private readonly io: BridgeIo) {}
+  constructor(
+    private readonly io: BridgeIo,
+    private readonly platform: NodeJS.Platform = process.platform,
+    private readonly runScript: RunScript = (script) => io.exec(POWERSHELL, powershellArgs(script))
+  ) {}
 
   async poll(now: number): Promise<SourceHealth> {
     if (now < this.nextPoll) return { ...this.health }
@@ -142,16 +199,19 @@ export class OrcaSource {
   ): Promise<OrcaEnvironment> {
     const identity = `${pid}:${startedAtMs}`
     let cached = this.environments.get(identity)
+    // On Windows the lookup asks Orca itself, which is pointless while it is down.
+    if (this.platform === 'win32' && !this.health.ok) return NOT_IN_ORCA
     if (!cached || now >= cached.retryAt) {
       try {
-        const value = await readOrcaEnvironment(pid, (args) => this.io.exec('/bin/ps', args))
+        const value = await orcaEnvironmentOf(pid, {
+          exec: (file, args) => this.io.exec(file, args),
+          runScript: this.runScript,
+          platform: this.platform
+        })
         cached = { value, retryAt: Infinity }
         if (value.paneKey && !this.health.ok) this.nextPoll = 0
       } catch {
-        cached = {
-          value: { paneKey: null, worktreeId: null, jobDir: null },
-          retryAt: now + 30000
-        }
+        cached = { value: NOT_IN_ORCA, retryAt: now + 30000 }
       }
       this.environments.set(identity, cached)
     }

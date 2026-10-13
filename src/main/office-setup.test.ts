@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
@@ -30,8 +30,14 @@ vi.mock('../shared/orca-bundle', async (original) => ({
   assertOrcaTrusted
 }))
 
-import { ORCA_APP, ORCA_CLI } from '../shared/orca-bundle'
+import { orcaBundle } from '../shared/orca-bundle'
 import { setupOffice } from './office-setup'
+
+// The Office below is macOS's, whatever this machine is.
+const { app: ORCA_APP, cli: ORCA_CLI } = orcaBundle('darwin')
+const machinePlatform = process.platform
+beforeAll(() => Object.defineProperty(process, 'platform', { value: 'darwin' }))
+afterAll(() => Object.defineProperty(process, 'platform', { value: machinePlatform }))
 
 const pageEvent = (page: string): unknown => ({
   senderFrame: { parent: null, url: pathToFileURL(join(__dirname, '../renderer', page)).href }
