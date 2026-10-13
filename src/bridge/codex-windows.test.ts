@@ -132,6 +132,57 @@ it('gives each of two Windows processes the thread it created, however recently 
   expect(owners).toEqual({ 42: 'older', 43: 'newer' })
 })
 
+const createdAt = (offsetMs: number): { timestamp: string } => ({
+  timestamp: new Date(STARTED_MS + offsetMs).toISOString()
+})
+
+it('places neither of two Windows processes whose threads both began after both started', async () => {
+  const io = codexHome({
+    one: {
+      header: meta('one', 'C:\\Users\\a\\one', createdAt(90_000)),
+      mtimeMs: STARTED_MS + 95_000
+    },
+    two: {
+      header: meta('two', 'C:\\Users\\a\\two', createdAt(100_000)),
+      mtimeMs: STARTED_MS + 105_000
+    }
+  })
+  const both = [row(42, VENDOR_CODEX), row(43, VENDOR_CODEX, STARTED_MS + 60_000)]
+  expect((await collect(io, both, STARTED_MS + 110_000)).sessions).toEqual([])
+  // Nothing was remembered from the guess it declined: alone, 42 takes the thread only it began.
+  const [alone] = (await collect(io, [both[0]], STARTED_MS + 112_000)).sessions
+  expect(alone).toMatchObject({ pid: 42, sessionId: 'one', cwd: 'C:\\Users\\a\\one' })
+})
+
+it('gives a Windows process that has written nothing yet no other process’s thread', async () => {
+  const io = codexHome({
+    theirs: {
+      header: meta('theirs', 'C:\\Users\\a\\two', createdAt(10_000)),
+      mtimeMs: STARTED_MS + 20_000
+    }
+  })
+  const first = row(43, VENDOR_CODEX)
+  expect((await collect(io, [first], STARTED_MS + 21_000)).sessions).toHaveLength(1)
+  io.add('theirs', {
+    header: meta('theirs', 'C:\\Users\\a\\two', createdAt(10_000)),
+    mtimeMs: STARTED_MS + 90_000
+  })
+  const later = row(42, VENDOR_CODEX, STARTED_MS + 60_000)
+  const { sessions } = await collect(io, [first, later], STARTED_MS + 95_000)
+  expect(sessions.map(({ pid, sessionId }) => [pid, sessionId])).toEqual([[43, 'theirs']])
+})
+
+it('places a Windows process at the thread it resumed, begun before it started', async () => {
+  const io = codexHome({
+    resumed: {
+      header: meta('resumed', 'C:\\Users\\a\\repo', createdAt(-86_400_000)),
+      mtimeMs: STARTED_MS + 30_000
+    }
+  })
+  const [session] = (await collect(io, [row(42, VENDOR_CODEX)], STARTED_MS + 40_000)).sessions
+  expect(session).toMatchObject({ pid: 42, sessionId: 'resumed', cwd: 'C:\\Users\\a\\repo' })
+})
+
 it('shows the threads a Windows desktop app hosts, but none it runs from an install folder', async () => {
   const io = codexHome({
     chat: {

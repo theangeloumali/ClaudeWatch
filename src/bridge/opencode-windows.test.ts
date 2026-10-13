@@ -83,6 +83,37 @@ it('gives each of two Windows processes the session it began, however recently e
   expect(owners).toEqual({ 42: 'ses_older', 43: 'ses_newer' })
 })
 
+it('places neither of two Windows processes whose sessions both began after both started', async () => {
+  const fixture = setup((db) => {
+    session(db, 'ses_one', 'C:/Users/a/one', STARTED_MS + 90_000, NOW - 1000)
+    session(db, 'ses_two', 'C:/Users/a/two', STARTED_MS + 100_000, NOW - 2000)
+  })
+  const both = [row(42, TUI), row(43, TUI, STARTED_MS + 60_000)]
+  expect((await collect(fixture, both)).sessions).toEqual([])
+  // Nothing was remembered from the guess it declined: alone, 42 takes the session only it began.
+  const [alone] = (await collect(fixture, [both[0]])).sessions
+  expect(alone).toMatchObject({ pid: 42, sessionId: 'ses_one', cwd: 'C:\\Users\\a\\one' })
+})
+
+it('gives a Windows process that has written nothing yet no other process’s session', async () => {
+  const fixture = setup((db) => {
+    session(db, 'ses_theirs', 'C:/Users/a/two', STARTED_MS + 10_000, NOW - 1000)
+  })
+  const first = row(43, TUI)
+  expect((await collect(fixture, [first])).sessions).toHaveLength(1)
+  const later = row(42, TUI, STARTED_MS + 60_000)
+  const { sessions } = await collect(fixture, [first, later])
+  expect(sessions.map(({ pid, sessionId }) => [pid, sessionId])).toEqual([[43, 'ses_theirs']])
+})
+
+it('places a Windows process at the session it continued, begun before it started', async () => {
+  const fixture = setup((db) => {
+    session(db, 'ses_resumed', 'C:/Users/a/repo', STARTED_MS - 86_400_000, NOW - 1000)
+  })
+  const [found] = (await collect(fixture, [row(42, TUI)])).sessions
+  expect(found).toMatchObject({ pid: 42, sessionId: 'ses_resumed', cwd: 'C:\\Users\\a\\repo' })
+})
+
 it('never places a Windows process in an install folder', async () => {
   const fixture = setup((db) => {
     session(db, 'ses_app', 'C:/Program Files/Tool', STARTED_MS + 1000, NOW - 1000)

@@ -1,6 +1,6 @@
 import { isAbsoluteFolder } from '../shared/platform-process'
 import { CONTROL_CHARACTER } from '../shared/unsafe-text'
-import { isInsideAppBundle } from './process-table'
+import { identityOf, isInsideAppBundle } from './process-table'
 
 // A recorded folder reaches the feed and, on focus, a terminal: only a plain absolute path may.
 export const isFolderPath = (folder: string, platform: NodeJS.Platform): boolean =>
@@ -20,19 +20,42 @@ export function isAppFolder(folder: string, platform: NodeJS.Platform = process.
   return WINDOWS_INSTALL_ROOT.test(folderKey(folder, platform))
 }
 
-// Windows names no process's folder, so it is taken from the conversation the process began, or
-// failing that the newest it has written to since it started (a resumed one). `written` holds
-// only those written since, newest first.
-export function ownConversation<Conversation>(
-  written: Conversation[],
-  startedAtMs: number,
-  createdAtMs: (conversation: Conversation) => number | null
-): Conversation | undefined {
-  let first: { conversation: Conversation; atMs: number } | undefined
-  for (const conversation of written) {
-    const atMs = createdAtMs(conversation)
-    if (atMs !== null && atMs >= startedAtMs && (!first || atMs < first.atMs))
-      first = { conversation, atMs }
+export interface WrittenConversation {
+  folder: string
+  createdAtMs: number | null
+  writtenAtMs: number
+}
+interface LiveProcess {
+  pid: number
+  startedAtMs: number
+}
+
+// Windows names no process's folder, so a process waiting for one is placed in the folder of a
+// conversation only it can have begun, or failing that resumed. Two that either could have are
+// left for a later look, and nothing is remembered from them.
+export function claimFolders(
+  processes: LiveProcess[],
+  folders: Map<string, string>,
+  conversations: WrittenConversation[]
+): void {
+  const folderOf = (process: LiveProcess): string | undefined => folders.get(identityOf(process))
+  const byCreation = [...conversations].sort(
+    (a, b) => (a.createdAtMs ?? -Infinity) - (b.createdAtMs ?? -Infinity)
+  )
+  for (const conversation of byCreation) {
+    const key = folderKey(conversation.folder, 'win32')
+    // A process placed elsewhere writes there; one placed here may have begun this one too.
+    const writers = processes.filter((process) => {
+      const folder = folderOf(process)
+      if (folder !== undefined && folderKey(folder, 'win32') !== key) return false
+      return process.startedAtMs <= conversation.writtenAtMs
+    })
+    const { createdAtMs } = conversation
+    const creators =
+      createdAtMs === null ? [] : writers.filter(({ startedAtMs }) => startedAtMs <= createdAtMs)
+    const candidates = creators.length ? creators : writers
+    const [owner] = candidates
+    if (candidates.length === 1 && folderOf(owner) === undefined)
+      folders.set(identityOf(owner), conversation.folder)
   }
-  return first?.conversation ?? written[0]
 }

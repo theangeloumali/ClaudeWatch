@@ -254,6 +254,19 @@ it('keeps live CLI processes even without a rollout and reports process failures
   }
   expect((await collectOnMac('/codex', io)).sources[0].ok).toBe(false)
 })
+it('walks the session folders only every 30 s while a macOS process has no rollout yet', async () => {
+  const io = fixtureIo({ '/codex/sessions/2026/rollout-old.jsonl': '{}', '/repo/.git': null })
+  io.exec = async (file) =>
+    file.endsWith('ps') ? '42 Sat Oct 10 15:29:12 2026 codex' : 'p42\nn/repo\n'
+  const list = vi.spyOn(io, 'list')
+  const now = Date.parse('2026-10-11T10:00:00Z')
+  await collectOnMac('/codex', io, undefined, false, now)
+  const walk = list.mock.calls.length
+  for (const tick of [1, 2, 3, 4])
+    await collectOnMac('/codex', io, undefined, false, now + tick * 2000)
+  // `lsof` already placed it: its first rollout waits for the next full walk.
+  expect(list.mock.calls.length).toBe(walk)
+})
 it('skips Codex processes running inside an app bundle (helpers, not user sessions)', async () => {
   const io = fixtureIo()
   io.exec = async (file) =>

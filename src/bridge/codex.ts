@@ -8,7 +8,7 @@ import type {
 } from '../shared/office/types'
 import { type CodexTotal, codexTotalOf } from '../shared/accounts'
 import { programName } from '../shared/platform-process'
-import { folderKey, isAppFolder, ownConversation } from './process-folders'
+import { claimFolders, folderKey, isAppFolder } from './process-folders'
 import { type BridgeIo, folderName, isLabel, isMissing, jsonObject, object } from './io'
 import { placementOf, resolveProject } from './project-root'
 import { findRollouts, type Rollout } from './codex-rollouts'
@@ -187,28 +187,6 @@ async function currentRollouts(
   return last.rollouts
 }
 
-// The folder of the thread a Windows process began; remembered, as `lsof`'s answer is elsewhere.
-function claimedFolder(
-  folders: Map<string, string>,
-  process: { pid: number; startedAtMs: number },
-  rollouts: Rollout[],
-  used: Set<string>
-): string | undefined {
-  const identity = identityOf(process)
-  const known = folders.get(identity)
-  if (known) return known
-  const written = rollouts.filter(
-    (rollout) =>
-      rollout.cliStarted &&
-      !used.has(rollout.id) &&
-      rollout.mtimeMs >= process.startedAtMs &&
-      !isAppFolder(rollout.cwd, 'win32')
-  )
-  const cwd = ownConversation(written, process.startedAtMs, ({ startedAtMs }) => startedAtMs)?.cwd
-  if (cwd) folders.set(identity, cwd)
-  return cwd
-}
-
 export interface CodexBatch {
   sessions: SessionRef[]
   // The total each rollout ended on, for the sessions that left since the last look: one may
@@ -314,12 +292,26 @@ export async function collectCodex(
       if (tail) tail.session = session
       health.detail = 'live'
     }
+    if (platform === 'win32') {
+      const threads = rollouts.filter(
+        ({ cliStarted, cwd }) => cliStarted && !isAppFolder(cwd, platform)
+      )
+      claimFolders(
+        processes,
+        folders,
+        threads.map(({ cwd, startedAtMs, mtimeMs }) => ({
+          folder: cwd,
+          createdAtMs: startedAtMs,
+          writtenAtMs: mtimeMs
+        }))
+      )
+    }
     let isWaiting = false
     for (const process of newestFirst(processes)) {
       try {
         const cwd =
           platform === 'win32'
-            ? claimedFolder(folders, process, rollouts, used)
+            ? folders.get(identityOf(process))
             : await rememberedFolder(io, folders, process, platform)
         // On Windows the folder itself comes from the rollout the process has yet to write.
         if (!cwd) isWaiting ||= platform === 'win32'
@@ -328,7 +320,8 @@ export async function collectCodex(
           (item) => folderKey(item.cwd, platform) === folderKey(cwd, platform) && !used.has(item.id)
         )
         if (rollout) used.add(rollout.id)
-        else isWaiting = true
+        // On macOS `lsof` has placed it already: the 30 s walk finds its first rollout soon enough.
+        else isWaiting ||= platform === 'win32'
         await show(rollout, cwd, process)
       } catch {
         health.ok = false
