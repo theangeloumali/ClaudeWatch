@@ -49,7 +49,7 @@ if ($first) { $global:tails = @{}; $global:waiting = @{}; $global:misses = @{}; 
 $lines = $global:tails
 $live = @{}
 foreach ($process in [Diagnostics.Process]::GetProcesses()) {
-  try { if ($process.SessionId -eq $session) { $live["$($process.Id):$($process.StartTime.ToFileTimeUtc())"] = $process.Id } } catch {}
+  try { if ($process.SessionId -eq $session) { $live["$($process.Id):$($process.StartTime.ToFileTimeUtc())"] = $process.Id } } catch {} finally { $process.Dispose() }
 }
 $changed = $first
 foreach ($key in @($lines.Keys)) {

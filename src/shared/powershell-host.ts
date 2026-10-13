@@ -4,21 +4,26 @@ import { childEnv, POWERSHELL, POWERSHELL_SPAWN, powershellArgs } from './platfo
 
 // Reads one id and base64 script per line and answers each on one line, so PowerShell starts
 // once and not on every poll: a cold start costs around a second of CPU. An output equal to
-// the last is answered `same`. Only the raw std streams are used: a script may free the console.
+// the same script's last is answered `same`; both sides remember up to 32 scripts and forget
+// them all together. Only the raw std streams are used: a script may free the console.
 export const POWERSHELL_HOST_SCRIPT = `$ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 $utf8 = New-Object Text.UTF8Encoding $false
 $reader = [IO.StreamReader]::new([Console]::OpenStandardInput(), $utf8)
 $writer = [IO.StreamWriter]::new([Console]::OpenStandardOutput(), $utf8)
 $writer.AutoFlush = $true
-$last = $null
+$last = [Collections.Generic.Dictionary[string, string]]::new()
 while ($null -ne ($request = $reader.ReadLine())) {
   $id, $body = $request.Split(' ')
   try {
     $script = [ScriptBlock]::Create($utf8.GetString([Convert]::FromBase64String($body)))
     $output = [string]((& $script) -join [char]10)
-    if ($output -ceq $last) { $reply = $id + ' same' }
-    else { $last = $output; $reply = $id + ' ok ' + [Convert]::ToBase64String($utf8.GetBytes($output)) }
+    if ($last.ContainsKey($body) -and $output -ceq $last[$body]) { $reply = $id + ' same' }
+    else {
+      if ($last.Count -ge 32 -and -not $last.ContainsKey($body)) { $last.Clear() }
+      $last[$body] = $output
+      $reply = $id + ' ok ' + [Convert]::ToBase64String($utf8.GetBytes($output))
+    }
   } catch {
     $reply = $id + ' error ' + [Convert]::ToBase64String($utf8.GetBytes([string]$_))
   }
@@ -51,6 +56,7 @@ interface Pending {
 
 const DEFAULT_TIMEOUT_MS = 5000
 const MAX_REPLY_BYTES = 8 * 1024 * 1024
+const MAX_REMEMBERED = 32
 const REPLY = /^(\d+) (?:(ok|error) ([A-Za-z0-9+/]*={0,2})|same)$/
 const decode = (base64: string): string => Buffer.from(base64, 'base64').toString('utf8')
 // What execFile reports: a status for a script that ran and failed, none for a shell that did not.
@@ -92,8 +98,8 @@ export class PowerShellHost {
   private shell: HostProcess | null = null
   private hasAnswered = false
   private buffered = ''
-  // The shell's last output, which it answers `same` to.
-  private last: string | null = null
+  // Each script's last output, which the shell answers `same` to; kept as the shell keeps it.
+  private readonly last = new Map<string, string>()
   private pending: Pending | null = null
   private nextId = 1
   private queue: Promise<unknown> = Promise.resolve()
@@ -142,7 +148,7 @@ export class PowerShellHost {
     this.shell = shell
     this.hasAnswered = false
     this.buffered = ''
-    this.last = null
+    this.last.clear()
     shell.stdout.on('data', (chunk: Buffer | string) => {
       if (shell === this.shell) this.read(String(chunk))
     })
@@ -174,13 +180,17 @@ export class PowerShellHost {
     const pending = this.pending
     if (!reply || !pending || Number(reply[1]) !== pending.id) return
     const [, , kind, base64] = reply
-    if (!kind && this.last === null)
+    const known = this.last.get(pending.script)
+    if (!kind && known === undefined)
       return this.drop(failure('PowerShell broke protocol', { code: null }))
     this.settle()
     this.hasAnswered = true
     if (kind === 'error') return pending.reject(failure(decode(base64), { code: 1 }))
-    if (kind === 'ok') this.last = decode(base64)
-    pending.resolve(this.last ?? '')
+    if (!kind) return pending.resolve(known ?? '')
+    const output = decode(base64)
+    if (this.last.size >= MAX_REMEMBERED && !this.last.has(pending.script)) this.last.clear()
+    this.last.set(pending.script, output)
+    pending.resolve(output)
   }
 
   private settle(): Pending | null {

@@ -1,10 +1,16 @@
-import { execFile } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, describe, expect, it } from 'vitest'
-import { closePowerShellHost, runInteractivePowerShell, runPowerShell } from './powershell-host'
+import { childEnv, POWERSHELL, POWERSHELL_SPAWN, powershellArgs } from './platform-process'
+import {
+  closePowerShellHost,
+  POWERSHELL_HOST_SCRIPT,
+  runInteractivePowerShell,
+  runPowerShell
+} from './powershell-host'
 
 // These drive the real powershell.exe, which exists only on Windows.
 const onWindows = process.platform === 'win32'
@@ -37,6 +43,33 @@ describe.runIf(onWindows)('the kept PowerShell on Windows', () => {
     expect(await runPowerShell('$null', 4000)).toBe('')
     expect(await runPowerShell('$PID')).toBe(pid)
   }, 20_000)
+  it('answers a script unchanged since its own last run as same, whatever ran between', async () => {
+    const shell = spawn(POWERSHELL, powershellArgs(POWERSHELL_HOST_SCRIPT), {
+      env: childEnv('win32'),
+      ...POWERSHELL_SPAWN
+    })
+    const lines: string[] = []
+    shell.stdout.on('data', (chunk: Buffer) => lines.push(...chunk.toString().split(/\r?\n/)))
+    const request = (id: number, script: string) =>
+      shell.stdin.write(`${id} ${Buffer.from(script).toString('base64')}\n`)
+    try {
+      request(1, "'table'")
+      request(2, "'TABLE'")
+      request(3, "'table'")
+      request(4, "'TABLE'")
+      const deadline = Date.now() + 15_000
+      while (lines.filter(Boolean).length < 4 && Date.now() < deadline)
+        await new Promise((resolve) => setTimeout(resolve, 50))
+      expect(lines.filter(Boolean)).toEqual([
+        `1 ok ${Buffer.from('table').toString('base64')}`,
+        `2 ok ${Buffer.from('TABLE').toString('base64')}`,
+        '3 same',
+        '4 same'
+      ])
+    } finally {
+      shell.kill()
+    }
+  }, 30_000)
   it('passes over what a script writes to the host itself', async () => {
     expect(await runPowerShell("Write-Host 'noise'; 'kept'")).toBe('kept')
   }, 20_000)

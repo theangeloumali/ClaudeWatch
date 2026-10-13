@@ -71,6 +71,11 @@ async function askStart(
   return { start: ticks, startedAtMs: filetimeToMs(filetime) }
 }
 
+// A start once proven gone never comes back, so a stale registry file costs one ask, not one a
+// tick. Remembered by pid and start until the file goes (`forgetGoneExcept`).
+const provenGone = new WeakMap<BridgeIo, Set<string>>()
+const goneKey = ({ pid, procStart }: RegistryEntry): string => `${pid}:${procStart}`
+
 // When a live record's process started, or null when the record's process has gone. The owner's
 // table answers for a pid it lists; only one it lacks is asked about, as it may run under
 // another account. A Windows record holds a FILETIME or ticks, not a date.
@@ -80,6 +85,9 @@ export async function liveStartedAt(
   table: ProcessRow[],
   platform: NodeJS.Platform = process.platform
 ): Promise<number | null> {
+  let gone = provenGone.get(io)
+  if (!gone) provenGone.set(io, (gone = new Set()))
+  if (gone.has(goneKey(entry))) return null
   try {
     const row = table.find(({ pid }) => pid === entry.pid)
     const listed = isCreationTicks(entry.procStart, platform) ? row?.creationTicks : row?.lstart
@@ -87,12 +95,25 @@ export async function liveStartedAt(
       row && listed !== undefined
         ? { start: listed, startedAtMs: row.startedAtMs }
         : await askStart(entry, io, platform)
-    if (collapseWhitespace(start) !== collapseWhitespace(entry.procStart)) return null
+    if (collapseWhitespace(start) !== collapseWhitespace(entry.procStart)) {
+      // Another start proves it, and so does CIM's nothing; ps or .NET would have failed instead.
+      if (start.trim() || isCreationTicks(entry.procStart, platform)) gone.add(goneKey(entry))
+      return null
+    }
     return Number.isFinite(startedAtMs) ? startedAtMs : 0
   } catch (error) {
-    if (platform === 'win32' && !hasExitStatus(error)) throw error
+    if (hasExitStatus(error)) gone.add(goneKey(entry))
+    else if (platform === 'win32') throw error
     return null
   }
+}
+
+// Drops what is remembered of records whose files have gone.
+export function forgetGoneExcept(io: BridgeIo, entries: RegistryEntry[]): void {
+  const gone = provenGone.get(io)
+  if (!gone) return
+  const present = new Set(entries.map(goneKey))
+  for (const key of gone) if (!present.has(key)) gone.delete(key)
 }
 
 export const isLive = async (

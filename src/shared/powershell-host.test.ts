@@ -133,6 +133,30 @@ describe('a PowerShell kept running', () => {
     shells[0].same()
     expect(await again).toBe(output)
   })
+  it('remembers the last output of each script, so another script between leaves it unchanged', async () => {
+    const { host, shells } = harness()
+    const answer = async (script: string, respond: () => void): Promise<string> => {
+      const run = host.run(script)
+      await settle()
+      respond()
+      return run
+    }
+    const table = await answer('table', () => shells[0].reply('x'.repeat(1000)))
+    expect(await answer('$PID', () => shells[0].reply('42'))).toBe('42')
+    expect(await answer('table', () => shells[0].same())).toBe(table)
+    expect(await answer('$PID', () => shells[0].same())).toBe('42')
+  })
+  it('takes an unchanged mark for a script never answered as the shell having failed', async () => {
+    const { host, shells } = harness()
+    const first = host.run('table')
+    await settle()
+    shells[0].reply('x')
+    await first
+    const run = host.run('other')
+    await settle()
+    shells[0].same()
+    await expect(run).rejects.toMatchObject({ code: null })
+  })
   it('takes an unchanged mark before any output as the shell having failed', async () => {
     const { host, shells } = harness()
     const run = host.run('table')

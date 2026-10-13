@@ -19,7 +19,7 @@ import { join } from 'node:path'
 import { isAbsoluteFolder } from '../shared/platform-process'
 import type { SessionRef, SourceHealth } from '../shared/office/types'
 import { type BridgeIo, isMissing, jsonObject } from './io'
-import { liveStartedAt } from './liveness'
+import { forgetGoneExcept, liveStartedAt } from './liveness'
 import { sessionFromRegistry, sessionFromTeammate } from './claude'
 import { resolveProject } from './project-root'
 import { pruneTranscripts, readTranscript, transcriptPath } from './transcript-tail'
@@ -138,6 +138,7 @@ export async function collectClaude(
   const settled = (error: unknown): 'failed' | null => (isMissing(error) ? null : 'failed')
   let lastTick = liveLastTick.get(io)
   if (!lastTick) liveLastTick.set(io, (lastTick = new Map()))
+  const entries: RegistryEntry[] = []
   for (const root of uniqueRoots) {
     const health: SourceHealth = { id: `claude:${root}`, ok: true, detail: 'empty' }
     const wasLive = lastTick.get(root) ?? new Map<string, number>()
@@ -152,6 +153,7 @@ export async function collectClaude(
         try {
           const entry = parseRegistry(await io.readText(join(root, 'sessions', file)), platform)
           if (!entry) continue
+          entries.push(entry)
           // An unreadable table proves nothing either way: each pid is then asked about.
           const rows = await table().catch(() => [])
           const record = recordOf(entry)
@@ -199,6 +201,7 @@ export async function collectClaude(
     lastTick.set(root, isLiveNow)
     sources.push(health)
   }
+  forgetGoneExcept(io, entries)
   // Who has no lead cannot be told while a registry is unread: it may hold the lead.
   if (sources.every((source) => source.ok)) {
     const parents = (await processes().catch(() => [])).map((p) => p.parentSessionId)
