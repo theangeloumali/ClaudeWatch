@@ -11,7 +11,9 @@ import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import type { ClaudeInstance, InstanceUpdate, PromoStatus } from '../renderer/lib/types'
 import type { SettingsStore } from './store'
-import { isOnAnyDisplay } from './window-bounds'
+import { isOnAnyDisplay, popoverPosition } from './window-bounds'
+import { popoverChrome } from './window-chrome'
+import trayIconPath from '../../resources/tray/tray.png?asset'
 
 interface TrayManagerOptions {
   onOpenDashboard: () => void
@@ -20,6 +22,7 @@ interface TrayManagerOptions {
   onQuit: () => void
   onCheckForUpdates?: () => void
   preloadPath: string
+  platform?: NodeJS.Platform
   store: Pick<
     SettingsStore,
     'getPopoverPinned' | 'getPopoverPosition' | 'setPopoverPinned' | 'setPopoverPosition'
@@ -45,6 +48,7 @@ export class TrayManager {
   private onQuit: () => void
   private onCheckForUpdates?: () => void
   private preloadPath: string
+  private platform: NodeJS.Platform
   private store: TrayManagerOptions['store']
   private pinned = false
   private positionSaveTimeout: ReturnType<typeof setTimeout> | null = null
@@ -66,17 +70,28 @@ export class TrayManager {
     this.onQuit = options.onQuit
     this.onCheckForUpdates = options.onCheckForUpdates
     this.preloadPath = options.preloadPath
+    this.platform = options.platform ?? process.platform
     this.store = options.store
     this.pinned = this.store.getPopoverPinned()
     this.createTray()
     this.createPopover()
   }
 
+  // macOS shows the count as the menu bar title; Windows has no tray title, so it needs a real icon.
+  private hasTitle(): boolean {
+    return this.platform === 'darwin'
+  }
+
+  private createTrayIcon(): Electron.NativeImage {
+    if (this.hasTitle()) return nativeImage.createEmpty()
+    // resources/ is electron-vite's public dir, so names are kept and tray@2x.png loads by suffix.
+    return nativeImage.createFromPath(trayIconPath)
+  }
+
   private createTray(): void {
-    const icon = nativeImage.createEmpty()
-    this.tray = new Tray(icon)
-    this.tray.setTitle('\u25CF 0')
-    this.tray.setToolTip('ClaudeWatch')
+    this.tray = new Tray(this.createTrayIcon())
+    if (this.hasTitle()) this.tray.setToolTip('ClaudeWatch')
+    this.updateTrayTitle()
 
     // Hover → show popover
     this.tray.on('mouse-enter', () => {
@@ -106,9 +121,7 @@ export class TrayManager {
       maximizable: false,
       fullscreenable: false,
       skipTaskbar: true,
-      transparent: true,
-      vibrancy: 'popover',
-      visualEffectState: 'active',
+      ...popoverChrome(this.platform),
       roundedCorners: true,
       alwaysOnTop: this.pinned,
       webPreferences: {
@@ -179,7 +192,6 @@ export class TrayManager {
     }
   }
 
-  /** Position the popover below the tray icon, clamped to screen bounds */
   private positionPopoverAtTray(): void {
     if (!this.popover || this.popover.isDestroyed() || !this.tray) return
 
@@ -188,15 +200,11 @@ export class TrayManager {
       x: trayBounds.x,
       y: trayBounds.y
     })
-
-    const x = Math.round(trayBounds.x + trayBounds.width / 2 - POPOVER_WIDTH / 2)
-    const y = trayBounds.y + trayBounds.height + 4
-    const clampedX = Math.max(
-      display.workArea.x,
-      Math.min(x, display.workArea.x + display.workArea.width - POPOVER_WIDTH)
-    )
-
-    this.popover.setPosition(clampedX, y)
+    const { x, y } = popoverPosition(trayBounds, display.workArea, {
+      width: POPOVER_WIDTH,
+      height: POPOVER_HEIGHT
+    })
+    this.popover.setPosition(x, y)
   }
 
   private isPositionOnScreen(x: number, y: number): boolean {
@@ -319,8 +327,13 @@ export class TrayManager {
   private updateTrayTitle(): void {
     if (!this.tray) return
 
-    const prefix = this.promoStatus?.is2x ? '2x ' : ''
-    this.tray.setTitle(`${prefix}\u25CF ${this.stats.active}`)
+    const is2x = this.promoStatus?.is2x === true
+    if (this.hasTitle()) {
+      this.tray.setTitle(`${is2x ? '2x ' : ''}\u25CF ${this.stats.active}`)
+      return
+    }
+    const prefix = is2x ? '2x \u00B7 ' : ''
+    this.tray.setToolTip(`${prefix}ClaudeWatch \u2014 ${this.stats.active} active`)
   }
 
   /** Show the popover programmatically (e.g., on dashboard minimize) */

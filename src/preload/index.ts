@@ -12,6 +12,9 @@ import type { FocusResult, OfficeSnapshot } from '../shared/office/types'
 import type { AccountsState, AliasResult } from '../shared/accounts'
 
 const api = {
+  // The renderer shapes its header around the platform's window buttons.
+  platform: process.platform,
+
   getInstances: (): Promise<InstanceUpdate> => ipcRenderer.invoke('instances:get'),
 
   getSettings: (): Promise<AppSettings> => ipcRenderer.invoke('settings:get'),

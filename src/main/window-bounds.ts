@@ -67,6 +67,36 @@ export function restoreBounds(
   }
 }
 
+const POPOVER_GAP = 4
+
+// Opens away from whichever work-area edge the taskbar or menu bar holding the icon sits on.
+// An icon inside the work area (an overflow flyout, an auto-hidden taskbar) opens on the roomier side.
+export function popoverPosition(
+  tray: Bounds,
+  workArea: Bounds,
+  size: Size
+): { x: number; y: number } {
+  const centre = { x: tray.x + tray.width / 2, y: tray.y + tray.height / 2 }
+  const right = workArea.x + workArea.width
+  const bottom = workArea.y + workArea.height
+  const centredX = centre.x - size.width / 2
+  const levelY = centre.y - size.height / 2
+  const above = { x: centredX, y: tray.y - size.height - POPOVER_GAP }
+  const below = { x: centredX, y: tray.y + tray.height + POPOVER_GAP }
+
+  let position: { x: number; y: number }
+  if (centre.y >= bottom) position = above
+  else if (centre.y < workArea.y) position = below
+  else if (centre.x < workArea.x) position = { x: tray.x + tray.width + POPOVER_GAP, y: levelY }
+  else if (centre.x >= right) position = { x: tray.x - size.width - POPOVER_GAP, y: levelY }
+  else position = centre.y > workArea.y + workArea.height / 2 ? above : below
+
+  return {
+    x: Math.round(clamp(position.x, [workArea.x, right - size.width])),
+    y: Math.round(clamp(position.y, [workArea.y, bottom - size.height]))
+  }
+}
+
 interface MovableWindow {
   on(event: 'moved' | 'resized' | 'close', listener: () => void): unknown
   getNormalBounds(): Bounds

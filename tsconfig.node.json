@@ -11,7 +11,7 @@
     "paths": {
       "@/*": ["src/main/*"]
     },
-    "types": ["node"],
+    "types": ["node", "electron-vite/node"],
     "target": "ESNext",
     "strict": true,
     "skipLibCheck": true,

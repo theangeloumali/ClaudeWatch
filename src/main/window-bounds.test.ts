@@ -1,6 +1,52 @@
 import { EventEmitter } from 'events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { isOnAnyDisplay, rememberBounds, restoreBounds } from './window-bounds'
+import { isOnAnyDisplay, popoverPosition, rememberBounds, restoreBounds } from './window-bounds'
+
+describe('popoverPosition', () => {
+  const popover = { width: 320, height: 420 }
+
+  it('opens below a menu bar at the top, centred under the icon', () => {
+    const workArea = { x: 0, y: 25, width: 1512, height: 920 }
+    const tray = { x: 1200, y: 0, width: 24, height: 25 }
+    expect(popoverPosition(tray, workArea, popover)).toEqual({ x: 1052, y: 29 })
+  })
+
+  it('opens above a taskbar at the bottom, kept inside the right edge', () => {
+    const workArea = { x: 0, y: 0, width: 1920, height: 1040 }
+    const tray = { x: 1840, y: 1044, width: 24, height: 32 }
+    expect(popoverPosition(tray, workArea, popover)).toEqual({ x: 1600, y: 620 })
+  })
+
+  it('opens beside a taskbar on the left, level with the icon', () => {
+    const workArea = { x: 48, y: 0, width: 1872, height: 1080 }
+    const tray = { x: 12, y: 900, width: 24, height: 24 }
+    expect(popoverPosition(tray, workArea, popover)).toEqual({ x: 48, y: 660 })
+  })
+
+  it('opens beside a taskbar on the right, kept inside both edges', () => {
+    const workArea = { x: 0, y: 0, width: 1872, height: 1080 }
+    const tray = { x: 1884, y: 1000, width: 24, height: 24 }
+    expect(popoverPosition(tray, workArea, popover)).toEqual({ x: 1552, y: 660 })
+  })
+
+  it('stays on a secondary display left of and above the main one', () => {
+    const workArea = { x: -1920, y: -200, width: 1920, height: 1040 }
+    const tray = { x: -20, y: 845, width: 24, height: 32 }
+    expect(popoverPosition(tray, workArea, popover)).toEqual({ x: -320, y: 420 })
+  })
+
+  it('picks the roomier side when the icon sits inside the work area, as in an overflow flyout', () => {
+    const workArea = { x: 0, y: 0, width: 1920, height: 1040 }
+    expect(popoverPosition({ x: 900, y: 900, width: 24, height: 24 }, workArea, popover)).toEqual({
+      x: 752,
+      y: 476
+    })
+    expect(popoverPosition({ x: 900, y: 100, width: 24, height: 24 }, workArea, popover)).toEqual({
+      x: 752,
+      y: 128
+    })
+  })
+})
 
 const laptop = { x: 0, y: 25, width: 1512, height: 920 }
 const side = { x: 1512, y: 0, width: 2560, height: 1440 }
