@@ -1,5 +1,5 @@
 import { join } from 'path'
-import { PARSED_OUTPUT_ENV } from '../../shared/ps'
+import { childEnv } from '../../shared/platform-process'
 import { createOrcaCli } from '../orca-cli'
 import { execFilePromise } from '../platform/exec'
 import { AccountLedger } from './account-ledger'
@@ -15,19 +15,29 @@ interface AccountLedgerPlaces {
   home: string
   // ClaudeWatch's own data folder, where the ledger is kept.
   userData: string
+  platform?: NodeJS.Platform
+  // Windows' roaming app-data folder (%APPDATA%), where Orca keeps its data there.
+  appData?: string
+}
+
+// Orca keeps the same claude-accounts/ layout in its platform's app-data folder.
+export function orcaDataFolder({
+  home,
+  platform = process.platform,
+  appData = process.env.APPDATA
+}: Pick<AccountLedgerPlaces, 'home' | 'platform' | 'appData'>): string {
+  if (platform !== 'win32') return join(home, 'Library', 'Application Support', 'orca')
+  return join(appData || join(home, 'AppData', 'Roaming'), 'orca')
 }
 
 // The ledger wired to the real files: the default login, Orca's identity files and its
 // signature-checked command line, and ClaudeWatch's own ledger file.
-export function createAccountLedger({
-  isWatching,
-  home,
-  userData
-}: AccountLedgerPlaces): AccountLedger {
+export function createAccountLedger(places: AccountLedgerPlaces): AccountLedger {
+  const { isWatching, home, userData } = places
   const orca = createOrcaCli((program, args, options) =>
-    execFilePromise(program, args, { ...options, env: PARSED_OUTPUT_ENV })
+    execFilePromise(program, args, { ...options, env: childEnv() })
   )
-  const orcaData = join(home, 'Library', 'Application Support', 'orca')
+  const orcaData = orcaDataFolder(places)
   const ledgerFile = join(userData, 'accounts-ledger.json')
   return new AccountLedger({
     isWatching,

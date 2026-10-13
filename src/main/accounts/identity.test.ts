@@ -106,8 +106,17 @@ describe('the default login', () => {
     expect(await readDefaultIdentity(home)).toEqual({ status: 'unreadable' })
   })
 
-  it('does not wait on a pipe left where the login file goes', async () => {
-    execFileSync('/usr/bin/mkfifo', [path()])
+  // Windows has no FIFOs; the folder case below covers the same guard there.
+  it.skipIf(process.platform === 'win32')(
+    'does not wait on a pipe left where the login file goes',
+    async () => {
+      execFileSync('/usr/bin/mkfifo', [path()])
+      expect(await readDefaultIdentity(home)).toEqual({ status: 'unreadable' })
+    }
+  )
+
+  it('does not read a folder left where the login file goes', async () => {
+    await mkdir(path())
     expect(await readDefaultIdentity(home)).toEqual({ status: 'unreadable' })
   })
 })

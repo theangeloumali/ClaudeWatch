@@ -194,11 +194,10 @@ export function setupIpcHandlers(options: IpcHandlerOptions): void {
 
   handle('ratelimits:setup-statusline', async () => {
     if (!rateLimitReader) return false
-    const scriptSource = join(
-      app.isPackaged ? process.resourcesPath : app.getAppPath(),
-      'resources',
-      'claudewatch-statusline.sh'
-    )
+    // extraResources puts the script at the root of resourcesPath, not under a resources/ folder.
+    const scriptSource = app.isPackaged
+      ? join(process.resourcesPath, 'claudewatch-statusline.sh')
+      : join(app.getAppPath(), 'resources', 'claudewatch-statusline.sh')
     return rateLimitReader.setupStatusline(scriptSource)
   })
 

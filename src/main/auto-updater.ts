@@ -7,7 +7,10 @@ export class AutoUpdaterManager {
   private getWindows: (() => BrowserWindow | null)[]
   private checkInterval: NodeJS.Timeout | null = null
 
-  constructor(getWindows: (() => BrowserWindow | null)[]) {
+  constructor(
+    getWindows: (() => BrowserWindow | null)[],
+    private readonly platform: NodeJS.Platform = process.platform
+  ) {
     this.getWindows = getWindows
 
     if (is.dev) return
@@ -51,8 +54,18 @@ export class AutoUpdaterManager {
     })
 
     autoUpdater.on('error', (err) => {
+      if (this.isMissingWindowsRelease(err)) {
+        console.warn(`[updater] no Windows build in the latest release: ${err.message}`)
+        this.send({ status: 'not-available' })
+        return
+      }
       this.send({ status: 'error', data: err.message })
     })
+  }
+
+  // Releases published before Windows support carry no latest.yml; that is "no update", not a fault.
+  private isMissingWindowsRelease(err: Error & { code?: string }): boolean {
+    return this.platform === 'win32' && err.code === 'ERR_UPDATER_CHANNEL_FILE_NOT_FOUND'
   }
 
   // A failure also arrives as the 'error' event, which is what the windows are told; the

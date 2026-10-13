@@ -157,6 +157,56 @@ describe('AutoUpdaterManager', () => {
     })
   })
 
+  describe('a release that carries no build for this platform', () => {
+    const missingChannelFile = {
+      message: 'Cannot find latest.yml in the latest release artifacts',
+      code: 'ERR_UPDATER_CHANNEL_FILE_NOT_FOUND'
+    }
+
+    it('tells Windows there is no update and only logs the cause', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+      const win = makeMockWindow()
+      new AutoUpdaterManager([() => win as unknown as Electron.BrowserWindow], 'win32')
+
+      mockAutoUpdater._emit('error', missingChannelFile)
+
+      expect(win.webContents.send).toHaveBeenCalledWith('updater:status', {
+        status: 'not-available'
+      })
+      expect(win.webContents.send).not.toHaveBeenCalledWith(
+        'updater:status',
+        expect.objectContaining({ status: 'error' })
+      )
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining(missingChannelFile.message))
+      warn.mockRestore()
+    })
+
+    it('still reports other Windows update errors', () => {
+      const win = makeMockWindow()
+      new AutoUpdaterManager([() => win as unknown as Electron.BrowserWindow], 'win32')
+
+      mockAutoUpdater._emit('error', { message: 'Network error' })
+
+      expect(win.webContents.send).toHaveBeenCalledWith('updater:status', {
+        status: 'error',
+        data: 'Network error'
+      })
+    })
+
+    // Every mac release ships latest-mac.yml, so its absence there is a broken release.
+    it('still reports it on macOS', () => {
+      const win = makeMockWindow()
+      new AutoUpdaterManager([() => win as unknown as Electron.BrowserWindow], 'darwin')
+
+      mockAutoUpdater._emit('error', missingChannelFile)
+
+      expect(win.webContents.send).toHaveBeenCalledWith('updater:status', {
+        status: 'error',
+        data: missingChannelFile.message
+      })
+    })
+  })
+
   it('skips destroyed windows when sending', () => {
     const destroyedWin = makeMockWindow(true)
     const liveWin = makeMockWindow(false)

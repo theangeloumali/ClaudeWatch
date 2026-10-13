@@ -56,8 +56,8 @@ function determineStatus(
   return 'active'
 }
 
-function getPlatformDetector(): PlatformDetector {
-  if (process.platform === 'win32') {
+function getPlatformDetector(platform: NodeJS.Platform): PlatformDetector {
+  if (platform === 'win32') {
     return new Win32Detector()
   }
   return new DarwinDetector()
@@ -86,9 +86,10 @@ export class ProcessMonitor {
     cpuIdleThreshold?: number
     detector?: PlatformDetector
     terminalResolver?: Pick<TerminalResolver, 'resolve'>
+    platform?: NodeJS.Platform
   }) {
     this.cpuIdleThreshold = options?.cpuIdleThreshold ?? 3.0
-    this.detector = options?.detector ?? getPlatformDetector()
+    this.detector = options?.detector ?? getPlatformDetector(options?.platform ?? process.platform)
     this.terminalResolver = options?.terminalResolver
   }
 

@@ -4,7 +4,13 @@ import type { FocusResult, OfficeSnapshot } from '../shared/office/types'
 
 const { handle, app, openExternal } = vi.hoisted(() => ({
   handle: vi.fn(),
-  app: { isQuitting: false, isPackaged: false, quit: vi.fn(), setLoginItemSettings: vi.fn() },
+  app: {
+    isQuitting: false,
+    isPackaged: false,
+    quit: vi.fn(),
+    setLoginItemSettings: vi.fn(),
+    getAppPath: vi.fn(() => '/repo')
+  },
   openExternal: vi.fn()
 }))
 vi.mock('electron', () => ({ ipcMain: { handle }, app, shell: { openExternal } }))
@@ -140,6 +146,25 @@ it.each([
   ['popover:set-pinned', { success: false }]
 ])('%s returns its result for a trusted sender', async (channel, expected) => {
   expect(await handlers[channel](appEvent)).toEqual(expected)
+})
+
+describe('ratelimits:setup-statusline', () => {
+  it('installs the script electron-builder ships at the root of a packaged app', async () => {
+    app.isPackaged = true
+    Object.defineProperty(process, 'resourcesPath', { value: '/res', configurable: true })
+    await handlers['ratelimits:setup-statusline'](appEvent)
+    app.isPackaged = false
+    expect(rateLimitReader.setupStatusline).toHaveBeenCalledWith(
+      join('/res', 'claudewatch-statusline.sh')
+    )
+  })
+
+  it('installs the repo copy in dev', async () => {
+    await handlers['ratelimits:setup-statusline'](appEvent)
+    expect(rateLimitReader.setupStatusline).toHaveBeenCalledWith(
+      join('/repo', 'resources', 'claudewatch-statusline.sh')
+    )
+  })
 })
 
 it('filters unknown settings keys, including nested keys', () => {

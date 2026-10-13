@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ProcessMonitor, detectSessionType } from './process-monitor'
+import { POWERSHELL, childEnv } from '../shared/platform-process'
 
 // We mock child_process used by platform detectors
 vi.mock('child_process', () => ({
@@ -48,7 +49,7 @@ describe('ProcessMonitor', () => {
         }
       }) as typeof execFile)
 
-      const monitor = new ProcessMonitor({ cpuIdleThreshold: 1.0 })
+      const monitor = new ProcessMonitor({ cpuIdleThreshold: 1.0, platform: 'darwin' })
       const instances = await monitor.poll()
 
       expect(instances).toHaveLength(1)
@@ -73,7 +74,7 @@ describe('ProcessMonitor', () => {
         }
       }) as typeof execFile)
 
-      const monitor = new ProcessMonitor({ cpuIdleThreshold: 1.0 })
+      const monitor = new ProcessMonitor({ cpuIdleThreshold: 1.0, platform: 'darwin' })
       const instances = await monitor.poll()
 
       expect(instances).toHaveLength(1)
@@ -87,7 +88,7 @@ describe('ProcessMonitor', () => {
       mockExecFile.mockImplementation(((_bin: string, _args: unknown, cb: unknown) => {
         ;(cb as ExecCallback)(null, `${PS_HEADER}\n${PS_LINE_ACTIVE}\n`, '')
       }) as typeof execFile)
-      const monitor = new ProcessMonitor({ cpuIdleThreshold: 1.0 })
+      const monitor = new ProcessMonitor({ cpuIdleThreshold: 1.0, platform: 'darwin' })
       expect((await monitor.poll())[0].status).toBe('active')
 
       monitor.setCpuIdleThreshold(90)
@@ -99,7 +100,7 @@ describe('ProcessMonitor', () => {
         ;(cb as ExecCallback)(null, `${PS_HEADER}\n${PS_LINE_GUI}\n${PS_LINE_GREP}\n`, '')
       }) as typeof execFile)
 
-      const monitor = new ProcessMonitor()
+      const monitor = new ProcessMonitor({ platform: 'darwin' })
       const instances = await monitor.poll()
 
       expect(instances).toHaveLength(0)
@@ -118,7 +119,7 @@ describe('ProcessMonitor', () => {
         }
       }) as typeof execFile)
 
-      const monitor = new ProcessMonitor({ cpuIdleThreshold: 1.0 })
+      const monitor = new ProcessMonitor({ cpuIdleThreshold: 1.0, platform: 'darwin' })
       const instances = await monitor.poll()
 
       expect(instances).toHaveLength(2)
@@ -130,7 +131,7 @@ describe('ProcessMonitor', () => {
         ;(cb as ExecCallback)(null, `${PS_HEADER}\n`, '')
       }) as typeof execFile)
 
-      const monitor = new ProcessMonitor()
+      const monitor = new ProcessMonitor({ platform: 'darwin' })
       const instances = await monitor.poll()
 
       expect(instances).toEqual([])
@@ -141,7 +142,7 @@ describe('ProcessMonitor', () => {
         ;(cb as ExecCallback)(new Error('ps failed'), '', 'ps failed')
       }) as typeof execFile)
 
-      const monitor = new ProcessMonitor()
+      const monitor = new ProcessMonitor({ platform: 'darwin' })
       const instances = await monitor.poll()
 
       expect(instances).toEqual([])
@@ -158,7 +159,7 @@ describe('ProcessMonitor', () => {
         }
       }) as typeof execFile)
 
-      const monitor = new ProcessMonitor()
+      const monitor = new ProcessMonitor({ platform: 'darwin' })
       const instances = await monitor.poll()
 
       expect(instances).toHaveLength(1)
@@ -177,7 +178,7 @@ describe('ProcessMonitor', () => {
         }
       }) as typeof execFile)
 
-      const monitor = new ProcessMonitor()
+      const monitor = new ProcessMonitor({ platform: 'darwin' })
       const instances = await monitor.poll()
 
       expect(instances).toHaveLength(1)
@@ -200,7 +201,7 @@ describe('ProcessMonitor', () => {
         }
       }) as typeof execFile)
 
-      const monitor = new ProcessMonitor()
+      const monitor = new ProcessMonitor({ platform: 'darwin' })
       const instances = await monitor.poll()
 
       expect(instances[0].projectName).toBe('ZKidz/MacClaudeTracker')
@@ -220,7 +221,7 @@ describe('ProcessMonitor', () => {
         }
       }) as typeof execFile)
 
-      const monitor = new ProcessMonitor({ cpuIdleThreshold: 1.0 })
+      const monitor = new ProcessMonitor({ cpuIdleThreshold: 1.0, platform: 'darwin' })
       const instances = await monitor.poll()
       expect(instances[0].status).toBe('active')
     })
@@ -237,7 +238,7 @@ describe('ProcessMonitor', () => {
         }
       }) as typeof execFile)
 
-      const monitor = new ProcessMonitor({ cpuIdleThreshold: 1.0 })
+      const monitor = new ProcessMonitor({ cpuIdleThreshold: 1.0, platform: 'darwin' })
       const instances = await monitor.poll()
       expect(instances[0].status).toBe('idle')
     })
@@ -254,7 +255,7 @@ describe('ProcessMonitor', () => {
         }
       }) as typeof execFile)
 
-      const monitor = new ProcessMonitor({ cpuIdleThreshold: 5.0 })
+      const monitor = new ProcessMonitor({ cpuIdleThreshold: 5.0, platform: 'darwin' })
       const instances = await monitor.poll()
       expect(instances[0].status).toBe('idle')
     })
@@ -273,7 +274,7 @@ describe('ProcessMonitor', () => {
         }
       }) as typeof execFile)
 
-      const monitor = new ProcessMonitor()
+      const monitor = new ProcessMonitor({ platform: 'darwin' })
       const instances = await monitor.poll()
       expect(instances[0].status).toBe('idle')
     })
@@ -293,7 +294,7 @@ describe('ProcessMonitor', () => {
         }
       }) as typeof execFile)
 
-      const monitor = new ProcessMonitor()
+      const monitor = new ProcessMonitor({ platform: 'darwin' })
       const instances = await monitor.poll()
       expect(instances[0].sessionId).toBe('session-xyz')
       expect(instances[0].flags).toContain('--resume')
@@ -311,7 +312,7 @@ describe('ProcessMonitor', () => {
         }
       }) as typeof execFile)
 
-      const monitor = new ProcessMonitor()
+      const monitor = new ProcessMonitor({ platform: 'darwin' })
       const instances = await monitor.poll()
       expect(instances[0].sessionId).toBeUndefined()
       expect(instances[0].flags).toContain('--continue')
@@ -329,11 +330,40 @@ describe('ProcessMonitor', () => {
         }
       }) as typeof execFile)
 
-      const monitor = new ProcessMonitor()
+      const monitor = new ProcessMonitor({ platform: 'darwin' })
       const instances = await monitor.poll()
       expect(instances[0].flags).toEqual([])
       expect(instances[0].sessionId).toBeUndefined()
     })
+  })
+})
+
+describe('poll() on win32', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('lists Claude Code through one CIM query in the inbox PowerShell', async () => {
+    const row = {
+      pid: 4242,
+      command: 'C:\\bin\\claude.exe --continue',
+      startedAt: '',
+      cpuTicks: '0',
+      workingSet: '0'
+    }
+    mockExecFile.mockImplementation(((...args: unknown[]) => {
+      ;(args.at(-1) as ExecCallback)(null, JSON.stringify([row]), '')
+    }) as typeof execFile)
+
+    const instances = await new ProcessMonitor({ platform: 'win32' }).poll()
+
+    const [file, args, options] = mockExecFile.mock.calls[0]
+    expect(file).toBe(POWERSHELL)
+    expect(args).toHaveLength(4)
+    expect(options).toMatchObject({ env: childEnv('win32') })
+    expect(instances.map((instance) => [instance.pid, instance.flags])).toEqual([
+      [4242, ['--continue']]
+    ])
   })
 })
 
@@ -360,7 +390,7 @@ describe('terminal enrichment', () => {
       })
     }
 
-    const monitor = new ProcessMonitor({ terminalResolver: mockResolver })
+    const monitor = new ProcessMonitor({ terminalResolver: mockResolver, platform: 'darwin' })
     const instances = await monitor.poll()
 
     expect(instances).toHaveLength(1)
@@ -380,7 +410,7 @@ describe('terminal enrichment', () => {
       }
     }) as typeof execFile)
 
-    const monitor = new ProcessMonitor()
+    const monitor = new ProcessMonitor({ platform: 'darwin' })
     const instances = await monitor.poll()
 
     expect(instances).toHaveLength(1)

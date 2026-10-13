@@ -6,6 +6,7 @@ directories:
 files:
   - out/**/*
   - '!out/office-web/**/*'
+  - resources/tray/**
   - package.json
   - node_modules/**/*
   - '!node_modules/lucide-react/**/*'
@@ -18,6 +19,11 @@ files:
   - '!**/node_modules/**/LICENSE*'
   - '!**/node_modules/**/.github/**'
 afterPack: scripts/afterSign.js
+extraResources:
+  - from: resources/sounds
+    to: sounds
+  - from: resources/claudewatch-statusline.sh
+    to: claudewatch-statusline.sh
 dmg:
   writeUpdateInfo: false
 mac:
@@ -37,9 +43,6 @@ mac:
   extraFiles:
     - from: build/widget/ClaudeWatchWidgetExtension.appex
       to: PlugIns/ClaudeWatchWidgetExtension.appex
-  extraResources:
-    - from: resources/sounds
-      to: sounds
 win:
   artifactName: '${name}-${version}-setup.${ext}'
   target:
