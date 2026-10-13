@@ -1,7 +1,7 @@
-import { isAbsolute, join } from 'node:path'
-import { CONTROL_CHARACTER } from '../shared/unsafe-text'
+import { posix, win32 } from 'node:path'
 import { accountKey } from './account-key'
 import { type BridgeIo, isMissing, jsonObject, object } from './io'
+import { isFolderPath } from './process-folders'
 
 export interface Rollout {
   path: string
@@ -13,6 +13,8 @@ export interface Rollout {
   startedAtMs: number | null
   // The account the session was created under, hashed here so its id never leaves this file.
   accountKey: string | null
+  // Started by a CLI process, not by an app-server or as another thread's subagent.
+  cliStarted: boolean
 }
 interface CachedRollout {
   mtimeMs: number
@@ -20,16 +22,20 @@ interface CachedRollout {
   derived: boolean
   rollout: Rollout | null
 }
-// A header's folder reaches the feed and, on focus, a terminal: only a plain absolute path may.
-const isFolderPath = (cwd: string): boolean => isAbsolute(cwd) && !CONTROL_CHARACTER.test(cwd)
+// Rollouts written before Codex recorded a source came from the CLI.
+const isCliSource = (source: unknown): boolean =>
+  source === undefined || source === 'cli' || source === 'exec'
 const caches = new WeakMap<BridgeIo, Map<string, Map<string, CachedRollout>>>()
 
 // An account key is derived only when asked for: with accounts unwatched, no identity value is.
 export async function findRollouts(
   root: string,
   io: BridgeIo,
-  derivesAccounts = false
+  derivesAccounts = false,
+  platform: NodeJS.Platform = process.platform
 ): Promise<Rollout[]> {
+  // The fixtures of a test that names another platform are written in that platform's paths.
+  const { join } = platform === 'win32' ? win32 : posix
   let roots = caches.get(io)
   if (!roots) caches.set(io, (roots = new Map()))
   let cache = roots.get(root)
@@ -71,7 +77,7 @@ export async function findRollouts(
         if (
           header?.type === 'session_meta' &&
           typeof meta?.cwd === 'string' &&
-          isFolderPath(meta.cwd) &&
+          isFolderPath(meta.cwd, platform) &&
           typeof meta.id === 'string'
         ) {
           const creator = meta.creator_account_id
@@ -87,7 +93,8 @@ export async function findRollouts(
             accountKey:
               derivesAccounts && typeof creator === 'string' && creator
                 ? accountKey('codex', creator)
-                : null
+                : null,
+            cliStarted: isCliSource(meta.source)
           }
           rollouts.push(rollout)
         }

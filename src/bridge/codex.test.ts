@@ -1,9 +1,21 @@
 import { expect, it, vi } from 'vitest'
+import { join } from 'node:path'
 import { accountKey } from './account-key'
 import { collectCodex, codexProcesses, parseCodexActivity } from './codex'
 import { parseProcessTable } from './process-table'
 import { parseCodexUsage } from './codex-usage'
 import { fixtureIo } from './__fixtures__/helpers'
+import type { BridgeIo } from './io'
+
+// These cases describe macOS, where `lsof` names the folder each process runs in.
+const collectOnMac = (
+  root: string,
+  io: BridgeIo,
+  readProcesses?: Parameters<typeof collectCodex>[2],
+  derivesAccounts = false,
+  now = Date.now()
+): ReturnType<typeof collectCodex> =>
+  collectCodex(root, io, readProcesses, derivesAccounts, now, 'darwin')
 
 function tokenCount(total: number | null, cached = 0, last = 0): string {
   const usage = (input: number) => ({
@@ -93,7 +105,7 @@ it('matches cwd using only rollout headers then tails the newest match', async (
     file.endsWith('ps') ? '42 Sat Oct 10 15:29:12 2026 /bin/codex' : 'p42\nn/repo\n'
   )
   const tail = vi.spyOn(io, 'readTail')
-  const batch = await collectCodex('/codex', io)
+  const batch = await collectOnMac('/codex', io)
   expect(batch.sessions[0]).toMatchObject({
     key: 'codex:new',
     pid: 42,
@@ -120,15 +132,15 @@ it('asks where a Codex process runs once, and reads its rollout again only when 
   const tail = vi.spyOn(io, 'readTail')
   const folderAsks = (): number =>
     exec.mock.calls.filter(([program]) => program.endsWith('lsof')).length
-  await collectCodex('/codex', io)
-  expect((await collectCodex('/codex', io)).sessions).toHaveLength(1)
+  await collectOnMac('/codex', io)
+  expect((await collectOnMac('/codex', io)).sessions).toHaveLength(1)
   expect([folderAsks(), tail.mock.calls.length]).toEqual([1, 1])
   files['/codex/sessions/rollout-a.jsonl'] += `${tokenCount(1000, 700, 300)}\n`
-  expect((await collectCodex('/codex', io)).sessions[0].usage?.own.input).toBe(300)
+  expect((await collectOnMac('/codex', io)).sessions[0].usage?.own.input).toBe(300)
   expect([folderAsks(), tail.mock.calls.length]).toEqual([1, 2])
   // Another process under the same pid is asked about afresh.
   startedAt = 'Sun Oct 11 15:29:12 2026'
-  await collectCodex('/codex', io)
+  await collectOnMac('/codex', io)
   expect(folderAsks()).toBe(2)
 })
 
@@ -141,7 +153,7 @@ it('keeps the last usage it read while output pushes the token count out of the 
   const io = fixtureIo(files)
   io.exec = async (file) =>
     file.endsWith('ps') ? '42 Sat Oct 10 15:29:12 2026 /bin/codex' : 'p42\nn/repo\n'
-  const usage = async (): Promise<unknown> => (await collectCodex('/codex', io)).sessions[0].usage
+  const usage = async (): Promise<unknown> => (await collectOnMac('/codex', io)).sessions[0].usage
   const counted = await usage()
   expect(counted).toMatchObject({ own: { input: 300, cacheRead: 700 } })
 
@@ -175,38 +187,38 @@ function endingSession() {
 
 it('reads a rollout once more when its process has gone, for the total the thread ended on', async () => {
   const { rollout, files, io, stop } = endingSession()
-  expect((await collectCodex('/codex', io)).departed).toEqual([])
+  expect((await collectOnMac('/codex', io)).departed).toEqual([])
 
   // Its last turn, written and the process gone before the next look.
   files[rollout] += `${tokenCount(2000, 700, 300)}\n`
   stop()
   const tail = vi.spyOn(io, 'readTail')
-  const batch = await collectCodex('/codex', io)
+  const batch = await collectOnMac('/codex', io)
   expect(batch.sessions).toEqual([])
   expect(batch.departed).toMatchObject([
     { sessionKey: 'codex:a', projectLabel: 'repo', counts: { input: 1300, cacheRead: 700 } }
   ])
   expect(batch.sources[0].ok).toBe(true)
 
-  expect((await collectCodex('/codex', io)).departed).toEqual([])
+  expect((await collectOnMac('/codex', io)).departed).toEqual([])
   expect(tail).toHaveBeenCalledTimes(1)
 })
 
 it('has no last total for a session whose rollout is gone, and says so when it cannot be read', async () => {
   const gone = endingSession()
-  await collectCodex('/codex', gone.io)
+  await collectOnMac('/codex', gone.io)
   delete gone.files[gone.rollout]
   gone.stop()
-  const quiet = await collectCodex('/codex', gone.io)
+  const quiet = await collectOnMac('/codex', gone.io)
   expect([quiet.departed, quiet.sources[0].ok]).toEqual([[], true])
 
   const denied = endingSession()
-  await collectCodex('/codex', denied.io)
+  await collectOnMac('/codex', denied.io)
   denied.io.readTail = async () => {
     throw Object.assign(new Error('denied'), { code: 'EACCES' })
   }
   denied.stop()
-  const failed = await collectCodex('/codex', denied.io)
+  const failed = await collectOnMac('/codex', denied.io)
   expect(failed.departed).toEqual([])
   expect(failed.sources[0]).toEqual({ id: 'codex', ok: false, detail: 'rollout read failed' })
 })
@@ -221,19 +233,19 @@ it('says when the thread itself began, which a resumed session’s process does 
   const io = fixtureIo(files)
   io.exec = async (file) =>
     file.endsWith('ps') ? '42 Sat Oct 10 15:29:12 2026 /bin/codex' : 'p42\nn/repo\n'
-  const [resumed] = (await collectCodex('/codex', io)).sessions
+  const [resumed] = (await collectOnMac('/codex', io)).sessions
   expect(resumed.startedAtMs).toBe(Date.parse('Sat Oct 10 15:29:12 2026 UTC'))
   expect(resumed.threadStartedAtMs).toBe(Date.parse('2026-09-01T08:00:00.000Z'))
 
   const undated = fixtureIo({ ...files, '/codex/sessions/rollout-a.jsonl': meta({}) })
   undated.exec = io.exec
-  expect('threadStartedAtMs' in (await collectCodex('/codex', undated)).sessions[0]).toBe(false)
+  expect('threadStartedAtMs' in (await collectOnMac('/codex', undated)).sessions[0]).toBe(false)
 })
 
 it('keeps live CLI processes even without a rollout and reports process failures', async () => {
   const io = fixtureIo()
   io.exec = async (file) => (file.endsWith('ps') ? '42 Sat Oct 10 15:29:12 2026 codex' : 'n/plain')
-  expect((await collectCodex('/codex', io)).sessions[0]).toMatchObject({
+  expect((await collectOnMac('/codex', io)).sessions[0]).toMatchObject({
     provider: 'codex',
     projectLabel: 'plain',
     usage: null
@@ -241,7 +253,7 @@ it('keeps live CLI processes even without a rollout and reports process failures
   io.exec = async () => {
     throw new Error('denied')
   }
-  expect((await collectCodex('/codex', io)).sources[0].ok).toBe(false)
+  expect((await collectOnMac('/codex', io)).sources[0].ok).toBe(false)
 })
 it('skips Codex processes running inside an app bundle (helpers, not user sessions)', async () => {
   const io = fixtureIo()
@@ -249,7 +261,7 @@ it('skips Codex processes running inside an app bundle (helpers, not user sessio
     file.endsWith('ps')
       ? '42 Sat Oct 10 15:29:12 2026 codex'
       : 'n/Applications/ChatGPT.app/Contents/Resources'
-  expect((await collectCodex('/codex', io)).sessions).toEqual([])
+  expect((await collectOnMac('/codex', io)).sessions).toEqual([])
 })
 
 it.each([
@@ -265,10 +277,10 @@ it.each([
   })
   io.exec = async (file) =>
     file.endsWith('ps') ? '42 Sat Oct 10 15:29:12 2026 /bin/codex' : 'p42\nn/repo\n'
-  const [unwatched] = (await collectCodex('/codex', io)).sessions
+  const [unwatched] = (await collectOnMac('/codex', io)).sessions
   expect(unwatched).toMatchObject({ key: 'codex:a', accountKey: null })
   expect(unwatched.accountConfidence).toBeUndefined()
-  const [session] = (await collectCodex('/codex', io, undefined, true)).sessions
+  const [session] = (await collectOnMac('/codex', io, undefined, true)).sessions
   const named = 'creator_account_id' in creator
   expect(session.key).toBe('codex:a')
   expect(session.accountKey).toBe(named ? accountKey('codex', 'acct_CANARY_ID') : null)
@@ -303,7 +315,7 @@ it.each(['/company/repo', '/company/repo/.claude/.worktree/task'])(
     })
     io.exec = async (file) =>
       file.endsWith('ps') ? '42 Sat Oct 10 15:29:12 2026 codex' : `n${cwd}`
-    const batch = await collectCodex('/codex', io)
+    const batch = await collectOnMac('/codex', io)
     expect(batch.sessions[0]).toMatchObject({
       projectRoot: '/company/repo',
       projectLabel: 'repo',
@@ -407,11 +419,11 @@ it('passes the open tool category through collection and removes departed proces
   let isRunning = true
   io.exec = async (file) =>
     file.endsWith('ps') ? (isRunning ? '42 Sat Oct 10 15:29:12 2026 codex' : '') : 'p42\nn/repo\n'
-  expect((await collectCodex('/codex', io)).sessions).toMatchObject([
+  expect((await collectOnMac('/codex', io)).sessions).toMatchObject([
     { activity: 'editing', currentTool: { name: 'apply_patch', category: 'edit' } }
   ])
   isRunning = false
-  expect((await collectCodex('/codex', io)).sessions).toEqual([])
+  expect((await collectOnMac('/codex', io)).sessions).toEqual([])
 })
 
 it('keeps exec sessions whose prompt mentions helper command names', () => {
@@ -436,16 +448,16 @@ it('ages quiet assistant output to idle on cached tails while retaining open too
     file.endsWith('ps') ? '42 Sat Oct 10 15:29:12 2026 codex' : 'p42\nn/repo\n'
   const atMs = Date.parse('2026-10-12T01:00:00Z')
   expect(
-    (await collectCodex('/codex', io, undefined, false, atMs + 1000)).sessions[0].activity
+    (await collectOnMac('/codex', io, undefined, false, atMs + 1000)).sessions[0].activity
   ).toBe('thinking')
   expect(
-    (await collectCodex('/codex', io, undefined, false, atMs + 60000)).sessions[0].activity
+    (await collectOnMac('/codex', io, undefined, false, atMs + 60000)).sessions[0].activity
   ).toBe('idle')
   files['/codex/sessions/rollout-a.jsonl'] = `${meta}\n${activityRecords([
     { type: 'function_call', call_id: 'call-a', name: 'exec_command' }
   ])}`
   expect(
-    (await collectCodex('/codex', io, undefined, false, atMs + 60000)).sessions[0].activity
+    (await collectOnMac('/codex', io, undefined, false, atMs + 60000)).sessions[0].activity
   ).toBe('running')
 })
 
@@ -471,7 +483,7 @@ it('shows threads an app-server hosts (desktop app, IDE, plugins) while their ro
       ? '43 Sat Oct 10 15:29:12 2026 /Applications/Codex.app/codex app-server'
       : ''
   )
-  const batch = await collectCodex('/codex', io, undefined, false, now)
+  const batch = await collectOnMac('/codex', io, undefined, false, now)
   expect(batch.sessions).toHaveLength(1)
   expect(batch.sessions[0]).toMatchObject({
     key: 'codex:live',
@@ -491,7 +503,7 @@ it('shows no hosted thread when no app-server is running', async () => {
     '/repo/.git': null
   })
   io.exec = vi.fn(async () => '')
-  expect((await collectCodex('/codex', io, undefined, false, 1500)).sessions).toEqual([])
+  expect((await collectOnMac('/codex', io, undefined, false, 1500)).sessions).toEqual([])
 })
 
 it('walks the session folders fully only every 30 s while app-servers run, and follows fresh rollouts between', async () => {
@@ -517,7 +529,7 @@ it('walks the session folders fully only every 30 s while app-servers run, and f
       : ''
   )
   const list = vi.spyOn(io, 'list')
-  await collectCodex('/codex', io, undefined, false, now)
+  await collectOnMac('/codex', io, undefined, false, now)
   const fullWalk = list.mock.calls.length
   expect(fullWalk).toBeGreaterThan(0)
 
@@ -527,7 +539,7 @@ it('walks the session folders fully only every 30 s while app-servers run, and f
   files['/codex/sessions/2026/10/rollout-live.jsonl'] += activityRecords([
     { type: 'local_shell_call', call_id: 'c1' }
   ])
-  const between = await collectCodex('/codex', io, undefined, false, now)
+  const between = await collectOnMac('/codex', io, undefined, false, now)
   expect(list.mock.calls.length).toBe(fullWalk)
   expect(between.sessions.map((session) => [session.key, session.activity])).toEqual([
     ['codex:live', 'running']
@@ -538,14 +550,15 @@ it('walks the session folders fully only every 30 s while app-servers run, and f
   now += 25_000
   times.late = now - 1_000
   times.live = now - 1_000
-  const later = await collectCodex('/codex', io, undefined, false, now)
+  const later = await collectOnMac('/codex', io, undefined, false, now)
   expect(list.mock.calls.length).toBeGreaterThan(fullWalk)
   expect(later.sessions.map((session) => session.key).sort()).toEqual(['codex:late', 'codex:live'])
 })
 
 // One app-server and one hosted thread in /repo whose rollout time the test moves.
 function hostedThread(tail: string, extra: object = {}) {
-  const path = '/codex/sessions/rollout-h.jsonl'
+  // Joined as the bridge joins it, so the stat below matches the path it asks about.
+  const path = join('/codex', 'sessions', 'rollout-h.jsonl')
   const meta = JSON.stringify({
     type: 'session_meta',
     payload: { id: 'h', cwd: '/repo', ...extra }
@@ -564,7 +577,7 @@ function hostedThread(tail: string, extra: object = {}) {
       : ''
   )
   const keys = async (now: number): Promise<string[]> =>
-    (await collectCodex('/codex', io, undefined, false, now)).sessions.map(({ key }) => key)
+    (await collectOnMac('/codex', io, undefined, false, now)).sessions.map(({ key }) => key)
   return { path, files, io, written, keys }
 }
 
@@ -595,7 +608,7 @@ it('lets a quiet hosted thread with no open tool leave after two minutes', async
 it('gives a hosted thread with no start time in its rollout one start time, however often it is written', async () => {
   const { path, files, io, written } = hostedThread(activityRecords([{ type: 'reasoning' }]))
   const startOf = async (now: number): Promise<number | undefined> =>
-    (await collectCodex('/codex', io, undefined, false, now)).sessions[0]?.startedAtMs
+    (await collectOnMac('/codex', io, undefined, false, now)).sessions[0]?.startedAtMs
   written.atMs = 1_000_000
   const first = await startOf(1_000_000)
   files[path] += `\n${activityRecords([{ type: 'reasoning' }])}`
@@ -608,12 +621,12 @@ it('keeps the key a Codex process was first shown under once its rollout appears
   const io = fixtureIo(files)
   io.exec = async (file) =>
     file.endsWith('ps') ? '42 Sat Oct 10 15:29:12 2026 /bin/codex' : 'p42\nn/repo\n'
-  const [before] = (await collectCodex('/codex', io)).sessions
+  const [before] = (await collectOnMac('/codex', io)).sessions
   files['/codex/sessions/rollout-a.jsonl'] = JSON.stringify({
     type: 'session_meta',
     payload: { id: 'a', cwd: '/repo' }
   })
-  const [after] = (await collectCodex('/codex', io, undefined, false, Date.now() + 60_000)).sessions
+  const [after] = (await collectOnMac('/codex', io, undefined, false, Date.now() + 60_000)).sessions
   expect(before.key).toBe(`codex:pid-42-${Date.parse('Sat Oct 10 15:29:12 2026 UTC')}`)
   expect(after).toMatchObject({ key: before.key, sessionId: 'a' })
 })
@@ -633,7 +646,7 @@ it('lets the newest Codex process claim the newest rollout in a shared folder', 
     file.endsWith('ps')
       ? '42 Sat Oct 10 15:29:12 2026 /bin/codex\n43 Sat Oct 10 15:39:12 2026 /bin/codex'
       : `p${args[2]}\nn/repo\n`
-  const { sessions } = await collectCodex('/codex', io)
+  const { sessions } = await collectOnMac('/codex', io)
   const owners = Object.fromEntries(sessions.map((session) => [session.pid, session.key]))
   expect(owners).toEqual({ 42: 'codex:old', 43: 'codex:new' })
 })
@@ -643,6 +656,6 @@ it('strips control and bidi override characters from a name taken from a folder'
   const io = fixtureIo()
   io.exec = async (file) =>
     file.endsWith('ps') ? '42 Sat Oct 10 15:29:12 2026 codex' : `p42\nn${cwd}\n`
-  const [session] = (await collectCodex('/codex', io)).sessions
+  const [session] = (await collectOnMac('/codex', io)).sessions
   expect(session.name).toBe('repo')
 })

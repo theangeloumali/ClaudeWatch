@@ -32,6 +32,8 @@ it('posts each Codex total on the tick that reads it, while the feed holds the s
     io,
     claudeRoots: [],
     codexRoot: '/codex',
+    // The process table and folder above are what `ps` and `lsof` print on macOS.
+    platform: 'darwin',
     now: () => now,
     onCodexTotals: (totals) => posted.push(totals)
   })

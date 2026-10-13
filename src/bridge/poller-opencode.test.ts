@@ -33,6 +33,8 @@ function pollerFor(environment = ''): BridgePoller {
     claudeRoots: [],
     codexRoot: '/codex',
     opencodeRoot: root,
+    // The process table and folder above are what `ps` and `lsof` print on macOS.
+    platform: 'darwin',
     now: () => NOW
   })
 }

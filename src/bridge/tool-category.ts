@@ -29,13 +29,15 @@ const categories: Record<string, ToolCategory> = {
   patch: 'edit',
   apply_patch: 'edit',
   bash: 'run',
+  shell: 'run',
   exec: 'run',
   exec_command: 'run',
   web_search: 'web',
   webfetch: 'web',
   websearch: 'web',
   codesearch: 'web',
-  task: 'agent'
+  task: 'agent',
+  subagent: 'agent'
 }
 export function toolCategory(name: string): ToolCategory {
   return Object.hasOwn(categories, name) ? categories[name] : 'other'

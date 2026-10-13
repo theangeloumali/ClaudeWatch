@@ -94,6 +94,8 @@ it.each([
     'idle',
     'none'
   ],
+  ['an OpenCode 2 reply the owner interrupted', { error: 'aborted' }, 'idle', 'none'],
+  ['an OpenCode 2 reply that failed', { error: 'provider.transport' }, 'idle', 'error'],
   ['a reply that failed', { error: 'APIError', completed: NOW - 5 }, 'idle', 'error'],
   ['a reply that failed mid-step', { error: 'UnknownError' }, 'idle', 'error'],
   ['a prompt just sent', { role: 'user', time_created: NOW - 800 }, 'thinking', 'none'],

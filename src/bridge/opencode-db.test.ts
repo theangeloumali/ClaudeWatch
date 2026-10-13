@@ -4,7 +4,10 @@ import { symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { systemIo } from './io'
+import { collectOpencode } from './opencode'
+import { splitCommandLine } from '../shared/platform-process'
 import { OPENCODE_STATEMENTS, type OpencodeDbError, type OpencodeStatement } from './opencode-db'
+import { fixtureIo } from './__fixtures__/helpers'
 import { buildOpencodeDb, insertSession, OPENCODE_SCHEMA } from './__fixtures__/opencode-db'
 
 const roots: string[] = []
@@ -16,6 +19,66 @@ function fixture(fill: Parameters<typeof buildOpencodeDb>[0] = () => {}, schema 
   roots.push(built.root)
   return built
 }
+// The tables OpenCode 2.0 moved its sessions to, as 2.0.27 creates them, beside the 1.x ones it
+// keeps but no longer writes.
+const OPENCODE_2_SCHEMA = `
+  CREATE TABLE session_v2 (
+    id text PRIMARY KEY, project_id text NOT NULL, parent_id text, slug text NOT NULL,
+    directory text NOT NULL, title text, version text NOT NULL, agent text,
+    tokens_input integer DEFAULT 0 NOT NULL, tokens_output integer DEFAULT 0 NOT NULL,
+    tokens_reasoning integer DEFAULT 0 NOT NULL, tokens_cache_read integer DEFAULT 0 NOT NULL,
+    tokens_cache_write integer DEFAULT 0 NOT NULL, time_created integer NOT NULL,
+    time_updated integer NOT NULL, time_archived integer
+  );
+  CREATE INDEX session_v2_parent_idx ON session_v2 (parent_id);
+  CREATE TABLE session_message (
+    id text PRIMARY KEY, session_id text NOT NULL, type text NOT NULL, seq integer NOT NULL,
+    time_created integer NOT NULL, time_updated integer NOT NULL, data text NOT NULL
+  );
+  CREATE UNIQUE INDEX session_message_session_seq_idx ON session_message (session_id, seq);
+  CREATE INDEX session_message_session_time_created_id_idx
+    ON session_message (session_id, time_created, id);
+`
+const BOTH_SCHEMAS = OPENCODE_SCHEMA + OPENCODE_2_SCHEMA
+function insertSession2(
+  db: DatabaseSync,
+  row: {
+    id: string
+    directory: string
+    parentId?: string
+    updatedAtMs: number
+    archivedAtMs?: number
+  }
+): void {
+  db.prepare(
+    `INSERT INTO session_v2 (id, project_id, parent_id, slug, directory, title, version, agent,
+       tokens_input, tokens_output, time_created, time_updated, time_archived)
+     VALUES (?, 'p', ?, 'slug', ?, ?, '2.0.27', 'build', 1200, 300, ?, ?, ?)`
+  ).run(
+    row.id,
+    row.parentId ?? null,
+    row.directory,
+    row.id,
+    row.updatedAtMs - 1000,
+    row.updatedAtMs,
+    row.archivedAtMs ?? null
+  )
+}
+function insertMessage2(
+  db: DatabaseSync,
+  row: { id: string; sessionId: string; type: string; seq: number; atMs: number; data: object }
+): void {
+  db.prepare('INSERT INTO session_message VALUES (?, ?, ?, ?, ?, ?, ?)').run(
+    row.id,
+    row.sessionId,
+    row.type,
+    row.seq,
+    row.atMs,
+    row.atMs,
+    JSON.stringify(row.data)
+  )
+}
+
 const statements = Object.entries(OPENCODE_STATEMENTS)
 const failure = (reason: OpencodeDbError['reason']) =>
   expect.objectContaining({ name: 'OpencodeDbError', reason })
@@ -25,26 +88,167 @@ const readRoots = (target: string) =>
 it.each(statements)('keeps the %s statement to the session tables, bounded and keyed', (_, sql) => {
   const tables = [...sql.matchAll(/\b(?:FROM|JOIN)\s+(\w+)/gi)].map((match) => match[1])
   expect(tables.length).toBeGreaterThan(0)
-  for (const table of tables) expect(['session', 'message', 'part']).toContain(table)
+  const sessionTables = ['session', 'message', 'part', 'session_v2', 'session_message']
+  for (const table of tables) expect(sessionTables).toContain(table)
   expect(sql).not.toMatch(/credential|account|auth|\*/i)
   expect(sql).toMatch(/^\s*SELECT\b/i)
   expect(sql).toMatch(/\bLIMIT \d+\s*$/)
-  expect(sql).toMatch(/\b(session_id|parent_id|directory) = \?/)
+  // Keyed by one session, parent or folder, or bounded to the sessions written since a time.
+  expect(sql).toMatch(/\b((session_id|parent_id|directory) = \?|time_updated >= \?)/)
   expect(sql).toMatch(/\bINDEXED BY \w+/)
 })
 
 it.each(statements)('answers the %s statement from an index, never a table scan', (_, sql) => {
-  const { path } = fixture()
+  const { path } = fixture(() => {}, BOTH_SCHEMAS)
   const db = new DatabaseSync(path, { readOnly: true })
   try {
     const values = [...sql.matchAll(/\?/g)].map(() => 'x')
     const plan = db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...values)
     const steps = plan.map((step) => String(step.detail))
     expect(steps.some((step) => step.startsWith('SEARCH'))).toBe(true)
-    expect(steps.filter((step) => step.startsWith('SCAN'))).toEqual([])
+    // Walking the parts of the one message found is no table scan.
+    const scans = steps.filter(
+      (step) => step.startsWith('SCAN') && !/^SCAN \w+ VIRTUAL TABLE/.test(step)
+    )
+    expect(scans).toEqual([])
   } finally {
     db.close()
   }
+})
+
+// An OpenCode 2 session mid-turn: a reply that has run one tool and is running another.
+function workingSession2(db: DatabaseSync, directory: string, atMs: number): void {
+  insertSession2(db, { id: 'ses_v2', directory, updatedAtMs: atMs })
+  insertSession2(db, { id: 'ses_v2_child', parentId: 'ses_v2', directory, updatedAtMs: atMs })
+  insertSession2(db, { id: 'ses_v2_gone', directory, updatedAtMs: atMs + 1, archivedAtMs: atMs })
+  insertMessage2(db, { id: 'msg_1', sessionId: 'ses_v2', type: 'user', seq: 1, atMs, data: {} })
+  insertMessage2(db, {
+    id: 'msg_2',
+    sessionId: 'ses_v2',
+    type: 'assistant',
+    seq: 2,
+    atMs: atMs + 100,
+    data: {
+      time: { created: atMs + 100 },
+      content: [
+        { type: 'reasoning', text: 'SECRET_PROMPT' },
+        { type: 'tool', name: 'shell', state: { status: 'completed', input: 'SECRET_PROMPT' } },
+        { type: 'tool', name: 'read', state: { status: 'running' } }
+      ]
+    }
+  })
+  // Bookkeeping rows a session writes between turns say nothing about the turn.
+  insertMessage2(db, {
+    id: 'msg_3',
+    sessionId: 'ses_v2',
+    type: 'system',
+    seq: 3,
+    atMs: atMs + 200,
+    data: {}
+  })
+}
+
+it('asks an OpenCode 2 database the same questions, and finds a message’s parts inside it', async () => {
+  const { path } = fixture((db) => workingSession2(db, 'C:/a', 6000), BOTH_SCHEMAS)
+  const rows = await systemIo.readOpencode(path, (query) => ({
+    roots: query('rootSessions', 'C:/a'),
+    recent: query('recentRootSessions', 5000),
+    children: query('childSessions', 'ses_v2'),
+    message: query('newestMessage', 'ses_v2'),
+    parts: query('messageParts', 'msg_2', 'ses_v2')
+  }))
+  expect(rows.roots).toMatchObject([{ id: 'ses_v2', tokens_input: 1200, time_updated: 6000 }])
+  expect(rows.recent).toEqual([
+    { id: 'ses_v2', directory: 'C:/a', time_created: 5000, time_updated: 6000 }
+  ])
+  expect(rows.children).toMatchObject([{ id: 'ses_v2_child', agent: 'build' }])
+  expect(rows.message).toEqual([
+    {
+      id: 'msg_2',
+      time_created: 6100,
+      role: 'assistant',
+      finish: null,
+      completed: null,
+      error: null
+    }
+  ])
+  expect(rows.parts).toEqual([
+    { type: 'tool', tool: 'read', status: 'running' },
+    { type: 'tool', tool: 'shell', status: 'completed' },
+    { type: 'reasoning', tool: null, status: null }
+  ])
+  expect(JSON.stringify(rows)).not.toContain('SECRET_PROMPT')
+})
+
+it('says why an OpenCode 2 reply stopped, by the type it records', async () => {
+  const { path } = fixture((db) => {
+    insertSession2(db, { id: 'ses_v2', directory: 'C:/a', updatedAtMs: 6000 })
+    const data = { time: { created: 6000, completed: 6100 }, error: { type: 'aborted' } }
+    insertMessage2(db, {
+      id: 'msg_a',
+      sessionId: 'ses_v2',
+      type: 'assistant',
+      seq: 1,
+      atMs: 6000,
+      data
+    })
+  }, BOTH_SCHEMAS)
+  const [message] = await systemIo.readOpencode(path, (query) => query('newestMessage', 'ses_v2'))
+  expect(message).toMatchObject({ error: 'aborted', completed: 6100 })
+})
+
+it('says an OpenCode 2 database whose tables changed has changed, never reading the stale 1.x ones', async () => {
+  const schema = BOTH_SCHEMAS.replace(
+    'INDEX session_v2_parent_idx ON session_v2',
+    'INDEX other_idx ON session_v2'
+  )
+  const { path } = fixture(
+    (db) => insertSession(db, { id: 'ses_v1', directory: '/repo', updatedAtMs: 9000 }),
+    schema
+  )
+  await expect(readRoots(path)).rejects.toEqual(failure('changed'))
+})
+
+it('shows the OpenCode 2 session a process is working in, not the stale 1.x one', async () => {
+  const startedAtMs = 5000
+  const { root } = fixture((db) => {
+    insertSession(db, { id: 'ses_v1', directory: 'C:/Users/a/repo', updatedAtMs: 9000 })
+    workingSession2(db, 'C:/Users/a/repo', 9000)
+  }, BOTH_SCHEMAS)
+  const io = fixtureIo()
+  io.readOpencode = systemIo.readOpencode
+  const opencode = {
+    pid: 42,
+    lstart: '0',
+    startedAtMs,
+    argv: splitCommandLine('C:\\x\\opencode.exe')
+  }
+  const { sessions } = await collectOpencode(root, io, async () => [opencode], 9500, 'win32')
+  expect(sessions).toMatchObject([
+    {
+      key: 'opencode:ses_v2',
+      cwd: 'C:\\Users\\a\\repo',
+      activity: 'reading',
+      currentTool: { name: 'read' },
+      usage: { own: { input: 1200, output: 300 } },
+      subagents: [{ id: 'ses_v2_child', type: 'build', activity: 'thinking' }]
+    }
+  ])
+})
+
+it('finds the root sessions written since a time, newest first, with their folders', async () => {
+  const { path } = fixture((db) => {
+    insertSession(db, { id: 'ses_old', directory: 'C:/old', updatedAtMs: 4000 })
+    insertSession(db, { id: 'ses_a', directory: 'C:/a', updatedAtMs: 6000 })
+    insertSession(db, { id: 'ses_b', directory: 'C:/b', updatedAtMs: 7000 })
+    insertSession(db, { id: 'ses_child', parentId: 'ses_a', directory: 'C:/a', updatedAtMs: 8000 })
+    insertSession(db, { id: 'ses_gone', directory: 'C:/c', updatedAtMs: 9000, archivedAtMs: 9000 })
+  })
+  const rows = await systemIo.readOpencode(path, (query) => query('recentRootSessions', 5000))
+  expect(rows).toEqual([
+    { id: 'ses_b', directory: 'C:/b', time_created: 6000, time_updated: 7000 },
+    { id: 'ses_a', directory: 'C:/a', time_created: 5000, time_updated: 6000 }
+  ])
 })
 
 it('runs a fixed statement by name and no other text', async () => {

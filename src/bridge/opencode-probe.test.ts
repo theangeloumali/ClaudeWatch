@@ -26,8 +26,15 @@ it('reads the installed OpenCode database through the fixed statements, or says 
   const direct = new DatabaseSync(REAL_DATABASE, { readOnly: true })
   let newestRoot: Record<string, unknown> | undefined
   try {
+    // OpenCode 2 writes its own table, and the reader asks that one wherever it exists.
+    const isOpencode2 = direct
+      .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'session_v2'")
+      .get()
+    const table = isOpencode2 ? 'session_v2' : 'session'
     newestRoot = direct
-      .prepare('SELECT id, directory FROM session WHERE parent_id IS NULL ORDER BY id DESC LIMIT 1')
+      .prepare(
+        `SELECT id, directory FROM ${table} WHERE parent_id IS NULL ORDER BY id DESC LIMIT 1`
+      )
       .get()
   } finally {
     direct.close()
