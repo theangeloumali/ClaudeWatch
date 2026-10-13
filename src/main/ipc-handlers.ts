@@ -1,5 +1,6 @@
 import { BrowserWindow, app, shell } from 'electron'
-import { isAbsolute, join } from 'path'
+import { join } from 'path'
+import { isAbsoluteFolder } from '../shared/platform-process'
 import { handleTrusted } from './window-factory'
 import { conformSettings } from './settings-shape'
 import { openTerminal } from './terminal-opener'
@@ -66,6 +67,21 @@ interface IpcHandlerOptions {
 
 const ACCOUNTS_OFF: AccountsState = { status: 'off' }
 const ALIAS_REFUSED_OFF: AliasResult = { success: false, reason: 'off' }
+
+// \\host\share, and its //, \\?\ and \\.\ forms: a terminal opened there connects over SMB and
+// hands the host the user's NTLM response.
+const WINDOWS_UNC_PREFIX = /^[\\/]{2}/
+
+// The renderer names the folder, so a terminal opens only where a session the app tracks runs.
+export function isOpenableFolder(
+  folder: string,
+  sessionFolders: readonly string[],
+  platform: NodeJS.Platform = process.platform
+): boolean {
+  if (!isAbsoluteFolder(folder, platform)) return false
+  if (platform === 'win32' && WINDOWS_UNC_PREFIX.test(folder)) return false
+  return sessionFolders.includes(folder)
+}
 
 export function setupIpcHandlers(options: IpcHandlerOptions): void {
   const {
@@ -246,10 +262,14 @@ export function setupIpcHandlers(options: IpcHandlerOptions): void {
   handle(
     'terminal:open',
     (_event: Electron.IpcMainInvokeEvent, projectPath: string, terminalType?: string) => {
-      if (!projectPath || typeof projectPath !== 'string' || !isAbsolute(projectPath)) {
+      if (terminalType !== undefined && !isTerminalType(terminalType)) return { success: false }
+      const sessionFolders = [
+        ...tracker.getInstances().map((instance) => instance.projectPath),
+        ...(getOfficeSnapshot()?.sessions.map((session) => session.cwd) ?? [])
+      ]
+      if (typeof projectPath !== 'string' || !isOpenableFolder(projectPath, sessionFolders)) {
         return { success: false }
       }
-      if (terminalType !== undefined && !isTerminalType(terminalType)) return { success: false }
       return openTerminal(projectPath, terminalType)
     }
   )
