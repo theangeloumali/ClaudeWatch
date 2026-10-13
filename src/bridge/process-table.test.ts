@@ -102,6 +102,18 @@ describe('the process table on Windows', () => {
 })
 
 describe('remembered folders', () => {
+  it('asks as the platform it runs on when no platform is named', async () => {
+    const io = fixtureIo()
+    const exec = vi.fn(async () => 'n/repo\n')
+    io.exec = exec
+    const folder = await rememberedFolder(io, new Map(), { pid: 42, startedAtMs: 1 })
+    // Only lsof can name another process's folder; Windows has no such question to ask.
+    if (process.platform === 'win32') {
+      expect(folder).toBeUndefined()
+      expect(exec).not.toHaveBeenCalled()
+    } else
+      expect(exec).toHaveBeenCalledWith('/usr/sbin/lsof', ['-a', '-p', '42', '-d', 'cwd', '-Fn'])
+  })
   it('asks the platform it is told where a process runs, once per pid and start', async () => {
     const io = fixtureIo()
     const exec = vi.fn(async () => 'n/repo\n')
