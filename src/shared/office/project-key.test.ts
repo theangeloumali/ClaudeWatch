@@ -36,6 +36,19 @@ describe('projectKey', () => {
     expect(projectKey('C:\\\\')).toBe(projectKey('C:\\'))
   })
 
+  it('treats a Windows root case-blind and either slash alike, as editors report it both ways', () => {
+    const key = projectKey('c:\\repo')
+    expect(projectKey('C:\\REPO\\')).toBe(key)
+    expect(projectKey('C:/repo')).toBe(key)
+    expect(projectKey('C:\\')).toBe(projectKey('c:/'))
+    expect(projectKey('\\\\Server\\Share\\repo')).toBe(projectKey('\\\\server\\share\\REPO\\'))
+    expect(projectKey('c:\\repo')).not.toBe(projectKey('c:\\other'))
+  })
+
+  it('keeps POSIX roots case-sensitive, since macOS and Linux folders can differ by case', () => {
+    expect(projectKey('/Users/dev/Repo')).not.toBe(projectKey('/Users/dev/repo'))
+  })
+
   it('separates different roots', () => {
     expect(projectKey('/Users/dev/a')).not.toBe(projectKey('/Users/dev/b'))
   })
