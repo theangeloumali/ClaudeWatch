@@ -2,6 +2,8 @@ import {
   checkedPid,
   filetimeToMs,
   powershellArgs,
+  type PowerShellScript,
+  powerShellScript,
   startTimeQuery
 } from '../shared/platform-process'
 import type { BridgeIo } from './io'
@@ -39,8 +41,10 @@ const isCreationTicks = (procStart: string, platform: NodeJS.Platform): boolean 
   platform === 'win32' && Number(procStart) > 3e17
 
 // The ticks of a process as Claude Code asked for them when it wrote the record.
-export const creationTicksScript = (pid: number): string =>
-  `(Get-CimInstance Win32_Process -Filter "ProcessId=${checkedPid(pid)}").CreationDate.Ticks`
+export const creationTicksScript = (pid: number): PowerShellScript =>
+  powerShellScript(
+    `(Get-CimInstance Win32_Process -Filter "ProcessId=${checkedPid(pid)}").CreationDate.Ticks`
+  )
 
 function ownStartQuery(entry: RegistryEntry, platform: NodeJS.Platform) {
   const query = startTimeQuery(entry.pid, platform)

@@ -4,7 +4,7 @@ import { expect, it, vi } from 'vitest'
 
 const { spawn, execFile } = vi.hoisted(() => ({ spawn: vi.fn(), execFile: vi.fn() }))
 vi.mock('node:child_process', () => ({ spawn, execFile }))
-import { childEnv, POWERSHELL, powershellArgs } from './platform-process'
+import { childEnv, POWERSHELL, POWERSHELL_CWD, powershellArgs } from './platform-process'
 import { POWERSHELL_HOST_SCRIPT, PowerShellHost } from './powershell-host'
 
 function child(): EventEmitter & Record<'stdin' | 'stdout' | 'stderr', PassThrough> {
@@ -28,6 +28,7 @@ it('starts the kept shell hidden, on pipes, with nothing of this process’s env
     powershellArgs(POWERSHELL_HOST_SCRIPT),
     {
       env: childEnv('win32'),
+      cwd: POWERSHELL_CWD,
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true
     }
@@ -47,6 +48,11 @@ it('runs a script cold, hidden, when the kept shell cannot start', async () => {
   expect(execFile.mock.calls[0].slice(0, 3)).toEqual([
     POWERSHELL,
     powershellArgs('$PID'),
-    expect.objectContaining({ env: childEnv('win32'), timeout: 3000, windowsHide: true })
+    expect.objectContaining({
+      env: childEnv('win32'),
+      cwd: POWERSHELL_CWD,
+      timeout: 3000,
+      windowsHide: true
+    })
   ])
 })

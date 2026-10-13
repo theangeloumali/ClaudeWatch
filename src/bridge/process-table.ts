@@ -2,6 +2,7 @@ import {
   filetimeToMs,
   POWERSHELL,
   powershellArgs,
+  powerShellScript,
   splitCommandLine
 } from '../shared/platform-process'
 import type { BridgeIo } from './io'
@@ -39,7 +40,8 @@ export function parseProcessTable(output: string): ProcessRow[] {
 // to the 100 ns Claude Code records (CIM cuts them to the microsecond). CIM is costly, so it is
 // asked only for command lines and CreationDate ticks: once per process that outlived a run, at
 // most every 10 s. The kept host carries them between runs; a fresh shell asks for all at once.
-export const WINDOWS_PROCESS_TABLE_SCRIPT = `$session = [Diagnostics.Process]::GetCurrentProcess().SessionId
+export const WINDOWS_PROCESS_TABLE_SCRIPT =
+  powerShellScript(`$session = [Diagnostics.Process]::GetCurrentProcess().SessionId
 $first = $null -eq $global:tails
 if ($first) { $global:tails = @{}; $global:waiting = @{}; $global:clock = [Diagnostics.Stopwatch]::StartNew(); $global:askedAt = -10000 }
 $lines = $global:tails
@@ -79,7 +81,7 @@ if ($changed -or $null -eq $global:table) {
     if ($lines[$key]) { $key.Replace(':', ' ') + ' ' + $lines[$key] }
   }) -join [char]10
 }
-$global:table`
+$global:table`)
 
 // A row a line: pid, FILETIME, CreationDate ticks and the command line in base64, which costs
 // PowerShell a third of what JSON does.

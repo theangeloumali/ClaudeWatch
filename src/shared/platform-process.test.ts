@@ -1,11 +1,15 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, expectTypeOf, it } from 'vitest'
 import {
   POWERSHELL,
+  POWERSHELL_CWD,
   checkedPid,
   childEnv,
   filetimeToMs,
   isAbsoluteFolder,
+  type PowerShellArgs,
   powershellArgs,
+  type PowerShellScript,
+  powerShellScript,
   powershellScriptOf,
   programName,
   splitCommandLine,
@@ -43,6 +47,16 @@ describe('powershell', () => {
     ])
   })
 
+  it('brands the scripts the bridge builds, so plain text is not one of them where it is typed', () => {
+    const script = powerShellScript('$PID')
+    expectTypeOf(script).toEqualTypeOf<PowerShellScript>()
+    expectTypeOf<string>().not.toMatchTypeOf<PowerShellScript>()
+    expectTypeOf(powershellArgs(script)).toEqualTypeOf<PowerShellArgs>()
+    expectTypeOf(powershellArgs('$PID')).toEqualTypeOf<string[]>()
+    expect(powershellArgs(script)).toEqual(powershellArgs('$PID'))
+    expectTypeOf(startTimeQuery(1, 'win32').args).toEqualTypeOf<string[]>()
+  })
+
   it('gives back the one script of an exact powershellArgs call, and refuses anything else', () => {
     expect(powershellScriptOf(powershellArgs('Get-Date'))).toBe('Get-Date')
     for (const args of [
@@ -73,8 +87,23 @@ describe('childEnv', () => {
 
   it('adds only what PowerShell needs to start on Windows', () => {
     const env = childEnv('win32')
-    expect(Object.keys(env).sort()).toEqual(['LC_ALL', 'SystemRoot', 'TZ', 'windir'])
+    expect(Object.keys(env).sort()).toEqual([
+      'LC_ALL',
+      'PSModulePath',
+      'SystemRoot',
+      'TZ',
+      'windir'
+    ])
     expect(env.SystemRoot).toMatch(/^[A-Za-z]:\\/)
+  })
+
+  // Unset, PowerShell 5.1 builds a module path holding a literal `%ProgramFiles%\...` entry,
+  // which resolves against the working folder: a module planted there would autoload.
+  it('names one absolute module path on Windows, the inbox modules', () => {
+    expect(childEnv('win32').PSModulePath).toBe(
+      `${childEnv('win32').SystemRoot}\\System32\\WindowsPowerShell\\v1.0\\Modules`
+    )
+    expect(POWERSHELL_CWD).toBe(`${childEnv('win32').SystemRoot}\\System32`)
   })
 })
 

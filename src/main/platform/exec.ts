@@ -1,10 +1,8 @@
 import { execFile } from 'child_process'
-import { POWERSHELL, powershellScriptOf } from '../../shared/platform-process'
+import { POWERSHELL_CWD, powershellScriptOf, programName } from '../../shared/platform-process'
 
-function assertSafePowerShell(bin: string, args: string[]): void {
-  // Throws unless the call is exactly powershellArgs(script).
-  if (bin.toLowerCase() === POWERSHELL.toLowerCase()) powershellScriptOf(args)
-}
+// Every spelling that starts a PowerShell is held to one script and nothing after it.
+const isPowerShell = (bin: string): boolean => ['powershell', 'pwsh'].includes(programName(bin))
 
 export function execFilePromise(
   bin: string,
@@ -12,7 +10,9 @@ export function execFilePromise(
   options?: { timeout?: number; env?: NodeJS.ProcessEnv }
 ): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
-    assertSafePowerShell(bin, args)
+    const runsPowerShell = isPowerShell(bin)
+    // Throws unless the call is exactly powershellArgs(script).
+    if (runsPowerShell) powershellScriptOf(args)
     const cb = (err: Error | null, stdout: string | Buffer, stderr: string | Buffer): void => {
       if (err) {
         reject(err)
@@ -23,6 +23,8 @@ export function execFilePromise(
 
     // No console window flashes up on Windows; ignored elsewhere. Not for wt.exe, which
     // honours SW_HIDE and would open hidden.
-    execFile(bin, args, { ...options, windowsHide: true }, cb)
+    // PowerShell resolves part of its module path against its working folder: never the launch one.
+    const cwd = runsPowerShell ? { cwd: POWERSHELL_CWD } : {}
+    execFile(bin, args, { ...options, ...cwd, windowsHide: true }, cb)
   })
 }

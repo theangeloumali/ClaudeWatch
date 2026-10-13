@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { readFile } from 'node:fs/promises'
 import { posix, win32 } from 'node:path'
 import { resolveProject } from './project-root'
@@ -76,6 +76,54 @@ describe.each([
   it('uses cwd for non-repositories', async () => {
     const plain = path.join(top, 'plain')
     expect(await resolve(plain, fixtureIo())).toEqual({ root: plain, worktree: null })
+  })
+})
+
+describe('a Windows worktree whose git folder is on another machine', () => {
+  const onShare = (paths: string[]) => paths.filter((path) => path.startsWith('\\\\'))
+  function watched(files: Record<string, string | null>) {
+    const io = fixtureIo(files)
+    const stat = vi.spyOn(io, 'stat')
+    const readText = vi.spyOn(io, 'readText')
+    const asked = () => [...stat.mock.calls, ...readText.mock.calls].map(([path]) => path)
+    return { io, asked }
+  }
+
+  it.each([
+    '\\\\host\\share\\repo\\.git\\worktrees\\wt',
+    '//host/share/repo/.git/worktrees/wt',
+    '\\\\?\\UNC\\host\\share\\x',
+    '\\\\.\\pipe\\x'
+  ])('is its own project, and nothing at %s is asked for', async (gitdir) => {
+    const { io, asked } = watched({ 'C:\\work\\wt\\.git': `gitdir: ${gitdir}\n` })
+    expect(await resolveProject('C:\\work\\wt\\src', io, Date.now(), 'win32')).toEqual({
+      root: 'C:\\work\\wt',
+      worktree: null
+    })
+    expect(onShare(asked())).toEqual([])
+  })
+  it('does not follow a commondir that points at another machine', async () => {
+    const { io, asked } = watched({
+      'C:\\work\\wt\\.git': 'gitdir: C:/repo/.git/worktrees/wt\n',
+      'C:\\repo\\.git\\worktrees\\wt\\commondir': '\\\\host\\share\\repo\\.git\n',
+      'C:\\repo\\.git': null
+    })
+    expect(await resolveProject('C:\\work\\wt', io, Date.now(), 'win32')).toEqual({
+      root: 'C:\\repo',
+      worktree: 'C:\\work\\wt'
+    })
+    expect(onShare(asked())).toEqual([])
+  })
+  it('follows a git folder on the share the session itself works on', async () => {
+    const { io, asked } = watched({
+      '\\\\host\\share\\wt\\.git': 'gitdir: \\\\host\\share\\repo\\.git\\worktrees\\wt\n',
+      '\\\\host\\share\\repo\\.git': null
+    })
+    expect(await resolveProject('\\\\host\\share\\wt', io, Date.now(), 'win32')).toEqual({
+      root: '\\\\host\\share\\repo',
+      worktree: '\\\\host\\share\\wt'
+    })
+    expect(onShare(asked()).length).toBeGreaterThan(1)
   })
 })
 

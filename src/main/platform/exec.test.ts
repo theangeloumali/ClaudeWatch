@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { POWERSHELL, powershellArgs } from '../../shared/platform-process'
+import { POWERSHELL, POWERSHELL_CWD, powershellArgs } from '../../shared/platform-process'
 
 const mockExecFile = vi.fn()
 vi.mock('child_process', () => ({
@@ -44,10 +44,24 @@ describe('execFilePromise', () => {
     expect(mockExecFile).toHaveBeenCalledWith(
       POWERSHELL,
       powershellArgs('Get-Date'),
-      { env: { SystemRoot: 'C:\\W' }, windowsHide: true },
+      { env: { SystemRoot: 'C:\\W' }, cwd: POWERSHELL_CWD, windowsHide: true },
       expect.any(Function)
     )
   })
+
+  it('runs other programs from the folder it was given', async () => {
+    await execFilePromise('/bin/ps', ['-o', 'pid='])
+    expect(mockExecFile.mock.calls[0][2]).toEqual({ windowsHide: true })
+  })
+
+  // Any spelling that starts a PowerShell gets the same guard: a bare name, an .exe, pwsh.
+  it.each(['powershell', 'powershell.exe', 'PowerShell.EXE', 'pwsh', 'C:\\pwsh\\pwsh.exe'])(
+    'refuses %s an argument after its script',
+    async (bin) => {
+      await expect(execFilePromise(bin, ['-Command', 's', 'x'])).rejects.toThrow(/PowerShell/)
+      expect(mockExecFile).not.toHaveBeenCalled()
+    }
+  )
 
   // PowerShell joins anything after -Command into the script and runs it as code.
   it.each([
