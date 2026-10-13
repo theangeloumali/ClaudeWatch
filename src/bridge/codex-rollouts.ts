@@ -13,9 +13,9 @@ export interface Rollout {
   startedAtMs: number | null
   // The account the session was created under, hashed here so its id never leaves this file.
   accountKey: string | null
-  // The CLI as a terminal or `codex exec` (just 'cli' when Codex recorded no source), or null
+  // The CLI as a terminal or `codex exec` (undefined when Codex recorded no source), or null
   // for an app-server's thread or another thread's subagent.
-  startedBy: CodexKind | 'cli' | null
+  startedBy: CodexKind | undefined | null
 }
 interface CachedRollout {
   mtimeMs: number
@@ -28,7 +28,7 @@ export type CodexKind = 'terminal' | 'exec'
 function startedBy(source: unknown): Rollout['startedBy'] {
   if (source === 'cli') return 'terminal'
   if (source === 'exec') return 'exec'
-  return source === undefined ? 'cli' : null
+  return source === undefined ? undefined : null
 }
 const caches = new WeakMap<BridgeIo, Map<string, Map<string, CachedRollout>>>()
 

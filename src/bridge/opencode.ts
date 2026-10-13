@@ -110,18 +110,16 @@ interface Conversation {
 type OpencodeProcess = ReturnType<typeof opencodeProcesses>[number]
 // A session shown before its process can be told apart has no process: its pid is null.
 type AgentProcess = SessionOwner & { cwd: string }
-// A Windows process whose folder is not yet known has none.
-type LocatedProcess = OpencodeProcess & { cwd: string | null }
 
 type RecentSession = WrittenConversation & { id: string }
 // Places the Windows processes still waiting for a folder, from the root sessions written since
 // the first of them started, and returns those sessions.
 function claimOpencodeFolders(
   query: OpencodeQuery,
-  located: LocatedProcess[],
+  agents: OpencodeProcess[],
   folders: Map<string, string>
 ): RecentSession[] {
-  const waiting = located.filter(({ cwd }) => cwd === null)
+  const waiting = agents.filter((process) => !folders.has(identityOf(process)))
   if (!waiting.length) return []
   const since = Math.min(...waiting.map(({ startedAtMs }) => startedAtMs))
   const sessions = query('recentRootSessions', since).flatMap((row) => {
@@ -132,7 +130,7 @@ function claimOpencodeFolders(
     const created = typeof createdAtMs === 'number' ? createdAtMs : null
     return [{ id, folder: directory, createdAtMs: created, writtenAtMs }]
   })
-  claimFolders(located, folders, sessions)
+  claimFolders(agents, folders, sessions)
   return sessions
 }
 
@@ -175,17 +173,14 @@ async function locate(
   processes: OpencodeProcess[],
   health: SourceHealth,
   platform: NodeJS.Platform
-): Promise<LocatedProcess[]> {
-  if (platform === 'win32')
-    return processes.map((process) => ({
-      ...process,
-      cwd: folders.get(identityOf(process)) ?? null
-    }))
-  const running: LocatedProcess[] = []
+): Promise<OpencodeProcess[]> {
+  // Windows names no process's folder: each is placed from its sessions, into `folders` too.
+  if (platform === 'win32') return processes
+  const running: OpencodeProcess[] = []
   for (const process of processes) {
     try {
       const cwd = await rememberedFolder(io, folders, process, platform)
-      if (cwd && !isAppFolder(cwd, platform)) running.push({ ...process, cwd })
+      if (cwd && !isAppFolder(cwd, platform)) running.push(process)
     } catch {
       // It may have exited since the table was read: the others are still shown.
       health.ok = false
@@ -220,7 +215,8 @@ export async function collectOpencode(
     const running = newestFirst(await locate(io, folders, processes, health, platform))
     if (!running.length) return { sessions: [], sources: [health] }
 
-    const agents = running.map((agent) => `${identityOf(agent)}@${agent.cwd ?? ''}`).join(',')
+    const folderOf = (agent: OpencodeProcess): string | undefined => folders.get(identityOf(agent))
+    const agents = running.map((agent) => `${identityOf(agent)}@${folderOf(agent) ?? ''}`).join(',')
     const { result: conversations, answers } = await readOrRecall(
       io,
       join(root, 'opencode.db'),
@@ -240,9 +236,9 @@ export async function collectOpencode(
             return null
           }
         }
-        const placed = running.flatMap((located) => {
-          const cwd = located.cwd ?? folders.get(identityOf(located))
-          return cwd ? [read({ ...located, cwd })] : []
+        const placed = running.flatMap((agent) => {
+          const cwd = folderOf(agent)
+          return cwd ? [read({ ...agent, cwd })] : []
         })
         // A session no process can yet be told apart for is shown with none, as it was created.
         const unclaimed = recent.filter(({ id }) => !taken.has(id))
