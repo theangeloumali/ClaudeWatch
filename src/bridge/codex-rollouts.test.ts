@@ -3,6 +3,7 @@ import { accountKey } from './account-key'
 import { findRollouts } from './codex-rollouts'
 import { join } from 'node:path'
 import { fixtureIo } from './__fixtures__/helpers'
+import { ForbiddenError } from './io'
 
 it('caches headers by path, mtime and size and prunes deleted files', async () => {
   const path = '/codex/sessions/rollout-a.jsonl'
@@ -136,7 +137,8 @@ it('skips a rollout it may not read, such as one Codex hard-linked to archive it
   })
   const readFirstLine = io.readFirstLine
   const header = vi.fn(async (path: string) => {
-    if (path.endsWith('rollout-linked.jsonl')) throw new Error('forbidden: credential store')
+    if (path.endsWith('rollout-linked.jsonl'))
+      throw new ForbiddenError('forbidden: credential store')
     return readFirstLine(path)
   })
   io.readFirstLine = header

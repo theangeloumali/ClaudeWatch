@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import { POWERSHELL, powershellArgs, startTimeQuery } from '../shared/platform-process'
-import { creationTicksScript, isLive, liveStartedAt } from './liveness'
+import { creationTicksScript, liveStartedAt } from './liveness'
 import { fixtureIo, missing, registryEntry } from './__fixtures__/helpers'
+
+const isLive = async (...args: Parameters<typeof liveStartedAt>): Promise<boolean> =>
+  (await liveStartedAt(...args)) !== null
 
 const startedAtMs = Date.parse('Sat Oct 10 15:29:12 2026 UTC')
 const row = (pid: number, lstart: string) => ({ pid, lstart, startedAtMs, argv: ['claude'] })

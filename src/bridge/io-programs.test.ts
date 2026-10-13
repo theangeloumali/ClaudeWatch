@@ -15,8 +15,8 @@ import { ORCA_CLI, orcaCliEnv } from '../shared/orca-bundle'
 import {
   childEnv,
   POWERSHELL,
-  POWERSHELL_CWD,
   powershellArgs,
+  powershellScriptOf,
   startTimeQuery
 } from '../shared/platform-process'
 import {
@@ -30,7 +30,7 @@ import { creationTicksScript } from './liveness'
 import { OrcaSource } from './orca'
 import { WINDOWS_PROCESS_TABLE_SCRIPT } from './process-table'
 
-const START_TIME = startTimeQuery(42, 'win32').args[3]
+const START_TIME = powershellScriptOf(startTimeQuery(42, 'win32').args)
 
 beforeEach(() => {
   vi.resetAllMocks()
@@ -86,17 +86,10 @@ it('runs nothing from an Orca bundle whose signature does not hold, and says Orc
 
 it('runs PowerShell by its absolute path, with nothing of this process’s env but what it needs', async () => {
   const output = await systemIo.exec(POWERSHELL, powershellArgs(START_TIME))
-  if (process.platform === 'win32') {
-    // On Windows one kept shell runs every script; a cold start per poll costs a second of CPU.
-    expect(output).toBe(`ran ${START_TIME}`)
-    expect(runPowerShell).toHaveBeenCalledExactlyOnceWith(START_TIME, 5000)
-    expect(execFile).not.toHaveBeenCalled()
-  } else {
-    expect(output).toBe('{"ok":true}')
-    expect(execFile.mock.calls[0].slice(0, 2)).toEqual([POWERSHELL, powershellArgs(START_TIME)])
-    expect(execFile.mock.calls[0][2].env).toEqual(childEnv())
-    expect(execFile.mock.calls[0][2].cwd).toBe(POWERSHELL_CWD)
-  }
+  // One kept shell runs every script; a cold start per poll costs a second of CPU.
+  expect(output).toBe(`ran ${START_TIME}`)
+  expect(runPowerShell).toHaveBeenCalledExactlyOnceWith(START_TIME, 5000)
+  expect(execFile).not.toHaveBeenCalled()
   await expect(systemIo.exec('powershell.exe', powershellArgs(START_TIME))).rejects.toThrow(
     'forbidden'
   )
@@ -119,7 +112,7 @@ it('runs only the bridge’s own PowerShell scripts, each for one integer pid at
   for (const script of [
     WINDOWS_PROCESS_TABLE_SCRIPT,
     START_TIME,
-    startTimeQuery(7, 'win32').args[3],
+    powershellScriptOf(startTimeQuery(7, 'win32').args),
     creationTicksScript(55152),
     consoleRootScript(1234),
     PROCESS_LIST_SCRIPT
@@ -154,9 +147,7 @@ it('holds a program to the time its caller allows, five seconds unless told', as
   await systemIo.exec('/bin/ps', ['-o', 'lstart=', '-p', '1'], { timeoutMs: 1234 })
   expect(execFile.mock.calls.map(([, , options]) => options.timeout)).toEqual([5000, 1234])
   await systemIo.exec(POWERSHELL, powershellArgs(START_TIME), { timeoutMs: 1234 })
-  if (process.platform === 'win32')
-    expect(runPowerShell).toHaveBeenCalledExactlyOnceWith(START_TIME, 1234)
-  else expect(execFile.mock.calls[2][2].timeout).toBe(1234)
+  expect(runPowerShell).toHaveBeenCalledExactlyOnceWith(START_TIME, 1234)
 })
 
 it('gives ps on macOS the same parsed-output env as before', async () => {

@@ -111,10 +111,3 @@ export function forgetGoneExcept(io: BridgeIo, entries: RegistryEntry[]): void {
   const present = new Set(entries.map(goneKey))
   for (const key of gone) if (!present.has(key)) gone.delete(key)
 }
-
-export const isLive = async (
-  entry: RegistryEntry,
-  io: BridgeIo,
-  table: ProcessRow[],
-  platform: NodeJS.Platform = process.platform
-): Promise<boolean> => (await liveStartedAt(entry, io, table, platform)) !== null

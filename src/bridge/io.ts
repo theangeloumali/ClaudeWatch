@@ -6,7 +6,6 @@ import { assertOrcaTrusted, ORCA_CLI, orcaCliEnv } from '../shared/orca-bundle'
 import {
   childEnv,
   POWERSHELL,
-  POWERSHELL_SPAWN,
   powershellScriptOf,
   startTimeQuery
 } from '../shared/platform-process'
@@ -53,8 +52,8 @@ export function isMissing(error: unknown): boolean {
 }
 
 // A read this file's guard refused, as opposed to one the disk failed.
-export const isForbidden = (error: unknown): boolean =>
-  error instanceof Error && error.message.startsWith('forbidden: ')
+export class ForbiddenError extends Error {}
+export const isForbidden = (error: unknown): boolean => error instanceof ForbiddenError
 
 // realpath names a hard link by its own name, so a credential store linked under an innocent
 // one shows only in the open file's link count.
@@ -128,11 +127,11 @@ async function readFrom(path: string, offset: number, maxBytes: number): Promise
 const CREDENTIAL_STORE =
   /(^|[\\/])(\.credentials\.json|[\w.-]*auth\.json|\.orca-managed-claude-auth|orca-(runtime|e2ee-keypair|secret-protection)\.json|Cookies)$|\.key$/i
 const PROGRAMS = new Set(['/bin/ps', '/usr/sbin/lsof', POWERSHELL, ORCA_CLI])
-const forbidden = (what: string): Error => new Error(`forbidden: ${what}`)
+const forbidden = (what: string): Error => new ForbiddenError(`forbidden: ${what}`)
 // Each PowerShell script the bridge runs, built for one pid at most. A script reaches PowerShell
 // only when it is one of them exactly, so no source can read through it what the guard refuses.
 const PID_SCRIPTS: ((pid: number) => string)[] = [
-  (pid) => startTimeQuery(pid, 'win32').args[3],
+  (pid) => powershellScriptOf(startTimeQuery(pid, 'win32').args),
   creationTicksScript,
   consoleRootScript
 ]
@@ -216,18 +215,14 @@ export const systemIo: BridgeIo = {
     if (!PROGRAMS.has(file)) throw forbidden('program')
     // Orca's bundle is checked before anything in it runs, as in the main process.
     if (file === ORCA_CLI) await assertOrcaTrusted()
-    if (file === POWERSHELL) {
-      const script = bridgeScript(args)
-      if (process.platform === 'win32') return runPowerShell(script, timeoutMs)
-    }
+    if (file === POWERSHELL) return runPowerShell(bridgeScript(args), timeoutMs)
     // Orca's CLI cannot start without APPDATA on Windows; every other program gets the minimum.
     const env = file === ORCA_CLI ? orcaCliEnv() : childEnv()
-    const spawn = file === POWERSHELL ? POWERSHELL_SPAWN : { windowsHide: true }
     return new Promise((resolve, reject) => {
       execFile(
         file,
         args,
-        { env, ...spawn, timeout: timeoutMs, maxBuffer: 8 * 1024 * 1024 },
+        { env, timeout: timeoutMs, maxBuffer: 8 * 1024 * 1024, windowsHide: true },
         (error, stdout) => {
           if (error) reject(error)
           else resolve(stdout)
