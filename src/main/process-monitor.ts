@@ -112,9 +112,12 @@ export class ProcessMonitor {
     }
 
     const instances: ClaudeInstance[] = []
+    const projectPaths = await Promise.all(
+      rawProcesses.map((proc) => this.detector.getWorkingDirectory(proc.pid))
+    )
 
-    for (const proc of rawProcesses) {
-      const projectPath = await this.detector.getWorkingDirectory(proc.pid)
+    for (const [index, proc] of rawProcesses.entries()) {
+      const projectPath = projectPaths[index]
       const projectName = projectPath ? getProjectName(projectPath) : ''
       const flags = parseFlags(proc.command)
       const sessionId = parseSessionId(proc.command)

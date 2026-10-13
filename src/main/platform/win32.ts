@@ -11,21 +11,41 @@ import {
 } from '../../shared/platform-process'
 import { runPowerShell } from '../../shared/powershell-host'
 
-// Starts come from .NET at the 100 ns Claude Code records; CIM's CreationDate keeps only
-// microseconds, but its Ticks are the form Claude Code falls back to. Times leave as strings:
-// a FILETIME is past 2^53.
-const PROCESS_QUERY = [
-  "$starts = @{}; foreach ($p in [Diagnostics.Process]::GetProcessesByName('claude')) {",
-  'try { $starts[$p.Id] = [string]$p.StartTime.ToFileTimeUtc() } catch {} };',
-  '$rows = @(Get-CimInstance Win32_Process -Filter "Name=\'claude.exe\'"',
-  '-Property ProcessId,CommandLine,CreationDate,KernelModeTime,UserModeTime,WorkingSetSize |',
-  'ForEach-Object { [pscustomobject]@{ pid = $_.ProcessId; command = $_.CommandLine;',
-  'startedAt = [string]$starts[[int]$_.ProcessId];',
-  "startedTicks = if ($_.CreationDate) { [string]$_.CreationDate.Ticks } else { '' };",
-  'cpuTicks = [string]($_.KernelModeTime + $_.UserModeTime);',
-  'workingSet = [string]$_.WorkingSetSize } });',
-  'ConvertTo-Json -InputObject $rows -Compress'
-].join(' ')
+// .NET gives pid, exact start (the 100 ns Claude Code records), CPU and memory every poll. CIM,
+// whose cost lands in WmiPrvSE, is asked only for the command line and CreationDate ticks
+// (Claude Code's fallback start) of a pid:start not seen yet, at most every 10 s; the kept host
+// remembers the answers, so steady state makes no CIM query. A row a line, command in base64.
+export function processTableScript(imageName: string): string {
+  if (!/^[\w.-]+$/.test(imageName)) throw new Error(`not an image name: ${imageName}`)
+  return `$first = $null -eq $global:claudeWatchCimLines
+if ($first) { $global:claudeWatchCimLines = @{}; $global:claudeWatchCimClock = [Diagnostics.Stopwatch]::StartNew(); $global:claudeWatchCimAskedAt = -10000 }
+$lines = $global:claudeWatchCimLines
+$live = @{}
+foreach ($process in [Diagnostics.Process]::GetProcessesByName('${imageName}')) {
+  try { $start = $process.StartTime.ToFileTimeUtc(); $live["$($process.Id):$start"] = "$($process.Id) $start $($process.TotalProcessorTime.Ticks) $($process.WorkingSet64)" } catch {} finally { $process.Dispose() }
+}
+foreach ($key in @($lines.Keys)) { if (-not $live.ContainsKey($key)) { $lines.Remove($key) } }
+$unseen = @(foreach ($key in $live.Keys) { if (-not $lines.ContainsKey($key)) { $key } })
+if ($unseen.Count -and $global:claudeWatchCimClock.ElapsedMilliseconds - $global:claudeWatchCimAskedAt -ge 10000) {
+  $global:claudeWatchCimAskedAt = $global:claudeWatchCimClock.ElapsedMilliseconds
+  $filter = ($unseen | ForEach-Object { 'ProcessId=' + $_.Split(':')[0] }) -join ' OR '
+  try {
+    $found = @{}
+    foreach ($row in Get-CimInstance Win32_Process -Filter $filter -Property ProcessId,CreationDate,CommandLine) {
+      if ($row.CreationDate -and $row.CommandLine) { $found["$($row.ProcessId):$($row.CreationDate.ToFileTimeUtc())"] = [string]$row.CreationDate.Ticks + ' ' + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($row.CommandLine)) }
+    }
+    foreach ($key in $unseen) {
+      $id, $start = $key.Split(':'); $start = [long]$start
+      $line = $found["\${id}:$($start - $start % 10)"]
+      if ($line) { $lines[$key] = $line }
+    }
+  } catch {}
+}
+@(foreach ($key in $live.Keys) { if ($lines[$key]) { $live[$key] + ' ' + $lines[$key] } }) -join [char]10`
+}
+const CLAUDE_PROCESS_SCRIPT = processTableScript('claude')
+// pid, exact start FILETIME, CPU ticks, working set, CreationDate ticks, command line in base64.
+const TABLE_LINE = /^(\d+) (\d+) (\d+) (\d+) (\d+) ([A-Za-z0-9+/]+={0,2})$/
 const TICKS_PER_MS = 10_000
 
 interface Win32DetectorOptions {
@@ -69,32 +89,26 @@ function isClaudeCode(command: string): boolean {
   return !argv.some((arg) => arg.startsWith('--type='))
 }
 
-function toProcessRow(value: unknown): ProcessRow | null {
-  if (!isJsonObject(value)) return null
-  const { pid, command, cpuTicks, workingSet, startedAt, startedTicks } = value
-  if (typeof pid !== 'number' || !Number.isSafeInteger(pid) || pid <= 0) return null
-  if (typeof command !== 'string' || !isClaudeCode(command)) return null
-  const text = (field: unknown): string => (typeof field === 'string' ? field : '')
-  return {
-    pid,
-    command,
-    startedAt: text(startedAt),
-    startedTicks: text(startedTicks),
-    cpuTicks: Number(cpuTicks) || 0,
-    workingSet: Number(workingSet) || 0
-  }
+function toProcessRow(line: string): ProcessRow[] {
+  const match = TABLE_LINE.exec(line.trim())
+  if (!match) return []
+  const [, pidText, startedAt, cpuTicks, workingSet, startedTicks, encodedCommand] = match
+  const pid = Number(pidText)
+  const command = Buffer.from(encodedCommand, 'base64').toString('utf8')
+  if (!Number.isSafeInteger(pid) || pid <= 0 || !isClaudeCode(command)) return []
+  return [
+    {
+      pid,
+      command,
+      startedAt,
+      startedTicks,
+      cpuTicks: Number(cpuTicks),
+      workingSet: Number(workingSet)
+    }
+  ]
 }
 
-function parseRows(stdout: string): ProcessRow[] {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(stdout)
-  } catch {
-    return []
-  }
-  if (!Array.isArray(parsed)) return []
-  return parsed.flatMap((value) => toProcessRow(value) ?? [])
-}
+const parseRows = (stdout: string): ProcessRow[] => stdout.split('\n').flatMap(toProcessRow)
 
 // What Windows cannot give: a run state (always 'S', so CPU alone decides) and a tty. The
 // working folder is not in CIM, so it comes from the record Claude Code keeps per session.
@@ -119,7 +133,7 @@ export class Win32Detector implements PlatformDetector {
   async getClaudeProcesses(): Promise<RawProcessInfo[]> {
     let stdout: string
     try {
-      stdout = await this.runScript(PROCESS_QUERY)
+      stdout = await this.runScript(CLAUDE_PROCESS_SCRIPT)
     } catch {
       return []
     }
