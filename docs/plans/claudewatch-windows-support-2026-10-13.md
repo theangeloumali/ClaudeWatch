@@ -30,8 +30,8 @@
 - [x] Phase 0: Branch, plan of record, contract module
 - [x] Phase 1: Wave 1 — five parallel owners (S1–S5)
 - [x] Phase 2: Integrate + gate chain
-- [ ] Phase 3: Live Windows verification on this machine
-- [ ] Phase 4: Wave 2 review (Maya + Kai)
+- [x] Phase 3: Live Windows verification on this machine
+- [x] Phase 4: Wave 2 review (Maya + Kai)
 - [ ] Phase 5: Close — mandate steps, MP4, PR
 
 ## Execution shape
@@ -166,7 +166,7 @@ export function isAbsoluteFolder(path: string, platform?: NodeJS.Platform): bool
 - [ ] STEP 6: `npx prettier --write <changed>` → `npx eslint .` → `npm run typecheck` → `npx vitest run` → `npm run build` → `npx knip`
       **Verify:** `npx eslint . && npm run typecheck && npx vitest run && npm run build`
 
-## - [ ] Phase 3 — Live Windows verification on this machine (primary) · 1.5h | 6h
+## - [x] Phase 3 — Live Windows verification on this machine (primary) · 1.5h | 6h
 
 - [ ] `npm run build:win -- --publish never`; quit the running 1.3.0; silent reinstall; launch
 - [ ] Tray: the registry `IconSnapshot` is non-empty; screenshot the tray; the tooltip shows the count
@@ -178,7 +178,7 @@ export function isAbsoluteFolder(path: string, platform?: NodeJS.Platform): bool
 - [ ] `verify-claudewatch` office smoke on Windows: console errors = 0
       **Verify:** the evidence set above: screenshots in `recordings/windows-support/`, `bridge --once` JSON, registry snapshot bytes > 0
 
-## - [ ] Phase 4 — Wave 2 review: @maya + @kai (risk 2) · 1.5h | 8h
+## - [x] Phase 4 — Wave 2 review: @maya + @kai (risk 2) · 1.5h | 8h
 
 - [ ] Maya: diff-scoped review + FILES TOUCHED cross-check, coverage of both platforms and Review Focus 1–5
 - [ ] Kai: PowerShell invocation (fixed scripts, pid-only interpolation, no shell), the path guard, the Authenticode trust check, the env passed to children
