@@ -20,6 +20,15 @@ interface RateLimitsFileData {
 
 const claudeSettingsPath = (): string => join(homedir(), '.claude', 'settings.json')
 
+// Claude Code runs the statusLine through Git Bash on Windows, which reads `C:/x` but not `C:\x`.
+export function statuslineCommand(
+  scriptPath: string,
+  platform: NodeJS.Platform = process.platform
+): string {
+  const shellPath = platform === 'win32' ? scriptPath.replaceAll('\\', '/') : scriptPath
+  return `bash "${shellPath}"`
+}
+
 const EMPTY_WINDOW: RateLimitWindow = { used_percentage: 0, resets_at: null }
 
 const EMPTY_RATE_LIMITS: RateLimits = {
@@ -141,7 +150,7 @@ export class RateLimitReader {
 
       settings.statusLine = {
         type: 'command',
-        command: `bash "${destPath}"`
+        command: statuslineCommand(destPath)
       }
 
       await writeJsonAtomic(settingsPath, settings)

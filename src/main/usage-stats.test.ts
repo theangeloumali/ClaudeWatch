@@ -15,6 +15,7 @@ vi.mock('electron', () => ({
   BrowserWindow: vi.fn()
 }))
 
+import { join } from 'path'
 import { UsageStatsReader } from './usage-stats'
 
 function makeMockWindow(destroyed = false) {
@@ -302,6 +303,7 @@ describe('UsageStatsReader', () => {
     const reader = new UsageStatsReader([])
     await reader.read()
 
-    expect(mockReadFile).toHaveBeenCalledWith('/Users/test/.claude.json', 'utf-8')
+    // path.join uses the host separator.
+    expect(mockReadFile).toHaveBeenCalledWith(join('/Users/test', '.claude.json'), 'utf-8')
   })
 })

@@ -82,11 +82,16 @@ afterEach(async () => {
   await rm(folder, { recursive: true, force: true })
 })
 const mode = async (file: string): Promise<number> => (await stat(file)).mode & 0o777
+// Windows has no POSIX mode bits: there the profile folder's ACL keeps the ledger private.
+const hasModeBits = process.platform !== 'win32'
+const expectOwnerOnly = async (file: string): Promise<void> => {
+  if (hasModeBits) expect(await mode(file)).toBe(0o600)
+}
 
 describe('saveLedger', () => {
   it('writes a file only its owner can read, and reads the same ledger back', async () => {
     saveLedger(path, filledLedger())
-    expect(await mode(path)).toBe(0o600)
+    await expectOwnerOnly(path)
     expect(loadLedger(path)).toEqual(filledLedger())
     expect(await readdir(folder)).toEqual(['accounts-ledger.json'])
   })
@@ -94,7 +99,7 @@ describe('saveLedger', () => {
   it('replaces a file that was readable by others with one that is not', async () => {
     await writeFile(path, '{}', { mode: 0o644 })
     saveLedger(path, filledLedger())
-    expect(await mode(path)).toBe(0o600)
+    await expectOwnerOnly(path)
   })
 
   it('does not write through a link left where its temporary file goes', async () => {
@@ -107,13 +112,25 @@ describe('saveLedger', () => {
     expect((await readdir(folder)).sort()).toEqual(['accounts-ledger.json', 'victim'])
   })
 
-  it('leaves the previous ledger whole when a write fails', async () => {
+  const expectWriteFailureKeepsLedger = async (
+    breakWrite: () => Promise<unknown>
+  ): Promise<void> => {
     saveLedger(path, filledLedger())
     const before = await readFile(path, 'utf8')
-    await chmod(folder, 0o500)
+    await breakWrite()
     expect(() => saveLedger(path, emptyLedger(5))).toThrow()
     expect(await readFile(path, 'utf8')).toBe(before)
-  })
+  }
+
+  // Windows cannot make a folder read-only; the case below fails a write on every platform.
+  it.skipIf(!hasModeBits)('leaves the previous ledger whole when its folder is read-only', () =>
+    expectWriteFailureKeepsLedger(() => chmod(folder, 0o500))
+  )
+
+  it('leaves the previous ledger whole when a folder holds its temporary name', () =>
+    expectWriteFailureKeepsLedger(() =>
+      mkdir(join(`${path}.${process.pid}.tmp`, 'x'), { recursive: true })
+    ))
 })
 
 describe('loadLedger', () => {
@@ -138,7 +155,7 @@ describe('loadLedger', () => {
       await writeFile(path, text, { mode: 0o600 })
       expect(loadLedger(path)).toBeNull()
       expect(await readFile(`${path}.damaged`, 'utf8')).toBe(text)
-      expect(await mode(`${path}.damaged`)).toBe(0o600)
+      await expectOwnerOnly(`${path}.damaged`)
       expect(await readdir(folder)).toEqual(['accounts-ledger.json.damaged'])
     }
   )

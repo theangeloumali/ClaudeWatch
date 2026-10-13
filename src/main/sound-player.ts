@@ -1,18 +1,22 @@
-import { execFile } from 'child_process'
 import { resolve, join } from 'path'
 import { existsSync } from 'fs'
 import { app } from 'electron'
+import { execFilePromise } from './platform/exec'
+import { POWERSHELL, childEnv, powershellArgs } from '../shared/platform-process'
+
+// System.Media.SoundPlayer plays only WAV; the path travels in the env because PowerShell
+// re-parses anything after -Command as code.
+const WINDOWS_PLAY_SCRIPT =
+  '(New-Object System.Media.SoundPlayer $env:CLAUDEWATCH_SOUND).PlaySync()'
 
 export class SoundPlayer {
   private soundPath: string
 
-  constructor() {
-    // In production: process.resourcesPath/sounds/task-complete.m4a
-    // In dev: resources/sounds/task-complete.m4a
-    const isProd = app.isPackaged
-    this.soundPath = isProd
-      ? join(process.resourcesPath, 'sounds', 'task-complete.m4a')
-      : resolve(__dirname, '../../resources/sounds/task-complete.m4a')
+  constructor(private readonly platform: NodeJS.Platform = process.platform) {
+    const fileName = platform === 'win32' ? 'task-complete.wav' : 'task-complete.m4a'
+    this.soundPath = app.isPackaged
+      ? join(process.resourcesPath, 'sounds', fileName)
+      : resolve(__dirname, '../../resources/sounds', fileName)
   }
 
   async playTaskComplete(): Promise<void> {
@@ -20,24 +24,14 @@ export class SoundPlayer {
       return
     }
 
-    if (process.platform === 'darwin') {
-      return new Promise<void>((res) => {
-        execFile('afplay', [this.soundPath], () => {
-          // Graceful no-op on error
-          res()
-        })
-      })
+    // A sound that fails to play is not worth reporting.
+    if (this.platform === 'darwin') {
+      await execFilePromise('afplay', [this.soundPath]).catch(() => undefined)
+    } else if (this.platform === 'win32') {
+      const env = { ...childEnv('win32'), CLAUDEWATCH_SOUND: this.soundPath }
+      await execFilePromise(POWERSHELL, powershellArgs(WINDOWS_PLAY_SCRIPT), { env }).catch(
+        () => undefined
+      )
     }
-
-    if (process.platform === 'win32') {
-      return new Promise<void>((res) => {
-        const script = `(New-Object System.Media.SoundPlayer '${this.soundPath}').PlaySync()`
-        execFile('powershell', ['-Command', script], () => {
-          res()
-        })
-      })
-    }
-
-    // Linux and other platforms: no-op
   }
 }

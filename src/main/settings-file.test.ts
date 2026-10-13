@@ -49,8 +49,11 @@ describe('settings-file', () => {
     const file = join(dir, 'settings.json')
     await writeFile(file, '{}')
     await chmod(file, 0o600)
+    // Windows has no POSIX bits (chmod reads back 0o666), so the mode is compared to what was set.
+    const modeBefore = (await stat(file)).mode & 0o777
+    if (process.platform !== 'win32') expect(modeBefore).toBe(0o600)
     await writeJsonAtomic(file, { a: 1 })
-    expect((await stat(file)).mode & 0o777).toBe(0o600)
+    expect((await stat(file)).mode & 0o777).toBe(modeBefore)
   })
 
   it('writes through a symlink to the real file instead of replacing the link', async () => {

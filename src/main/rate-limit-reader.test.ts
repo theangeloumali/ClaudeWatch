@@ -26,7 +26,11 @@ vi.mock('electron', () => ({
   BrowserWindow: vi.fn()
 }))
 
-import { RateLimitReader } from './rate-limit-reader'
+import { join } from 'path'
+import { RateLimitReader, statuslineCommand } from './rate-limit-reader'
+
+// path.join uses the host separator, so expected paths are built the same way.
+const claudePath = (name: string): string => join('/Users/test', '.claude', name)
 
 function makeMockWindow(destroyed = false) {
   return {
@@ -345,7 +349,7 @@ describe('RateLimitReader', () => {
       const reader = new RateLimitReader([])
       const result = await reader.isStatuslineConfigured()
       expect(result).toBe(true)
-      expect(mockReadJsonObject).toHaveBeenCalledWith('/Users/test/.claude/settings.json')
+      expect(mockReadJsonObject).toHaveBeenCalledWith(claudePath('settings.json'))
     })
 
     it('returns false when statusLine is not in settings', async () => {
@@ -379,10 +383,10 @@ describe('RateLimitReader', () => {
       expect(result).toBe(true)
       expect(mockCopyFile).toHaveBeenCalledWith(
         '/app/resources/claudewatch-statusline.sh',
-        '/Users/test/.claude/claudewatch-statusline.sh'
+        claudePath('claudewatch-statusline.sh')
       )
-      expect(mockChmod).toHaveBeenCalledWith('/Users/test/.claude/claudewatch-statusline.sh', 0o755)
-      expect(mockWriteJsonAtomic).toHaveBeenCalledWith('/Users/test/.claude/settings.json', {
+      expect(mockChmod).toHaveBeenCalledWith(claudePath('claudewatch-statusline.sh'), 0o755)
+      expect(mockWriteJsonAtomic).toHaveBeenCalledWith(claudePath('settings.json'), {
         permissions: {},
         statusLine: {
           type: 'command',
@@ -398,7 +402,7 @@ describe('RateLimitReader', () => {
 
       expect(result).toBe(true)
       expect(mockWriteJsonAtomic).toHaveBeenCalledWith(
-        '/Users/test/.claude/settings.json',
+        claudePath('settings.json'),
         expect.objectContaining({ statusLine: expect.any(Object) })
       )
     })
@@ -434,5 +438,19 @@ describe('RateLimitReader', () => {
       const result = await reader.setupStatusline('/app/resources/claudewatch-statusline.sh')
       expect(result).toBe(false)
     })
+  })
+})
+
+describe('statuslineCommand', () => {
+  it('runs the script through bash by its own path on darwin', () => {
+    expect(statuslineCommand('/Users/a/.claude/claudewatch-statusline.sh', 'darwin')).toBe(
+      'bash "/Users/a/.claude/claudewatch-statusline.sh"'
+    )
+  })
+
+  it('gives Git Bash a forward-slash path on win32', () => {
+    expect(statuslineCommand('C:\\Users\\a b\\.claude\\claudewatch-statusline.sh', 'win32')).toBe(
+      'bash "C:/Users/a b/.claude/claudewatch-statusline.sh"'
+    )
   })
 })

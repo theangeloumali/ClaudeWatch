@@ -18,6 +18,7 @@ w5h_resets=$(echo "$w5h_block" | grep -o '"resets_at"[[:space:]]*:[[:space:]]*"[
 w7d_resets=$(echo "$w7d_block" | grep -o '"resets_at"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"\([^"]*\)"$/\1/')
 
 if [ -n "$w5h_pct" ] || [ -n "$w7d_pct" ]; then
+    mkdir -p "$CACHE_DIR" 2>/dev/null
     printf '{"window_5h":{"used_percentage":%s,"resets_at":"%s"},"window_7d":{"used_percentage":%s,"resets_at":"%s"},"updated_at":"%s"}\n' \
         "${w5h_pct:-0}" "${w5h_resets:-}" "${w7d_pct:-0}" "${w7d_resets:-}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
         > "${CACHE_DIR}/rate-limits.json" 2>/dev/null
