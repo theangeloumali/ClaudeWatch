@@ -4,7 +4,7 @@ const execFile = vi.hoisted(() => vi.fn())
 vi.mock('node:child_process', () => ({ execFile }))
 
 import { createOrcaTrust, orcaBundle, orcaCliEnv, ORCA_SIGNER } from './orca-bundle'
-import { POWERSHELL } from './platform-process'
+import { POWERSHELL, POWERSHELL_CWD } from './platform-process'
 
 type Done = (error: Error | null, stdout: string) => void
 
@@ -61,6 +61,8 @@ describe('the Orca signature check on Windows', () => {
     expect(args[3]).not.toContain('Programs')
     expect(options).toMatchObject({
       windowsHide: true,
+      // A planted module beside the launch folder must not load into the very check that trusts Orca.
+      cwd: POWERSHELL_CWD,
       env: { CLAUDEWATCH_ORCA_CLI: bundle.cli, CLAUDEWATCH_ORCA_APP: bundle.app }
     })
   })

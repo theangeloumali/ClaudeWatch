@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process'
 import { homedir } from 'node:os'
 import { win32 } from 'node:path'
-import { childEnv, POWERSHELL, powershellArgs } from './platform-process'
+import { childEnv, POWERSHELL, POWERSHELL_CWD, powershellArgs } from './platform-process'
 
 export interface OrcaBundle {
   platform: NodeJS.Platform
@@ -108,7 +108,7 @@ function verifyAuthenticode(bundle: OrcaBundle): Promise<void> {
     execFile(
       POWERSHELL,
       powershellArgs(AUTHENTICODE_SCRIPT),
-      { timeout: VERIFY_TIMEOUT_MS, env, windowsHide: true },
+      { timeout: VERIFY_TIMEOUT_MS, env, cwd: POWERSHELL_CWD, windowsHide: true },
       (error, stdout) => {
         if (!error && String(stdout).trim() === 'trusted') resolve()
         else reject(error ?? new Error('Orca is not trusted'))

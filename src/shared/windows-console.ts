@@ -1,5 +1,5 @@
 import { isJsonObject } from './json-object'
-import { filetimeToMs } from './platform-process'
+import { filetimeToMs, checkedPid } from './platform-process'
 
 // Compiled by Add-Type on every run (about 1 s): fine for a click or once per session, never
 // for a poll. Inside single quotes in PowerShell, so it holds none. Console() ignores Ctrl+C
@@ -49,11 +49,6 @@ public static class ClaudeWatchWindows {
   }
 }'`
 
-function checkedInteger(value: number, what: string): number {
-  if (!Number.isSafeInteger(value) || value <= 0) throw new Error(`not a ${what}: ${value}`)
-  return value
-}
-
 // A script run by PowerShell that returns what it printed: a fresh powershell.exe per script, or
 // a host kept running, which then compiles the helper once.
 export type RunScript = (script: string) => Promise<string>
@@ -75,7 +70,7 @@ export function processTreeScript(pid: number): string {
   return [
     "$ErrorActionPreference = 'Stop'",
     NATIVE,
-    `$console = [ClaudeWatchWindows]::Console(${checkedInteger(pid, 'pid')})[0]`,
+    `$console = [ClaudeWatchWindows]::Console(${checkedPid(pid)})[0]`,
     '$processes = @(Get-CimInstance Win32_Process -Property ProcessId, ParentProcessId, Name, CreationDate | ForEach-Object {',
     "@{ pid = $_.ProcessId; ppid = $_.ParentProcessId; name = $_.Name; started = $(if ($_.CreationDate) { $_.CreationDate.ToFileTimeUtc().ToString() } else { '0' }) } })",
     '@{ console = $console; processes = $processes } | ConvertTo-Json -Compress -Depth 3'
@@ -86,7 +81,7 @@ export function processTreeScript(pid: number): string {
 // in front. The window is its Windows Terminal tab's, its classic console, or the nearest host up
 // the chain, walked as `ancestry` walks it.
 export function focusWindowScript(pid: number): string {
-  const checked = checkedInteger(pid, 'pid')
+  const checked = checkedPid(pid)
   return [
     "$ErrorActionPreference = 'Stop'",
     NATIVE,
