@@ -17,7 +17,7 @@ import type {
   ProviderId
 } from '../shared/office/types'
 import { orcaBundle } from '../shared/orca-bundle'
-import { filetimeToMs, startTimeQuery } from '../shared/platform-process'
+import { filetimeToMs, powershellScriptOf, startTimeQuery } from '../shared/platform-process'
 import { PARSED_OUTPUT_ENV } from '../shared/ps'
 import { runInteractivePowerShell } from '../shared/powershell-host'
 import type { RunScript } from '../shared/windows-console'
@@ -73,8 +73,7 @@ export function createOfficeService({
   const processStart = async (pid: number): Promise<number | null> => {
     try {
       const { file, args } = startTimeQuery(pid, platform)
-      // On Windows the query's last argument is its script.
-      if (isWindows) return filetimeToMs((await runScript(args.at(-1) ?? '')).trim()) || null
+      if (isWindows) return filetimeToMs((await runScript(powershellScriptOf(args))).trim()) || null
       const started = (await run(file, args, PS_OPTIONS)).stdout.trim()
       return Date.parse(`${started} UTC`) || null
     } catch {

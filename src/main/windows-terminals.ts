@@ -1,10 +1,16 @@
 import { spawn } from 'child_process'
 import { access, stat } from 'fs/promises'
-import { homedir } from 'os'
 import { win32 } from 'path'
 import type { TerminalInfo, TerminalType } from '../renderer/lib/types'
 import type { InteractionResult } from '../shared/office/types'
-import { childEnv, POWERSHELL, powershellArgs, programName } from '../shared/platform-process'
+import {
+  childEnv,
+  LOCAL_APP_DATA,
+  POWERSHELL,
+  POWERSHELL_CWD,
+  powershellArgs,
+  programName
+} from '../shared/platform-process'
 import { runInteractivePowerShell } from '../shared/powershell-host'
 import {
   ancestry,
@@ -12,13 +18,16 @@ import {
   parseProcessTree,
   processTreeScript,
   RAISE_APP_SCRIPT,
-  type RunScript
+  type RunScript,
+  WINDOW_HOSTS
 } from '../shared/windows-console'
 import type { AgentCommand } from './orca-terminals'
 import { execFilePromise } from './platform/exec'
 
-// Windows hosts by program name: `C:\…\WindowsTerminal.exe` is `windowsterminal`.
-const WINDOWS_TERMINALS: Record<string, { terminalType: TerminalType; displayName: string }> = {
+type WindowsTerminal = { terminalType: TerminalType; displayName: string }
+// Windows hosts by program name: `C:\…\WindowsTerminal.exe` is `windowsterminal`. Every host
+// focus can raise, but Orca, which has its own route, must be listed.
+const WINDOWS_TERMINALS: Record<string, WindowsTerminal> = {
   windowsterminal: { terminalType: 'terminal-app', displayName: 'Windows Terminal' },
   mintty: { terminalType: 'terminal-app', displayName: 'Git Bash' },
   code: { terminalType: 'vscode', displayName: 'VS Code' },
@@ -26,12 +35,11 @@ const WINDOWS_TERMINALS: Record<string, { terminalType: TerminalType; displayNam
   alacritty: { terminalType: 'alacritty', displayName: 'Alacritty' },
   'wezterm-gui': { terminalType: 'wezterm', displayName: 'WezTerm' },
   hyper: { terminalType: 'hyper', displayName: 'Hyper' }
-}
+} satisfies Record<Exclude<(typeof WINDOW_HOSTS)[number], 'orca'>, WindowsTerminal>
 
 // The scripts that carry a path run in a fresh PowerShell, which takes seconds to start.
 const POWERSHELL_TIMEOUT_MS = 20_000
 
-const LOCAL_APP_DATA = process.env.LOCALAPPDATA ?? win32.join(homedir(), 'AppData', 'Local')
 // The App Execution Alias Windows Terminal installs; absent when it is not installed.
 export const WINDOWS_TERMINAL = win32.join(LOCAL_APP_DATA, 'Microsoft', 'WindowsApps', 'wt.exe')
 
@@ -53,11 +61,7 @@ function spawnDetached(
   })
 }
 
-export const WINDOWS_CMD = win32.join(
-  process.env.SystemRoot ?? 'C:\\Windows',
-  'System32',
-  'cmd.exe'
-)
+export const WINDOWS_CMD = win32.join(POWERSHELL_CWD, 'cmd.exe')
 
 // ShellExecute gives cmd.exe a console of its own (a spawned one would have none). The values
 // travel in the environment and are read literally: no wildcard, no quoting.
@@ -85,6 +89,7 @@ const isFile = (path: string): Promise<boolean> =>
 // The agent by absolute path, from the absolute PATH entries alone: cmd.exe looks in the working
 // folder first, which is the project, so a repo shipping `claude.cmd` would otherwise run it.
 async function resolveAgent(command: AgentCommand): Promise<string | null> {
+  // Drive paths only: a share (UNC) entry would make cmd.exe reach out to the network.
   const folders = (process.env.PATH ?? '').split(';').filter((entry) => /^[A-Za-z]:\\/.test(entry))
   for (const folder of folders) {
     for (const extension of AGENT_EXTENSIONS) {

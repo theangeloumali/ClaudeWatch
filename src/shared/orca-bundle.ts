@@ -1,7 +1,12 @@
 import { execFile } from 'node:child_process'
-import { homedir } from 'node:os'
 import { win32 } from 'node:path'
-import { childEnv, POWERSHELL, POWERSHELL_SPAWN, powershellArgs } from './platform-process'
+import {
+  childEnv,
+  LOCAL_APP_DATA,
+  POWERSHELL,
+  POWERSHELL_SPAWN,
+  powershellArgs
+} from './platform-process'
 
 export interface OrcaBundle {
   platform: NodeJS.Platform
@@ -13,7 +18,7 @@ export interface OrcaBundle {
 // it, and on Windows `orca.cmd` would hand the arguments to cmd.exe to reparse.
 export function orcaBundle(
   platform: NodeJS.Platform = process.platform,
-  localAppData = process.env.LOCALAPPDATA ?? win32.join(homedir(), 'AppData', 'Local')
+  localAppData = LOCAL_APP_DATA
 ): OrcaBundle {
   if (platform !== 'win32') {
     const app = '/Applications/Orca.app'

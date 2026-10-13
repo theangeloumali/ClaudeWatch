@@ -1,3 +1,5 @@
+import { homedir } from 'node:os'
+import { win32 } from 'node:path'
 import { PARSED_OUTPUT_ENV, startTimeArgs } from './ps'
 
 const SYSTEM_ROOT = process.env.SystemRoot ?? 'C:\\Windows'
@@ -5,6 +7,9 @@ const SYSTEM_ROOT = process.env.SystemRoot ?? 'C:\\Windows'
 export const POWERSHELL = `${SYSTEM_ROOT}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe`
 
 // Where every PowerShell runs: a folder only administrators write, never the launch folder.
+// Per-user installs (Orca, the Windows Terminal alias) live here.
+export const LOCAL_APP_DATA = process.env.LOCALAPPDATA ?? win32.join(homedir(), 'AppData', 'Local')
+
 export const POWERSHELL_CWD = `${SYSTEM_ROOT}\\System32`
 // How every PowerShell starts: from POWERSHELL_CWD, as part of its module path resolves against
 // the working folder, and with no console window. Each caller adds only its own env.
