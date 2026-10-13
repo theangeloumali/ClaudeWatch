@@ -16,19 +16,21 @@ export const TITLE_BAR_HEIGHT = 44
 // OfficeApp's drag strip is h-9 and its panels start at pt-10, below these buttons.
 export const OFFICE_TITLE_BAR_HEIGHT = 36
 
+// Window Controls Overlay needs the system frame: frame:false or transparent drops the buttons.
+function windowsOverlay(color: string, height: number): Chrome {
+  return {
+    titleBarStyle: 'hidden',
+    titleBarOverlay: { color, symbolColor: CHROME_COLORS.caption, height }
+  }
+}
+
 export function windowChrome(platform: NodeJS.Platform = process.platform): Chrome {
   if (platform === 'darwin') {
     return { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 15, y: 15 } }
   }
   if (platform === 'win32') {
-    // Window Controls Overlay needs the system frame: frame:false or transparent drops the buttons.
     return {
-      titleBarStyle: 'hidden',
-      titleBarOverlay: {
-        color: CHROME_COLORS.rail,
-        symbolColor: CHROME_COLORS.caption,
-        height: TITLE_BAR_HEIGHT
-      },
+      ...windowsOverlay(CHROME_COLORS.rail, TITLE_BAR_HEIGHT),
       backgroundColor: CHROME_COLORS.night
     }
   }
@@ -58,12 +60,7 @@ export function officeChrome(platform: NodeJS.Platform = process.platform): Chro
   if (platform !== 'win32')
     return { ...windowChrome(platform), backgroundColor: CHROME_COLORS.office }
   return {
-    titleBarStyle: 'hidden',
-    titleBarOverlay: {
-      color: CHROME_COLORS.office,
-      symbolColor: CHROME_COLORS.caption,
-      height: OFFICE_TITLE_BAR_HEIGHT
-    },
+    ...windowsOverlay(CHROME_COLORS.office, OFFICE_TITLE_BAR_HEIGHT),
     backgroundColor: CHROME_COLORS.office
   }
 }
