@@ -113,3 +113,25 @@ it('says how the CLI started a thread, as against an app-server or a parent thre
   const started = Object.fromEntries(rollouts.map(({ id, startedBy }) => [id, startedBy]))
   expect(started).toEqual({ a: 'terminal', b: 'exec', c: null, d: null, e: 'cli' })
 })
+
+it('skips a rollout it may not read, such as one Codex hard-linked to archive it, and finds the rest', async () => {
+  const meta = (id: string): string =>
+    JSON.stringify({ type: 'session_meta', payload: { id, cwd: '/repo' } })
+  const io = fixtureIo({
+    '/codex/sessions/rollout-a.jsonl': meta('a'),
+    '/codex/sessions/rollout-linked.jsonl': meta('linked')
+  })
+  const readFirstLine = io.readFirstLine
+  const header = vi.fn(async (path: string) => {
+    if (path.endsWith('rollout-linked.jsonl')) throw new Error('forbidden: credential store')
+    return readFirstLine(path)
+  })
+  io.readFirstLine = header
+  const found = async () => (await findRollouts('/codex', io, false, 'darwin')).map(({ id }) => id)
+  expect(await found()).toEqual(['a'])
+  // Refused once, it is not asked about again until it changes.
+  expect(await found()).toEqual(['a'])
+  expect(header.mock.calls.filter(([path]) => path.endsWith('rollout-linked.jsonl'))).toHaveLength(
+    1
+  )
+})
