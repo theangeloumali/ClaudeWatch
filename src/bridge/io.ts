@@ -1,11 +1,12 @@
 import { execFile } from 'node:child_process'
-import { open, readdir, realpath, stat } from 'node:fs/promises'
+import { type FileHandle, open, readdir, realpath, stat } from 'node:fs/promises'
 import { basename } from 'node:path'
 import { isJsonObject } from '../shared/json-object'
 import { assertOrcaTrusted, ORCA_CLI, orcaCliEnv } from '../shared/orca-bundle'
 import {
   childEnv,
   POWERSHELL,
+  POWERSHELL_CWD,
   powershellScriptOf,
   startTimeQuery
 } from '../shared/platform-process'
@@ -51,8 +52,19 @@ export function isMissing(error: unknown): boolean {
   return error instanceof Error && 'code' in error && error.code === 'ENOENT'
 }
 
-async function readTail(path: string): Promise<string> {
+// realpath names a hard link by its own name, so a credential store linked under an innocent
+// one shows only in the open file's link count.
+async function openSoleName(path: string): Promise<FileHandle> {
   const file = await open(path, 'r')
+  if ((await file.stat()).nlink > 1) {
+    await file.close()
+    throw forbidden('credential store')
+  }
+  return file
+}
+
+async function readTail(path: string): Promise<string> {
+  const file = await openSoleName(path)
   try {
     const { size } = await file.stat()
     const start = Math.max(0, size - 65536)
@@ -67,7 +79,7 @@ async function readTail(path: string): Promise<string> {
 }
 
 async function readFirstLine(path: string): Promise<string> {
-  const file = await open(path, 'r')
+  const file = await openSoleName(path)
   try {
     const cap = 256 * 1024
     const chunks: Buffer[] = []
@@ -93,7 +105,7 @@ async function readFirstLine(path: string): Promise<string> {
 }
 
 async function readFrom(path: string, offset: number, maxBytes: number): Promise<ForwardRead> {
-  const file = await open(path, 'r')
+  const file = await openSoleName(path)
   try {
     const { size } = await file.stat()
     const buffer = Buffer.alloc(Math.max(0, Math.min(maxBytes, size - offset)))
@@ -173,7 +185,7 @@ function readOpencode<Result>(target: string, read: (query: OpencodeQuery) => Re
 // the open file, so a file that grows afterwards cannot be read past it.
 const MAX_WHOLE_FILE_BYTES = 1024 * 1024
 async function readWhole(path: string): Promise<string> {
-  const file = await open(path, 'r')
+  const file = await openSoleName(path)
   try {
     const { size } = await file.stat()
     if (size > MAX_WHOLE_FILE_BYTES) throw forbidden('file too large')
@@ -205,11 +217,13 @@ export const systemIo: BridgeIo = {
     }
     // Orca's CLI cannot start without APPDATA on Windows; every other program gets the minimum.
     const env = file === ORCA_CLI ? orcaCliEnv() : childEnv()
+    // PowerShell resolves part of its module path against its working folder: never the launch one.
+    const cwd = file === POWERSHELL ? { cwd: POWERSHELL_CWD } : {}
     return new Promise((resolve, reject) => {
       execFile(
         file,
         args,
-        { env, timeout: timeoutMs, maxBuffer: 8 * 1024 * 1024, windowsHide: true },
+        { env, ...cwd, timeout: timeoutMs, maxBuffer: 8 * 1024 * 1024, windowsHide: true },
         (error, stdout) => {
           if (error) reject(error)
           else resolve(stdout)

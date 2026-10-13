@@ -1,4 +1,7 @@
 import { execFile } from 'node:child_process'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, describe, expect, it } from 'vitest'
 import { closePowerShellHost, runInteractivePowerShell, runPowerShell } from './powershell-host'
@@ -41,6 +44,29 @@ describe.runIf(onWindows)('the kept PowerShell on Windows', () => {
     expect(await runPowerShell(FREE_CONSOLE, 20_000)).toBe('freed')
     expect(Number(await runPowerShell('$PID'))).toBeGreaterThan(0)
   }, 30_000)
+  it('loads no module planted under a relative module path in the folder ClaudeWatch started in', async () => {
+    const launch = mkdtempSync(join(tmpdir(), 'claudewatch-launch-'))
+    const probe = join(launch, '%ProgramFiles%', 'WindowsPowerShell', 'Modules', 'ClaudeWatchProbe')
+    mkdirSync(probe, { recursive: true })
+    writeFileSync(join(probe, 'ClaudeWatchProbe.psm1'), 'function Get-Probe { 1 }')
+    try {
+      const child = fileURLToPath(
+        new URL('./__fixtures__/powershell-module-probe-child.mts', import.meta.url)
+      )
+      const output = await new Promise<string>((resolve, reject) =>
+        execFile(process.execPath, [child], { cwd: launch, timeout: 60_000 }, (error, stdout) =>
+          error ? reject(error) : resolve(stdout)
+        )
+      )
+      const { kept, cold } = JSON.parse(output.trim().split('\n').at(-1) ?? '{}')
+      for (const shell of [kept, cold]) {
+        expect(shell.found).toBe(0)
+        for (const path of shell.paths) expect(path).toMatch(/^[A-Za-z]:\\/)
+      }
+    } finally {
+      rmSync(launch, { recursive: true, force: true })
+    }
+  }, 70_000)
   it('leaves no shell running once the process it served has exited', async () => {
     const child = fileURLToPath(
       new URL('./__fixtures__/powershell-host-child.mts', import.meta.url)

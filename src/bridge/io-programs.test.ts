@@ -12,7 +12,13 @@ vi.mock('../shared/orca-bundle', async (original) => ({
   assertOrcaTrusted
 }))
 import { ORCA_CLI, orcaCliEnv } from '../shared/orca-bundle'
-import { childEnv, POWERSHELL, powershellArgs, startTimeQuery } from '../shared/platform-process'
+import {
+  childEnv,
+  POWERSHELL,
+  POWERSHELL_CWD,
+  powershellArgs,
+  startTimeQuery
+} from '../shared/platform-process'
 import { processTreeScript } from '../shared/windows-console'
 import { PARSED_OUTPUT_ENV } from '../shared/ps'
 import { systemIo } from './io'
@@ -85,6 +91,7 @@ it('runs PowerShell by its absolute path, with nothing of this process’s env b
     expect(output).toBe('{"ok":true}')
     expect(execFile.mock.calls[0].slice(0, 2)).toEqual([POWERSHELL, powershellArgs(START_TIME)])
     expect(execFile.mock.calls[0][2].env).toEqual(childEnv())
+    expect(execFile.mock.calls[0][2].cwd).toBe(POWERSHELL_CWD)
   }
   await expect(systemIo.exec('powershell.exe', powershellArgs(START_TIME))).rejects.toThrow(
     'forbidden'
@@ -114,6 +121,7 @@ it('runs only the bridge’s own PowerShell scripts, each for one integer pid at
   ])
     await expect(systemIo.exec(POWERSHELL, powershellArgs(script))).resolves.toBeTypeOf('string')
   for (const script of [
+    'arbitrary',
     'Get-Content C:\\Users\\me\\.claude\\.credentials.json',
     '$PID',
     START_TIME.replace('42', '42; Get-Content x'),

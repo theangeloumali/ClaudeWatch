@@ -1,5 +1,5 @@
 import { afterEach, expect, it } from 'vitest'
-import { appendFile, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
+import { appendFile, link, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { startTimeQuery } from '../shared/platform-process'
@@ -72,6 +72,21 @@ it('refuses a credential store reached through a symlink or a different letter c
     await expect(systemIo.readFirstLine(path)).rejects.toThrow('forbidden')
     await expect(systemIo.readFrom(path, 0, 64)).rejects.toThrow('forbidden')
   }
+})
+
+// realpath names a hard link by its own name, so only the file's link count gives it away.
+it('refuses a file with more than one name, which may be a credential store under another', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'bridge-guard-'))
+  directories.push(directory)
+  await writeFile(join(directory, '.credentials.json'), 'DO_NOT_READ')
+  await link(join(directory, '.credentials.json'), join(directory, '42.json'))
+  const path = join(directory, '42.json')
+  await expect(systemIo.readText(path)).rejects.toThrow('forbidden: credential store')
+  await expect(systemIo.readTail(path)).rejects.toThrow('forbidden: credential store')
+  await expect(systemIo.readFirstLine(path)).rejects.toThrow('forbidden: credential store')
+  await expect(systemIo.readFrom(path, 0, 64)).rejects.toThrow('forbidden: credential store')
+  await writeFile(join(directory, '43.json'), '{}')
+  expect(await systemIo.readText(join(directory, '43.json'))).toBe('{}')
 })
 
 it('reads forward from an offset in whole lines and says where to resume', async () => {

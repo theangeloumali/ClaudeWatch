@@ -53,12 +53,17 @@ export function resolveProject(
   return project
 }
 
+// A UNC path names another machine, and opening it hands that machine this user's NTLM response
+// on every look-up: one is followed only on the share the session itself works on.
+function isElsewhere(target: string, folder: string, path: typeof posix): boolean {
+  if (path !== win32 || !target.startsWith('\\\\')) return false
+  const share = (unc: string): string => unc.split('\\').slice(2, 4).join('\\').toLowerCase()
+  return !folder.startsWith('\\\\') || share(target) !== share(folder)
+}
+
 // The folder's own platform's paths, whichever platform reads them.
-async function findProject(
-  cwd: string,
-  io: BridgeIo,
-  { dirname, join, resolve }: typeof posix
-): Promise<Project> {
+async function findProject(cwd: string, io: BridgeIo, path: typeof posix): Promise<Project> {
+  const { dirname, join, resolve } = path
   let directory = resolve(cwd)
   while (true) {
     const marker = join(directory, '.git')
@@ -68,6 +73,7 @@ async function findProject(
       const gitdir = (await io.readText(marker)).match(/^gitdir:\s*(.+)$/m)?.[1]
       if (gitdir) {
         const target = resolve(directory, gitdir.trim())
+        if (isElsewhere(target, directory, path)) return { root: directory, worktree: null }
         const fallback = dirname(dirname(dirname(target)))
         let root = fallback
         try {
@@ -75,7 +81,9 @@ async function findProject(
           // git writes one short path here; anything else is not git's and is not read into a root.
           if ((await io.stat(pointer)).size <= COMMONDIR_MAX_BYTES) {
             const line = (await io.readText(pointer)).trim()
-            if (line && !line.includes('\n')) root = dirname(resolve(target, line))
+            const common = resolve(target, line)
+            if (line && !line.includes('\n') && !isElsewhere(common, directory, path))
+              root = dirname(common)
           }
         } catch (error) {
           if (!isMissing(error)) throw error
