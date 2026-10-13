@@ -2,16 +2,14 @@ import { readFile } from 'fs/promises'
 import { homedir, totalmem } from 'os'
 import { join } from 'path'
 import type { RawProcessInfo, PlatformDetector } from './darwin'
-import { execFilePromise } from './exec'
+import { isJsonObject } from '../../shared/json-object'
 import {
-  POWERSHELL,
-  childEnv,
   filetimeToMs,
   isAbsoluteFolder,
-  powershellArgs,
   programName,
   splitCommandLine
 } from '../../shared/platform-process'
+import { runPowerShell } from '../../shared/powershell-host'
 
 // Starts come from .NET at the 100 ns Claude Code records; CIM's CreationDate keeps only
 // microseconds, but its Ticks are the form Claude Code falls back to. Times leave as strings:
@@ -28,17 +26,7 @@ const PROCESS_QUERY = [
   'workingSet = [string]$_.WorkingSetSize } });',
   'ConvertTo-Json -InputObject $rows -Compress'
 ].join(' ')
-const QUERY_TIMEOUT_MS = 10_000
 const TICKS_PER_MS = 10_000
-
-// The cold route: one powershell.exe per poll. A persistent host can stand in for it.
-const coldPowerShell = async (script: string): Promise<string> =>
-  (
-    await execFilePromise(POWERSHELL, powershellArgs(script), {
-      env: childEnv('win32'),
-      timeout: QUERY_TIMEOUT_MS
-    })
-  ).stdout
 
 interface Win32DetectorOptions {
   runScript?: (script: string) => Promise<string>
@@ -82,17 +70,16 @@ function isClaudeCode(command: string): boolean {
 }
 
 function toProcessRow(value: unknown): ProcessRow | null {
-  if (typeof value !== 'object' || value === null) return null
-  const fields = value as Record<string, unknown>
-  const { pid, command, cpuTicks, workingSet } = fields
+  if (!isJsonObject(value)) return null
+  const { pid, command, cpuTicks, workingSet, startedAt, startedTicks } = value
   if (typeof pid !== 'number' || !Number.isSafeInteger(pid) || pid <= 0) return null
   if (typeof command !== 'string' || !isClaudeCode(command)) return null
   const text = (field: unknown): string => (typeof field === 'string' ? field : '')
   return {
     pid,
     command,
-    startedAt: text(fields.startedAt),
-    startedTicks: text(fields.startedTicks),
+    startedAt: text(startedAt),
+    startedTicks: text(startedTicks),
     cpuTicks: Number(cpuTicks) || 0,
     workingSet: Number(workingSet) || 0
   }
@@ -122,7 +109,7 @@ export class Win32Detector implements PlatformDetector {
   private startsByPid = new Map<number, string[]>()
 
   constructor(options: Win32DetectorOptions = {}) {
-    this.runScript = options.runScript ?? coldPowerShell
+    this.runScript = options.runScript ?? runPowerShell
     this.readText = options.readText ?? ((path) => readFile(path, 'utf8'))
     this.home = options.home ?? homedir()
     this.now = options.now ?? Date.now
@@ -153,9 +140,10 @@ export class Win32Detector implements PlatformDetector {
   async getWorkingDirectory(pid: number): Promise<string> {
     if (!Number.isSafeInteger(pid) || pid <= 0) return ''
     try {
-      const record = JSON.parse(
+      const record: unknown = JSON.parse(
         await this.readText(join(this.home, '.claude', 'sessions', `${pid}.json`))
-      ) as { cwd?: unknown; procStart?: unknown }
+      )
+      if (!isJsonObject(record)) return ''
       // A pid Windows has reused still finds the old session's record; its start time differs.
       const starts = this.startsByPid.get(pid) ?? []
       const isOtherProcess =
