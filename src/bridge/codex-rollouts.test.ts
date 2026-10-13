@@ -5,8 +5,7 @@ import { join } from 'node:path'
 import { fixtureIo } from './__fixtures__/helpers'
 
 it('caches headers by path, mtime and size and prunes deleted files', async () => {
-  // Joined as the bridge joins it, so the stat below matches the path it asks about.
-  const path = join('/codex', 'sessions', 'rollout-a.jsonl')
+  const path = '/codex/sessions/rollout-a.jsonl'
   const files: Record<string, string | null> = {
     [path]: JSON.stringify({ type: 'session_meta', payload: { id: 'a', cwd: '/repo' } })
   }
@@ -14,8 +13,9 @@ it('caches headers by path, mtime and size and prunes deleted files', async () =
   const stat = io.stat
   let mtimeMs = 1000
   let size = 100
+  // Matched by name: the bridge asks with whichever separator its platform joins with.
   io.stat = async (candidate) =>
-    candidate === path ? { directory: false, mtimeMs, size } : stat(candidate)
+    candidate.endsWith('rollout-a.jsonl') ? { directory: false, mtimeMs, size } : stat(candidate)
   const header = vi.spyOn(io, 'readFirstLine')
   await findRollouts('/codex', io, false, 'darwin')
   await findRollouts('/codex', io, false, 'darwin')

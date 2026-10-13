@@ -1,5 +1,4 @@
 import { expect, it, vi } from 'vitest'
-import { join } from 'node:path'
 import { accountKey } from './account-key'
 import { collectCodex, codexProcesses, parseCodexActivity } from './codex'
 import { parseProcessTable } from './process-table'
@@ -557,8 +556,7 @@ it('walks the session folders fully only every 30 s while app-servers run, and f
 
 // One app-server and one hosted thread in /repo whose rollout time the test moves.
 function hostedThread(tail: string, extra: object = {}) {
-  // Joined as the bridge joins it, so the stat below matches the path it asks about.
-  const path = join('/codex', 'sessions', 'rollout-h.jsonl')
+  const path = '/codex/sessions/rollout-h.jsonl'
   const meta = JSON.stringify({
     type: 'session_meta',
     payload: { id: 'h', cwd: '/repo', ...extra }
@@ -567,8 +565,9 @@ function hostedThread(tail: string, extra: object = {}) {
   const io = fixtureIo(files)
   const written = { atMs: 0 }
   const stat = io.stat
+  // Matched by name: the bridge asks with whichever separator its platform joins with.
   io.stat = async (candidate) =>
-    candidate === path
+    candidate.endsWith('rollout-h.jsonl')
       ? { directory: false, mtimeMs: written.atMs, size: files[path]?.length ?? 0 }
       : stat(candidate)
   io.exec = vi.fn(async (file: string) =>

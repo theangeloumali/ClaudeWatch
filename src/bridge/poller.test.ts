@@ -4,6 +4,9 @@ import * as processTable from './process-table'
 import { fixtureIo, registryEntry } from './__fixtures__/helpers'
 import type { FeedMessage } from '../shared/office/types'
 
+// These cases print what `ps` and `lsof` print on macOS, in macOS paths.
+const ON_MAC = { platform: 'darwin' } as const
+
 afterEach(() => vi.useRealTimers())
 it('posts hello followed by removal patches and stops scheduling', async () => {
   vi.useFakeTimers()
@@ -15,6 +18,7 @@ it('posts hello followed by removal patches and stops scheduling', async () => {
     file.endsWith('ps') && args[0] === '-o' ? (live ? entry.procStart : '') : ''
   const messages: FeedMessage[] = []
   const poller = new BridgePoller({
+    ...ON_MAC,
     io,
     claudeRoots: ['/claude'],
     codexRoot: '/codex',
@@ -42,6 +46,7 @@ it('posts hello followed by removal patches and stops scheduling', async () => {
 })
 it('deduplicates extra roots and produces healthy empty snapshots', async () => {
   const poller = new BridgePoller({
+    ...ON_MAC,
     io: fixtureIo(),
     claudeRoots: ['/missing', '/missing'],
     codexRoot: '/codex',
@@ -63,6 +68,7 @@ it('keeps two-second cadence when collection takes time', async () => {
     return ''
   }
   const poller = new BridgePoller({
+    ...ON_MAC,
     io,
     claudeRoots: [],
     codexRoot: '/codex',
@@ -82,6 +88,7 @@ it('posts no patch for a tick that changed nothing, only a keepalive when the fe
   io.exec = async (_file, args) => (args.includes('lstart=') && live ? entry.procStart : '')
   const messages: FeedMessage[] = []
   const poller = new BridgePoller({
+    ...ON_MAC,
     io,
     claudeRoots: ['/claude'],
     codexRoot: '/codex',
@@ -107,6 +114,7 @@ it('still posts on every tick at the background pace', async () => {
   vi.useFakeTimers()
   const messages: FeedMessage[] = []
   const poller = new BridgePoller({
+    ...ON_MAC,
     io: fixtureIo(),
     claudeRoots: [],
     codexRoot: '/codex',
@@ -138,6 +146,7 @@ it('posts no usage for a transcript line older than the ledger keeps', async () 
   io.exec = async (_file, args) => (args.includes('lstart=') ? entry.procStart : '')
   const onUsage = vi.fn()
   const poller = new BridgePoller({
+    ...ON_MAC,
     io,
     claudeRoots: ['/claude'],
     codexRoot: '/codex',
@@ -173,7 +182,12 @@ it('prunes environment identities when their sessions disappear', async () => {
     }
     return args.includes('command=') ? 'claude' : ''
   }
-  const poller = new BridgePoller({ io, claudeRoots: ['/claude'], codexRoot: '/codex' })
+  const poller = new BridgePoller({
+    ...ON_MAC,
+    io,
+    claudeRoots: ['/claude'],
+    codexRoot: '/codex'
+  })
   await poller.tick()
   live = false
   await poller.tick()
@@ -210,6 +224,7 @@ it('sends hello before counting any tokens, then fills usage in with the next pa
   const read = vi.spyOn(io, 'readFrom')
   const messages: FeedMessage[] = []
   const poller = new BridgePoller({
+    ...ON_MAC,
     io,
     claudeRoots: ['/claude'],
     codexRoot: '/codex',
@@ -255,6 +270,7 @@ it('re-sends a session for its token counters at most every ten seconds', async 
   io.exec = async (_file, args) => (args[0] === '-o' ? entry.procStart : '')
   const messages: FeedMessage[] = []
   const poller = new BridgePoller({
+    ...ON_MAC,
     io,
     claudeRoots: ['/claude'],
     codexRoot: '/codex',
@@ -300,6 +316,7 @@ it('shows a teammate under its lead with its own pane, then its tokens', async (
       : ''
   }
   const poller = new BridgePoller({
+    ...ON_MAC,
     io,
     claudeRoots: ['/claude'],
     codexRoot: '/codex',
@@ -353,7 +370,12 @@ it('parses the process table once per tick, however many sources read it', async
         : 'claude'
   // The reader parses what it reads, so one call is one parse for both sources.
   const parse = vi.spyOn(processTable, 'readProcessTable')
-  const poller = new BridgePoller({ io, claudeRoots: ['/claude'], codexRoot: '/codex' })
+  const poller = new BridgePoller({
+    ...ON_MAC,
+    io,
+    claudeRoots: ['/claude'],
+    codexRoot: '/codex'
+  })
   expect((await poller.tick()).sessions[0].subagents).toHaveLength(1)
   expect(parse).toHaveBeenCalledTimes(1)
   parse.mockRestore()
@@ -366,7 +388,12 @@ it('reads one process table per tick for the Claude and Codex sources together',
     args.includes('lstart=') ? entry.procStart : ''
   )
   io.exec = exec
-  const poller = new BridgePoller({ io, claudeRoots: ['/claude'], codexRoot: '/codex' })
+  const poller = new BridgePoller({
+    ...ON_MAC,
+    io,
+    claudeRoots: ['/claude'],
+    codexRoot: '/codex'
+  })
   await poller.tick()
   await poller.tick()
   expect(exec.mock.calls.filter(([, args]) => args[0] === '-xo')).toHaveLength(2)
@@ -380,6 +407,7 @@ it('carries on after a tick that fails, with no unhandled rejection', async () =
   try {
     let ticks = 0
     const poller = new BridgePoller({
+      ...ON_MAC,
       io: fixtureIo(),
       claudeRoots: [],
       codexRoot: '/codex',
@@ -407,7 +435,12 @@ it('carries on after a tick that fails, with no unhandled rejection', async () =
 
 it('polls at the pace it is told, and at once when told to speed up', async () => {
   vi.useFakeTimers()
-  const poller = new BridgePoller({ io: fixtureIo(), claudeRoots: [], codexRoot: '/codex' })
+  const poller = new BridgePoller({
+    ...ON_MAC,
+    io: fixtureIo(),
+    claudeRoots: [],
+    codexRoot: '/codex'
+  })
   // Ticks are counted, not posts: a tick that changed nothing posts nothing.
   const tick = vi.spyOn(poller, 'tick')
   const stop = await poller.start(vi.fn())
@@ -430,7 +463,12 @@ it('polls at the pace it is told, and at once when told to speed up', async () =
 
 it('keeps the pace it was given before it started', async () => {
   vi.useFakeTimers()
-  const poller = new BridgePoller({ io: fixtureIo(), claudeRoots: [], codexRoot: '/codex' })
+  const poller = new BridgePoller({
+    ...ON_MAC,
+    io: fixtureIo(),
+    claudeRoots: [],
+    codexRoot: '/codex'
+  })
   poller.setIntervalMs(30_000)
   const post = vi.fn()
   const stop = await poller.start(post)
@@ -449,6 +487,11 @@ it('reads Codex sessions the way the platform it is told runs them', async () =>
   })
   io.exec = async (file) =>
     file.endsWith('ps') ? '42 Sat Oct 10 15:29:12 2026 /bin/codex' : 'p42\nn/repo\n'
-  const poller = new BridgePoller({ io, claudeRoots: [], codexRoot: '/codex', platform: 'darwin' })
+  const poller = new BridgePoller({
+    ...ON_MAC,
+    io,
+    claudeRoots: [],
+    codexRoot: '/codex'
+  })
   expect((await poller.tick()).sessions.map(({ key }) => key)).toEqual(['codex:a'])
 })
