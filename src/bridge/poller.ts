@@ -32,6 +32,8 @@ export interface PollerOptions {
   onCodexTotals?: (totals: CodexTotal[]) => void
   // Whether a Codex session is given the hashed key of its account: only while accounts are watched.
   derivesAccounts?: boolean
+  // Decides how each source finds its processes and reads their paths.
+  platform?: NodeJS.Platform
 }
 export class BridgePoller {
   private snapshot = emptySnapshot()
@@ -55,9 +57,11 @@ export class BridgePoller {
   private readonly onUsage: PollerOptions['onUsage']
   private readonly onCodexTotals: PollerOptions['onCodexTotals']
   private readonly derivesAccounts: boolean
+  private readonly platform: NodeJS.Platform
   private pending: Promise<OfficeSnapshot> | null = null
   constructor(options: PollerOptions = {}) {
     this.io = options.io ?? systemIo
+    this.platform = options.platform ?? process.platform
     this.orca = new OrcaSource(this.io)
     this.teammates = new TeammateSource(this.io)
     this.usage = new UsageTracker(this.io)
@@ -88,8 +92,15 @@ export class BridgePoller {
     const readProcesses = (): Promise<ProcessRow[]> => (processTable ??= readProcessTable(this.io))
     const [claude, codex, opencode, orca] = await Promise.all([
       collectClaude(this.roots, this.io, now, this.teammates, readProcesses),
-      collectCodex(this.codexRoot, this.io, readProcesses, this.derivesAccounts, now),
-      collectOpencode(this.opencodeRoot, this.io, readProcesses, now),
+      collectCodex(
+        this.codexRoot,
+        this.io,
+        readProcesses,
+        this.derivesAccounts,
+        now,
+        this.platform
+      ),
+      collectOpencode(this.opencodeRoot, this.io, readProcesses, now, this.platform),
       this.orca.poll(now)
     ])
     // The first snapshot goes out with usage unknown, so no window waits on a first scan: that

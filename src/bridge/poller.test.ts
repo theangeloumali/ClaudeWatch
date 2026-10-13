@@ -438,3 +438,17 @@ it('keeps the pace it was given before it started', async () => {
   expect(post).toHaveBeenCalledTimes(1)
   stop()
 })
+
+it('reads Codex sessions the way the platform it is told runs them', async () => {
+  const io = fixtureIo({
+    '/codex/sessions/rollout-a.jsonl': JSON.stringify({
+      type: 'session_meta',
+      payload: { id: 'a', cwd: '/repo' }
+    }),
+    '/repo/.git': null
+  })
+  io.exec = async (file) =>
+    file.endsWith('ps') ? '42 Sat Oct 10 15:29:12 2026 /bin/codex' : 'p42\nn/repo\n'
+  const poller = new BridgePoller({ io, claudeRoots: [], codexRoot: '/codex', platform: 'darwin' })
+  expect((await poller.tick()).sessions.map(({ key }) => key)).toEqual(['codex:a'])
+})

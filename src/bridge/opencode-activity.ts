@@ -1,5 +1,5 @@
-import { basename } from 'node:path'
 import type { AgentActivity, AgentAttention, CurrentTool } from '../shared/office/types'
+import { programName } from '../shared/platform-process'
 import { isLabel } from './io'
 import type { OpencodeRow } from './opencode-db'
 import type { ProcessRow } from './process-table'
@@ -35,7 +35,7 @@ const NOT_A_SESSION = new Set([
 // The compiled binary is the agent. A package runner's `node …/bin/opencode` only starts it.
 export function opencodeProcesses(rows: ProcessRow[]): { pid: number; startedAtMs: number }[] {
   return rows
-    .filter(({ argv }) => basename(argv[0]) === 'opencode' && !NOT_A_SESSION.has(argv[1] ?? ''))
+    .filter(({ argv }) => programName(argv[0]) === 'opencode' && !NOT_A_SESSION.has(argv[1] ?? ''))
     .map(({ pid, startedAtMs }) => ({ pid, startedAtMs }))
 }
 
@@ -70,8 +70,9 @@ export function opencodeState(
   }
   if (message?.role !== 'assistant') return OPENCODE_IDLE
   if (typeof message.error === 'string') {
-    // The owner pressed stop: nothing to look at.
-    const attention = message.error === 'MessageAbortedError' ? 'none' : 'error'
+    // The owner pressed stop: nothing to look at. OpenCode 2 names it by type, 1.x by name.
+    const isAborted = message.error === 'MessageAbortedError' || message.error === 'aborted'
+    const attention = isAborted ? 'none' : 'error'
     return { ...OPENCODE_IDLE, attention }
   }
   if (typeof message.completed === 'number') {
