@@ -38,12 +38,14 @@ export function parseProcessTable(output: string): ProcessRow[] {
 
 // This logon session's processes, the Windows analogue of `ps -x`. Starts come from .NET, exact
 // to the 100 ns Claude Code records (CIM cuts them to the microsecond). CIM is costly, so it is
-// asked only for command lines and CreationDate ticks: once per process that outlived a run, at
-// most every 10 s. The kept host carries them between runs; a fresh shell asks for all at once.
+// asked only for command lines and CreationDate ticks, at most every 10 s, about processes that
+// outlived a run. One CIM has not described yet is asked again, three times at most, as a
+// protected process never is. The kept host carries all this between runs; a fresh shell asks
+// for every process at once.
 export const WINDOWS_PROCESS_TABLE_SCRIPT =
   powerShellScript(`$session = [Diagnostics.Process]::GetCurrentProcess().SessionId
 $first = $null -eq $global:tails
-if ($first) { $global:tails = @{}; $global:waiting = @{}; $global:clock = [Diagnostics.Stopwatch]::StartNew(); $global:askedAt = -10000 }
+if ($first) { $global:tails = @{}; $global:waiting = @{}; $global:misses = @{}; $global:clock = [Diagnostics.Stopwatch]::StartNew(); $global:askedAt = -10000 }
 $lines = $global:tails
 $live = @{}
 foreach ($process in [Diagnostics.Process]::GetProcesses()) {
@@ -58,6 +60,7 @@ $ask = @(foreach ($key in $unseen) { if ($first -or $global:waiting.ContainsKey(
 if ($global:clock.ElapsedMilliseconds - $global:askedAt -lt 10000) { $ask = @() }
 foreach ($key in $unseen) { if (-not $global:waiting.ContainsKey($key)) { $global:waiting[$key] = $true } }
 foreach ($key in @($global:waiting.Keys)) { if (-not $live.ContainsKey($key) -or $lines.ContainsKey($key)) { $global:waiting.Remove($key) } }
+foreach ($key in @($global:misses.Keys)) { if (-not $live.ContainsKey($key)) { $global:misses.Remove($key) } }
 if ($ask.Count) {
   $global:askedAt = $global:clock.ElapsedMilliseconds
   $filter = if ($ask.Count -gt 64) { "SessionId=$session" } else { ($ask | ForEach-Object { 'ProcessId=' + $live[$_] }) -join ' OR ' }
@@ -71,8 +74,11 @@ if ($ask.Count) {
     foreach ($key in $ask) {
       $start = [long]($key.Split(':')[1])
       $line = [string]$found["$($live[$key]):$($start - $start % 10)"]
-      $lines[$key] = $line
-      if ($line) { $changed = $true }
+      if ($line) { $lines[$key] = $line; $changed = $true; $global:misses.Remove($key) }
+      else {
+        $global:misses[$key] = 1 + [int]$global:misses[$key]
+        if ($global:misses[$key] -ge 3) { $lines[$key] = '' }
+      }
     }
   } catch {}
 }

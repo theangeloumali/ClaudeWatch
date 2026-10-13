@@ -1,6 +1,7 @@
 import {
   checkedPid,
   filetimeToMs,
+  POWERSHELL,
   powershellArgs,
   type PowerShellScript,
   powerShellScript,
@@ -40,47 +41,63 @@ const hasExitStatus = (error: unknown): boolean =>
 const isCreationTicks = (procStart: string, platform: NodeJS.Platform): boolean =>
   platform === 'win32' && Number(procStart) > 3e17
 
-// The ticks of a process as Claude Code asked for them when it wrote the record.
+// The ticks of a process as Claude Code asked for them when it wrote the record, then its
+// FILETIME: a ticks record holds no date of its own.
 export const creationTicksScript = (pid: number): PowerShellScript =>
   powerShellScript(
-    `(Get-CimInstance Win32_Process -Filter "ProcessId=${checkedPid(pid)}").CreationDate.Ticks`
+    `$process = Get-CimInstance Win32_Process -Filter "ProcessId=${checkedPid(pid)}"
+if ($process) { "$($process.CreationDate.Ticks) $($process.CreationDate.ToFileTimeUtc())" }`
   )
 
-function ownStartQuery(entry: RegistryEntry, platform: NodeJS.Platform) {
-  const query = startTimeQuery(entry.pid, platform)
-  if (!isCreationTicks(entry.procStart, platform)) return query
-  return { file: query.file, args: powershellArgs(creationTicksScript(entry.pid)) }
-}
-
-// When a live record's process started. A Windows record holds a FILETIME or ticks, not a date:
-// the process's own row gives the .NET start for both, and a ticks record without one waits for it.
-export function startedAtOf(
+// The record's start as a process would print it, and when that process started; asked of a
+// pid the table lacks as Claude Code asked when it wrote the record.
+async function askStart(
   entry: RegistryEntry,
-  table: ProcessRow[],
-  platform: NodeJS.Platform = process.platform
-): number {
-  if (platform !== 'win32') return Date.parse(`${entry.procStart} UTC`) || 0
-  const row = table.find(({ pid }) => pid === entry.pid)
-  if (row) return row.startedAtMs
-  return isCreationTicks(entry.procStart, platform) ? 0 : filetimeToMs(entry.procStart) || 0
+  io: BridgeIo,
+  platform: NodeJS.Platform
+): Promise<{ start: string; startedAtMs: number }> {
+  if (!isCreationTicks(entry.procStart, platform)) {
+    const { file, args } = startTimeQuery(entry.pid, platform)
+    const start = await io.exec(file, args)
+    const startedAtMs =
+      platform === 'win32' ? filetimeToMs(entry.procStart) : Date.parse(`${entry.procStart} UTC`)
+    return { start, startedAtMs }
+  }
+  const [ticks = '', filetime = ''] = (
+    await io.exec(POWERSHELL, powershellArgs(creationTicksScript(entry.pid)))
+  )
+    .trim()
+    .split(/\s+/)
+  return { start: ticks, startedAtMs: filetimeToMs(filetime) }
 }
 
-// The owner's process table answers for a pid it lists. Only one it lacks is asked about,
-// which may still run under another account.
-export async function isLive(
+// When a live record's process started, or null when the record's process has gone. The owner's
+// table answers for a pid it lists; only one it lacks is asked about, as it may run under
+// another account. A Windows record holds a FILETIME or ticks, not a date.
+export async function liveStartedAt(
   entry: RegistryEntry,
   io: BridgeIo,
   table: ProcessRow[],
   platform: NodeJS.Platform = process.platform
-): Promise<boolean> {
+): Promise<number | null> {
   try {
     const row = table.find(({ pid }) => pid === entry.pid)
     const listed = isCreationTicks(entry.procStart, platform) ? row?.creationTicks : row?.lstart
-    const { file, args } = ownStartQuery(entry, platform)
-    const start = listed ?? (await io.exec(file, args))
-    return collapseWhitespace(start) === collapseWhitespace(entry.procStart)
+    const { start, startedAtMs } =
+      row && listed !== undefined
+        ? { start: listed, startedAtMs: row.startedAtMs }
+        : await askStart(entry, io, platform)
+    if (collapseWhitespace(start) !== collapseWhitespace(entry.procStart)) return null
+    return Number.isFinite(startedAtMs) ? startedAtMs : 0
   } catch (error) {
     if (platform === 'win32' && !hasExitStatus(error)) throw error
-    return false
+    return null
   }
 }
+
+export const isLive = async (
+  entry: RegistryEntry,
+  io: BridgeIo,
+  table: ProcessRow[],
+  platform: NodeJS.Platform = process.platform
+): Promise<boolean> => (await liveStartedAt(entry, io, table, platform)) !== null
