@@ -6,6 +6,9 @@ export const POWERSHELL = `${SYSTEM_ROOT}\\System32\\WindowsPowerShell\\v1.0\\po
 
 // Where every PowerShell runs: a folder only administrators write, never the launch folder.
 export const POWERSHELL_CWD = `${SYSTEM_ROOT}\\System32`
+// How every PowerShell starts: from POWERSHELL_CWD, as part of its module path resolves against
+// the working folder, and with no console window. Each caller adds only its own env.
+export const POWERSHELL_SPAWN = { cwd: POWERSHELL_CWD, windowsHide: true } as const
 
 // PowerShell does not start without SystemRoot; nothing else of this process's env is passed on.
 // Left unset, its module path gains a literal `%ProgramFiles%\...` entry that resolves against

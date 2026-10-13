@@ -6,7 +6,7 @@ import { assertOrcaTrusted, ORCA_CLI, orcaCliEnv } from '../shared/orca-bundle'
 import {
   childEnv,
   POWERSHELL,
-  POWERSHELL_CWD,
+  POWERSHELL_SPAWN,
   powershellScriptOf,
   startTimeQuery
 } from '../shared/platform-process'
@@ -221,13 +221,12 @@ export const systemIo: BridgeIo = {
     }
     // Orca's CLI cannot start without APPDATA on Windows; every other program gets the minimum.
     const env = file === ORCA_CLI ? orcaCliEnv() : childEnv()
-    // PowerShell resolves part of its module path against its working folder: never the launch one.
-    const cwd = file === POWERSHELL ? { cwd: POWERSHELL_CWD } : {}
+    const spawn = file === POWERSHELL ? POWERSHELL_SPAWN : { windowsHide: true }
     return new Promise((resolve, reject) => {
       execFile(
         file,
         args,
-        { env, ...cwd, timeout: timeoutMs, maxBuffer: 8 * 1024 * 1024, windowsHide: true },
+        { env, ...spawn, timeout: timeoutMs, maxBuffer: 8 * 1024 * 1024 },
         (error, stdout) => {
           if (error) reject(error)
           else resolve(stdout)

@@ -1,5 +1,5 @@
 import { execFile } from 'child_process'
-import { POWERSHELL_CWD, powershellScriptOf, programName } from '../../shared/platform-process'
+import { POWERSHELL_SPAWN, powershellScriptOf, programName } from '../../shared/platform-process'
 
 // Every spelling that starts a PowerShell is held to one script and nothing after it.
 const isPowerShell = (bin: string): boolean => ['powershell', 'pwsh'].includes(programName(bin))
@@ -23,8 +23,7 @@ export function execFilePromise(
 
     // No console window flashes up on Windows; ignored elsewhere. Not for wt.exe, which
     // honours SW_HIDE and would open hidden.
-    // PowerShell resolves part of its module path against its working folder: never the launch one.
-    const cwd = runsPowerShell ? { cwd: POWERSHELL_CWD } : {}
-    execFile(bin, args, { ...options, ...cwd, windowsHide: true }, cb)
+    const spawn = runsPowerShell ? POWERSHELL_SPAWN : { windowsHide: true }
+    execFile(bin, args, { ...options, ...spawn }, cb)
   })
 }

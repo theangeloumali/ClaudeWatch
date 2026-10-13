@@ -2,6 +2,7 @@ import { describe, expect, expectTypeOf, it } from 'vitest'
 import {
   POWERSHELL,
   POWERSHELL_CWD,
+  POWERSHELL_SPAWN,
   checkedPid,
   childEnv,
   filetimeToMs,
@@ -163,5 +164,12 @@ describe('isAbsoluteFolder', () => {
     ['', 'win32', false]
   ])('%s on %s is %s', (path, platform, expected) => {
     expect(isAbsoluteFolder(path, platform)).toBe(expected)
+  })
+})
+
+describe('POWERSHELL_SPAWN', () => {
+  it('starts every PowerShell from System32 with no console window', () => {
+    expect(POWERSHELL_SPAWN).toEqual({ cwd: POWERSHELL_CWD, windowsHide: true })
+    expect(POWERSHELL_CWD).toMatch(/\System32$/)
   })
 })

@@ -1,3 +1,4 @@
+import { windowsFolderKey } from '../shared/office/project-key'
 import { isAbsoluteFolder } from '../shared/platform-process'
 import { CONTROL_CHARACTER } from '../shared/unsafe-text'
 import { identityOf, isInsideAppBundle } from './process-table'
@@ -8,7 +9,7 @@ export const isFolderPath = (folder: string, platform: NodeJS.Platform): boolean
 
 // Windows folders compare without regard to letter case, separator or a trailing separator.
 export const folderKey = (folder: string, platform: NodeJS.Platform = process.platform): string =>
-  platform === 'win32' ? folder.replaceAll('/', '\\').replace(/\\+$/, '').toLowerCase() : folder
+  platform === 'win32' ? windowsFolderKey(folder) : folder
 
 // Where Windows installs apps: Program Files, the Store's WindowsApps and %LOCALAPPDATA%\Programs.
 const WINDOWS_INSTALL_ROOT =

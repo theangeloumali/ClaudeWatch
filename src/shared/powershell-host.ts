@@ -1,6 +1,6 @@
 import { execFile, spawn } from 'node:child_process'
 import type { Readable, Writable } from 'node:stream'
-import { childEnv, POWERSHELL, POWERSHELL_CWD, powershellArgs } from './platform-process'
+import { childEnv, POWERSHELL, POWERSHELL_SPAWN, powershellArgs } from './platform-process'
 
 // Reads one id and base64 script per line and answers each on one line, so PowerShell starts
 // once and not on every poll: a cold start costs around a second of CPU. An output equal to
@@ -60,10 +60,8 @@ const failure = (message: string, extra: { code: number | null; killed?: boolean
 function startShell(): HostProcess {
   const shell = spawn(POWERSHELL, powershellArgs(POWERSHELL_HOST_SCRIPT), {
     env: childEnv('win32'),
-    // Part of PowerShell's module path resolves against this folder: never the launch folder.
-    cwd: POWERSHELL_CWD,
-    stdio: ['pipe', 'pipe', 'pipe'],
-    windowsHide: true
+    ...POWERSHELL_SPAWN,
+    stdio: ['pipe', 'pipe', 'pipe']
   })
   // Nothing reads what PowerShell writes to stderr, and a full pipe would stall it.
   shell.stderr.resume()
@@ -81,10 +79,9 @@ function runCold(script: string, timeoutMs: number): Promise<string> {
       powershellArgs(script),
       {
         env: childEnv('win32'),
-        cwd: POWERSHELL_CWD,
+        ...POWERSHELL_SPAWN,
         timeout: timeoutMs,
-        maxBuffer: MAX_REPLY_BYTES,
-        windowsHide: true
+        maxBuffer: MAX_REPLY_BYTES
       },
       (error, stdout) => (error ? reject(error) : resolve(stdout))
     )
