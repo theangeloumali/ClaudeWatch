@@ -3,8 +3,12 @@ import { ORCA_CLI } from '../shared/orca-bundle'
 import { POWERSHELL, powershellArgs, programName } from '../shared/platform-process'
 import {
   ancestry,
-  parseProcessTree,
-  processTreeScript,
+  consoleRootScript,
+  parseConsoleRoot,
+  parseProcessList,
+  PROCESS_LIST_SCRIPT,
+  type ProcessNode,
+  type ProcessTree,
   type RunScript
 } from '../shared/windows-console'
 import { type BridgeIo, jsonObject, object } from './io'
@@ -46,10 +50,10 @@ export async function readOrcaEnvironment(
   return parseOrcaEnvironment(environment)
 }
 
-// How a process is looked up: `exec` runs ps or the Orca CLI, `runScript` Windows PowerShell.
+// How a process is looked up: `exec` runs ps or the Orca CLI, `treeOf` reads Windows' tree.
 interface OrcaLookup {
   exec: (file: string, args: string[]) => Promise<string>
-  runScript: RunScript
+  treeOf: (pid: number) => Promise<ProcessTree>
   platform: NodeJS.Platform
 }
 const NOT_IN_ORCA: OrcaEnvironment = { paneKey: null, worktreeId: null, jobDir: null }
@@ -76,9 +80,11 @@ function panesByShell(diagnostics: string): Map<number, string> {
 // is one: for any other session they would cost seconds and say nothing.
 async function readWindowsPaneKey(
   pid: number,
-  { exec, runScript }: OrcaLookup
+  { exec, treeOf }: OrcaLookup
 ): Promise<string | null> {
-  const chain = ancestry(parseProcessTree(await runScript(processTreeScript(pid))), pid)
+  const chain = ancestry(await treeOf(pid), pid)
+  // Read before the process showed up: not proof that it runs outside Orca.
+  if (!chain.length) throw new Error('process not listed yet')
   if (!chain.some((node) => programName(node.name) === 'orca')) return null
   const panes = panesByShell(await exec(ORCA_CLI, ['diagnostics', 'memory', '--json']))
   const shell = chain.find((node) => panes.has(node.pid))
@@ -134,6 +140,8 @@ export class OrcaSource {
   private delay = FIRST_RETRY_MS
   private health: SourceHealth = { id: 'orca', ok: true, detail: 'not polled' }
   private environments = new Map<string, { value: OrcaEnvironment; retryAt: number }>()
+  // One enumeration of every process serves all of a tick's new sessions.
+  private listing: { now: number; processes: Promise<Map<number, ProcessNode>> } | null = null
   constructor(
     private readonly io: BridgeIo,
     private readonly platform: NodeJS.Platform = process.platform,
@@ -205,7 +213,7 @@ export class OrcaSource {
       try {
         const value = await orcaEnvironmentOf(pid, {
           exec: (file, args) => this.io.exec(file, args),
-          runScript: this.runScript,
+          treeOf: (treePid) => this.treeAt(treePid, now),
           platform: this.platform
         })
         cached = { value, retryAt: Infinity }
@@ -216,5 +224,16 @@ export class OrcaSource {
       this.environments.set(identity, cached)
     }
     return cached.value
+  }
+
+  private async treeAt(pid: number, now: number): Promise<ProcessTree> {
+    if (this.listing?.now !== now) {
+      this.listing = { now, processes: this.runScript(PROCESS_LIST_SCRIPT).then(parseProcessList) }
+    }
+    const [processes, consoleRoot] = await Promise.all([
+      this.listing.processes,
+      this.runScript(consoleRootScript(pid)).then(parseConsoleRoot)
+    ])
+    return { consoleRoot, processes }
   }
 }

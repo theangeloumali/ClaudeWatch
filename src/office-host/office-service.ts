@@ -20,7 +20,7 @@ import { orcaBundle } from '../shared/orca-bundle'
 import { filetimeToMs, powershellScriptOf, startTimeQuery } from '../shared/platform-process'
 import { PARSED_OUTPUT_ENV } from '../shared/ps'
 import { runInteractivePowerShell } from '../shared/powershell-host'
-import type { RunScript } from '../shared/windows-console'
+import { processTreeOf, type RunScript } from '../shared/windows-console'
 
 const PS_OPTIONS = { timeout: 5000, env: PARSED_OUTPUT_ENV }
 
@@ -32,7 +32,7 @@ interface OfficeServiceDeps {
   // False for a view-only page: then nothing here types, a `cd` into a terminal included.
   isInteractive: boolean
   platform?: NodeJS.Platform
-  // Runs the Windows scripts that carry only a pid; a fresh powershell.exe each when not given.
+  // Runs the Windows scripts that carry only a pid; the kept PowerShell host when not given.
   runScript?: RunScript
 }
 
@@ -134,7 +134,7 @@ export function createOfficeService({
     focusProcess: (owner) => interactions.focusProcess(owner),
     processStart,
     paneKeyOf: (pid) =>
-      orcaEnvironmentOf(pid, { exec, runScript, platform }).then(
+      orcaEnvironmentOf(pid, { exec, treeOf: processTreeOf(runScript), platform }).then(
         ({ paneKey }) => paneKey,
         () => null
       )

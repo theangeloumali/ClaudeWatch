@@ -19,7 +19,11 @@ import {
   powershellArgs,
   startTimeQuery
 } from '../shared/platform-process'
-import { processTreeScript } from '../shared/windows-console'
+import {
+  consoleRootScript,
+  PROCESS_LIST_SCRIPT,
+  processTreeScript
+} from '../shared/windows-console'
 import { PARSED_OUTPUT_ENV } from '../shared/ps'
 import { systemIo } from './io'
 import { creationTicksScript } from './liveness'
@@ -117,7 +121,8 @@ it('runs only the bridge’s own PowerShell scripts, each for one integer pid at
     START_TIME,
     startTimeQuery(7, 'win32').args[3],
     creationTicksScript(55152),
-    processTreeScript(1234)
+    consoleRootScript(1234),
+    PROCESS_LIST_SCRIPT
   ])
     await expect(systemIo.exec(POWERSHELL, powershellArgs(script))).resolves.toBeTypeOf('string')
   for (const script of [
@@ -128,7 +133,10 @@ it('runs only the bridge’s own PowerShell scripts, each for one integer pid at
     START_TIME.replace('42', '-1'),
     START_TIME.replace('42', '042'),
     creationTicksScript(55152).replace('55152', '55152 OR 1=1'),
-    `${processTreeScript(1234)}\nGet-Content x`
+    `${consoleRootScript(1234)}\nGet-Content x`,
+    `${PROCESS_LIST_SCRIPT}\nGet-Content x`,
+    // A single tree is the main process's; the bridge reads the shared list instead.
+    processTreeScript(1234)
   ])
     await expect(systemIo.exec(POWERSHELL, powershellArgs(script))).rejects.toThrow(
       'forbidden: program'

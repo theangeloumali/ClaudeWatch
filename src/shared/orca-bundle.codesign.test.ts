@@ -4,7 +4,9 @@ import { cp, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { ORCA_APP, ORCA_TEAM_ID, verifyArgs } from './orca-bundle'
+import { orcaBundle, ORCA_TEAM_ID, verifyArgs } from './orca-bundle'
+
+const ORCA_APP = orcaBundle('darwin').app
 
 const CODESIGN = '/usr/bin/codesign'
 const codesign = (args: string[]): { status: number | null; stderr: string } =>

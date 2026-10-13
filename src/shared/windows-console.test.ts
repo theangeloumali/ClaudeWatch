@@ -3,8 +3,13 @@ import { execFile, spawnSync } from 'node:child_process'
 import { childEnv, POWERSHELL, powershellArgs } from './platform-process'
 import {
   ancestry,
+  consoleRootScript,
   focusWindowScript,
+  parseConsoleRoot,
+  parseProcessList,
   parseProcessTree,
+  PROCESS_LIST_SCRIPT,
+  processTreeOf,
   processTreeScript,
   WINDOW_HOSTS,
   type ProcessTree
@@ -44,6 +49,7 @@ const runCold = (script: string): Promise<string> =>
 
 describe.each([
   ['processTreeScript', processTreeScript],
+  ['consoleRootScript', consoleRootScript],
   ['focusWindowScript', focusWindowScript]
 ])('%s', (_name, script) => {
   it('is one fixed script with only the pid written into it', () => {
@@ -68,6 +74,31 @@ describe.each([
     for (const pid of [0, -1, 1.5, Number.NaN, 2 ** 53]) {
       expect(() => script(pid)).toThrow('not a pid')
     }
+  })
+})
+
+describe('the process listing a whole tick shares', () => {
+  it('names no pid and attaches to no console, so one run serves every session', () => {
+    expect(PROCESS_LIST_SCRIPT).not.toMatch(/Console\(|Add-Type/)
+    expect(processTreeScript(42)).toContain(
+      PROCESS_LIST_SCRIPT.split('\n').find((line) => line.includes('Get-CimInstance'))
+    )
+  })
+
+  it('reads the listing alone, and a console root alone', () => {
+    const processes = parseProcessList(ORCA_PANE)
+    expect([...processes.keys()]).toEqual([55152, 52868, 28964, 4404, 38436])
+    expect(parseConsoleRoot('28964\r\n')).toBe(28964)
+    expect(parseConsoleRoot('0')).toBe(0)
+    for (const bad of ['', 'x', '-1', '1.5']) expect(() => parseConsoleRoot(bad)).toThrow()
+  })
+
+  it('reads one pid’s whole tree through the runner it is given', async () => {
+    const runScript = async (script: string): Promise<string> =>
+      script === processTreeScript(55152) ? ORCA_PANE : ''
+    expect(pids(await processTreeOf(runScript)(55152), 55152)).toEqual([
+      55152, 52868, 28964, 4404, 38436
+    ])
   })
 })
 
@@ -149,6 +180,14 @@ describe.runIf(process.platform === 'win32')('the scripts, run by PowerShell its
     )
     expect(chain[0]).toMatchObject({ pid: process.pid, name: 'node.exe' })
     expect(chain[1]?.pid).toBe(process.ppid)
+  }, 30_000)
+
+  it('gives the same ancestry from the shared listing and a console root', async () => {
+    const tree = {
+      consoleRoot: parseConsoleRoot(await runCold(consoleRootScript(process.pid))),
+      processes: parseProcessList(await runCold(PROCESS_LIST_SCRIPT))
+    }
+    expect(pids(tree, process.pid).slice(0, 2)).toEqual([process.pid, process.ppid])
   }, 30_000)
 
   it('raises nothing, and says so, for a process that has exited', async () => {

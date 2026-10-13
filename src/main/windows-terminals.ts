@@ -15,8 +15,7 @@ import { runInteractivePowerShell } from '../shared/powershell-host'
 import {
   ancestry,
   focusWindowScript,
-  parseProcessTree,
-  processTreeScript,
+  processTreeOf,
   RAISE_APP_SCRIPT,
   type RunScript,
   WINDOW_HOSTS
@@ -173,7 +172,7 @@ export async function resolveWindowsTerminal(
   pid: number,
   runScript: RunScript = runInteractivePowerShell
 ): Promise<TerminalInfo | null> {
-  const tree = parseProcessTree(await runScript(processTreeScript(pid)))
+  const tree = await processTreeOf(runScript)(pid)
   for (const node of ancestry(tree, pid).slice(1)) {
     const host = WINDOWS_TERMINALS[programName(node.name)]
     if (host) {
