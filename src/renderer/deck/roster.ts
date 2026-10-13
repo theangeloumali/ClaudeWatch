@@ -9,7 +9,7 @@ import type {
 } from '../../shared/office/types'
 import { GEM_SPECS } from '../office/logic/status-gem'
 import type { ClaudeInstance } from '../lib/types'
-import { timeAgo } from '../lib/utils'
+import { pathSegments, timeAgo } from '../lib/utils'
 import { buildTokenLedger, sessionTokens } from './tokens'
 
 // Listed in roster order: whoever needs you first, the departed last.
@@ -126,7 +126,7 @@ function stateOf(
 
 function emptySquad(instance: ClaudeInstance, session: SessionRef | undefined): Squad {
   const projectRoot = projectRootOf(instance.projectPath)
-  const segments = projectRoot.split(/[\\/]/).filter(Boolean)
+  const segments = pathSegments(projectRoot)
   const name = session?.projectLabel ?? segments[segments.length - 1] ?? instance.projectName
   return {
     // The feed keys a project by a hash of its root; hashing the path the same way keeps an

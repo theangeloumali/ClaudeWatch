@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Trash2, FileText } from 'lucide-react'
 import { deckApi } from '../deck/deck-api'
 import { crestFor } from '../deck/roster'
-import { formatElapsedTime, timeAgo } from '../lib/utils'
+import { formatElapsedTime, pathSegments, timeAgo } from '../lib/utils'
 import type { SessionHistoryEntry } from '../lib/types'
 import { BUTTON_QUIET_COMPACT_CLASS } from './deck/deck-styles'
 import { Crest } from './deck/Plate'
@@ -89,7 +89,7 @@ export function SessionHistory() {
           </div>
           <ul aria-label="Session history entries">
             {history.map((entry) => {
-              const projectLabel = entry.projectName.split('/').pop() ?? entry.projectName
+              const projectLabel = pathSegments(entry.projectName).pop() ?? entry.projectName
               return (
                 <li
                   key={`${entry.pid}-${String(entry.startedAt)}`}
