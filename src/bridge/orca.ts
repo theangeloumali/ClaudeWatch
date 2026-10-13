@@ -137,7 +137,9 @@ export class OrcaSource {
   constructor(
     private readonly io: BridgeIo,
     private readonly platform: NodeJS.Platform = process.platform,
-    private readonly runScript: RunScript = (script) => io.exec(POWERSHELL, powershellArgs(script))
+    // The process tree compiles a helper on a fresh host's first run, past the 5 s default.
+    private readonly runScript: RunScript = (script) =>
+      io.exec(POWERSHELL, powershellArgs(script), { timeoutMs: 20_000 })
   ) {}
 
   async poll(now: number): Promise<SourceHealth> {

@@ -213,3 +213,8 @@ export function runPowerShell(script: string, timeoutMs = DEFAULT_TIMEOUT_MS): P
 export function closePowerShellHost(): void {
   shared?.close()
 }
+
+// A click's script compiles a helper on a fresh host's first run, past a poll's 5 s.
+const INTERACTIVE_TIMEOUT_MS = 20_000
+export const runInteractivePowerShell = (script: string): Promise<string> =>
+  runPowerShell(script, INTERACTIVE_TIMEOUT_MS)

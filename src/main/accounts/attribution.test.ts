@@ -262,6 +262,8 @@ describe('a bridge that starts again', () => {
     const startBridge = async (): Promise<BridgePoller> => {
       const poller = new BridgePoller({
         io,
+        // The fixtures print macOS ps output.
+        platform: 'darwin',
         claudeRoots: ['/claude'],
         codexRoot: '/codex',
         now: () => now,

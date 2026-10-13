@@ -1,4 +1,4 @@
-import { posix, win32 } from 'node:path'
+import { join } from 'node:path'
 import { accountKey } from './account-key'
 import { type BridgeIo, isMissing, jsonObject, object } from './io'
 import { isFolderPath } from './process-folders'
@@ -34,8 +34,6 @@ export async function findRollouts(
   derivesAccounts = false,
   platform: NodeJS.Platform = process.platform
 ): Promise<Rollout[]> {
-  // The fixtures of a test that names another platform are written in that platform's paths.
-  const { join } = platform === 'win32' ? win32 : posix
   let roots = caches.get(io)
   if (!roots) caches.set(io, (roots = new Map()))
   let cache = roots.get(root)

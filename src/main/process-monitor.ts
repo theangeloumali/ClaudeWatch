@@ -3,6 +3,7 @@ import { parseElapsedTime, getProjectName } from '../renderer/lib/utils'
 import type { PlatformDetector, RawProcessInfo } from './platform/darwin'
 import { DarwinDetector } from './platform/darwin'
 import { Win32Detector } from './platform/win32'
+import { runPowerShell } from '../shared/powershell-host'
 import type { TerminalResolver } from './terminal-resolver'
 
 const KNOWN_FLAGS = [
@@ -58,7 +59,8 @@ function determineStatus(
 
 function getPlatformDetector(platform: NodeJS.Platform): PlatformDetector {
   if (platform === 'win32') {
-    return new Win32Detector()
+    // The kept PowerShell: a cold one per poll costs about a fifth of a core.
+    return new Win32Detector({ runScript: runPowerShell })
   }
   return new DarwinDetector()
 }

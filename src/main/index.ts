@@ -25,6 +25,7 @@ import { paceBridgeByWindows } from './bridge-pace'
 import { opensOfficeOnStart } from './office-window'
 import { createAccountLedger } from './accounts'
 import { dashboardChrome } from './window-chrome'
+import { closePowerShellHost, runInteractivePowerShell } from '../shared/powershell-host'
 
 // Prevent "write EIO" crashes when stdout/stderr pipe is broken
 // (e.g., launching terminal closed, or running packaged without a TTY)
@@ -116,7 +117,7 @@ app.whenReady().then(() => {
   app.setLoginItemSettings({ openAtLogin: settings.launchAtLogin })
 
   // Initialize terminal resolver and process monitor
-  const terminalResolver = new TerminalResolver()
+  const terminalResolver = new TerminalResolver(process.platform, runInteractivePowerShell)
   const monitor = new ProcessMonitor({
     terminalResolver,
     cpuIdleThreshold: settings.cpuIdleThreshold
@@ -285,6 +286,7 @@ app.on('before-quit', () => {
   // no tray and no window.
   app.isQuitting = true
   trayManager?.destroy()
+  closePowerShellHost()
   trayManager = null
 })
 

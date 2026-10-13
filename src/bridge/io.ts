@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process'
 import { open, readdir, realpath, stat } from 'node:fs/promises'
 import { basename } from 'node:path'
 import { isJsonObject } from '../shared/json-object'
-import { assertOrcaTrusted, ORCA_CLI } from '../shared/orca-bundle'
+import { assertOrcaTrusted, ORCA_CLI, orcaCliEnv } from '../shared/orca-bundle'
 import { childEnv, POWERSHELL, powershellArgs } from '../shared/platform-process'
 import { runPowerShell } from '../shared/powershell-host'
 import { UNSAFE_IN_A_NAME } from '../shared/unsafe-text'
@@ -172,11 +172,13 @@ export const systemIo: BridgeIo = {
       const script = powershellScript(args)
       if (process.platform === 'win32') return runPowerShell(script, timeoutMs)
     }
+    // Orca's CLI cannot start without APPDATA on Windows; every other program gets the minimum.
+    const env = file === ORCA_CLI ? orcaCliEnv() : childEnv()
     return new Promise((resolve, reject) => {
       execFile(
         file,
         args,
-        { env: childEnv(), timeout: timeoutMs, maxBuffer: 8 * 1024 * 1024, windowsHide: true },
+        { env, timeout: timeoutMs, maxBuffer: 8 * 1024 * 1024, windowsHide: true },
         (error, stdout) => {
           if (error) reject(error)
           else resolve(stdout)

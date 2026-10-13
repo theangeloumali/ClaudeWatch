@@ -11,7 +11,7 @@ vi.mock('../shared/orca-bundle', async (original) => ({
   ...(await original<typeof import('../shared/orca-bundle')>()),
   assertOrcaTrusted
 }))
-import { ORCA_CLI } from '../shared/orca-bundle'
+import { ORCA_CLI, orcaCliEnv } from '../shared/orca-bundle'
 import { childEnv, POWERSHELL, powershellArgs } from '../shared/platform-process'
 import { PARSED_OUTPUT_ENV } from '../shared/ps'
 import { systemIo } from './io'
@@ -31,6 +31,18 @@ it('runs Orca from the app bundle, the file the main process runs, and no other 
     'forbidden'
   )
   expect(execFile).toHaveBeenCalledTimes(1)
+})
+
+it("gives Orca the env its CLI needs and nothing more of this process's", async () => {
+  vi.stubEnv('APPDATA', 'C:\\Users\\ada\\AppData\\Roaming')
+  vi.stubEnv('CLAUDEWATCH_SECRET', 'canary')
+  try {
+    await systemIo.exec(ORCA_CLI, ['worktree', 'ps', '--json'])
+    expect(execFile.mock.calls[0][2].env).toEqual(orcaCliEnv())
+    expect(JSON.stringify(execFile.mock.calls[0][2].env)).not.toContain('canary')
+  } finally {
+    vi.unstubAllEnvs()
+  }
 })
 
 it('has the Orca bundle checked before it runs anything from it, and only then', async () => {

@@ -12,6 +12,8 @@ import type { SessionTracker } from './session-tracker'
 import type { TerminalResolver } from './terminal-resolver'
 import type { SettingsStore } from './store'
 import { rememberBounds, restoreBounds } from './window-bounds'
+import { officeChrome } from './window-chrome'
+import { runInteractivePowerShell } from '../shared/powershell-host'
 import { type AccountLedger, type OfficeAccounts, withAccounts } from './accounts'
 
 type OfficeWindowStore = Pick<SettingsStore, 'getOfficeWindowBounds' | 'setOfficeWindowBounds'>
@@ -30,9 +32,7 @@ function createOfficeWindow(store: OfficeWindowStore): Electron.BrowserWindow {
     minWidth: MINIMUM_SIZE.width,
     minHeight: MINIMUM_SIZE.height,
     title: 'ClaudeWatch Office',
-    backgroundColor: '#0E0E10',
-    titleBarStyle: 'hiddenInset',
-    trafficLightPosition: { x: 15, y: 15 },
+    ...officeChrome(),
     webPreferences: { preload: join(__dirname, '../preload/office.js') }
   })
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
@@ -92,7 +92,8 @@ export function setupOffice(
     host,
     run: execFilePromise,
     terminalOf: async (pid) => (await terminalResolver.resolve(pid)).terminalType,
-    isInteractive: true
+    isInteractive: true,
+    runScript: runInteractivePowerShell
   })
   const paneFocus = new PaneFocus({
     instances: () => tracker.getInstances(),

@@ -27,9 +27,9 @@
 
 ## Phase ledger
 
-- [ ] Phase 0: Branch, plan of record, contract module
-- [ ] Phase 1: Wave 1 — five parallel owners (S1–S5)
-- [ ] Phase 2: Integrate + gate chain
+- [x] Phase 0: Branch, plan of record, contract module
+- [x] Phase 1: Wave 1 — five parallel owners (S1–S5)
+- [x] Phase 2: Integrate + gate chain
 - [ ] Phase 3: Live Windows verification on this machine
 - [ ] Phase 4: Wave 2 review (Maya + Kai)
 - [ ] Phase 5: Close — mandate steps, MP4, PR
@@ -58,7 +58,7 @@ Budget: `T3 active=5 total=12` → Wave 1 = 5, Wave 2 = 2, 1 reserved retry/doma
 - macOS behaviour unchanged: every existing test keeps passing unmodified in intent; darwin branches stay byte-for-byte where untouched.
 - Platform is injected (`platform: NodeJS.Platform = process.platform`) at every branch point; tests cover `darwin` and `win32` for each.
 - No new runtime dependencies, no native modules.
-- Windows subprocesses: `POWERSHELL` absolute path from the contract; `execFile` only, never `shell: true`; never run a `.cmd`/`.bat`; scripts are string constants, with only `Number.isSafeInteger` pids interpolated. File paths go in as arguments (`$args[0]`), never spliced into script text.
+- Windows subprocesses: `POWERSHELL` absolute path from the contract; `execFile` only, never `shell: true`; never run a `.cmd`/`.bat`; scripts are string constants, with only `Number.isSafeInteger` pids interpolated. File paths and strings go in through the child env (`$env:CLAUDEWATCH_*`), never as argv after `-Command` (Windows PowerShell parses those as code, verified 2026-10-13) and never spliced into script text.
 - Child env = `childEnv(platform)` (C locale + UTC, plus `SystemRoot`/`windir` on win32), never `process.env`.
 - Comment mandate (1–2 lines, the why only), `clean-code-typescript` (no `any`, no `as unknown as`), prettier on every changed file.
 - Each owner edits ONLY their FILES OWN list; a bug elsewhere is reported `FOUND:`.
@@ -73,7 +73,7 @@ Budget: `T3 active=5 total=12` → Wave 1 = 5, Wave 2 = 2, 1 reserved retry/doma
 
 ---
 
-## - [ ] Phase 0 — Branch, plan of record, contract module (primary, inline) · 1h with Claude | 4h without
+## - [x] Phase 0 — Branch, plan of record, contract module (primary, inline) · 1h with Claude | 4h without
 
 **Files:** Create `src/shared/platform-process.ts`, `src/shared/platform-process.test.ts`, `docs/plans/claudewatch-windows-support-2026-10-13.md` (+ `.mmd`).
 
@@ -101,7 +101,7 @@ export function isAbsoluteFolder(path: string, platform?: NodeJS.Platform): bool
 
 **Verify:** `npx vitest run src/shared/platform-process.test.ts && npm run typecheck`
 
-## - [ ] Phase 1 — Wave 1, five parallel owners (each in its own worktree, all from C0)
+## - [x] Phase 1 — Wave 1, five parallel owners (each in its own worktree, all from C0)
 
 ### S1 · @lena · #4 tray, popover, window chrome, notifications · 2h | 10h
 
@@ -123,7 +123,7 @@ export function isAbsoluteFolder(path: string, platform?: NodeJS.Platform): bool
 - [ ] `registry.ts:40` and `teammates.ts:136` use `isAbsoluteFolder`
 - [ ] win32 table: one CIM query (`ProcessId, CreationDate.ToFileTimeUtc(), CommandLine`) filtered to the caller's `SessionId` (the `ps -x` analogue), `ConvertTo-Json -Compress`, argv via `splitCommandLine`; rows with no CommandLine or CreationDate are skipped
 - [ ] `liveness.ts` uses `startTimeQuery`; `io.ts` allowlist adds `POWERSHELL` and execs with `childEnv`; `CREDENTIAL_STORE` matches `[\\/]`
-- [ ] Measure the bridge's CPU at idle over 60 s on this machine and report it; budget ≤ 3% of one core averaged. Over budget → serve the table from one read per poll tick and hold it for `LIVE_POLL_MS` on win32
+- [ ] Measured: a cold PowerShell table read costs ~1.1 s CPU + ~0.3 s WMI, about 50% of a core at the 2 s poll. Decision (2026-10-13): a persistent host in `src/shared/powershell-host.ts` (`runPowerShell(script, timeoutMs)`, `closePowerShellHost()`) with base64-framed requests over stdin, one in flight, timeout → restart, no orphan on exit and a cold-spawn fallback; the table is incremental (CIM CommandLine only for an unseen pid + start). Budget: bridge + host ≤ 3% of one core at idle over 60 s
       **Verify:** `npx vitest run src/bridge src/shared && npm run typecheck && npm run build && node out/main/bridge.js --once` → the claude source is `live` and lists sessionId `b57e65c7-b04f-4745-9a90-60e1aecea8f1` with cwd `…\ZKidz\ClaudeWatch`
 
 ### S3 · @ravi · #6 Codex + OpenCode on Windows · 3h | 14h
@@ -141,7 +141,7 @@ export function isAbsoluteFolder(path: string, platform?: NodeJS.Platform): bool
 **Own:** `src/main/terminal-opener.ts`, `terminal-resolver.ts`, `pane-focus.ts`, `orca-cli.ts`, `office-setup.ts`, `office-interactions.ts`, `src/shared/orca-bundle.ts`, `src/bridge/orca.ts`, `src/office-host/office-service.ts`, and their tests (`*.test.ts`, `orca-bundle.codesign.test.ts`).
 **Keeps stable:** `ORCA_APP`, `ORCA_CLI: string` (resolved per platform at load; `io.ts` imports it), `assertOrcaTrusted()`.
 
-- [ ] win32 `ORCA_CLI` = `%LOCALAPPDATA%\Programs\orca\resources\bin\orca.exe`, never `orca.cmd`; trust = `Get-AuthenticodeSignature` `Valid` + pinned signer subject `CN=SignPath Foundation, O=SignPath Foundation, L=Lewes, S=Delaware, C=US` + `VersionInfo.CompanyName === 'stablyai'`; path passed as `$args[0]`
+- [ ] win32 `ORCA_CLI` = `%LOCALAPPDATA%\Programs\orca\resources\bin\orca.exe`, never `orca.cmd`; trust = `Get-AuthenticodeSignature` `Valid` + pinned signer subject `CN=SignPath Foundation, O=SignPath Foundation, L=Lewes, S=Delaware, C=US` + `VersionInfo.CompanyName === 'stablyai'`; path passed as `$env:CLAUDEWATCH_*`
 - [ ] Launch Orca on win32 by executing `Orca.exe` directly; the Orca pane key on win32 comes from Orca CLI output, not process environment
 - [ ] Focus on win32: walk `ParentProcessId` to the nearest ancestor with a top-level window and bring it forward (`ShowWindow` + `SetForegroundWindow`); terminal resolution recognises `WindowsTerminal.exe`, `Code.exe`, `Cursor.exe`, `Orca.exe`, `conhost`
 - [ ] Open terminal on win32: `wt.exe -d <folder>` when present, else `cmd.exe` spawned with `cwd: folder` (the folder never enters argv text)
@@ -154,15 +154,15 @@ export function isAbsoluteFolder(path: string, platform?: NodeJS.Platform): bool
 
 - [ ] `Win32Detector` uses one CIM query via `POWERSHELL` + `childEnv` (no `wmic`)
 - [ ] Top-level `extraResources` ships `resources/sounds` + `claudewatch-statusline.sh` on every platform (mac keeps the widget `extraFiles`)
-- [ ] Add `task-complete.wav` (ffmpeg from the m4a); win32 plays the WAV with the path passed as `$args[0]`; darwin keeps `afplay` + m4a
+- [ ] Add `task-complete.wav` (ffmpeg from the m4a); win32 plays the WAV with the path passed as `$env:CLAUDEWATCH_*`; darwin keeps `afplay` + m4a
 - [ ] Statusline: packaged source = `join(process.resourcesPath, 'claudewatch-statusline.sh')`; on win32 the command is one Claude Code's Git Bash runs (forward-slash path), and the script runs under Git Bash
 - [ ] Auto-updater on win32 with no Windows release: no error reaches the UI
       **Verify:** `npx vitest run src/main/platform src/main/sound-player.test.ts src/main/build-config.test.ts src/main/ipc-handlers.test.ts src/main/rate-limit-reader.test.ts src/main/auto-updater.test.ts src/main/process-monitor.test.ts && npm run typecheck && npm run build:win -- --publish never` → `dist/win-unpacked/resources/{sounds/task-complete.wav,claudewatch-statusline.sh}` exist
 
-## - [ ] Phase 2 — Integrate + gate chain (primary) · 1.5h | 6h
+## - [x] Phase 2 — Integrate + gate chain (primary) · 1.5h | 6h
 
 - [ ] Merge `win/s1…s5` into `fix/windows-support` (disjoint files → no conflicts); re-run every owner's Verify
-- [ ] `office-setup.ts` `createOfficeWindow` spreads `windowChrome()` (the one cross-slice line)
+- [ ] `office-setup.ts` `createOfficeWindow` spreads `windowChrome()`, and the `Win32Detector` injected runner defaults to `runPowerShell` (the two cross-slice lines)
 - [ ] STEP 6: `npx prettier --write <changed>` → `npx eslint .` → `npm run typecheck` → `npx vitest run` → `npm run build` → `npx knip`
       **Verify:** `npx eslint . && npm run typecheck && npx vitest run && npm run build`
 

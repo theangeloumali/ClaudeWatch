@@ -34,8 +34,11 @@ export function orcaDataFolder({
 // signature-checked command line, and ClaudeWatch's own ledger file.
 export function createAccountLedger(places: AccountLedgerPlaces): AccountLedger {
   const { isWatching, home, userData } = places
-  const orca = createOrcaCli((program, args, options) =>
-    execFilePromise(program, args, { ...options, env: childEnv() })
+  // The CLI's own env wins: on Windows it carries the APPDATA Orca cannot start without.
+  const orca = createOrcaCli(
+    (program, args, options) => execFilePromise(program, args, { env: childEnv(), ...options }),
+    undefined,
+    places.platform
   )
   const orcaData = orcaDataFolder(places)
   const ledgerFile = join(userData, 'accounts-ledger.json')

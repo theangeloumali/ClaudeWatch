@@ -8,7 +8,7 @@ import type {
 } from '../shared/office/types'
 import { type CodexTotal, codexTotalOf } from '../shared/accounts'
 import { programName } from '../shared/platform-process'
-import { folderKey, isAppFolder, ownConversation, processIdentity } from './process-folders'
+import { folderKey, isAppFolder, ownConversation } from './process-folders'
 import { type BridgeIo, folderName, isLabel, isMissing, jsonObject, object } from './io'
 import { placementOf, resolveProject } from './project-root'
 import { findRollouts, type Rollout } from './codex-rollouts'
@@ -18,6 +18,7 @@ import { isStillWorking, OPEN_TOOL_HOLD_MS, quietFor } from './liveness'
 import { toolActivity, toolCategory } from './tool-category'
 import {
   forgetExited,
+  identityOf,
   keyOf,
   newestFirst,
   placeholderId,
@@ -193,7 +194,7 @@ function claimedFolder(
   rollouts: Rollout[],
   used: Set<string>
 ): string | undefined {
-  const identity = processIdentity(process)
+  const identity = identityOf(process)
   const known = folders.get(identity)
   if (known) return known
   const written = rollouts.filter(
@@ -219,7 +220,7 @@ export interface CodexBatch {
 export async function collectCodex(
   root: string,
   io: BridgeIo,
-  readProcesses = (): Promise<ProcessRow[]> => readProcessTable(io),
+  readProcesses = (): Promise<ProcessRow[]> => readProcessTable(io, platform),
   derivesAccounts = false,
   now = Date.now(),
   platform: NodeJS.Platform = process.platform
@@ -288,7 +289,7 @@ export async function collectCodex(
       const usage = tail?.usage ?? known.get(id) ?? null
       if (usage) known.set(id, usage)
       live.add(id)
-      const project = await resolveProject(cwd, io, now)
+      const project = await resolveProject(cwd, io, now, platform)
       const session: SessionRef = {
         key: keyOf(placeholders, owner, 'codex', rollout?.id),
         provider: 'codex',
@@ -319,7 +320,7 @@ export async function collectCodex(
         const cwd =
           platform === 'win32'
             ? claimedFolder(folders, process, rollouts, used)
-            : await rememberedFolder(io, folders, process)
+            : await rememberedFolder(io, folders, process, platform)
         // On Windows the folder itself comes from the rollout the process has yet to write.
         if (!cwd) isWaiting ||= platform === 'win32'
         if (!cwd || isAppFolder(cwd, platform)) continue

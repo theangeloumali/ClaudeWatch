@@ -3,8 +3,10 @@ import { join } from 'path'
 import { describe, expect, it } from 'vitest'
 import {
   CHROME_COLORS,
+  OFFICE_TITLE_BAR_HEIGHT,
   TITLE_BAR_HEIGHT,
   dashboardChrome,
+  officeChrome,
   popoverChrome,
   windowChrome
 } from './window-chrome'
@@ -71,6 +73,33 @@ describe('popoverChrome', () => {
 
   it('is opaque on Windows, where vibrancy does nothing and transparency drops the rounded corners', () => {
     expect(popoverChrome('win32')).toEqual({ backgroundColor: CHROME_COLORS.night })
+  })
+})
+
+describe('officeChrome', () => {
+  it('keeps the inset traffic lights on macOS, on the Office ground', () => {
+    expect(officeChrome('darwin')).toEqual({
+      ...windowChrome('darwin'),
+      backgroundColor: CHROME_COLORS.office
+    })
+  })
+
+  it('draws the caption buttons in the Office strip on Windows, so panels below it stay clear', () => {
+    expect(officeChrome('win32')).toEqual({
+      titleBarStyle: 'hidden',
+      titleBarOverlay: {
+        color: CHROME_COLORS.office,
+        symbolColor: CHROME_COLORS.caption,
+        height: OFFICE_TITLE_BAR_HEIGHT
+      },
+      backgroundColor: CHROME_COLORS.office
+    })
+    // OfficeApp's drag strip is h-9 and its panels start at pt-10.
+    expect(OFFICE_TITLE_BAR_HEIGHT).toBe(36)
+  })
+
+  it('leaves the system frame alone elsewhere', () => {
+    expect(officeChrome('linux')).toEqual({ backgroundColor: CHROME_COLORS.office })
   })
 })
 

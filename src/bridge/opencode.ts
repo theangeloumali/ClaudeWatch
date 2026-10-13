@@ -1,7 +1,7 @@
 import { join, win32 } from 'node:path'
 import type { SessionRef, SourceHealth, SubagentRef, TokenCounts } from '../shared/office/types'
 import { zeroCounts } from '../shared/office/token-counts'
-import { isAppFolder, isFolderPath, ownConversation, processIdentity } from './process-folders'
+import { isAppFolder, isFolderPath, ownConversation } from './process-folders'
 import { type BridgeIo, displayName, folderName, isLabel } from './io'
 import {
   OPENCODE_IDLE,
@@ -17,6 +17,7 @@ import {
 } from './opencode-db'
 import {
   forgetExited,
+  identityOf,
   keyOf,
   newestFirst,
   placeholderId,
@@ -121,7 +122,7 @@ function claimedFolder(
     process.startedAtMs,
     ({ createdAtMs }) => createdAtMs
   )?.directory
-  if (cwd) folders.set(processIdentity(process), cwd)
+  if (cwd) folders.set(identityOf(process), cwd)
   return cwd
 }
 
@@ -166,12 +167,12 @@ async function locate(
   if (platform === 'win32')
     return processes.map((process) => ({
       ...process,
-      cwd: folders.get(processIdentity(process)) ?? null
+      cwd: folders.get(identityOf(process)) ?? null
     }))
   const running: LocatedProcess[] = []
   for (const process of processes) {
     try {
-      const cwd = await rememberedFolder(io, folders, process)
+      const cwd = await rememberedFolder(io, folders, process, platform)
       if (cwd && !isAppFolder(cwd, platform)) running.push({ ...process, cwd })
     } catch {
       // It may have exited since the table was read: the others are still shown.
@@ -191,7 +192,7 @@ interface OpencodeBatch {
 export async function collectOpencode(
   root: string,
   io: BridgeIo,
-  readProcesses = (): Promise<ProcessRow[]> => readProcessTable(io),
+  readProcesses = (): Promise<ProcessRow[]> => readProcessTable(io, platform),
   now = Date.now(),
   platform: NodeJS.Platform = process.platform
 ): Promise<OpencodeBatch> {
@@ -228,7 +229,7 @@ export async function collectOpencode(
       // OpenCode records a Windows folder with forward slashes; the feed shows it as Windows does.
       const cwd = platform === 'win32' ? win32.normalize(found.process.cwd) : found.process.cwd
       const process = { ...found.process, cwd }
-      const project = await resolveProject(cwd, io, now)
+      const project = await resolveProject(cwd, io, now, platform)
       const key = keyOf(placeholders, process, 'opencode', found.conversation?.session.id)
       sessions.push(sessionOf(process, found.conversation, key, placementOf(project)))
     }

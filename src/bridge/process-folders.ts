@@ -20,15 +20,6 @@ export function isAppFolder(folder: string, platform: NodeJS.Platform = process.
   return WINDOWS_INSTALL_ROOT.test(folderKey(folder, platform))
 }
 
-// Must match process-table's identity, which `forgetExited` prunes remembered folders by.
-export const processIdentity = ({
-  pid,
-  startedAtMs
-}: {
-  pid: number
-  startedAtMs: number
-}): string => `${pid}:${startedAtMs}`
-
 // Windows names no process's folder, so it is taken from the conversation the process began, or
 // failing that the newest it has written to since it started (a resumed one). `written` holds
 // only those written since, newest first.

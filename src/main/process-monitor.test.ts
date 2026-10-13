@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ProcessMonitor, detectSessionType } from './process-monitor'
-import { POWERSHELL, childEnv } from '../shared/platform-process'
+import { runPowerShell } from '../shared/powershell-host'
 
 // We mock child_process used by platform detectors
 vi.mock('child_process', () => ({
   execFile: vi.fn()
 }))
+vi.mock('../shared/powershell-host', () => ({ runPowerShell: vi.fn() }))
 
 import { execFile } from 'child_process'
 
@@ -428,7 +429,8 @@ describe('poll() on win32', () => {
     vi.clearAllMocks()
   })
 
-  it('lists Claude Code through one CIM query in the inbox PowerShell', async () => {
+  // A cold powershell.exe costs about a fifth of a core per 3 s poll; the kept one does not.
+  it('lists Claude Code through one CIM query in the kept PowerShell, starting no process', async () => {
     const row = {
       pid: 4242,
       command: 'C:\\bin\\claude.exe --continue',
@@ -436,16 +438,12 @@ describe('poll() on win32', () => {
       cpuTicks: '0',
       workingSet: '0'
     }
-    mockExecFile.mockImplementation(((...args: unknown[]) => {
-      ;(args.at(-1) as ExecCallback)(null, JSON.stringify([row]), '')
-    }) as typeof execFile)
+    vi.mocked(runPowerShell).mockResolvedValue(JSON.stringify([row]))
 
     const instances = await new ProcessMonitor({ platform: 'win32' }).poll()
 
-    const [file, args, options] = mockExecFile.mock.calls[0]
-    expect(file).toBe(POWERSHELL)
-    expect(args).toHaveLength(4)
-    expect(options).toMatchObject({ env: childEnv('win32') })
+    expect(runPowerShell).toHaveBeenCalledOnce()
+    expect(mockExecFile).not.toHaveBeenCalled()
     expect(instances.map((instance) => [instance.pid, instance.flags])).toEqual([
       [4242, ['--continue']]
     ])

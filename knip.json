@@ -1,7 +1,6 @@
 {
   "$schema": "https://unpkg.com/knip@latest/schema.json",
   "entry": ["src/office-web/cli.ts", "scripts/*.{js,mjs}"],
-  "ignoreBinaries": ["afplay"],
   "ignoreDependencies": ["app-builder-lib", "builder-util", "@vitest/coverage-v8"],
   "ignore": [".claude/skills/**"]
 }

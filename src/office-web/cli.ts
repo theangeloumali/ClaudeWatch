@@ -8,6 +8,7 @@ import { BridgeHost } from '../main/bridge-host'
 import { execFilePromise } from '../main/platform/exec'
 import { TerminalResolver } from '../main/terminal-resolver'
 import { createOfficeService } from '../office-host/office-service'
+import { runInteractivePowerShell } from '../shared/powershell-host'
 import { PollerProcess } from '../office-host/poller-process'
 import { parseArgs } from './args'
 import { createLaunchToken, writeLaunchFile } from './launch-token'
@@ -34,8 +35,11 @@ async function main(): Promise<void> {
     host: withoutAccounts(host),
     run: execFilePromise,
     // A fresh resolver each time: its cache is keyed by pid, and nothing here evicts a dead one.
-    terminalOf: async (pid) => (await new TerminalResolver().resolve(pid)).terminalType,
-    isInteractive: args.interactive
+    terminalOf: async (pid) =>
+      (await new TerminalResolver(process.platform, runInteractivePowerShell).resolve(pid))
+        .terminalType,
+    isInteractive: args.interactive,
+    runScript: runInteractivePowerShell
   })
 
   const launchCode = createLaunchToken()

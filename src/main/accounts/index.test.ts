@@ -14,11 +14,13 @@ vi.mock('../../shared/orca-bundle', async (original) => ({
   assertOrcaTrusted
 }))
 
-import { ORCA_CLI } from '../../shared/orca-bundle'
+import { ORCA_CLI, orcaBundle } from '../../shared/orca-bundle'
 import { childEnv } from '../../shared/platform-process'
 import { createAccountLedger, orcaDataFolder } from './index'
 
 const CANARY = 'CANARY_SECRET_VALUE'
+// A ledger runs the CLI of the platform it is given, not the host's.
+const MAC_ORCA_CLI = orcaBundle('darwin').cli
 const oauthAccount = (name: string): Record<string, unknown> => ({
   accountUuid: `uuid-${name}`,
   organizationUuid: `org-${name}`,
@@ -46,7 +48,7 @@ beforeEach(async () => {
   assertOrcaTrusted.mockResolvedValue(undefined)
   execFilePromise.mockImplementation(async (program: string) => ({
     stdout:
-      program === ORCA_CLI
+      program === ORCA_CLI || program === MAC_ORCA_CLI
         ? JSON.stringify({ ok: true, result: { claude: { accounts: [] }, token: CANARY } })
         : '',
     stderr: ''
@@ -78,7 +80,9 @@ it('watches the real files with one fixed, scrubbed Orca command, and keeps its 
   const scrubbed = { timeout: 15_000, env: childEnv() }
   // The bundle check is the one the whole process shares, not a second one of the ledger's.
   expect(assertOrcaTrusted).toHaveBeenCalledOnce()
-  expect(execFilePromise.mock.calls).toEqual([[ORCA_CLI, ['account', 'list', '--json'], scrubbed]])
+  expect(execFilePromise.mock.calls).toEqual([
+    [MAC_ORCA_CLI, ['account', 'list', '--json'], scrubbed]
+  ])
   const file = join(userData, 'accounts-ledger.json')
   // Windows has no POSIX mode bits: there the profile folder's ACL keeps the ledger private.
   if (process.platform !== 'win32') expect((await stat(file)).mode & 0o777).toBe(0o600)
@@ -116,6 +120,22 @@ it("finds Orca's accounts under the roaming app-data folder on Windows", async (
     })
   )
   ledger.stop()
+})
+
+it('hands the Orca CLI the app-data folder it cannot start without on Windows', async () => {
+  const appData = join(home, 'Roaming')
+  vi.stubEnv('APPDATA', appData)
+  const ledger = createAccountLedger({
+    isWatching: true,
+    home,
+    userData,
+    platform: 'win32',
+    appData
+  })
+  ledger.start()
+  await vi.waitFor(() => expect(execFilePromise).toHaveBeenCalledTimes(1))
+  ledger.stop()
+  expect(execFilePromise.mock.calls[0][2].env).toEqual({ ...childEnv('win32'), APPDATA: appData })
 })
 
 describe('orcaDataFolder', () => {

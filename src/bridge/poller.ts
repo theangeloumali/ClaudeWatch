@@ -62,8 +62,8 @@ export class BridgePoller {
   constructor(options: PollerOptions = {}) {
     this.io = options.io ?? systemIo
     this.platform = options.platform ?? process.platform
-    this.orca = new OrcaSource(this.io)
-    this.teammates = new TeammateSource(this.io)
+    this.orca = new OrcaSource(this.io, this.platform)
+    this.teammates = new TeammateSource(this.io, this.platform)
     this.usage = new UsageTracker(this.io)
     this.roots = options.claudeRoots ?? [join(homedir(), '.claude')]
     this.codexRoot = options.codexRoot ?? join(homedir(), '.codex')
@@ -89,9 +89,10 @@ export class BridgePoller {
     // One process table, read and parsed once, serves every source: it is the tick's most
     // expensive read.
     let processTable: Promise<ProcessRow[]> | undefined
-    const readProcesses = (): Promise<ProcessRow[]> => (processTable ??= readProcessTable(this.io))
+    const readProcesses = (): Promise<ProcessRow[]> =>
+      (processTable ??= readProcessTable(this.io, this.platform))
     const [claude, codex, opencode, orca] = await Promise.all([
-      collectClaude(this.roots, this.io, now, this.teammates, readProcesses),
+      collectClaude(this.roots, this.io, now, this.teammates, readProcesses, this.platform),
       collectCodex(
         this.codexRoot,
         this.io,

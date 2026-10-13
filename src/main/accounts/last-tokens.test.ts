@@ -54,6 +54,8 @@ function codexBridge() {
   let now = at(10)
   const poller = new BridgePoller({
     io,
+    // The fixtures print macOS ps output.
+    platform: 'darwin',
     claudeRoots: [],
     codexRoot: '/codex',
     now: () => now,
@@ -120,6 +122,8 @@ function claudeBridge(extraFiles: Record<string, string> = {}, sessionId = 'a') 
   const clock = { now: at(10, 5) }
   const poller = new BridgePoller({
     io,
+    // The fixtures print macOS ps output.
+    platform: 'darwin',
     claudeRoots: ['/claude'],
     codexRoot: '/codex',
     now: () => clock.now,

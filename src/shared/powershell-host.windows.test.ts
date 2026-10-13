@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { afterAll, describe, expect, it } from 'vitest'
-import { closePowerShellHost, runPowerShell } from './powershell-host'
+import { closePowerShellHost, runInteractivePowerShell, runPowerShell } from './powershell-host'
 
 // These drive the real powershell.exe, which exists only on Windows.
 const onWindows = process.platform === 'win32'
@@ -25,6 +25,9 @@ describe.runIf(onWindows)('the kept PowerShell on Windows', () => {
     const pid = await runPowerShell('$PID')
     expect(await runPowerShell('$PID')).toBe(pid)
     expect(await runPowerShell("'C:\\Users\\José'")).toBe('C:\\Users\\José')
+  }, 20_000)
+  it('runs a click script in the same kept shell as the polls', async () => {
+    expect(await runInteractivePowerShell('$PID')).toBe(await runPowerShell('$PID'))
   }, 20_000)
   it('passes over what a script writes to the host itself', async () => {
     expect(await runPowerShell("Write-Host 'noise'; 'kept'")).toBe('kept')

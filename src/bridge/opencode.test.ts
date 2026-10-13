@@ -9,8 +9,7 @@ import {
   buildOpencodeDb,
   insertMessage,
   insertPart,
-  insertSession,
-  OPENCODE_SCHEMA
+  insertSession
 } from './__fixtures__/opencode-db'
 
 const START = 'Sat Oct 10 15:29:12 2026'
@@ -29,11 +28,7 @@ function setup(
   folders: Record<number, string> = { 42: '/repo' },
   starts: Record<number, string> = {}
 ): { io: BridgeIo; root: string; opens: () => number } {
-  // One transaction with no fsync: built row by row, a fixture spends seconds on a busy disk.
-  const { root } = buildOpencodeDb((db) => {
-    fill(db)
-    db.exec('COMMIT')
-  }, `PRAGMA journal_mode = MEMORY; PRAGMA synchronous = OFF; BEGIN; ${OPENCODE_SCHEMA}`)
+  const { root } = buildOpencodeDb(fill)
   roots.push(root)
   const io = fixtureIo({ '/repo/.git': null, '/other/.git': null })
   const table = Object.keys(folders).map(
