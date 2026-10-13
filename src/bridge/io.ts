@@ -3,7 +3,8 @@ import { open, readdir, realpath, stat } from 'node:fs/promises'
 import { basename } from 'node:path'
 import { isJsonObject } from '../shared/json-object'
 import { assertOrcaTrusted, ORCA_CLI } from '../shared/orca-bundle'
-import { PARSED_OUTPUT_ENV } from '../shared/ps'
+import { childEnv, POWERSHELL, powershellArgs } from '../shared/platform-process'
+import { runPowerShell } from '../shared/powershell-host'
 import { UNSAFE_IN_A_NAME } from '../shared/unsafe-text'
 import {
   OPENCODE_STATEMENTS,
@@ -22,6 +23,10 @@ interface ForwardRead {
   text: string
   nextOffset: number
 }
+// How long a program may run before it is killed; five seconds unless the caller says.
+interface ExecOptions {
+  timeoutMs?: number
+}
 export interface BridgeIo {
   readText(path: string): Promise<string>
   readTail(path: string): Promise<string>
@@ -29,7 +34,7 @@ export interface BridgeIo {
   readFrom(path: string, offset: number, maxBytes: number): Promise<ForwardRead>
   list(path: string): Promise<string[]>
   stat(path: string): Promise<FileInfo>
-  exec(file: string, args: string[]): Promise<string>
+  exec(file: string, args: string[], options?: ExecOptions): Promise<string>
   // OpenCode's session database, read-only, through the fixed statements and nothing else.
   readOpencode<Result>(path: string, read: (query: OpencodeQuery) => Result): Promise<Result>
 }
@@ -97,9 +102,19 @@ async function readFrom(path: string, offset: number, maxBytes: number): Promise
 // reach a credential store or a shell by mistake. The one program run elsewhere is codesign,
 // by the Orca bundle check, with a fixed path and fixed arguments.
 const CREDENTIAL_STORE =
-  /(^|\/)(\.credentials\.json|[\w.-]*auth\.json|\.orca-managed-claude-auth|orca-(runtime|e2ee-keypair|secret-protection)\.json|Cookies)$|\.key$/i
-const PROGRAMS = new Set(['/bin/ps', '/usr/sbin/lsof', ORCA_CLI])
+  /(^|[\\/])(\.credentials\.json|[\w.-]*auth\.json|\.orca-managed-claude-auth|orca-(runtime|e2ee-keypair|secret-protection)\.json|Cookies)$|\.key$/i
+const PROGRAMS = new Set(['/bin/ps', '/usr/sbin/lsof', POWERSHELL, ORCA_CLI])
 const forbidden = (what: string): Error => new Error(`forbidden: ${what}`)
+// PowerShell runs whatever follows -Command as code, appended arguments included: a script is
+// all a caller can hand it.
+function powershellScript(args: string[]): string {
+  const script = args.at(-1) ?? ''
+  const expected = powershellArgs(script)
+  if (args.some((arg, index) => arg !== expected[index]) || args.length !== expected.length)
+    throw forbidden('program')
+  return script
+}
+const EXEC_TIMEOUT_MS = 5000
 const guarded =
   <Rest extends unknown[], Result>(read: (path: string, ...rest: Rest) => Promise<Result>) =>
   async (path: string, ...rest: Rest): Promise<Result> => {
@@ -149,15 +164,19 @@ export const systemIo: BridgeIo = {
     const info = await stat(path)
     return { directory: info.isDirectory(), mtimeMs: info.mtimeMs, size: info.size }
   },
-  exec: async (file, args) => {
+  exec: async (file, args, { timeoutMs = EXEC_TIMEOUT_MS } = {}) => {
     if (!PROGRAMS.has(file)) throw forbidden('program')
     // Orca's bundle is checked before anything in it runs, as in the main process.
     if (file === ORCA_CLI) await assertOrcaTrusted()
+    if (file === POWERSHELL) {
+      const script = powershellScript(args)
+      if (process.platform === 'win32') return runPowerShell(script, timeoutMs)
+    }
     return new Promise((resolve, reject) => {
       execFile(
         file,
         args,
-        { env: PARSED_OUTPUT_ENV, timeout: 5000, maxBuffer: 8 * 1024 * 1024 },
+        { env: childEnv(), timeout: timeoutMs, maxBuffer: 8 * 1024 * 1024, windowsHide: true },
         (error, stdout) => {
           if (error) reject(error)
           else resolve(stdout)

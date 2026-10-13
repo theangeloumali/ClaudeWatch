@@ -1,4 +1,5 @@
 import { join } from 'node:path'
+import { isAbsoluteFolder } from '../shared/platform-process'
 import type { AgentActivity, SubagentRef } from '../shared/office/types'
 import { type BridgeIo, isLabel, isMissing, jsonObject, object } from './io'
 import type { ProcessRow } from './process-table'
@@ -54,7 +55,10 @@ export class TeammateSource {
   private searches = new Map<string, { againAt: number; delayMs: number }>()
   private seen = new Set<string>()
 
-  constructor(private readonly io: BridgeIo) {}
+  constructor(
+    private readonly io: BridgeIo,
+    private readonly platform: NodeJS.Platform = process.platform
+  ) {}
 
   // Teammates write no registry file: the roster names them and the process table proves
   // which are alive. `processes` is asked only when the session leads a team. `leadCwd` is
@@ -133,7 +137,10 @@ export class TeammateSource {
         agentId,
         name: member.name,
         agentType: member.agentType,
-        cwd: typeof member.cwd === 'string' && member.cwd.startsWith('/') ? member.cwd : null,
+        cwd:
+          typeof member.cwd === 'string' && isAbsoluteFolder(member.cwd, this.platform)
+            ? member.cwd
+            : null,
         joinedAtMs: typeof member.joinedAt === 'number' ? member.joinedAt : 0,
         process
       }

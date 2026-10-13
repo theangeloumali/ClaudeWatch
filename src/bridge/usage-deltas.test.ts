@@ -1,7 +1,9 @@
+import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import { BridgePoller } from './poller'
 import { type TranscriptDelta, UsageTracker } from './usage-tracker'
-import { fixtureIo, registryEntry } from './__fixtures__/helpers'
+import { projectSlug } from './transcript-tail'
+import { fixtureIo, hostPath, isTableQuery, registryEntry } from './__fixtures__/helpers'
 
 const minuteMs = (minute: number): number => Date.parse(`2026-10-11T10:${minute}:00.000Z`)
 const stamped = (id: string, output: number, minute: number): string =>
@@ -62,16 +64,17 @@ it('reports the tokens each transcript added, once, under the session that owns 
 })
 
 it('reports added tokens with the project of their session, on the tick they arrive', async () => {
-  const entry = registryEntry()
-  const transcript = '/claude/projects/-repo/a.jsonl'
+  const entry = registryEntry(process.platform)
+  const root = hostPath('/claude')
+  const transcript = join(root, 'projects', projectSlug(entry.cwd), 'a.jsonl')
   const io = fixtureIo({
-    '/claude/sessions/42.json': JSON.stringify(entry),
-    '/repo/.git': null,
+    [join(root, 'sessions', '42.json')]: JSON.stringify(entry),
+    [hostPath('/repo/.git')]: null,
     [transcript]: stamped('m1', 9, 10)
   })
-  io.exec = async (_file, args) => (args[0] === '-o' ? entry.procStart : '')
+  io.exec = async (file, args) => (isTableQuery(file, args) ? '' : entry.procStart)
   const onUsage = vi.fn()
-  const poller = new BridgePoller({ io, claudeRoots: ['/claude'], codexRoot: '/codex', onUsage })
+  const poller = new BridgePoller({ io, claudeRoots: [root], codexRoot: '/codex', onUsage })
   // The first tick publishes before counting, so it has nothing to report.
   await poller.tick()
   expect(onUsage).not.toHaveBeenCalled()

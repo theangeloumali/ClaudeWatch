@@ -16,6 +16,7 @@ export interface RegistryEntry {
 }
 
 import { join } from 'node:path'
+import { isAbsoluteFolder } from '../shared/platform-process'
 import type { SessionRef, SourceHealth } from '../shared/office/types'
 import { type BridgeIo, isMissing, jsonObject } from './io'
 import { isLive } from './liveness'
@@ -27,7 +28,10 @@ import { type ProcessRow, readProcessTable } from './process-table'
 import { type Teammate, type TeammateProcess, teammateProcesses, TeammateSource } from './teammates'
 import type { SessionFiles } from './usage-tracker'
 
-function parseRegistry(text: string): RegistryEntry | null {
+export function parseRegistry(
+  text: string,
+  platform: NodeJS.Platform = process.platform
+): RegistryEntry | null {
   const record = jsonObject(text)
   if (
     !record ||
@@ -37,7 +41,7 @@ function parseRegistry(text: string): RegistryEntry | null {
     typeof record.sessionId !== 'string' ||
     !SESSION_ID.test(record.sessionId) ||
     typeof record.cwd !== 'string' ||
-    !record.cwd.startsWith('/') ||
+    !isAbsoluteFolder(record.cwd, platform) ||
     typeof record.procStart !== 'string' ||
     !isStatus(record.status)
   )
@@ -74,9 +78,12 @@ export async function collectClaude(
   roots: string[],
   io: BridgeIo,
   now: number,
-  teammates = new TeammateSource(io),
-  readProcesses = (): Promise<ProcessRow[]> => readProcessTable(io)
+  teamSource?: TeammateSource,
+  readProcesses = (): Promise<ProcessRow[]> => readProcessTable(io, platform),
+  // The platform that wrote the registry; the host's own unless a test says otherwise.
+  platform: NodeJS.Platform = process.platform
 ): Promise<ClaudeBatch> {
+  const teammates = teamSource ?? new TeammateSource(io, platform)
   const sessions: SessionRef[] = []
   const sources: SourceHealth[] = []
   const transcripts = new Map<string, SessionFiles>()
@@ -90,7 +97,7 @@ export async function collectClaude(
   const liveSessionIds = new Set<string>()
   // One live entry as a session, with its agents, its team and the transcripts behind them.
   const collectSession = async (root: string, entry: RegistryEntry): Promise<Collected> => {
-    const project = await resolveProject(entry.cwd, io, now)
+    const project = await resolveProject(entry.cwd, io, now, platform)
     const path = await transcriptPath(root, entry.cwd, entry.sessionId, io)
     const transcript = path ? await readTranscript(path, io) : { tool: null, error: false }
     const agentFiles = path ? await listAgentFiles(path, io) : []
@@ -127,9 +134,10 @@ export async function collectClaude(
       const reads: Promise<Collected | 'failed' | null>[] = []
       for (const file of files.filter((name) => /^\d+\.json$/.test(name))) {
         try {
-          const entry = parseRegistry(await io.readText(join(root, 'sessions', file)))
+          const entry = parseRegistry(await io.readText(join(root, 'sessions', file)), platform)
           // An unreadable table proves nothing either way: each pid is then asked about.
-          if (!entry || !(await isLive(entry, io, await table().catch(() => [])))) continue
+          if (!entry || !(await isLive(entry, io, await table().catch(() => []), platform)))
+            continue
           liveSessionIds.add(entry.sessionId)
           reads.push(collectSession(root, entry).catch(settled))
         } catch (error) {
@@ -169,7 +177,7 @@ export async function collectClaude(
           .collect(root, leadSessionId, null, processes, now)
           .catch(() => [])
         for (const orphan of orphans) {
-          const files = await orphanSession(orphan, io, now).catch(() => null)
+          const files = await orphanSession(orphan, io, now, platform).catch(() => null)
           if (!files) continue
           sessions.push(files.session)
           if (files.transcripts) transcripts.set(files.session.key, files.transcripts)
@@ -187,11 +195,12 @@ export async function collectClaude(
 async function orphanSession(
   { ref, transcripts: [main] }: Teammate,
   io: BridgeIo,
-  now: number
+  now: number,
+  platform: NodeJS.Platform
 ): Promise<{ session: SessionRef; transcripts: SessionFiles | null } | null> {
   const { cwd, pid } = ref
   if (!cwd || typeof pid !== 'number') return null
-  const project = await resolveProject(cwd, io, now)
+  const project = await resolveProject(cwd, io, now, platform)
   return {
     session: sessionFromTeammate({ ...ref, cwd, pid }, project.root, project.worktree),
     transcripts: main
