@@ -77,6 +77,21 @@ describe('the Orca signature check on Windows', () => {
     expect(script).toContain("'stablyai'")
   })
 
+  it('pins each binary’s own names, which a SignPath-signed program of another project lacks', async () => {
+    await createOrcaTrust(Date.now, bundle)()
+    const script: string = execFile.mock.calls[0][1][3]
+    // Read from Orca 1.4.221: the app's OriginalFilename is empty.
+    expect(script).toContain(
+      "@{ path = $env:CLAUDEWATCH_ORCA_CLI; original = 'orca.exe'; internal = 'orca.exe' }"
+    )
+    expect(script).toContain(
+      "@{ path = $env:CLAUDEWATCH_ORCA_APP; original = ''; internal = 'Orca' }"
+    )
+    expect(script).toContain("$info.ProductName -cne 'Orca'")
+    expect(script).toContain('[string]$info.OriginalFilename -cne $binary.original')
+    expect(script).toContain('[string]$info.InternalName -cne $binary.internal')
+  })
+
   it('rejects when PowerShell fails, and when it does not say the bundle is trusted', async () => {
     error = new Error('unsigned')
     await expect(createOrcaTrust(Date.now, bundle)()).rejects.toThrow()
