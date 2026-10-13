@@ -1,6 +1,6 @@
 {
   "name": "claudewatch",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Cross-platform Electron app to monitor Claude Code CLI instances",
   "main": "./out/main/index.js",
   "engines": {
