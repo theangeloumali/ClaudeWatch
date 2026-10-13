@@ -2,7 +2,6 @@ import {
   filetimeToMs,
   POWERSHELL,
   powershellArgs,
-  powerShellScript,
   splitCommandLine
 } from '../shared/platform-process'
 import type { BridgeIo } from './io'
@@ -13,7 +12,7 @@ export const PROCESS_TABLE_ARGS = ['-xo', 'pid=,lstart=,command=']
 
 export interface ProcessRow {
   pid: number
-  // The start time as `ps` printed it.
+  // The start as the registry records it: `ps` lstart on macOS, the FILETIME on Windows.
   lstart: string
   startedAtMs: number
   argv: string[]
@@ -42,8 +41,7 @@ export function parseProcessTable(output: string): ProcessRow[] {
 // outlived a run. One CIM has not described yet is asked again, three times at most, as a
 // protected process never is. The kept host carries all this between runs; a fresh shell asks
 // for every process at once.
-export const WINDOWS_PROCESS_TABLE_SCRIPT =
-  powerShellScript(`$session = [Diagnostics.Process]::GetCurrentProcess().SessionId
+export const WINDOWS_PROCESS_TABLE_SCRIPT = `$session = [Diagnostics.Process]::GetCurrentProcess().SessionId
 $first = $null -eq $global:tails
 if ($first) { $global:tails = @{}; $global:waiting = @{}; $global:misses = @{}; $global:clock = [Diagnostics.Stopwatch]::StartNew(); $global:askedAt = -10000 }
 $lines = $global:tails
@@ -87,7 +85,7 @@ if ($changed -or $null -eq $global:table) {
     if ($lines[$key]) { $key.Replace(':', ' ') + ' ' + $lines[$key] }
   }) -join [char]10
 }
-$global:table`)
+$global:table`
 
 // A row a line: pid, FILETIME, CreationDate ticks and the command line in base64, which costs
 // PowerShell a third of what JSON does.
