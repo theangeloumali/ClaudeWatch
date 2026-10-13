@@ -1,6 +1,10 @@
 import { describe, it, expect, vi } from 'vitest'
 import { join } from 'path'
+import { runPowerShell } from '../../shared/powershell-host'
 import { Win32Detector, formatElapsed } from './win32'
+
+// No test here may start a real PowerShell.
+vi.mock('../../shared/powershell-host', () => ({ runPowerShell: vi.fn() }))
 
 const NOW = Date.UTC(2026, 9, 13, 12, 0, 0)
 const GIB = 1024 ** 3
@@ -123,11 +127,21 @@ describe('Win32Detector.getClaudeProcesses', () => {
   it.each([
     ['output that is not JSON', 'not json'],
     ['a row with no usable pid', JSON.stringify([{ ...row(), pid: -1 }])],
-    ['a row that is not an object', JSON.stringify([7])]
+    ['a row that is not an object', JSON.stringify([7])],
+    ['a row that is a list', JSON.stringify([[4242, 'claude.exe']])]
   ])('reports nothing for %s', async (_case, stdout) => {
     const { detector, runScript } = detectorOver([])
     runScript.mockResolvedValueOnce(stdout)
     expect(await detector.getClaudeProcesses()).toEqual([])
+  })
+
+  it('asks the kept PowerShell host when no runner is given', async () => {
+    vi.mocked(runPowerShell).mockResolvedValueOnce(JSON.stringify([row()]))
+    const [process] = await new Win32Detector({ totalMemoryBytes: GIB }).getClaudeProcesses()
+    expect(runPowerShell).toHaveBeenCalledWith(
+      expect.stringContaining('Get-CimInstance Win32_Process')
+    )
+    expect(process.pid).toBe(4242)
   })
 
   it('reports nothing when PowerShell fails', async () => {
@@ -179,7 +193,8 @@ describe('Win32Detector.getWorkingDirectory', () => {
   it.each([
     ['no record', {}],
     ['a relative folder', { [registryPath(4242)]: registry('repo') }],
-    ['a record that is not JSON', { [registryPath(4242)]: '{' }]
+    ['a record that is not JSON', { [registryPath(4242)]: '{' }],
+    ['a record that is a list', { [registryPath(4242)]: JSON.stringify(['C:\\repo']) }]
   ])('reports no folder for %s', async (_case, files) => {
     const { detector } = detectorOver([[row()]], files)
     await detector.getClaudeProcesses()
