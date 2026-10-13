@@ -72,8 +72,8 @@ it('selects only CLI argv[0], excluding app-server and helpers', () => {
       )
     )
   ).toEqual([
-    { pid: 42, startedAtMs: Date.parse(`${start} UTC`) },
-    { pid: 44, startedAtMs: Date.parse(`${start} UTC`) }
+    { pid: 42, startedAtMs: Date.parse(`${start} UTC`), kind: 'terminal' },
+    { pid: 44, startedAtMs: Date.parse(`${start} UTC`), kind: 'exec' }
   ])
 })
 it.each([

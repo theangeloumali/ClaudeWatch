@@ -99,7 +99,7 @@ it('walks a Windows session folder and keeps only drive or UNC folders on win32'
   ])
 })
 
-it('says whether the CLI started a thread, as against an app-server or a parent thread', async () => {
+it('says how the CLI started a thread, as against an app-server or a parent thread', async () => {
   const meta = (id: string, source?: unknown): string =>
     JSON.stringify({ type: 'session_meta', payload: { id, cwd: '/repo', source } })
   const io = fixtureIo({
@@ -110,6 +110,6 @@ it('says whether the CLI started a thread, as against an app-server or a parent 
     '/codex/sessions/rollout-e.jsonl': meta('e')
   })
   const rollouts = await findRollouts('/codex', io, false, 'darwin')
-  const started = Object.fromEntries(rollouts.map(({ id, cliStarted }) => [id, cliStarted]))
-  expect(started).toEqual({ a: true, b: true, c: false, d: false, e: true })
+  const started = Object.fromEntries(rollouts.map(({ id, startedBy }) => [id, startedBy]))
+  expect(started).toEqual({ a: 'terminal', b: 'exec', c: null, d: null, e: 'cli' })
 })
