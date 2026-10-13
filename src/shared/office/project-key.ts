@@ -15,8 +15,14 @@ function fnv1a64(text: string): string {
 // Floor identity for a project. Callers pass the resolved project root (the bridge
 // resolves the git common dir); this stays pure so the renderer can import it.
 export function projectKey(projectRoot: string): string {
-  const normalised = projectRoot.length > 1 ? projectRoot.replace(/\/+$/, '') : projectRoot
-  return `p_${fnv1a64(normalised)}`
+  return `p_${fnv1a64(withoutTrailingSeparators(projectRoot))}`
+}
+
+// A bare root keeps one separator: '/' must not hash as '', nor 'C:\' as the drive-relative 'C:'.
+function withoutTrailingSeparators(path: string): string {
+  const trimmed = path.replace(/[\\/]+$/, '')
+  if (trimmed === '' || /^[A-Za-z]:$/.test(trimmed)) return path.slice(0, trimmed.length + 1)
+  return trimmed
 }
 
 // An agent's worktree lives inside its project; the project is the folder above `.claude`.

@@ -37,8 +37,13 @@ export function parseElapsedTime(elapsed: string): number {
   return seconds
 }
 
+// Either separator: a Windows cwd arrives with backslashes, and some tools hand over forward ones.
+export function pathSegments(path: string): string[] {
+  return path.split(/[\\/]/).filter(Boolean)
+}
+
 export function getProjectName(projectPath: string): string {
-  const segments = projectPath.split('/').filter(Boolean)
+  const segments = pathSegments(projectPath)
   if (segments.length >= 2) {
     return `${segments[segments.length - 2]}/${segments[segments.length - 1]}`
   }

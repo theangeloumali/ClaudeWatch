@@ -32,6 +32,14 @@ describe('SessionHistory', () => {
     expect(row).toHaveTextContent('30:00')
   })
 
+  it('crests a session by its folder, even under a Windows path saved by an older build', async () => {
+    const windowsPath = 'C:\\Users\\a\\PropApp'
+    window.api = mockApi({ getHistory: vi.fn().mockResolvedValue([entry(3, windowsPath)]) })
+    render(<SessionHistory />)
+    const row = (await screen.findByText(windowsPath)).closest('li')
+    expect(row?.querySelector('.crest')).toHaveTextContent('PA')
+  })
+
   it('asks before clearing and clears only once confirmed', async () => {
     render(<SessionHistory />)
     fireEvent.click(await screen.findByRole('button', { name: 'Clear history' }))
