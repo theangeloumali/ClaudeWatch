@@ -25,10 +25,8 @@ export function execFilePromise(
       resolve({ stdout: stdout as string, stderr: stderr as string })
     }
 
-    if (options?.timeout || options?.env) {
-      execFile(bin, args, options, cb)
-    } else {
-      execFile(bin, args, cb)
-    }
+    // No console window flashes up on Windows; ignored elsewhere. Not for wt.exe, which
+    // honours SW_HIDE and would open hidden.
+    execFile(bin, args, { ...options, windowsHide: true }, cb)
   })
 }
