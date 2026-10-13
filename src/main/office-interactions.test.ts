@@ -305,27 +305,53 @@ describe('OfficeInteractions', () => {
       })
     })
 
+    // The same interactions, comparing folders as `platform` does.
+    const on = (platform: NodeJS.Platform): OfficeInteractions =>
+      new OfficeInteractions({
+        snapshot: () => snapshot,
+        orca,
+        openTerminalRunning,
+        processStart,
+        raiseOrca: vi.fn(),
+        openFolder: vi.fn(),
+        platform
+      })
+
     it('matches Windows folders as Windows does: either separator, any case', async () => {
+      const windows = on('win32')
       snapshot.sessions = [session({ cwd: 'C:\\Repo\\app-wt\\src', projectRoot: 'C:\\Repo\\app' })]
       for (const worktreePath of ['C:/Repo/app-wt', 'c:/repo/APP', 'C:\\Repo\\app-wt\\']) {
         orca.handleFor.mockResolvedValueOnce(pane({ worktreePath }))
-        expect(await interactions.send('claude:s1', 'hi')).toEqual({ success: true })
+        expect(await windows.send('claude:s1', 'hi')).toEqual({ success: true })
       }
       for (const worktreePath of ['C:/Repo/app-wt-other', 'D:/Repo/app', '/Repo/app']) {
         orca.handleFor.mockResolvedValueOnce(pane({ worktreePath }))
-        expect(await interactions.send('claude:s1', 'hi')).toEqual({
+        expect(await windows.send('claude:s1', 'hi')).toEqual({
           success: false,
           reason: 'terminal-not-found'
         })
       }
     })
 
-    it('keeps POSIX folders case-sensitive', async () => {
-      orca.handleFor.mockResolvedValueOnce(pane({ worktreePath: '/Repo/App' }))
-      expect(await interactions.send('claude:s1', 'hi')).toEqual({
+    it('keeps POSIX folders exact: case, and a backslash is part of a name', async () => {
+      const mac = on('darwin')
+      for (const worktreePath of ['/Repo/App', '\\repo\\app']) {
+        orca.handleFor.mockResolvedValueOnce(pane({ worktreePath }))
+        expect(await mac.send('claude:s1', 'hi')).toEqual({
+          success: false,
+          reason: 'terminal-not-found'
+        })
+      }
+      // Only Windows reads a drive letter: elsewhere these are two different names.
+      snapshot.sessions = [session({ cwd: 'c:\\repo\\app', projectRoot: 'c:\\repo\\app' })]
+      orca.handleFor.mockResolvedValueOnce(pane({ worktreePath: 'C:/Repo/App' }))
+      expect(await mac.send('claude:s1', 'hi')).toEqual({
         success: false,
         reason: 'terminal-not-found'
       })
+      orca.handleFor.mockResolvedValueOnce(pane({ worktreePath: '/repo/' }))
+      snapshot.sessions = [session({ cwd: '/repo/app', projectRoot: '/elsewhere' })]
+      expect(await mac.send('claude:s1', 'hi')).toEqual({ success: true })
     })
 
     it('refuses a pane where this session’s agent is no longer the running program', async () => {

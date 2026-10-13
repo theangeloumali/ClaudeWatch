@@ -320,13 +320,26 @@ describe('Orca panes on Windows, where no process environment can be read', () =
     expect((await source.enrich(session('a'), 30_000)).orcaPaneKey).toBe('tab:leaf')
   })
 
-  it('runs nothing for a session while Orca is unavailable', async () => {
+  it('keeps a known pane while one Orca poll fails, without asking again', async () => {
     const io = windowsIo([{ pid: 7, paneKey: 'tab:leaf' }])
-    vi.mocked(io.exec).mockRejectedValueOnce(new Error('runtime unavailable'))
-    const source = new OrcaSource(io, 'win32')
-    await source.poll(0)
+    const source = new OrcaSource(io, 'win32', vi.fn().mockResolvedValue(TREE))
+    expect((await source.enrich(session('a'), 0)).orcaPaneKey).toBe('tab:leaf')
+    vi.mocked(io.exec).mockRejectedValueOnce(new Error('signature check timed out'))
+    expect((await source.poll(1)).ok).toBe(false)
     vi.mocked(io.exec).mockClear()
-    expect((await source.enrich(session('a'), 1)).orcaPaneKey).toBeNull()
+    expect(await source.enrich(session('a'), 2)).toMatchObject({
+      host: 'orca',
+      orcaPaneKey: 'tab:leaf'
+    })
     expect(io.exec).not.toHaveBeenCalled()
+  })
+
+  it('asks a failing Orca again at once when a new session turns out to be in a pane', async () => {
+    const io = windowsIo([{ pid: 7, paneKey: 'tab:leaf' }])
+    const source = new OrcaSource(io, 'win32', vi.fn().mockResolvedValue(TREE))
+    vi.mocked(io.exec).mockRejectedValueOnce(new Error('runtime unavailable'))
+    expect((await source.poll(0)).ok).toBe(false)
+    expect((await source.enrich(session('a'), 1)).orcaPaneKey).toBe('tab:leaf')
+    expect((await source.poll(2)).ok).toBe(true)
   })
 })

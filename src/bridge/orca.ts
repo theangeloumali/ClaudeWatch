@@ -201,8 +201,6 @@ export class OrcaSource {
   ): Promise<OrcaEnvironment> {
     const identity = `${pid}:${startedAtMs}`
     let cached = this.environments.get(identity)
-    // On Windows the lookup asks Orca itself, which is pointless while it is down.
-    if (this.platform === 'win32' && !this.health.ok) return NOT_IN_ORCA
     if (!cached || now >= cached.retryAt) {
       try {
         const value = await orcaEnvironmentOf(pid, {

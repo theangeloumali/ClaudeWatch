@@ -1,5 +1,6 @@
 import { createHash } from 'crypto'
 import { parseAgentKey } from '../shared/office/agent-key'
+import { folderKey } from '../bridge/process-folders'
 import { needsHuman } from '../shared/office/attention'
 import { CONTROL_CHARACTER } from '../shared/unsafe-text'
 import type {
@@ -30,6 +31,8 @@ interface OfficeInteractionsDeps {
     path: string,
     pid: number | null
   ) => Promise<{ success: boolean; target?: 'terminal' | 'terminal-app' }>
+  // How folders compare: Windows ignores case and the separator.
+  platform?: NodeJS.Platform
 }
 
 // The process a pane must be proven to belong to before anything touches it: a session, or a
@@ -51,19 +54,17 @@ const fail = (reason: InteractionFailure): InteractionResult => ({ success: fals
 const fingerprintOf = (lines: string[]): string =>
   createHash('sha256').update(lines.join('\n')).digest('hex')
 const isPrintable = (text: string): boolean => !CONTROL_CHARACTER.test(text)
-// A Windows path compares as Windows does (Orca writes `C:/x`, a process reports `C:\X`); a
-// POSIX path compares exactly.
-const comparable = (path: string): string =>
-  /^([A-Za-z]:[\\/]|\\\\)/.test(path) ? path.replace(/\\/g, '/').toLowerCase() : path
-const isWithin = (path: string, folder: string): boolean => {
-  const [inner, outer] = [comparable(path), comparable(folder)]
-  return inner === outer || inner.startsWith(`${outer.replace(/\/+$/, '')}/`)
+// Orca writes `C:/x` where a process reports `C:\X`; folderKey makes them one on Windows.
+const isWithin = (path: string, folder: string, platform: NodeJS.Platform): boolean => {
+  const [inner, outer] = [folderKey(path, platform), folderKey(folder, platform)]
+  const prefix = platform === 'win32' ? `${outer}\\` : `${outer.replace(/\/+$/, '')}/`
+  return inner === outer || inner.startsWith(prefix)
 }
 // The pane must be in this session's folder and still running its agent: once the agent
 // exits the pane is a shell, and typed text would run as a command.
-const paneServes = (terminal: PaneTerminal, owner: PaneOwner): boolean =>
-  (comparable(terminal.worktreePath) === comparable(owner.projectRoot) ||
-    isWithin(owner.cwd, terminal.worktreePath)) &&
+const paneServes = (terminal: PaneTerminal, owner: PaneOwner, platform: NodeJS.Platform): boolean =>
+  (folderKey(terminal.worktreePath, platform) === folderKey(owner.projectRoot, platform) ||
+    isWithin(owner.cwd, terminal.worktreePath, platform)) &&
   terminal.agent !== null &&
   ORCA_AGENTS[owner.provider].includes(terminal.agent)
 
@@ -253,7 +254,8 @@ export class OfficeInteractions {
     if (startedAtMs === null || startedAtMs !== owner.startedAtMs) return fail('unknown-session')
     try {
       const terminal = await this.deps.orca.handleFor(owner.orcaPaneKey)
-      if (!terminal || !paneServes(terminal, owner)) return fail('terminal-not-found')
+      if (!terminal || !paneServes(terminal, owner, this.deps.platform ?? process.platform))
+        return fail('terminal-not-found')
       return await action(terminal)
     } catch {
       return fail('orca-unavailable')

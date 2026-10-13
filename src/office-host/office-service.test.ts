@@ -10,8 +10,7 @@ vi.mock('../main/terminal-opener', () => ({ openTerminal, openTerminalRunning, r
 const raiseProcessWindow = vi.hoisted(() => vi.fn())
 vi.mock('../main/windows-terminals', () => ({
   raiseProcessWindow,
-  launchWindowsApp: vi.fn(),
-  runColdScript: vi.fn()
+  launchWindowsApp: vi.fn()
 }))
 vi.mock('../shared/orca-bundle', async (original) => ({
   ...(await original<typeof import('../shared/orca-bundle')>()),

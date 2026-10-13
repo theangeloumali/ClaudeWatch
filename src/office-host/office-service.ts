@@ -6,7 +6,7 @@ import { createOrcaCli } from '../main/orca-cli'
 import { OrcaTerminals } from '../main/orca-terminals'
 import type { execFilePromise } from '../main/platform/exec'
 import { openTerminal, openTerminalRunning, raiseTerminal } from '../main/terminal-opener'
-import { raiseProcessWindow, runColdScript } from '../main/windows-terminals'
+import { raiseProcessWindow } from '../main/windows-terminals'
 import type { TerminalType } from '../renderer/lib/types'
 import type {
   FeedMessage,
@@ -19,6 +19,7 @@ import type {
 import { orcaBundle } from '../shared/orca-bundle'
 import { filetimeToMs, startTimeQuery } from '../shared/platform-process'
 import { PARSED_OUTPUT_ENV } from '../shared/ps'
+import { runInteractivePowerShell } from '../shared/powershell-host'
 import type { RunScript } from '../shared/windows-console'
 
 const PS_OPTIONS = { timeout: 5000, env: PARSED_OUTPUT_ENV }
@@ -64,7 +65,7 @@ export function createOfficeService({
   terminalOf,
   isInteractive,
   platform = process.platform,
-  runScript = runColdScript
+  runScript = runInteractivePowerShell
 }: OfficeServiceDeps): OfficeService {
   const isWindows = platform === 'win32'
   const orcaCli = createOrcaCli(run, undefined, platform)
@@ -102,6 +103,7 @@ export function createOfficeService({
     openTerminalRunning,
     processStart,
     raiseOrca: orcaCli.raise,
+    platform,
     openFolder: async (path, pid) => {
       if (isWindows) return showOnWindows(path, pid)
       const terminal = pid === null ? undefined : await terminalOf(pid)

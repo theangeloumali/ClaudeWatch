@@ -4,6 +4,7 @@ import { homedir } from 'os'
 import { win32 } from 'path'
 import type { TerminalInfo, TerminalType } from '../renderer/lib/types'
 import { childEnv, POWERSHELL, powershellArgs, programName } from '../shared/platform-process'
+import { runInteractivePowerShell } from '../shared/powershell-host'
 import {
   ancestry,
   focusWindowScript,
@@ -26,17 +27,8 @@ const WINDOWS_TERMINALS: Record<string, { terminalType: TerminalType; displayNam
   hyper: { terminalType: 'hyper', displayName: 'Hyper' }
 }
 
-// One run compiles a helper and lists every process: seconds, not milliseconds.
+// The scripts that carry a path run in a fresh PowerShell, which takes seconds to start.
 const POWERSHELL_TIMEOUT_MS = 20_000
-
-// The cold route: a fresh powershell.exe for each script, which compiles the helper every time.
-export const runColdScript: RunScript = async (script) =>
-  (
-    await execFilePromise(POWERSHELL, powershellArgs(script), {
-      timeout: POWERSHELL_TIMEOUT_MS,
-      env: childEnv('win32')
-    })
-  ).stdout
 
 const LOCAL_APP_DATA = process.env.LOCALAPPDATA ?? win32.join(homedir(), 'AppData', 'Local')
 // The App Execution Alias Windows Terminal installs; absent when it is not installed.
@@ -99,7 +91,7 @@ export function openWindowsFolder(
 // another in front.
 export async function raiseProcessWindow(
   pid: number,
-  runScript: RunScript = runColdScript
+  runScript: RunScript = runInteractivePowerShell
 ): Promise<boolean> {
   try {
     return (await runScript(focusWindowScript(pid))).trim() === 'True'
@@ -123,7 +115,7 @@ export async function launchWindowsApp(program: string): Promise<void> {
 // The nearest terminal host above `pid`, or null when none is.
 export async function resolveWindowsTerminal(
   pid: number,
-  runScript: RunScript = runColdScript
+  runScript: RunScript = runInteractivePowerShell
 ): Promise<TerminalInfo | null> {
   const tree = parseProcessTree(await runScript(processTreeScript(pid)))
   for (const node of ancestry(tree, pid).slice(1)) {

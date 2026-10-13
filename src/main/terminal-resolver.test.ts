@@ -3,10 +3,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 vi.mock('./platform/exec', () => ({
   execFilePromise: vi.fn()
 }))
+vi.mock('../shared/powershell-host', () => ({ runInteractivePowerShell: vi.fn() }))
 
 import { execFilePromise } from './platform/exec'
 import { TerminalResolver } from './terminal-resolver'
-import { childEnv, POWERSHELL } from '../shared/platform-process'
+import { runInteractivePowerShell } from '../shared/powershell-host'
 import { processTreeScript } from '../shared/windows-console'
 
 const mockExec = vi.mocked(execFilePromise)
@@ -347,42 +348,40 @@ describe('TerminalResolver on Windows', () => {
         started: at(100 - index)
       }))
     })
+  const runScript = vi.fn()
   const answer = (stdout: string): void => {
-    mockExec.mockResolvedValue({ stdout, stderr: '' })
+    runScript.mockResolvedValue(stdout)
   }
   let resolver: TerminalResolver
 
   beforeEach(() => {
     vi.clearAllMocks()
-    resolver = new TerminalResolver('win32')
+    resolver = new TerminalResolver('win32', runScript)
   })
 
-  it('asks PowerShell once, by its absolute path and with the minimal environment', async () => {
+  it('runs one fixed script through the runner it is given', async () => {
     answer(
-      listing(0, [
-        [100, 200, 'claude.exe'],
-        [200, 1, 'WindowsTerminal.exe']
-      ])
-    )
-    await resolver.resolve(100)
-    expect(mockExec).toHaveBeenCalledOnce()
-    const [program, args, options] = mockExec.mock.calls[0]
-    expect(program).toBe(POWERSHELL)
-    expect(args.at(-1)).toContain('Console(100)')
-    expect(options?.env).toEqual(childEnv('win32'))
-  })
-
-  it('runs its script through the runner it is given, such as a PowerShell kept running', async () => {
-    const runScript = vi.fn().mockResolvedValue(
       listing(0, [
         [100, 200, 'claude.exe'],
         [200, 1, 'Code.exe']
       ])
     )
-    expect(await new TerminalResolver('win32', runScript).resolve(100)).toMatchObject({
-      terminalType: 'vscode'
-    })
+    expect(await resolver.resolve(100)).toMatchObject({ terminalType: 'vscode' })
     expect(runScript).toHaveBeenCalledExactlyOnceWith(processTreeScript(100))
+    expect(mockExec).not.toHaveBeenCalled()
+  })
+
+  it('uses the kept PowerShell host when given no runner', async () => {
+    vi.mocked(runInteractivePowerShell).mockResolvedValue(
+      listing(0, [
+        [100, 200, 'claude.exe'],
+        [200, 1, 'WindowsTerminal.exe']
+      ])
+    )
+    expect(await new TerminalResolver('win32').resolve(100)).toMatchObject({
+      terminalApp: 'Windows Terminal'
+    })
+    expect(runInteractivePowerShell).toHaveBeenCalledExactlyOnceWith(processTreeScript(100))
     expect(mockExec).not.toHaveBeenCalled()
   })
 
@@ -427,7 +426,7 @@ describe('TerminalResolver on Windows', () => {
       ])
     )
     expect((await resolver.resolve(100)).terminalType).toBe('unknown')
-    mockExec.mockRejectedValue(new Error('timeout'))
+    runScript.mockRejectedValue(new Error('timeout'))
     expect((await resolver.resolve(101)).terminalType).toBe('unknown')
   })
 })
