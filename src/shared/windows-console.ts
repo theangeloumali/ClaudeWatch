@@ -65,14 +65,34 @@ export const WINDOW_HOSTS = [
   'orca'
 ] as const
 
-// The console's first process, then every process with its parent and start.
+// Every process with its parent and start: a whole enumeration, so it is read once and shared.
+const LIST_PROCESSES = [
+  '$processes = @(Get-CimInstance Win32_Process -Property ProcessId, ParentProcessId, Name, CreationDate | ForEach-Object {',
+  "@{ pid = $_.ProcessId; ppid = $_.ParentProcessId; name = $_.Name; started = $(if ($_.CreationDate) { $_.CreationDate.ToFileTimeUtc().ToString() } else { '0' }) } })"
+]
+
+export const PROCESS_LIST_SCRIPT = [
+  "$ErrorActionPreference = 'Stop'",
+  ...LIST_PROCESSES,
+  '@{ processes = $processes } | ConvertTo-Json -Compress -Depth 3'
+].join('\n')
+
+// The first process of the console `pid` is attached to; 0 when it has none.
+export function consoleRootScript(pid: number): string {
+  return [
+    "$ErrorActionPreference = 'Stop'",
+    NATIVE,
+    `[ClaudeWatchWindows]::Console(${checkedPid(pid)})[0]`
+  ].join('\n')
+}
+
+// Both in one run, for a caller that asks about a single process.
 export function processTreeScript(pid: number): string {
   return [
     "$ErrorActionPreference = 'Stop'",
     NATIVE,
     `$console = [ClaudeWatchWindows]::Console(${checkedPid(pid)})[0]`,
-    '$processes = @(Get-CimInstance Win32_Process -Property ProcessId, ParentProcessId, Name, CreationDate | ForEach-Object {',
-    "@{ pid = $_.ProcessId; ppid = $_.ParentProcessId; name = $_.Name; started = $(if ($_.CreationDate) { $_.CreationDate.ToFileTimeUtc().ToString() } else { '0' }) } })",
+    ...LIST_PROCESSES,
     '@{ console = $console; processes = $processes } | ConvertTo-Json -Compress -Depth 3'
   ].join('\n')
 }
@@ -141,15 +161,36 @@ function processNode(value: unknown): ProcessNode | null {
   return { pid, ppid, name, startedMs: filetimeToMs(started) }
 }
 
+function processesOf(rows: unknown): Map<number, ProcessNode> {
+  if (!Array.isArray(rows)) throw new Error('not a process listing')
+  const processes = new Map<number, ProcessNode>()
+  for (const node of rows.map(processNode)) if (node) processes.set(node.pid, node)
+  return processes
+}
+
+export function parseProcessList(stdout: string): Map<number, ProcessNode> {
+  const listing: unknown = JSON.parse(stdout)
+  return processesOf(isJsonObject(listing) ? listing.processes : null)
+}
+
+export function parseConsoleRoot(stdout: string): number {
+  const text = stdout.trim()
+  if (!/^\d+$/.test(text) || !isCount(Number(text))) throw new Error('not a console root')
+  return Number(text)
+}
+
 export function parseProcessTree(stdout: string): ProcessTree {
   const listing: unknown = JSON.parse(stdout)
   const consoleRoot = isJsonObject(listing) ? listing.console : null
-  const rows = isJsonObject(listing) ? listing.processes : null
-  if (!isCount(consoleRoot) || !Array.isArray(rows)) throw new Error('not a process listing')
-  const processes = new Map<number, ProcessNode>()
-  for (const node of rows.map(processNode)) if (node) processes.set(node.pid, node)
-  return { consoleRoot, processes }
+  if (!isCount(consoleRoot)) throw new Error('not a process listing')
+  return { consoleRoot, processes: processesOf(isJsonObject(listing) ? listing.processes : null) }
 }
+
+// One process's tree in one run of `runScript`.
+export const processTreeOf =
+  (runScript: RunScript) =>
+  async (pid: number): Promise<ProcessTree> =>
+    parseProcessTree(await runScript(processTreeScript(pid)))
 
 const MAX_DEPTH = 32
 

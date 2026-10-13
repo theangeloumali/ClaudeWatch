@@ -12,7 +12,7 @@ import {
 } from '../shared/platform-process'
 import { runPowerShell } from '../shared/powershell-host'
 import { UNSAFE_IN_A_NAME } from '../shared/unsafe-text'
-import { processTreeScript } from '../shared/windows-console'
+import { consoleRootScript, PROCESS_LIST_SCRIPT } from '../shared/windows-console'
 import { creationTicksScript } from './liveness'
 import {
   OPENCODE_STATEMENTS,
@@ -134,7 +134,7 @@ const forbidden = (what: string): Error => new Error(`forbidden: ${what}`)
 const PID_SCRIPTS: ((pid: number) => string)[] = [
   (pid) => startTimeQuery(pid, 'win32').args[3],
   creationTicksScript,
-  processTreeScript
+  consoleRootScript
 ]
 // The pid sits where the scripts for pids 1 and 2 first differ; the rest must rebuild exactly.
 function isPidScript(script: string, build: (pid: number) => string): boolean {
@@ -157,6 +157,7 @@ function bridgeScript(args: string[]): string {
   }
   const isKnown =
     script === WINDOWS_PROCESS_TABLE_SCRIPT ||
+    script === PROCESS_LIST_SCRIPT ||
     PID_SCRIPTS.some((build) => isPidScript(script, build))
   if (!isKnown) throw forbidden('program')
   return script

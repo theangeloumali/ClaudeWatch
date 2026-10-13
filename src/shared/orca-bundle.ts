@@ -33,7 +33,6 @@ export function orcaBundle(
 }
 
 const BUNDLE = orcaBundle()
-export const ORCA_APP = BUNDLE.app
 export const ORCA_CLI = BUNDLE.cli
 // The Developer ID team that signs Orca (read from Orca 1.4.224).
 export const ORCA_TEAM_ID = '6CX3WHS9HZ'
