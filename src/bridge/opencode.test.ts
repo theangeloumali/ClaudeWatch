@@ -141,6 +141,51 @@ it('shows a running OpenCode process as a session, from its newest session in th
   expect(feed).not.toContain('DO_NOT_READ')
 })
 
+// The database and its log as `stat` sees them; a test moves either one.
+function stampDatabase(io: BridgeIo): { db: number; wal: number } {
+  const stamps = { db: 1000, wal: 1000 }
+  const stat = io.stat
+  io.stat = async (path) => {
+    if (path.endsWith('opencode.db')) return { directory: false, mtimeMs: stamps.db, size: 4096 }
+    if (path.endsWith('opencode.db-wal'))
+      return { directory: false, mtimeMs: stamps.wal, size: 512 }
+    return stat(path)
+  }
+  return stamps
+}
+
+it('opens the database again only when it or its log changed, or the agents did', async () => {
+  const { io, root, opens } = setup(workingSession)
+  const stamps = stampDatabase(io)
+  const first = await collectOpencode(root, io, undefined, NOW, 'darwin')
+  const second = await collectOpencode(root, io, undefined, NOW + 1000, 'darwin')
+  expect(opens()).toBe(1)
+  expect(second.sessions.map(({ key, activity }) => [key, activity])).toEqual(
+    first.sessions.map(({ key, activity }) => [key, activity])
+  )
+  stamps.wal++
+  await collectOpencode(root, io, undefined, NOW + 2000, 'darwin')
+  expect(opens()).toBe(2)
+})
+
+it('ages a session’s state with the clock while its database stays unchanged', async () => {
+  const { io, root, opens } = setup((db) => {
+    insertSession(db, { id: 'ses_root', directory: '/repo', updatedAtMs: NOW - 1000 })
+    insertMessage(db, {
+      id: 'msg_1',
+      sessionId: 'ses_root',
+      atMs: NOW - 1000,
+      data: { role: 'user' }
+    })
+  })
+  stampDatabase(io)
+  const activity = async (atMs: number) =>
+    (await collectOpencode(root, io, undefined, atMs, 'darwin')).sessions[0].activity
+  expect(await activity(NOW)).toBe('thinking')
+  expect(await activity(NOW + 61_000)).toBe('idle')
+  expect(opens()).toBe(1)
+})
+
 it('shows a finished turn as done', async () => {
   const { io, root } = setup((db) => {
     insertSession(db, { id: 'ses_root', directory: '/repo', updatedAtMs: NOW - 2000 })

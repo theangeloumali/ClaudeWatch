@@ -267,6 +267,22 @@ it('walks the session folders only every 30 s while a macOS process has no rollo
   // `lsof` already placed it: its first rollout waits for the next full walk.
   expect(list.mock.calls.length).toBe(walk)
 })
+it('looks again between full walks only at the rollouts it showed, not at a folder’s history', async () => {
+  const meta = (id: string) =>
+    JSON.stringify({ type: 'session_meta', payload: { id, cwd: '/repo' } })
+  const files: Record<string, string | null> = { '/repo/.git': null }
+  for (const id of ['a', 'b', 'c', 'd', 'e', 'f'])
+    files[`/codex/sessions/rollout-${id}.jsonl`] = meta(id)
+  const io = fixtureIo(files)
+  io.exec = async (file) =>
+    file.endsWith('ps') ? '42 Sat Oct 10 15:29:12 2026 /bin/codex' : 'p42\nn/repo\n'
+  const now = Date.parse('2026-10-11T10:00:00Z')
+  expect((await collectOnMac('/codex', io, undefined, false, now)).sessions).toHaveLength(1)
+  const stat = vi.spyOn(io, 'stat')
+  await collectOnMac('/codex', io, undefined, false, now + 2000)
+  const rollouts = stat.mock.calls.filter(([path]) => path.includes('rollout-'))
+  expect(rollouts).toHaveLength(1)
+})
 it('skips Codex processes running inside an app bundle (helpers, not user sessions)', async () => {
   const io = fixtureIo()
   io.exec = async (file) =>
