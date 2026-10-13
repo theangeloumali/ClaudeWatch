@@ -1,10 +1,12 @@
 import { isDirectory, systemIo } from '../bridge/io'
+import { orcaEnvironmentOf } from '../bridge/orca'
 import type { BridgeHost } from '../main/bridge-host'
 import { OfficeInteractions, type PaneOwner } from '../main/office-interactions'
 import { createOrcaCli } from '../main/orca-cli'
 import { OrcaTerminals } from '../main/orca-terminals'
 import type { execFilePromise } from '../main/platform/exec'
 import { openTerminal, openTerminalRunning, raiseTerminal } from '../main/terminal-opener'
+import { raiseProcessWindow, runColdScript } from '../main/windows-terminals'
 import type { TerminalType } from '../renderer/lib/types'
 import type {
   FeedMessage,
@@ -14,9 +16,12 @@ import type {
   PermissionDecision,
   ProviderId
 } from '../shared/office/types'
-import { PARSED_OUTPUT_ENV, startTimeArgs } from '../shared/ps'
+import { orcaBundle } from '../shared/orca-bundle'
+import { filetimeToMs, startTimeQuery } from '../shared/platform-process'
+import { PARSED_OUTPUT_ENV } from '../shared/ps'
+import type { RunScript } from '../shared/windows-console'
 
-export const PS_OPTIONS = { timeout: 5000, env: PARSED_OUTPUT_ENV }
+const PS_OPTIONS = { timeout: 5000, env: PARSED_OUTPUT_ENV }
 
 interface OfficeServiceDeps {
   host: Pick<BridgeHost, 'snapshot' | 'onMessage'>
@@ -25,6 +30,9 @@ interface OfficeServiceDeps {
   terminalOf: (pid: number) => Promise<TerminalType | undefined>
   // False for a view-only page: then nothing here types, a `cd` into a terminal included.
   isInteractive: boolean
+  platform?: NodeJS.Platform
+  // Runs the Windows scripts that carry only a pid; a fresh powershell.exe each when not given.
+  runScript?: RunScript
 }
 
 // What the Office can do, whichever transport carries it. Arguments are `unknown` because
@@ -40,6 +48,8 @@ export interface OfficeService {
   focusProcess(owner: PaneOwner): Promise<FocusResult>
   // When the process with this pid started (epoch ms), or null when no such process runs.
   processStart(pid: number): Promise<number | null>
+  // The Orca pane the process runs in, or null when it runs in none.
+  paneKeyOf(pid: number): Promise<string | null>
 }
 
 const INVALID: InteractionResult = { success: false, reason: 'invalid-input' }
@@ -52,14 +62,40 @@ export function createOfficeService({
   host,
   run,
   terminalOf,
-  isInteractive
+  isInteractive,
+  platform = process.platform,
+  runScript = runColdScript
 }: OfficeServiceDeps): OfficeService {
-  const orcaCli = createOrcaCli(run)
-  const processStart = (pid: number): Promise<number | null> =>
-    run('/bin/ps', startTimeArgs(pid), PS_OPTIONS).then(
-      ({ stdout }) => Date.parse(`${stdout.trim()} UTC`) || null,
-      () => null
-    )
+  const isWindows = platform === 'win32'
+  const orcaCli = createOrcaCli(run, undefined, platform)
+  const orcaCliPath = orcaBundle(platform).cli
+  const processStart = async (pid: number): Promise<number | null> => {
+    try {
+      const { file, args } = startTimeQuery(pid, platform)
+      // On Windows the query's last argument is its script.
+      if (isWindows) return filetimeToMs((await runScript(args.at(-1) ?? '')).trim()) || null
+      const started = (await run(file, args, PS_OPTIONS)).stdout.trim()
+      return Date.parse(`${started} UTC`) || null
+    } catch {
+      return null
+    }
+  }
+  // Only these two programs: ps, and the trust-checked Orca CLI.
+  const exec = async (file: string, args: string[]): Promise<string> => {
+    if (file === orcaCliPath) return orcaCli.exec(args)
+    if (file === '/bin/ps') return (await run(file, args, PS_OPTIONS)).stdout
+    throw new Error(`not allowed: ${file}`)
+  }
+  // Windows has no app to merely bring forward, but has the session's own window.
+  const showOnWindows = async (
+    path: string,
+    pid: number | null
+  ): Promise<{ success: boolean; target?: 'terminal' | 'terminal-app' }> => {
+    if (pid !== null && (await raiseProcessWindow(pid, runScript)))
+      return { success: true, target: 'terminal-app' }
+    if (!isInteractive || !(await isDirectory(path, systemIo))) return { success: false }
+    return openTerminal(path, undefined)
+  }
   const interactions = new OfficeInteractions({
     snapshot: () => host.snapshot(),
     orca: new OrcaTerminals(orcaCli.exec),
@@ -67,6 +103,7 @@ export function createOfficeService({
     processStart,
     raiseOrca: orcaCli.raise,
     openFolder: async (path, pid) => {
+      if (isWindows) return showOnWindows(path, pid)
       const terminal = pid === null ? undefined : await terminalOf(pid)
       // Opening the folder types `cd` into the terminal app, which a view-only page may not.
       if (isInteractive) {
@@ -94,6 +131,11 @@ export function createOfficeService({
     startAgent: async (projectKey, provider) =>
       isProvider(provider) ? interactions.start(asString(projectKey), provider) : INVALID,
     focusProcess: (owner) => interactions.focusProcess(owner),
-    processStart
+    processStart,
+    paneKeyOf: (pid) =>
+      orcaEnvironmentOf(pid, { exec, runScript, platform }).then(
+        ({ paneKey }) => paneKey,
+        () => null
+      )
   }
 }

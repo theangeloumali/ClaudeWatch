@@ -305,6 +305,29 @@ describe('OfficeInteractions', () => {
       })
     })
 
+    it('matches Windows folders as Windows does: either separator, any case', async () => {
+      snapshot.sessions = [session({ cwd: 'C:\\Repo\\app-wt\\src', projectRoot: 'C:\\Repo\\app' })]
+      for (const worktreePath of ['C:/Repo/app-wt', 'c:/repo/APP', 'C:\\Repo\\app-wt\\']) {
+        orca.handleFor.mockResolvedValueOnce(pane({ worktreePath }))
+        expect(await interactions.send('claude:s1', 'hi')).toEqual({ success: true })
+      }
+      for (const worktreePath of ['C:/Repo/app-wt-other', 'D:/Repo/app', '/Repo/app']) {
+        orca.handleFor.mockResolvedValueOnce(pane({ worktreePath }))
+        expect(await interactions.send('claude:s1', 'hi')).toEqual({
+          success: false,
+          reason: 'terminal-not-found'
+        })
+      }
+    })
+
+    it('keeps POSIX folders case-sensitive', async () => {
+      orca.handleFor.mockResolvedValueOnce(pane({ worktreePath: '/Repo/App' }))
+      expect(await interactions.send('claude:s1', 'hi')).toEqual({
+        success: false,
+        reason: 'terminal-not-found'
+      })
+    })
+
     it('refuses a pane where this session’s agent is no longer the running program', async () => {
       for (const agent of [null, 'codex', 'claude-something-else']) {
         orca.handleFor.mockResolvedValueOnce(pane({ agent }))

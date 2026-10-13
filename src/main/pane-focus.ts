@@ -6,7 +6,7 @@ interface PaneFocusDeps {
   // The session tracker's current list: the only processes a caller may name.
   instances: () => Pick<ClaudeInstance, 'pid' | 'projectPath'>[]
   processStart: (pid: number) => Promise<number | null>
-  // ORCA_PANE_KEY of that process, or null when it does not run in an Orca pane.
+  // The Orca pane that process runs in, or null when it runs in none.
   paneKeyOf: (pid: number) => Promise<string | null>
   focusProcess: (owner: PaneOwner) => Promise<FocusResult>
 }

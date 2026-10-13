@@ -1,10 +1,49 @@
 import { execFile } from 'node:child_process'
+import { homedir } from 'node:os'
+import { win32 } from 'node:path'
+import { childEnv, POWERSHELL, powershellArgs } from './platform-process'
 
-export const ORCA_APP = '/Applications/Orca.app'
-// The app bundle's CLI, not whatever `orca` is first on PATH; Homebrew's is a symlink to it.
-export const ORCA_CLI = `${ORCA_APP}/Contents/Resources/bin/orca`
+export interface OrcaBundle {
+  platform: NodeJS.Platform
+  app: string
+  cli: string
+}
+
+// The app's own CLI, not whatever `orca` is first on PATH: on macOS Homebrew's is a symlink to
+// it, and on Windows `orca.cmd` would hand the arguments to cmd.exe to reparse.
+export function orcaBundle(
+  platform: NodeJS.Platform = process.platform,
+  localAppData = process.env.LOCALAPPDATA ?? win32.join(homedir(), 'AppData', 'Local')
+): OrcaBundle {
+  if (platform !== 'win32') {
+    const app = '/Applications/Orca.app'
+    return { platform, app, cli: `${app}/Contents/Resources/bin/orca` }
+  }
+  const install = win32.join(localAppData, 'Programs', 'orca')
+  return {
+    platform,
+    app: win32.join(install, 'Orca.exe'),
+    cli: win32.join(install, 'resources', 'bin', 'orca.exe')
+  }
+}
+
+const BUNDLE = orcaBundle()
+export const ORCA_APP = BUNDLE.app
+export const ORCA_CLI = BUNDLE.cli
 // The Developer ID team that signs Orca (read from Orca 1.4.224).
 export const ORCA_TEAM_ID = '6CX3WHS9HZ'
+// The Authenticode signer of Orca's Windows binaries (read from Orca 1.4.221).
+export const ORCA_SIGNER =
+  'CN=SignPath Foundation, O=SignPath Foundation, L=Lewes, S=Delaware, C=US'
+
+// On Windows the CLI cannot find its runtime without APPDATA.
+export function orcaCliEnv(
+  platform: NodeJS.Platform = process.platform,
+  env: NodeJS.ProcessEnv = process.env
+): Record<string, string> {
+  const base = childEnv(platform)
+  return platform === 'win32' && env.APPDATA ? { ...base, APPDATA: env.APPDATA } : base
+}
 
 const CODESIGN = '/usr/bin/codesign'
 const VERIFY_TIMEOUT_MS = 15_000
@@ -19,18 +58,51 @@ export const verifyArgs = (bundle: string): string[] => [
   `-R=${SIGNED_BY_ORCA}`,
   bundle
 ]
+// SignPath signs many projects, so the signer alone is not Orca: the company, which the signature
+// covers, must be too. The CLI says "Stably AI", the app "stablyai"; `-ne` ignores case.
+const AUTHENTICODE_SCRIPT = [
+  "$ErrorActionPreference = 'Stop'",
+  'foreach ($path in $env:CLAUDEWATCH_ORCA_CLI, $env:CLAUDEWATCH_ORCA_APP) {',
+  '$signature = Get-AuthenticodeSignature -LiteralPath $path',
+  "if ($signature.Status -ne 'Valid') { throw 'not validly signed' }",
+  `if ($signature.SignerCertificate.Subject -cne '${ORCA_SIGNER}') { throw 'not signed for Orca' }`,
+  "$company = (Get-Item -LiteralPath $path).VersionInfo.CompanyName -replace '\\s', ''",
+  "if ($company -ne 'stablyai') { throw 'not Orca' }",
+  '}',
+  "'trusted'"
+].join('\n')
 // One verify (about 0.5 s) covers a burst of calls. The bundle is checked by path and then run
 // by path, so a swap inside this window, or between the check and the run, is not caught:
 // accepted, since closing it would need the checked file itself to be the one executed.
 export const ORCA_TRUST_MS = 3_000
 
-function verifySignature(): Promise<void> {
+function verifyCodesign(bundle: OrcaBundle): Promise<void> {
   return new Promise((resolve, reject) => {
     execFile(
       CODESIGN,
-      verifyArgs(ORCA_APP),
+      verifyArgs(bundle.app),
       { timeout: VERIFY_TIMEOUT_MS, env: { LC_ALL: 'C' } },
       (error) => (error ? reject(error) : resolve())
+    )
+  })
+}
+
+// Paths travel in the environment: `-Command` splices any trailing argument into the script.
+function verifyAuthenticode(bundle: OrcaBundle): Promise<void> {
+  const env = {
+    ...childEnv('win32'),
+    CLAUDEWATCH_ORCA_CLI: bundle.cli,
+    CLAUDEWATCH_ORCA_APP: bundle.app
+  }
+  return new Promise((resolve, reject) => {
+    execFile(
+      POWERSHELL,
+      powershellArgs(AUTHENTICODE_SCRIPT),
+      { timeout: VERIFY_TIMEOUT_MS, env, windowsHide: true },
+      (error, stdout) => {
+        if (!error && String(stdout).trim() === 'trusted') resolve()
+        else reject(error ?? new Error('Orca is not trusted'))
+      }
     )
   })
 }
@@ -39,14 +111,16 @@ function verifySignature(): Promise<void> {
 // check is not remembered, so an Orca installed later works without a restart.
 // `minLeftMs` is how much of the window a caller needs left: with less, it is checked afresh.
 export function createOrcaTrust(
-  now: () => number = Date.now
+  now: () => number = Date.now,
+  bundle: OrcaBundle = BUNDLE
 ): (minLeftMs?: number) => Promise<void> {
+  const verifySignature = bundle.platform === 'win32' ? verifyAuthenticode : verifyCodesign
   let trusted: Promise<void> | null = null
   let checkedAtMs = 0
   return (minLeftMs = 0) => {
     if (!trusted || now() - checkedAtMs > ORCA_TRUST_MS - minLeftMs) {
       checkedAtMs = now()
-      const check = verifySignature()
+      const check = verifySignature(bundle)
       trusted = check
       check.catch(() => {
         if (trusted === check) trusted = null
