@@ -43,6 +43,7 @@ describe('SoundPlayer', () => {
     expect(mockExecFile).toHaveBeenCalledWith(
       'afplay',
       [expect.stringMatching(/task-complete\.m4a$/)],
+      { windowsHide: true },
       expect.any(Function)
     )
   })

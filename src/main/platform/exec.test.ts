@@ -25,12 +25,26 @@ describe('execFilePromise', () => {
     })
   })
 
+  // Without it every child of the Electron main process flashes a console window on Windows.
+  it.each([
+    ['no options', undefined],
+    ['a timeout and an env', { timeout: 5, env: { A: 'b' } }]
+  ])('hides the child console window given %s', async (_case, options) => {
+    await execFilePromise('/bin/ps', ['-o', 'pid='], options)
+    expect(mockExecFile).toHaveBeenCalledWith(
+      '/bin/ps',
+      ['-o', 'pid='],
+      { ...options, windowsHide: true },
+      expect.any(Function)
+    )
+  })
+
   it('runs PowerShell with exactly one script and the fixed flags', async () => {
     await execFilePromise(POWERSHELL, powershellArgs('Get-Date'), { env: { SystemRoot: 'C:\\W' } })
     expect(mockExecFile).toHaveBeenCalledWith(
       POWERSHELL,
       powershellArgs('Get-Date'),
-      { env: { SystemRoot: 'C:\\W' } },
+      { env: { SystemRoot: 'C:\\W' }, windowsHide: true },
       expect.any(Function)
     )
   })
