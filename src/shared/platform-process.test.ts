@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   POWERSHELL,
+  checkedPid,
   childEnv,
   filetimeToMs,
   isAbsoluteFolder,
   powershellArgs,
+  powershellScriptOf,
   programName,
   splitCommandLine,
   startTimeQuery
@@ -41,8 +43,26 @@ describe('powershell', () => {
     ])
   })
 
+  it('gives back the one script of an exact powershellArgs call, and refuses anything else', () => {
+    expect(powershellScriptOf(powershellArgs('Get-Date'))).toBe('Get-Date')
+    for (const args of [
+      [...powershellArgs('Get-Date'), ';Write-Output INJECTED'],
+      ['-ExecutionPolicy', 'Bypass', '-Command', 'Get-Date'],
+      ['-NoProfile', '-NonInteractive', '-Command'],
+      []
+    ])
+      expect(() => powershellScriptOf(args)).toThrow(/PowerShell/)
+  })
+
   it('is the absolute Windows PowerShell path', () => {
     expect(POWERSHELL).toMatch(/\\System32\\WindowsPowerShell\\v1\.0\\powershell\.exe$/)
+  })
+})
+
+describe('checkedPid', () => {
+  it('passes a positive safe integer and refuses any other value', () => {
+    expect(checkedPid(55152)).toBe(55152)
+    for (const pid of [0, -1, 1.5, Number.NaN, 2 ** 53]) expect(() => checkedPid(pid)).toThrow()
   })
 })
 

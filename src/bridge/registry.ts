@@ -19,7 +19,7 @@ import { join } from 'node:path'
 import { isAbsoluteFolder } from '../shared/platform-process'
 import type { SessionRef, SourceHealth } from '../shared/office/types'
 import { type BridgeIo, isMissing, jsonObject } from './io'
-import { isLive } from './liveness'
+import { isLive, startedAtOf } from './liveness'
 import { sessionFromRegistry, sessionFromTeammate } from './claude'
 import { resolveProject } from './project-root'
 import { pruneTranscripts, readTranscript, transcriptPath } from './transcript-tail'
@@ -74,6 +74,12 @@ interface Collected {
   hasTeam: boolean
 }
 
+// The records each root showed live last tick, so one PowerShell cannot vouch for this tick is
+// kept rather than dropped: the robot would otherwise leave its desk and come back.
+const liveLastTick = new WeakMap<BridgeIo, Map<string, Set<string>>>()
+const recordOf = ({ pid, procStart, sessionId }: RegistryEntry): string =>
+  `${pid}:${procStart}:${sessionId}`
+
 export async function collectClaude(
   roots: string[],
   io: BridgeIo,
@@ -96,7 +102,11 @@ export async function collectClaude(
   const uniqueRoots = [...new Set(roots)]
   const liveSessionIds = new Set<string>()
   // One live entry as a session, with its agents, its team and the transcripts behind them.
-  const collectSession = async (root: string, entry: RegistryEntry): Promise<Collected> => {
+  const collectSession = async (
+    root: string,
+    entry: RegistryEntry,
+    startedAtMs: number
+  ): Promise<Collected> => {
     const project = await resolveProject(entry.cwd, io, now, platform)
     const path = await transcriptPath(root, entry.cwd, entry.sessionId, io)
     const transcript = path ? await readTranscript(path, io) : { tool: null, error: false }
@@ -111,7 +121,8 @@ export async function collectClaude(
       transcript,
       [...agents, ...(team ?? []).map((teammate) => teammate.ref)],
       project.root,
-      project.worktree
+      project.worktree,
+      startedAtMs
     )
     const teamTranscripts = (team ?? []).map((teammate): [string, string[]] => [
       teammate.ref.id,
@@ -125,8 +136,13 @@ export async function collectClaude(
   }
   // A vanished file drops the session for this tick; anything else is a failed read.
   const settled = (error: unknown): 'failed' | null => (isMissing(error) ? null : 'failed')
+  let lastTick = liveLastTick.get(io)
+  if (!lastTick) liveLastTick.set(io, (lastTick = new Map()))
   for (const root of uniqueRoots) {
     const health: SourceHealth = { id: `claude:${root}`, ok: true, detail: 'empty' }
+    const wasLive = lastTick.get(root) ?? new Set<string>()
+    const isLiveNow = new Set<string>()
+    let isUnvouched = false
     try {
       const files = await io.list(join(root, 'sessions'))
       // Liveness is proven one entry at a time, so at most one `ps` runs at once. Each live
@@ -135,11 +151,18 @@ export async function collectClaude(
       for (const file of files.filter((name) => /^\d+\.json$/.test(name))) {
         try {
           const entry = parseRegistry(await io.readText(join(root, 'sessions', file)), platform)
+          if (!entry) continue
           // An unreadable table proves nothing either way: each pid is then asked about.
-          if (!entry || !(await isLive(entry, io, await table().catch(() => []), platform)))
-            continue
+          const rows = await table().catch(() => [])
+          const live = await isLive(entry, io, rows, platform).catch((error: unknown) => {
+            if (!wasLive.has(recordOf(entry))) throw error
+            isUnvouched = true
+            return true
+          })
+          if (!live) continue
+          isLiveNow.add(recordOf(entry))
           liveSessionIds.add(entry.sessionId)
-          reads.push(collectSession(root, entry).catch(settled))
+          reads.push(collectSession(root, entry, startedAtOf(entry, rows, platform)).catch(settled))
         } catch (error) {
           reads.push(Promise.resolve(settled(error)))
         }
@@ -159,12 +182,17 @@ export async function collectClaude(
           health.detail = 'team read failed'
         }
       }
+      if (isUnvouched && health.ok) {
+        health.ok = false
+        health.detail = 'liveness unknown'
+      }
     } catch (error) {
       if (!isMissing(error)) {
         health.ok = false
         health.detail = 'registry read failed'
       }
     }
+    lastTick.set(root, isLiveNow)
     sources.push(health)
   }
   // Who has no lead cannot be told while a registry is unread: it may hold the lead.

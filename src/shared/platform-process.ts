@@ -21,8 +21,18 @@ export const powershellArgs = (script: string): string[] => [
   script
 ]
 
+// PowerShell joins any argument after -Command into the script and runs it, so a call must be
+// exactly powershellArgs(script); values go in the child env instead.
+export function powershellScriptOf(args: string[]): string {
+  const script = args.at(-1) ?? ''
+  const expected = powershellArgs(script)
+  if (args.length !== expected.length || args.some((arg, index) => arg !== expected[index]))
+    throw new Error('PowerShell runs only powershellArgs(script), with nothing after the script')
+  return script
+}
+
 // A pid is the only value ever written into a script, so it is checked before it gets there.
-function checkedPid(pid: number): number {
+export function checkedPid(pid: number): number {
   if (!Number.isSafeInteger(pid) || pid <= 0) throw new Error(`not a pid: ${pid}`)
   return pid
 }

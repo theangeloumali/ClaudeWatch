@@ -12,10 +12,15 @@ vi.mock('../shared/orca-bundle', async (original) => ({
   assertOrcaTrusted
 }))
 import { ORCA_CLI, orcaCliEnv } from '../shared/orca-bundle'
-import { childEnv, POWERSHELL, powershellArgs } from '../shared/platform-process'
+import { childEnv, POWERSHELL, powershellArgs, startTimeQuery } from '../shared/platform-process'
+import { processTreeScript } from '../shared/windows-console'
 import { PARSED_OUTPUT_ENV } from '../shared/ps'
 import { systemIo } from './io'
+import { creationTicksScript } from './liveness'
 import { OrcaSource } from './orca'
+import { WINDOWS_PROCESS_TABLE_SCRIPT } from './process-table'
+
+const START_TIME = startTimeQuery(42, 'win32').args[3]
 
 beforeEach(() => {
   vi.resetAllMocks()
@@ -70,31 +75,56 @@ it('runs nothing from an Orca bundle whose signature does not hold, and says Orc
 })
 
 it('runs PowerShell by its absolute path, with nothing of this process’s env but what it needs', async () => {
-  const output = await systemIo.exec(POWERSHELL, powershellArgs('$PID'))
+  const output = await systemIo.exec(POWERSHELL, powershellArgs(START_TIME))
   if (process.platform === 'win32') {
     // On Windows one kept shell runs every script; a cold start per poll costs a second of CPU.
-    expect(output).toBe('ran $PID')
-    expect(runPowerShell).toHaveBeenCalledExactlyOnceWith('$PID', 5000)
+    expect(output).toBe(`ran ${START_TIME}`)
+    expect(runPowerShell).toHaveBeenCalledExactlyOnceWith(START_TIME, 5000)
     expect(execFile).not.toHaveBeenCalled()
   } else {
     expect(output).toBe('{"ok":true}')
-    expect(execFile.mock.calls[0].slice(0, 2)).toEqual([POWERSHELL, powershellArgs('$PID')])
+    expect(execFile.mock.calls[0].slice(0, 2)).toEqual([POWERSHELL, powershellArgs(START_TIME)])
     expect(execFile.mock.calls[0][2].env).toEqual(childEnv())
   }
-  await expect(systemIo.exec('powershell.exe', powershellArgs('$PID'))).rejects.toThrow('forbidden')
+  await expect(systemIo.exec('powershell.exe', powershellArgs(START_TIME))).rejects.toThrow(
+    'forbidden'
+  )
 })
 
 it('refuses PowerShell any argument but the one script, as one after it would run as code', async () => {
   for (const args of [
-    [...powershellArgs('$PID'), ';Write-Output INJECTED'],
-    ['-Command', '$PID'],
+    [...powershellArgs(START_TIME), ';Write-Output INJECTED'],
+    ['-Command', START_TIME],
     ['-NoProfile', '-NonInteractive', '-EncodedCommand', 'JABQAEkARAA='],
     []
   ])
     await expect(systemIo.exec(POWERSHELL, args)).rejects.toThrow('forbidden: program')
   expect(runPowerShell).not.toHaveBeenCalled()
   expect(execFile).not.toHaveBeenCalled()
-  await expect(systemIo.exec(POWERSHELL, powershellArgs('$PID'))).resolves.toBeTypeOf('string')
+  await expect(systemIo.exec(POWERSHELL, powershellArgs(START_TIME))).resolves.toBeTypeOf('string')
+})
+
+it('runs only the bridge’s own PowerShell scripts, each for one integer pid at most', async () => {
+  for (const script of [
+    WINDOWS_PROCESS_TABLE_SCRIPT,
+    START_TIME,
+    startTimeQuery(7, 'win32').args[3],
+    creationTicksScript(55152),
+    processTreeScript(1234)
+  ])
+    await expect(systemIo.exec(POWERSHELL, powershellArgs(script))).resolves.toBeTypeOf('string')
+  for (const script of [
+    'Get-Content C:\\Users\\me\\.claude\\.credentials.json',
+    '$PID',
+    START_TIME.replace('42', '42; Get-Content x'),
+    START_TIME.replace('42', '-1'),
+    START_TIME.replace('42', '042'),
+    creationTicksScript(55152).replace('55152', '55152 OR 1=1'),
+    `${processTreeScript(1234)}\nGet-Content x`
+  ])
+    await expect(systemIo.exec(POWERSHELL, powershellArgs(script))).rejects.toThrow(
+      'forbidden: program'
+    )
 })
 
 it('runs every program hidden, so no console window flashes on Windows', async () => {
@@ -107,9 +137,9 @@ it('holds a program to the time its caller allows, five seconds unless told', as
   await systemIo.exec('/bin/ps', ['-o', 'lstart=', '-p', '1'])
   await systemIo.exec('/bin/ps', ['-o', 'lstart=', '-p', '1'], { timeoutMs: 1234 })
   expect(execFile.mock.calls.map(([, , options]) => options.timeout)).toEqual([5000, 1234])
-  await systemIo.exec(POWERSHELL, powershellArgs('$PID'), { timeoutMs: 1234 })
+  await systemIo.exec(POWERSHELL, powershellArgs(START_TIME), { timeoutMs: 1234 })
   if (process.platform === 'win32')
-    expect(runPowerShell).toHaveBeenCalledExactlyOnceWith('$PID', 1234)
+    expect(runPowerShell).toHaveBeenCalledExactlyOnceWith(START_TIME, 1234)
   else expect(execFile.mock.calls[2][2].timeout).toBe(1234)
 })
 

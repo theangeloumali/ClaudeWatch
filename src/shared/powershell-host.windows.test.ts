@@ -29,6 +29,11 @@ describe.runIf(onWindows)('the kept PowerShell on Windows', () => {
   it('runs a click script in the same kept shell as the polls', async () => {
     expect(await runInteractivePowerShell('$PID')).toBe(await runPowerShell('$PID'))
   }, 20_000)
+  it('answers a script that prints nothing at once, from the same shell', async () => {
+    const pid = await runPowerShell('$PID')
+    expect(await runPowerShell('$null', 4000)).toBe('')
+    expect(await runPowerShell('$PID')).toBe(pid)
+  }, 20_000)
   it('passes over what a script writes to the host itself', async () => {
     expect(await runPowerShell("Write-Host 'noise'; 'kept'")).toBe('kept')
   }, 20_000)

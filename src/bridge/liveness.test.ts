@@ -91,6 +91,11 @@ describe('liveness on Windows for a record in CreationDate ticks', () => {
     const stranger = { ...ticksEntry, procStart: '123' }
     expect(await isLive(stranger, io, [listed(FILETIME, TICKS)], 'win32')).toBe(false)
   })
+  it('takes a ticks record whose pid has gone, which CIM answers with nothing, as dead', async () => {
+    const io = fixtureIo()
+    io.exec = async () => ''
+    expect(await isLive(ticksEntry, io, [], 'win32')).toBe(false)
+  })
   it('asks CIM for the ticks of a pid the table lacks, as Claude Code itself did', async () => {
     const io = fixtureIo()
     const exec = vi.fn(async () => `${TICKS}\r\n`)
