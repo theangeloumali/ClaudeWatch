@@ -24,7 +24,6 @@ import { isStillWorking, OPEN_TOOL_HOLD_MS, quietFor } from './liveness'
 import { toolActivity, toolCategory } from './tool-category'
 import {
   forgetExited,
-  identityOf,
   keyOf,
   newestFirst,
   placeholderId,
@@ -311,33 +310,37 @@ export async function collectCodex(
     }
     const threads: (WrittenConversation & { rollout: Rollout })[] =
       platform === 'win32'
-        ? rollouts
-            .filter(({ startedBy, cwd }) => startedBy !== null && !isAppFolder(cwd, platform))
-            .map((rollout) => ({
-              rollout,
-              folder: rollout.cwd,
-              createdAtMs: rollout.startedAtMs,
-              writtenAtMs: rollout.mtimeMs,
-              kind: rollout.startedBy === 'cli' ? undefined : (rollout.startedBy ?? undefined)
-            }))
+        ? rollouts.flatMap((rollout) =>
+            rollout.startedBy === null || isAppFolder(rollout.cwd, platform)
+              ? []
+              : [
+                  {
+                    rollout,
+                    folder: rollout.cwd,
+                    createdAtMs: rollout.startedAtMs,
+                    writtenAtMs: rollout.mtimeMs,
+                    kind: rollout.startedBy
+                  }
+                ]
+          )
         : []
     claimFolders(processes, folders, threads)
     let isWaiting = false
     for (const process of newestFirst(processes)) {
       try {
-        const cwd =
-          platform === 'win32'
-            ? folders.get(identityOf(process))
-            : await rememberedFolder(io, folders, process, platform)
-        // On Windows the folder itself comes from the rollout the process has yet to write.
-        if (!cwd) isWaiting ||= platform === 'win32'
-        if (!cwd || isAppFolder(cwd, platform)) continue
-        const rollout = rollouts.find(
-          (item) => folderKey(item.cwd, platform) === folderKey(cwd, platform) && !used.has(item.id)
-        )
-        if (rollout) used.add(rollout.id)
+        // On Windows the folder is the one claimed above, from the process's rollouts.
+        const cwd = await rememberedFolder(io, folders, process, platform)
+        if (cwd && isAppFolder(cwd, platform)) continue
+        const rollout = cwd
+          ? rollouts.find(
+              (item) =>
+                folderKey(item.cwd, platform) === folderKey(cwd, platform) && !used.has(item.id)
+            )
+          : undefined
         // On macOS `lsof` has placed it already: the 30 s walk finds its first rollout soon enough.
-        else isWaiting ||= platform === 'win32'
+        if (!rollout) isWaiting ||= platform === 'win32'
+        if (!cwd) continue
+        if (rollout) used.add(rollout.id)
         await show(rollout, cwd, process)
       } catch {
         health.ok = false

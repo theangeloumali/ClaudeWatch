@@ -111,7 +111,7 @@ it('says how the CLI started a thread, as against an app-server or a parent thre
   })
   const rollouts = await findRollouts('/codex', io, false, 'darwin')
   const started = Object.fromEntries(rollouts.map(({ id, startedBy }) => [id, startedBy]))
-  expect(started).toEqual({ a: 'terminal', b: 'exec', c: null, d: null, e: 'cli' })
+  expect(started).toEqual({ a: 'terminal', b: 'exec', c: null, d: null, e: undefined })
 })
 
 it('still fails the walk on a real read error, which a skip would hide', async () => {
