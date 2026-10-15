@@ -317,7 +317,8 @@ describe('createLiveFeed', () => {
       expect(place(frames)).toBeUndefined()
 
       settings.set('loungeTrips', true)
-      vi.advanceTimersByTime(200)
+      // Re-enabling cannot interrupt the physical walk back to the desk.
+      vi.advanceTimersByTime(LOUNGE_MS)
       expect(place(frames)).toBe('lounge')
 
       // A stopped feed no longer listens for the setting.

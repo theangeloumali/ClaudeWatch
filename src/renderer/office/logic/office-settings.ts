@@ -26,7 +26,7 @@ export const DEFAULT_OFFICE_SETTINGS: OfficeSettings = {
   ambient: true,
   loungeTrips: true,
   player: true,
-  townSize: 'village'
+  townSize: 'city'
 }
 
 export const OFFICE_SETTINGS_STORAGE_KEY = 'claudewatch.office.settings'

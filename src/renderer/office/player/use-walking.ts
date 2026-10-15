@@ -1,35 +1,38 @@
-import { useCallback, useMemo, type Dispatch } from 'react'
+import { useCallback, useRef, type Dispatch } from 'react'
 import type { OfficeAction } from '../logic/office-reducer'
 import { findZone } from '../logic/zone-model'
 import type { FloorGeometry } from '../scene-model'
-import { doorstep } from './walk-ground'
-import { createPlayer, sendPlayer } from './walking'
+import { createPlayer } from './walking'
+import type { Player } from './walking'
+import { playerConnector } from './player-floor-routes'
 
 // The owner's player for the floor on show. It is made at the gate when the Office opens and
 // lives only in this page: the bridge never hears of it, so a view-only page has one too.
-export function useWalking(
-  floor: FloorGeometry | undefined,
-  isWalking: boolean,
+export function useWalking({
+  floor,
+  dispatch,
+  allFloors
+}: {
+  floor: FloorGeometry | undefined
   dispatch: Dispatch<OfficeAction>
-) {
-  const floorId = floor?.floorId
-  const gateX = floor?.elevator.x
-  const gateZ = floor?.elevator.z
-  const player = useMemo(
-    () =>
-      gateX === undefined || gateZ === undefined ? null : createPlayer({ x: gateX, z: gateZ }),
-    // The feed rebuilds the floor on every frame; the player lasts as long as its floor does.
-    [floorId]
-  )
-  // Choosing an office: walking sends the player to its door, otherwise the camera flies there.
+  allFloors?: readonly FloorGeometry[]
+}) {
+  const playerRef = useRef<Player | null>(null)
+  if (!playerRef.current && floor) {
+    playerRef.current = createPlayer(allFloors ? playerConnector(floor) : floor.elevator)
+    playerRef.current.elevation = 0
+    playerRef.current.physicalFloorId = (floor.elevation ?? 0) === 0 ? floor.floorId : null
+  }
+  const player = playerRef.current
+  // Sidebar navigation is an explicit camera action, not a delayed player walk.
   const goToZone = useCallback(
     (zoneId: string) => {
-      const zone = floor ? findZone(floor, zoneId) : undefined
-      if (!isWalking || !player || !zone) return dispatch({ type: 'zone-flown', zoneId })
-      sendPlayer(player, zone.door ? doorstep({ ...zone, door: zone.door }) : zone)
-      dispatch({ type: 'zone-walked', zoneId })
+      const floors = allFloors ?? (floor ? [floor] : [])
+      const destinationFloor = floors.find((candidate) => findZone(candidate, zoneId))
+      if (destinationFloor)
+        dispatch({ type: 'floor-flown', floorId: destinationFloor.floorId, zoneId })
     },
-    [floor, isWalking, player, dispatch]
+    [floor, dispatch, allFloors]
   )
   return { player, goToZone }
 }

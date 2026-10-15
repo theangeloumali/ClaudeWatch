@@ -5,7 +5,7 @@ import { ZonePickers } from './ZonePickers'
 
 interface PlateProps {
   onPointerDown: (event: { clientX: number; clientY: number }) => void
-  onClick: (event: { clientX: number; clientY: number }) => void
+  onClick: (event: { clientX: number; clientY: number; stopPropagation: () => void }) => void
 }
 
 // Expands function components by hand: the plates need no canvas to be exercised.
@@ -33,17 +33,20 @@ const floor = makeFloor({
 describe('ZonePickers', () => {
   it('clears the selection on a click on bare floor inside a zone, but not after a drag', () => {
     const onMiss = vi.fn()
+    const stopPropagation = vi.fn()
     const [company, project] = plates(ZonePickers({ floor, onFly: vi.fn(), onMiss }))
     expect(project).toBeDefined()
 
     company.props.onPointerDown({ clientX: 100, clientY: 100 })
-    company.props.onClick({ clientX: 101, clientY: 100 })
+    company.props.onClick({ clientX: 101, clientY: 100, stopPropagation })
     expect(onMiss).toHaveBeenCalledOnce()
+    expect(stopPropagation).toHaveBeenCalledOnce()
 
     // Panning the map ends with a click event on the plate under the pointer.
     project.props.onPointerDown({ clientX: 100, clientY: 100 })
-    project.props.onClick({ clientX: 180, clientY: 140 })
+    project.props.onClick({ clientX: 180, clientY: 140, stopPropagation })
     expect(onMiss).toHaveBeenCalledOnce()
+    expect(stopPropagation).toHaveBeenCalledOnce()
   })
 
   it('sends the player to a still click while walking, once, and keeps the selection', () => {

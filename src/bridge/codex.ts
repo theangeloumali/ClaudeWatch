@@ -1,10 +1,12 @@
+import { OBSERVATION_STALE_AFTER_MS } from '../shared/office/observation'
 import type {
   AgentActivity,
   AgentAttention,
   CurrentTool,
   SessionRef,
   SessionUsage,
-  SourceHealth
+  SourceHealth,
+  TokenCounts
 } from '../shared/office/types'
 import { type CodexTotal, codexTotalOf } from '../shared/accounts'
 import { programName } from '../shared/platform-process'
@@ -18,8 +20,12 @@ import {
 import { type BridgeIo, folderName, isLabel, isMissing, jsonObject, object } from './io'
 import { placementOf, resolveProject } from './project-root'
 import { type CodexKind, findRollouts, recentDayFolders, type Rollout } from './codex-rollouts'
+import {
+  applyCodexSubagentTotals,
+  attachCodexSubagents,
+  currentCodexActivity
+} from './codex-subagents'
 import { parseCodexUsage } from './codex-usage'
-import { NEXT_STEP_MS } from './opencode-activity'
 import { isStillWorking, OPEN_TOOL_HOLD_MS, quietFor } from './liveness'
 import { toolActivity, toolCategory } from './tool-category'
 import {
@@ -105,9 +111,10 @@ export function parseCodexActivity(tail: string): {
     updatedAtMs = Number.isFinite(timestamp) ? timestamp : 0
   }
   const currentTool = [...openCalls.values()].at(-1) ?? null
+  const needsAnswer = currentTool?.name === 'request_user_input' || currentTool?.name === 'question'
   return {
-    activity: currentTool ? toolActivity(currentTool.category) : activity,
-    attention,
+    activity: needsAnswer ? 'idle' : currentTool ? toolActivity(currentTool.category) : activity,
+    attention: needsAnswer ? 'question' : attention,
     updatedAtMs,
     currentTool
   }
@@ -121,6 +128,7 @@ interface Remembered {
   // The usage last read from each live rollout, by session id. A long tool output pushes the
   // newest `token_count` out of the 64 KB tail, and its total still stands until the next one.
   usage: Map<string, SessionUsage>
+  childTotals: Map<string, Map<string, TokenCounts>>
   // Where each live process runs, by pid and start time: asking costs an `lsof` run.
   folders: Map<string, string>
   // The placeholder key a process without a rollout was first shown under, by pid and start time.
@@ -131,6 +139,7 @@ interface Remembered {
     {
       mtimeMs: number
       size: number
+      observedAtMs: number
       state: ReturnType<typeof parseCodexActivity>
       usage: SessionUsage | null
       // The session last shown for this rollout: what its final total is filed under.
@@ -139,7 +148,7 @@ interface Remembered {
   >
 }
 const remembered = new WeakMap<BridgeIo, Remembered>()
-// A hosted thread has no process of its own: quiet this long, it has finished.
+// Hosted own-work freshness; live descendants may still retain an idle parent container.
 const HOSTED_FRESH_MS = 120_000
 // Codex never deletes a rollout, so a full walk grows with history: between full walks only
 // the ones written lately are looked at again. A new thread waits at most this long.
@@ -230,6 +239,7 @@ export async function collectCodex(
         walk: null,
         isWaiting: false,
         usage: new Map(),
+        childTotals: new Map(),
         folders: new Map(),
         placeholders: new Map(),
         tails: new Map()
@@ -248,38 +258,39 @@ export async function collectCodex(
         ? await currentRollouts(root, io, memory, processes, derivesAccounts, now, platform)
         : []
     const used = new Set<string>()
-    // One session per rollout: its activity and usage from the tail, its place from `cwd`.
-    const show = async (
-      rollout: Rollout | undefined,
-      cwd: string,
-      owner: SessionOwner
-    ): Promise<void> => {
-      const id = rollout?.id ?? placeholderId(owner)
-      let tail = rollout ? tails.get(rollout.path) : undefined
-      // The walk over rollouts has just read each file's size and time: an unchanged tail is
-      // not read or parsed again.
-      if (rollout && (tail?.mtimeMs !== rollout.mtimeMs || tail.size !== rollout.size)) {
+    const observe = async (rollout: Rollout) => {
+      let tail = tails.get(rollout.path)
+      if (!tail || tail.mtimeMs !== rollout.mtimeMs || tail.size !== rollout.size) {
         const text = await io.readTail(rollout.path)
         tail = {
           mtimeMs: rollout.mtimeMs,
           size: rollout.size,
+          observedAtMs: now,
           state: parseCodexActivity(text),
           usage: parseCodexUsage(text),
           session: null
         }
         tails.set(rollout.path, tail)
       }
-      if (rollout) liveTails.add(rollout.path)
+      liveTails.add(rollout.path)
+      live.add(rollout.id)
+      if (tail.usage) known.set(rollout.id, tail.usage)
+      return tail
+    }
+    // One session per rollout: its activity and usage from the tail, its place from `cwd`.
+    const show = async (
+      rollout: Rollout | undefined,
+      cwd: string,
+      owner: SessionOwner
+    ): Promise<SessionRef> => {
+      const id = rollout?.id ?? placeholderId(owner)
+      // Unchanged tails keep the time of the actual read, not this poll's time.
+      const tail = rollout ? await observe(rollout) : undefined
       const state = tail
         ? tail.state
         : { ...parseCodexActivity(''), updatedAtMs: owner.startedAtMs }
       // Cached assistant output must age out even when no new bytes arrive.
-      const activity =
-        state.activity === 'thinking' &&
-        state.updatedAtMs > 0 &&
-        now - state.updatedAtMs >= NEXT_STEP_MS
-          ? 'idle'
-          : state.activity
+      const activity = currentCodexActivity(state, now)
       const usage = tail?.usage ?? known.get(id) ?? null
       if (usage) known.set(id, usage)
       live.add(id)
@@ -299,6 +310,14 @@ export async function collectCodex(
         subagents: [],
         startedAtMs: owner.startedAtMs,
         usage,
+        ...(tail && {
+          observation: {
+            sourceId: 'codex',
+            observedAtMs: tail.observedAtMs,
+            staleAfterMs: OBSERVATION_STALE_AFTER_MS,
+            coverage: 'own' as const
+          }
+        }),
         ...(rollout?.startedAtMs != null && { threadStartedAtMs: rollout.startedAtMs }),
         accountKey: rollout?.accountKey ?? null,
         // A rollout names its own account, so nothing is inferred from who is signed in.
@@ -307,11 +326,15 @@ export async function collectCodex(
       sessions.push(session)
       if (tail) tail.session = session
       health.detail = 'live'
+      return session
     }
     const threads: (WrittenConversation & { rollout: Rollout })[] =
       platform === 'win32'
         ? rollouts.flatMap((rollout) =>
-            rollout.startedBy === null || isAppFolder(rollout.cwd, platform)
+            rollout.startedBy === null ||
+            rollout.isSubagent ||
+            rollout.parentThreadId ||
+            isAppFolder(rollout.cwd, platform)
               ? []
               : [
                   {
@@ -333,8 +356,11 @@ export async function collectCodex(
         if (cwd && isAppFolder(cwd, platform)) continue
         const rollout = cwd
           ? rollouts.find(
-              (item) =>
-                folderKey(item.cwd, platform) === folderKey(cwd, platform) && !used.has(item.id)
+              (candidate) =>
+                !candidate.isSubagent &&
+                !candidate.parentThreadId &&
+                folderKey(candidate.cwd, platform) === folderKey(cwd, platform) &&
+                !used.has(candidate.id)
             )
           : undefined
         // On macOS `lsof` has placed it already: the 30 s walk finds its first rollout soon enough.
@@ -362,29 +388,80 @@ export async function collectCodex(
         health.detail = 'rollout read failed'
       }
     }
-    // The desktop app, the IDE extension and plugins run their threads inside an app-server,
-    // which no process maps to: a thread is live while its rollout is being written.
-    for (const rollout of isHosting ? rollouts : []) {
+    const showHosted = async ({
+      rollout,
+      hasLiveDescendant = false
+    }: {
+      rollout: Rollout
+      hasLiveDescendant?: boolean
+    }): Promise<SessionRef | undefined> => {
+      if (
+        rollout.isSubagent ||
+        rollout.parentThreadId ||
+        used.has(rollout.id) ||
+        isAppFolder(rollout.cwd, platform)
+      )
+        return undefined
       const quietMs = quietFor(now, rollout.mtimeMs)
-      if (quietMs === null) continue
-      // Newest first: past the hold, every later one is quieter still.
-      if (quietMs >= OPEN_TOOL_HOLD_MS) break
+      if (quietMs === null) return undefined
       const shown = tails.get(rollout.path)
-      if (!isStillWorking(quietMs, HOSTED_FRESH_MS, shown?.state.currentTool != null)) continue
-      if (used.has(rollout.id) || isAppFolder(rollout.cwd, platform)) continue
+      const isOwnLive =
+        quietMs < OPEN_TOOL_HOLD_MS &&
+        isStillWorking(quietMs, HOSTED_FRESH_MS, shown?.state.currentTool != null)
+      if (!isOwnLive && !hasLiveDescendant) return undefined
       used.add(rollout.id)
       try {
-        await show(rollout, rollout.cwd, {
+        const session = await show(rollout, rollout.cwd, {
           pid: null,
           // An undated rollout keeps the time it was first shown with, not each new write's.
           startedAtMs: rollout.startedAtMs ?? shown?.session?.startedAtMs ?? rollout.mtimeMs
         })
+        // A descendant keeps the container, not expired tools or synthetic parent activity.
+        if (
+          hasLiveDescendant &&
+          (quietMs >= OPEN_TOOL_HOLD_MS ||
+            !isStillWorking(quietMs, HOSTED_FRESH_MS, session.currentTool !== null))
+        ) {
+          session.activity = 'idle'
+          session.currentTool = null
+        }
+        return session
       } catch {
         health.ok = false
         health.detail = 'rollout read failed'
+        return undefined
       }
     }
     memory.isWaiting = isWaiting
+    // Resolve live explicit descendants before a quiet hosted root can be filtered out.
+    try {
+      await attachCodexSubagents({
+        sessions,
+        rollouts,
+        totals: memory.childTotals,
+        observe: async (rollout) => {
+          const tail = await observe(rollout)
+          return {
+            ...tail.state,
+            usage: tail.usage ?? known.get(rollout.id) ?? null,
+            observedAtMs: tail.observedAtMs
+          }
+        },
+        now,
+        platform,
+        ...(isHosting && { showParent: showHosted })
+      })
+    } catch {
+      health.ok = false
+      health.detail = 'child rollout read failed'
+    }
+    // Threads with their own liveness evidence need no child to keep them present.
+    for (const rollout of isHosting ? rollouts : []) {
+      if (now - rollout.mtimeMs >= OPEN_TOOL_HOLD_MS) break
+      await showHosted({ rollout })
+    }
+    // Totals are finalized only after every retained parent has been shown.
+    applyCodexSubagentTotals(sessions, memory.childTotals)
     for (const id of known.keys()) if (!live.has(id)) known.delete(id)
     forgetExited(processes, folders, placeholders)
     for (const [path, { session }] of tails) {
@@ -393,7 +470,16 @@ export async function collectCodex(
       try {
         // Its last turn may have been written after the last look that found its process.
         const usage = session && parseCodexUsage(await io.readTail(path))
-        const total = usage && codexTotalOf({ ...session, usage })
+        const total =
+          usage &&
+          codexTotalOf({
+            ...session,
+            usage: {
+              ...usage,
+              subagents: session?.usage?.subagents ?? usage.subagents,
+              spawned: session?.usage?.spawned ?? usage.spawned
+            }
+          })
         if (total) departed.push(total)
       } catch (error) {
         if (isMissing(error)) continue
@@ -404,6 +490,10 @@ export async function collectCodex(
   } catch {
     health.ok = false
     health.detail = 'discovery failed'
+  }
+  if (health.ok) {
+    health.checkedAtMs = now
+    health.staleAfterMs = OBSERVATION_STALE_AFTER_MS
   }
   return { sessions, departed, sources: [health] }
 }

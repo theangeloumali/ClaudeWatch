@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { accountKey } from './account-key'
-import { type BridgeIo, isForbidden, isMissing, jsonObject, object } from './io'
+import { type BridgeIo, isForbidden, isLabel, isMissing, jsonObject, object } from './io'
 import { isFolderPath } from './process-folders'
 
 export interface Rollout {
@@ -16,6 +16,10 @@ export interface Rollout {
   // The CLI as a terminal or `codex exec` (undefined when Codex recorded no source), or null
   // for an app-server's thread or another thread's subagent.
   startedBy: CodexKind | undefined | null
+  isSubagent?: boolean
+  parentThreadId?: string | null
+  agentName?: string
+  agentRole?: string
 }
 interface CachedRollout {
   mtimeMs: number
@@ -30,6 +34,7 @@ function startedBy(source: unknown): Rollout['startedBy'] {
   if (source === 'exec') return 'exec'
   return source === undefined ? undefined : null
 }
+const THREAD_ID = /^[\w-]{1,128}$/
 const caches = new WeakMap<BridgeIo, Map<string, Map<string, CachedRollout>>>()
 
 // Codex files a new thread under the local date it began, sessions/YYYY/MM/DD: one that has just
@@ -119,11 +124,23 @@ export async function findRollouts(
           header?.type === 'session_meta' &&
           typeof meta?.cwd === 'string' &&
           isFolderPath(meta.cwd, platform) &&
-          typeof meta.id === 'string'
+          typeof meta.id === 'string' &&
+          THREAD_ID.test(meta.id)
         ) {
           const creator = meta.creator_account_id
           const created = meta.timestamp ?? header.timestamp
           const startedAtMs = typeof created === 'string' ? Date.parse(created) : Number.NaN
+          const source = object(meta.source)
+          const subagent = object(source?.subagent)
+          const spawn = object(subagent?.thread_spawn)
+          const parentId =
+            spawn?.parent_thread_id ??
+            subagent?.parent_thread_id ??
+            object(subagent?.review)?.parent_thread_id
+          const isSubagent =
+            (source !== null && Object.hasOwn(source, 'subagent')) || meta.source === 'subagent'
+          const agentName = meta.agent_nickname ?? spawn?.agent_nickname
+          const agentRole = meta.agent_role ?? spawn?.agent_role
           rollout = {
             path,
             id: meta.id,
@@ -135,7 +152,16 @@ export async function findRollouts(
               derivesAccounts && typeof creator === 'string' && creator
                 ? accountKey('codex', creator)
                 : null,
-            startedBy: startedBy(meta.source)
+            startedBy: startedBy(meta.source),
+            ...(isSubagent && {
+              isSubagent: true,
+              parentThreadId:
+                typeof parentId === 'string' && THREAD_ID.test(parentId) && parentId !== meta.id
+                  ? parentId
+                  : null
+            }),
+            ...(isLabel(agentName) && { agentName }),
+            ...(isLabel(agentRole) && { agentRole })
           }
           rollouts.push(rollout)
         }

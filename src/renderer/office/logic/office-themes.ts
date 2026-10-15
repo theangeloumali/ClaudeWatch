@@ -16,7 +16,7 @@ export interface ThemeAssignments {
   projects: ThemeIdsByKey
 }
 
-export type ThemedZone = Pick<ZoneGeometry, 'companyKey' | 'projectKey'>
+export type ThemedZone = Pick<ZoneGeometry, 'companyKey' | 'projectKey'> & { themeId?: string }
 export type ThemeStorage = Pick<Storage, 'getItem' | 'setItem'>
 
 // What one theme draws on a floor that mixes themes.
@@ -49,6 +49,7 @@ export function resolveTheme(
   defaultThemeId: string
 ): string {
   return (
+    zone.themeId ??
     assignedThemeId(assignments.projects, zone.projectKey) ??
     assignedThemeId(assignments.companies, zone.companyKey) ??
     defaultThemeId
@@ -168,7 +169,9 @@ export function groupZonesByTheme(
     }
   }
   for (const room of floor.rooms)
-    groupFor(themeIdByRoom.get(room.id) ?? themeIdFor(UNASSIGNED_ZONE)).rooms.push(room)
+    groupFor(room.themeId ?? themeIdByRoom.get(room.id) ?? themeIdFor(UNASSIGNED_ZONE)).rooms.push(
+      room
+    )
   return [...groups.values()]
 }
 

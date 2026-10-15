@@ -28,12 +28,15 @@ const RECHECK_MS = 5000
 export function paceBridgeByWindows(
   app: WindowSource,
   windows: () => WatchedWindow[],
-  setPollInterval: (intervalMs: number) => void
+  setPollInterval: (intervalMs: number) => void,
+  isBrowserWatching: () => boolean = () => false
 ): void {
   const update = (): void => {
-    const isWatched = windows().some(
-      (window) => !window.isDestroyed() && window.isVisible() && !window.isMinimized()
-    )
+    const isWatched =
+      isBrowserWatching() ||
+      windows().some(
+        (window) => !window.isDestroyed() && window.isVisible() && !window.isMinimized()
+      )
     setPollInterval(isWatched ? LIVE_POLL_MS : BACKGROUND_POLL_MS)
   }
   app.on('browser-window-created', (_event, window) => {

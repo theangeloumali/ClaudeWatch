@@ -2,7 +2,7 @@ import type { CameraControlsImpl } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, type RefObject } from 'react'
 import { Vector3 } from 'three'
-import { isInsideScroller, keyInputFrom } from '../logic/hotkeys'
+import { inspectorOwnsKeyboard, isInsideScroller, keyInputFrom } from '../logic/hotkeys'
 import {
   releaseVelocity,
   startFling,
@@ -42,6 +42,7 @@ interface GestureOptions {
   isWalking: boolean
   // The owner moved the camera by hand (wheel, pinch, scroll, arrow key, zoom key).
   onManualMove: () => void
+  onTransition?: () => void
   onFit: () => void
 }
 
@@ -76,7 +77,7 @@ function createGestureRig({ camera, domElement, invalidate, latestRef }: Gesture
   const shiftTarget = (x: number, y: number): void => {
     const controls = latestRef.current.controlsRef.current
     if (!controls) return
-    const { right, up } = screenAxes(controls.azimuthAngle)
+    const { right, up } = screenAxes(controls.azimuthAngle, controls.polarAngle)
     controls.getTarget(target, false)
     void controls.moveTo(
       target.x + right[0] * x - up[0] * y,
@@ -92,9 +93,9 @@ function createGestureRig({ camera, domElement, invalidate, latestRef }: Gesture
   const zoomAbout = (factor: number, offset: { x: number; y: number }): void => {
     const controls = latestRef.current.controlsRef.current
     if (!controls) return
-    fling = null
+    const previousGoal = zoomGoal ?? camera.zoom
     latestRef.current.onManualMove()
-    zoomGoal = nextZoomGoal(zoomGoal ?? camera.zoom, factor, {
+    zoomGoal = nextZoomGoal(previousGoal, factor, {
       min: controls.minZoom,
       max: controls.maxZoom
     })
@@ -103,6 +104,11 @@ function createGestureRig({ camera, domElement, invalidate, latestRef }: Gesture
   }
 
   const onWheel = (event: WheelEvent): void => {
+    if (event.defaultPrevented || inspectorOwnsKeyboard(event) || isInsideScroller(event.target))
+      return
+    const target = event.target instanceof Element ? event.target : null
+    if (target?.closest('input, textarea, select, [contenteditable="true"], [data-camera-guard]'))
+      return
     event.preventDefault()
     const input = wheelInputFrom(event, performance.now())
     const intent = classify(input)
@@ -123,7 +129,12 @@ function createGestureRig({ camera, domElement, invalidate, latestRef }: Gesture
     y: event.clientY
   })
   const onPointerDown = (event: PointerEvent): void => {
-    fling = null
+    if (event.target === domElement) latestRef.current.onManualMove()
+    // A second touch belongs to the native pinch/orbit action, never to a pan fling.
+    if (event.pointerType === 'touch' && !event.isPrimary) {
+      dragSamples = null
+      return
+    }
     const isPanStart = event.isPrimary && event.button === 0 && event.target === domElement
     dragSamples = isPanStart ? [sampleOf(event)] : null
   }
@@ -140,10 +151,21 @@ function createGestureRig({ camera, domElement, invalidate, latestRef }: Gesture
     fling = startFling(velocity)
     if (fling) invalidate()
   }
+  const onPointerCancel = (): void => {
+    dragSamples = null
+    fling = null
+  }
   const onKeyDown = (event: KeyboardEvent): void => {
+    if (inspectorOwnsKeyboard(event)) return
     fling = null
     const input = keyInputFrom(event)
-    if (event.defaultPrevented || input.hasModifier || input.isTargetEditable) return
+    if (
+      event.defaultPrevented ||
+      input.hasModifier ||
+      input.isTargetEditable ||
+      input.isCameraBlocked
+    )
+      return
     if (event.key === FIT_KEY) {
       event.preventDefault()
       return latestRef.current.onFit()
@@ -156,6 +178,7 @@ function createGestureRig({ camera, domElement, invalidate, latestRef }: Gesture
     latestRef.current.onManualMove()
     const [dx, dy] = [direction[0] * KEY_PAN_PX, direction[1] * KEY_PAN_PX]
     if (latestRef.current.isReducedMotion) return panPixels(dx, dy)
+    latestRef.current.onTransition?.()
     void controls.truck(dx / camera.zoom, dy / camera.zoom, true)
   }
 
@@ -165,6 +188,7 @@ function createGestureRig({ camera, domElement, invalidate, latestRef }: Gesture
       cancel: () => {
         zoomGoal = null
         fling = null
+        dragSamples = null
       }
     } satisfies CameraGestures,
     step(deltaSec: number): void {
@@ -194,14 +218,14 @@ function createGestureRig({ camera, domElement, invalidate, latestRef }: Gesture
       surface.addEventListener('pointerdown', onPointerDown)
       window.addEventListener('pointermove', onPointerMove)
       window.addEventListener('pointerup', onPointerUp)
-      window.addEventListener('pointercancel', onPointerUp)
+      window.addEventListener('pointercancel', onPointerCancel)
       window.addEventListener('keydown', onKeyDown)
       return () => {
         surface.removeEventListener('wheel', onWheel)
         surface.removeEventListener('pointerdown', onPointerDown)
         window.removeEventListener('pointermove', onPointerMove)
         window.removeEventListener('pointerup', onPointerUp)
-        window.removeEventListener('pointercancel', onPointerUp)
+        window.removeEventListener('pointercancel', onPointerCancel)
         window.removeEventListener('keydown', onKeyDown)
       }
     }

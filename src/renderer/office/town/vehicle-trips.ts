@@ -1,7 +1,7 @@
 import type { CitizenRoute, RoutePoint } from '../citizens/route-pose'
 import { boundsOfZone } from '../logic/zone-framing'
 import { between, draw, grow, hashOf } from '../themes/lot-math'
-import { reversed, roadNet, roadPath, type RoadNet } from './road-net'
+import { reversed, roadNet, roadPath, type Leg, type RoadNet } from './road-net'
 import type { VehicleRole } from './town-dress'
 import { ROAD_WIDTH_M } from './town-grid'
 import type { TownLot } from './town-lots'
@@ -71,6 +71,41 @@ function runaboutLoop(plan: TownPlan): CitizenRoute | null {
   ])
 }
 
+function cityVehicleLoop(options: {
+  plan: TownPlan
+  net: RoadNet
+  role: 'transit' | 'runabout'
+}): CitizenRoute | null {
+  const { plan, net, role } = options
+  const columns = [
+    ...new Set(plan.roads.filter((road) => road.from.x === road.to.x).map((road) => road.from.x))
+  ].sort((first, second) => first - second)
+  const rows = [
+    ...new Set(plan.roads.filter((road) => road.from.z === road.to.z).map((road) => road.from.z))
+  ].sort((first, second) => first - second)
+  const inset = role === 'runabout' && columns.length > 3 && rows.length > 3 ? 1 : 0
+  const west = columns[inset],
+    east = columns.at(-1 - inset)
+  const north = rows[inset],
+    south = rows.at(-1 - inset)
+  if (west === undefined || east === undefined || north === undefined || south === undefined)
+    return null
+  const corners = [
+    { x: west, z: north },
+    { x: west, z: south },
+    { x: east, z: south },
+    { x: east, z: north }
+  ]
+  const legs: Leg[] = []
+  for (const [index, from] of corners.entries()) {
+    const route = roadPath(net, from, corners[(index + 1) % corners.length])
+    if (!route?.length) return null
+    legs.push(...route)
+  }
+  const points = sidePath(legs, plan, 'vehicle')
+  return points.length > 2 ? ring(points) : null
+}
+
 interface Yards {
   plan: TownPlan
   net: RoadNet
@@ -88,8 +123,8 @@ function freightRun(yards: Yards, seed: number): { workshop: TownLot; route: Cit
     const legs = roadPath(net, workshop.door, market.door)
     if (!legs || legs.length === 0) continue
     const route = closedLoop(
-      sidePath(legs, plan.claim, 'vehicle'),
-      sidePath(reversed(legs), plan.claim, 'vehicle'),
+      sidePath(legs, plan, 'vehicle'),
+      sidePath(reversed(legs), plan, 'vehicle'),
       { sec: between(LOADING_SEC, draw(seed, DRAW.unloading)), isIndoors: false },
       { sec: between(LOADING_SEC, draw(seed, DRAW.loading)), isIndoors: false }
     )
@@ -109,10 +144,16 @@ export function vehicleTrips(town: TownInput, count: number): Trip[] {
     workshops: sorted.filter((lot) => lot.zone === 'workshop'),
     markets: sorted.filter((lot) => lot.zone === 'market')
   }
-  const lines = { transit: transitLoop(plan), runabout: runaboutLoop(plan) }
+  const lines = plan.officeSites
+    ? {
+        transit: cityVehicleLoop({ plan, net: yards.net, role: 'transit' }),
+        runabout: cityVehicleLoop({ plan, net: yards.net, role: 'runabout' })
+      }
+    : { transit: transitLoop(plan), runabout: runaboutLoop(plan) }
   const speeds = { transit: TRANSIT_M_PER_SEC, runabout: RUNABOUT_M_PER_SEC }
   // Transit and runabouts take a draw each; what is left goes to freight, one a theme.
-  const freightThemes = new Set<string>()
+  // Overflow freight uses the floor's vehicle, so its draw must be reserved too.
+  const freightThemes = new Set<string>([floorThemeId])
   const freightBudget = MOVER_COUNTS[town.detail].vehicleKinds - 2
   const sent: Record<VehicleRole, number> = { transit: 0, runabout: 0, freight: 0 }
 

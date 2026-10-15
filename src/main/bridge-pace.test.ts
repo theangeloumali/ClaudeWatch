@@ -39,6 +39,25 @@ describe('paceBridgeByWindows', () => {
     expect(setPollInterval.mock.calls).toEqual([[BACKGROUND_POLL_MS]])
   })
 
+  it('keeps the app bridge live for a browser watcher without visible native windows', () => {
+    vi.useFakeTimers()
+    try {
+      let isBrowserWatching = true
+      paceBridgeByWindows(
+        app,
+        () => windows,
+        setPollInterval,
+        () => isBrowserWatching
+      )
+      expect(setPollInterval).toHaveBeenLastCalledWith(LIVE_POLL_MS)
+      isBrowserWatching = false
+      vi.advanceTimersByTime(5000)
+      expect(setPollInterval).toHaveBeenLastCalledWith(BACKGROUND_POLL_MS)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('polls live as soon as any window shows, hidden ones not counting', () => {
     const dashboard = open()
     expect(setPollInterval).toHaveBeenLastCalledWith(BACKGROUND_POLL_MS)

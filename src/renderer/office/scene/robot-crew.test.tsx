@@ -48,4 +48,8 @@ it('re-renders only the robots whose agent changed on a step', () => {
   rerender(crew([{ ...idle }, { ...walker, x: 2.5 }]))
 
   expect(rendered).toEqual(['walker'])
+
+  rendered.length = 0
+  rerender(crew([{ ...idle }, { ...walker, x: 2.5 }]))
+  expect(rendered).toEqual([])
 })

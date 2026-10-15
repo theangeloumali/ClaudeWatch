@@ -1,4 +1,5 @@
 import { FURNITURE_SCALE } from '../../shared/office/figure-scale'
+import { SUBAGENT_BODY_RADIUS } from '../../shared/office/body-footprints'
 import type { Point } from './path'
 
 // The two seats beside a lead's desk. Every guest past them takes a seat in the team area.
@@ -34,6 +35,12 @@ export interface ZoneLayout extends Bounds {
   children: ZoneLayout[]
   // Company zones only.
   lounge?: LoungeLayout
+  displayLabel?: string
+  themeId?: string
+  buildingId?: string
+  floorId?: string
+  floorNumber?: number
+  elevation?: number
 }
 export interface RoomLayout extends ZoneLayout {
   kind: 'office' | 'team'
@@ -41,6 +48,7 @@ export interface RoomLayout extends ZoneLayout {
   plate: number
   bay: number
   slots: Slot[]
+  worldTarget?: string
 }
 export interface FloorLayout {
   id: string
@@ -53,6 +61,13 @@ export interface FloorLayout {
   rooms: RoomLayout[]
   zones: ZoneLayout[]
   elevator: Slot
+  buildingId?: string
+  floorNumber?: number
+  elevation?: number
+  displayLabel?: string
+  themeId?: string
+  connector?: Bounds
+  entrance?: Slot
 }
 
 // The lounge was laid out for agents at their old size: every length of it grows with them.
@@ -79,7 +94,8 @@ interface ProjectPlan {
 
 const DESK_PITCH = 5
 const DESK_ROW_PITCH = 6
-const SEAT_PITCH = 2
+// Two seated bodies must leave an aisle wide enough for another body and grid rounding.
+const SEAT_PITCH = SUBAGENT_BODY_RADIUS * 4 + 0.4
 
 function teamSize(seats: number, seatsPerRow: number): { width: number; depth: number } {
   return {
@@ -93,7 +109,7 @@ function teamSize(seats: number, seatsPerRow: number): { width: number; depth: n
 export function planProject(sessionCount: number, teamSeats: number): ProjectPlan {
   const columns = Math.min(4, sessionCount)
   const rows = Math.ceil(sessionCount / 4)
-  const teamSeatsPerRow = Math.max(2, Math.floor((columns * DESK_PITCH - 3) / SEAT_PITCH))
+  const teamSeatsPerRow = Math.max(4, Math.floor((columns * DESK_PITCH - 3) / SEAT_PITCH))
   const desks = { width: columns * DESK_PITCH + 1, depth: rows * DESK_ROW_PITCH + 2 }
   const team = teamSize(teamSeats, teamSeatsPerRow)
   return {

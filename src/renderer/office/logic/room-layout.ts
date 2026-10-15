@@ -6,6 +6,7 @@ type WalledRect = DooredRect & Pick<RoomGeometry, 'id'>
 
 export type WallSide = 'north' | 'south' | 'east' | 'west'
 export type WallsMode = 'up' | 'cutaway' | 'down'
+const WALL_SIDES: WallSide[] = ['north', 'south', 'east', 'west']
 
 export interface WallSegment {
   roomId: string
@@ -19,7 +20,7 @@ export interface WallSegment {
 // Low walls so the isometric view reads into every room; cutaway drops the near ones further.
 export const WALL_HEIGHT_FULL = 1.3
 export const WALL_HEIGHT_LOW = 0.25
-const DOOR_WIDTH = 1.1
+export const ROOM_DOOR_WIDTH = 1.6
 // Distance from a seated agent to the centre of its desk.
 export const DESK_REACH = 0.62
 // Cosine above which a wall counts as facing the camera in cutaway.
@@ -40,9 +41,7 @@ export function doorSide(room: DooredRect): WallSide {
     east: Math.abs(room.door.x - (room.x + room.width / 2)),
     west: Math.abs(room.door.x - (room.x - room.width / 2))
   }
-  return (Object.keys(distances) as WallSide[]).reduce((best, side) =>
-    distances[side] < distances[best] ? side : best
-  )
+  return WALL_SIDES.reduce((best, side) => (distances[side] < distances[best] ? side : best))
 }
 
 // Yaw of someone standing in the doorway and looking into the room.
@@ -77,9 +76,9 @@ function sideSegment(room: WalledRect, side: WallSide, from: number, to: number)
   }
 }
 
-export function roomWallSegments(room: WalledRect, doorWidth = DOOR_WIDTH): WallSegment[] {
+export function roomWallSegments(room: WalledRect, doorWidth = ROOM_DOOR_WIDTH): WallSegment[] {
   const withDoor = doorSide(room)
-  return (Object.keys(SIDE_NORMAL) as WallSide[]).flatMap((side) => {
+  return WALL_SIDES.flatMap((side) => {
     const isAlongX = SIDE_NORMAL[side].z !== 0
     const start = isAlongX ? room.x - room.width / 2 : room.z - room.depth / 2
     const end = isAlongX ? room.x + room.width / 2 : room.z + room.depth / 2

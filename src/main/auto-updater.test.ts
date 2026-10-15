@@ -18,6 +18,11 @@ const mockAutoUpdater = vi.hoisted(() => {
 })
 
 const mockIsDev = vi.hoisted(() => ({ value: false }))
+const mockUpdateConfiguration = vi.hoisted(() => ({ exists: true }))
+
+vi.mock('node:fs', () => ({
+  existsSync: vi.fn(() => mockUpdateConfiguration.exists)
+}))
 
 vi.mock('electron-updater', () => ({
   autoUpdater: mockAutoUpdater
@@ -49,6 +54,7 @@ describe('AutoUpdaterManager', () => {
     vi.clearAllMocks()
     vi.useFakeTimers()
     mockIsDev.value = false
+    mockUpdateConfiguration.exists = true
   })
 
   afterEach(() => {
@@ -75,6 +81,31 @@ describe('AutoUpdaterManager', () => {
     new AutoUpdaterManager([])
 
     expect(mockAutoUpdater.on).not.toHaveBeenCalled()
+  })
+
+  it('does not register or call an updater without packaged feed configuration', () => {
+    mockUpdateConfiguration.exists = false
+    const manager = new AutoUpdaterManager([])
+
+    manager.checkForUpdates()
+    manager.downloadUpdate()
+    manager.quitAndInstall()
+
+    expect(mockAutoUpdater.on).not.toHaveBeenCalled()
+    expect(mockAutoUpdater.checkForUpdates).not.toHaveBeenCalled()
+    expect(mockAutoUpdater.downloadUpdate).not.toHaveBeenCalled()
+    expect(mockAutoUpdater.quitAndInstall).not.toHaveBeenCalled()
+  })
+
+  it('does not schedule remote checks in an unconfigured local build', () => {
+    mockUpdateConfiguration.exists = false
+    const manager = new AutoUpdaterManager([])
+
+    manager.startAutoCheck(1000)
+    vi.advanceTimersByTime(100_000)
+
+    expect(vi.getTimerCount()).toBe(0)
+    expect(mockAutoUpdater.checkForUpdates).not.toHaveBeenCalled()
   })
 
   it('forwards update-available event to BrowserWindow', () => {

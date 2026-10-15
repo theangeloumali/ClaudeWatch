@@ -4,6 +4,7 @@ import type { Rect } from '../themes/lot-math'
 import type { Leg, Traveller } from './road-net'
 import { AVENUE_MEDIAN_M, ROAD_WIDTH_M, SIDEWALK_M } from './town-grid'
 import type { RoadClass } from './town-roads'
+import type { TownPlan } from './town-plan'
 
 const carriageway = (road: Exclude<RoadClass, 'lane'>): number =>
   ROAD_WIDTH_M[road] / 2 - SIDEWALK_M[road]
@@ -29,10 +30,22 @@ const INNER_SIDEWALK_M = ROAD_WIDTH_M.boulevard / 2 - SIDEWALK_M.boulevard / 2
 
 // Where a traveller is beside a leg's centre line: to the right of the way it is going, and for
 // a citizen on the boulevard, over on the sidewalk next to the campus.
-function besideOf(leg: Leg, claim: Rect, traveller: Traveller): Point {
+function besideOf(
+  leg: Leg,
+  context: Rect | Pick<TownPlan, 'claim' | 'officeSites'>,
+  traveller: Traveller
+): Point {
+  const claim = 'claim' in context ? context.claim : context
+  const isCity = 'claim' in context && Boolean(context.officeSites)
   const ahead = { x: Math.sign(leg.to.x - leg.from.x), z: Math.sign(leg.to.z - leg.from.z) }
-  const keep = KEEP_RIGHT_M[traveller][leg.class]
-  const beside = { x: -ahead.z * keep, z: ahead.x * keep }
+  const halfWidth = (leg.width ?? ROAD_WIDTH_M[leg.class]) / 2
+  const keep = !isCity
+    ? KEEP_RIGHT_M[traveller][leg.class]
+    : traveller === 'citizen'
+      ? halfWidth - SIDEWALK_M[leg.class] / 2
+      : (halfWidth - SIDEWALK_M[leg.class]) / 2
+  const direction = isCity ? -1 : 1
+  const beside = { x: -ahead.z * keep * direction, z: ahead.x * keep * direction }
   if (traveller !== 'citizen' || leg.class !== 'boulevard') return beside
   return ahead.x !== 0
     ? { x: beside.x, z: beside.z + Math.sign(claim.z - leg.from.z) * INNER_SIDEWALK_M }
@@ -41,9 +54,13 @@ function besideOf(leg: Leg, claim: Rect, traveller: Traveller): Point {
 
 // The line a traveller really takes along the legs: each one moved to its side of the road, the
 // corners joined where the two lines cross.
-export function sidePath(legs: readonly Leg[], claim: Rect, traveller: Traveller): RoutePoint[] {
+export function sidePath(
+  legs: readonly Leg[],
+  context: Rect | Pick<TownPlan, 'claim' | 'officeSites'>,
+  traveller: Traveller
+): RoutePoint[] {
   const moved = legs.map((leg) => {
-    const beside = besideOf(leg, claim, traveller)
+    const beside = besideOf(leg, context, traveller)
     return {
       from: { x: leg.from.x + beside.x, z: leg.from.z + beside.z },
       to: { x: leg.to.x + beside.x, z: leg.to.z + beside.z },

@@ -1,6 +1,8 @@
 import { clamp } from '../../../shared/range'
 import type { FloorGeometry, RoomGeometry, ZoneGeometry } from '../scene-model'
 import { BAND_ZOOM, ISO_POLAR } from './camera-bands'
+import { HUD_COLUMNS_BREAKPOINT, HUD_SAFE_INSETS } from './hud-layout'
+export { HUD_SAFE_INSETS } from './hud-layout'
 
 export interface Bounds {
   minX: number
@@ -13,6 +15,7 @@ export interface ScreenView {
   target: [number, number, number]
   zoom: number
   azimuth: number
+  polar?: number
 }
 
 interface Viewport {
@@ -27,34 +30,32 @@ interface Insets {
   bottom: number
 }
 
-// Screen area the HUD covers: left rail 16rem and right panel 17rem plus the 12 px grid padding
-// and gap, the bottom bar, and headroom above for name cards (QA: a lone office sat under "Needs you").
-export const HUD_SAFE_INSETS: Insets = { left: 280, right: 296, top: 72, bottom: 96 }
 // Below this safe width the rails stack (md breakpoint), so framing uses the whole viewport.
-const MIN_SAFE_WIDTH = 240
+const MIN_SAFE_WIDTH = 180
 const OCCUPIED_PADDING_M = 1.5
 // Name cards float about 2 m up; framing includes that height so cards are not cut off.
 const FRAMED_HEIGHT_M = 2.6
 const MIN_FRAME_ZOOM = 4
 
-const COS_POLAR = Math.cos(ISO_POLAR)
-const SIN_POLAR = Math.sin(ISO_POLAR)
-
 // Where name cards may sit: clear of the side rails and the bottom bar. Cards may rise to the
 // top edge; the camera already leaves headroom for them.
-export function cardSafeArea(viewport: Viewport): {
+export function cardSafeArea(
+  viewport: Viewport,
+  insets: Insets = HUD_SAFE_INSETS
+): {
   left: number
   right: number
   top: number
   bottom: number
 } {
   const hasRoomForRails =
-    viewport.width - HUD_SAFE_INSETS.left - HUD_SAFE_INSETS.right >= MIN_SAFE_WIDTH
+    viewport.width >= HUD_COLUMNS_BREAKPOINT &&
+    viewport.width - insets.left - insets.right >= MIN_SAFE_WIDTH
   return {
-    left: hasRoomForRails ? HUD_SAFE_INSETS.left : 0,
-    right: viewport.width - (hasRoomForRails ? HUD_SAFE_INSETS.right : 0),
+    left: hasRoomForRails ? insets.left : 0,
+    right: viewport.width - (hasRoomForRails ? insets.right : 0),
     top: 0,
-    bottom: viewport.height - HUD_SAFE_INSETS.bottom
+    bottom: viewport.height - insets.bottom
   }
 }
 
@@ -160,22 +161,29 @@ export function occupiedBounds(floor: FloorGeometry, liveSessionKeys: ReadonlySe
 }
 
 // Orthographic isometric projection into "screen metres": x to the right, y up the screen.
-function toScreenMetres(point: { x: number; y: number; z: number }, azimuth: number) {
+function toScreenMetres(
+  point: { x: number; y: number; z: number },
+  azimuth: number,
+  polar = ISO_POLAR
+) {
   const sin = Math.sin(azimuth)
   const cos = Math.cos(azimuth)
   return {
     x: point.x * cos - point.z * sin,
-    y: point.y * SIN_POLAR - (point.x * sin + point.z * cos) * COS_POLAR
+    y: point.y * Math.sin(polar) - (point.x * sin + point.z * cos) * Math.cos(polar)
   }
 }
 
 type Axis = [number, number, number]
 
 // World directions of screen-right and screen-up: the inverse of toScreenMetres.
-export function screenAxes(azimuth: number): { right: Axis; up: Axis } {
+export function screenAxes(azimuth: number, polar = ISO_POLAR): { right: Axis; up: Axis } {
   const sin = Math.sin(azimuth)
   const cos = Math.cos(azimuth)
-  return { right: [cos, 0, -sin], up: [-sin * COS_POLAR, SIN_POLAR, -cos * COS_POLAR] }
+  return {
+    right: [cos, 0, -sin],
+    up: [-sin * Math.cos(polar), Math.sin(polar), -cos * Math.cos(polar)]
+  }
 }
 
 export function projectToScreen(
@@ -186,7 +194,8 @@ export function projectToScreen(
   const [tx, ty, tz] = view.target
   const relative = toScreenMetres(
     { x: point.x - tx, y: point.y - ty, z: point.z - tz },
-    view.azimuth
+    view.azimuth,
+    view.polar
   )
   return {
     x: viewport.width / 2 + relative.x * view.zoom,
@@ -199,17 +208,28 @@ export function projectToScreen(
 export function frameBounds(
   bounds: Bounds,
   viewport: Viewport,
-  options: { azimuth: number; maxZoom?: number; insets?: Insets }
+  options: {
+    azimuth: number
+    polar?: number
+    maxZoom?: number
+    minZoom?: number
+    height?: number
+    insets?: Insets
+  }
 ): { target: [number, number, number]; zoom: number } {
   const requested = options.insets ?? HUD_SAFE_INSETS
-  const hasRoomForRails = viewport.width - requested.left - requested.right >= MIN_SAFE_WIDTH
+  const hasRoomForRails =
+    viewport.width >= HUD_COLUMNS_BREAKPOINT &&
+    viewport.width - requested.left - requested.right >= MIN_SAFE_WIDTH
   const insets = hasRoomForRails ? requested : { ...requested, left: 0, right: 0 }
   const safeWidth = viewport.width - insets.left - insets.right
   const safeHeight = Math.max(1, viewport.height - insets.top - insets.bottom)
 
   const projected = [bounds.minX, bounds.maxX].flatMap((x) =>
     [bounds.minZ, bounds.maxZ].flatMap((z) =>
-      [0, FRAMED_HEIGHT_M].map((y) => toScreenMetres({ x, y, z }, options.azimuth))
+      [0, options.height ?? FRAMED_HEIGHT_M].map((y) =>
+        toScreenMetres({ x, y, z }, options.azimuth, options.polar)
+      )
     )
   )
   const minX = Math.min(...projected.map((point) => point.x))
@@ -220,12 +240,12 @@ export function frameBounds(
     safeWidth / Math.max(maxX - minX, 0.01),
     safeHeight / Math.max(maxY - minY, 0.01)
   )
-  const zoom = clamp(fit, [MIN_FRAME_ZOOM, options.maxZoom ?? BAND_ZOOM.desk])
+  const zoom = clamp(fit, [options.minZoom ?? MIN_FRAME_ZOOM, options.maxZoom ?? BAND_ZOOM.desk])
 
   // Screen-metre position the target must have so the bounds' centre sits mid safe-area.
   const targetX = (minX + maxX) / 2 - (insets.left + safeWidth / 2 - viewport.width / 2) / zoom
   const targetY = (minY + maxY) / 2 + (insets.top + safeHeight / 2 - viewport.height / 2) / zoom
-  const depth = -targetY / COS_POLAR
+  const depth = -targetY / Math.cos(options.polar ?? ISO_POLAR)
   const sin = Math.sin(options.azimuth)
   const cos = Math.cos(options.azimuth)
   return { target: [targetX * cos + depth * sin, 0, -targetX * sin + depth * cos], zoom }

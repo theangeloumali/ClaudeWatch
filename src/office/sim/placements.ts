@@ -21,16 +21,19 @@ export function placements(
   layout: LayoutMap,
   held: HeldSeats = new Map()
 ): Placement[] {
-  const floor = layout.floors[0]
-  if (!floor) return []
+  if (!layout.floors.length) return []
+  const rooms = layout.floors.flatMap((floor) => floor.rooms)
+  const floorByRoom = new Map(
+    layout.floors.flatMap((floor) => floor.rooms.map((room) => [room, floor.id] as const))
+  )
   const result: Placement[] = []
   const seated: { session: SessionRef; room: RoomLayout; slotId: string }[] = []
   const unseated: { session: SessionRef; team: RoomLayout }[] = []
   const takenSeats = new Map<string, Set<string>>()
   const teamKey = (companyKey: string, projectKey: string | null) => `${companyKey}\n${projectKey}`
-  const offices = new Map(floor.rooms.map((room) => [room.sessionKey, room]))
+  const offices = new Map(rooms.map((room) => [room.sessionKey, room]))
   const teams = new Map(
-    floor.rooms
+    rooms
       .filter((room) => room.kind === 'team')
       .map((room) => [teamKey(room.companyKey, room.projectKey), room])
   )
@@ -41,7 +44,7 @@ export function placements(
       session,
       room: main,
       slot: main.slots.find((s) => s.id === 'desk_main')!,
-      floorId: floor.id,
+      floorId: floorByRoom.get(main)!,
       isSubagent: false,
       isFinished: session.attention === 'done'
     })
@@ -63,7 +66,8 @@ export function placements(
         // A teammate is known by its own name; a subagent only by its type.
         name: subagent.name ?? subagent.type,
         activity: subagent.activity,
-        attention: 'none' as const
+        attention: subagent.attention ?? 'none',
+        observation: subagent.observation
       }))
     const seatOf = (guest: SessionRef, room: RoomLayout): string | undefined =>
       held.get(guest.key)?.roomId === room.id ? held.get(guest.key)!.slotId : undefined
@@ -115,7 +119,7 @@ export function placements(
       session,
       room,
       slot: room.slots.find((s) => s.id === slotId)!,
-      floorId: floor.id,
+      floorId: floorByRoom.get(room)!,
       isSubagent: true,
       // A guest has no attention of its own: only a teammate gone quiet for a minute reports
       // idle, and a subagent is listed as thinking until it drops off the list.

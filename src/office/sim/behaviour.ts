@@ -5,13 +5,13 @@ import type {
   SessionRef
 } from '../../shared/office/types'
 import type { Slot } from './layout'
-import type { Point } from './path'
+import type { FloorWaypoint } from './world-floor-routes'
 
 type AgentState = 'arriving' | 'working' | 'needs_you' | 'done' | 'leaving'
 export interface AgentRecord {
-  view: AgentView
+  view: AgentView & { venueId?: string; connectorId?: string }
   state: AgentState
-  path: Point[]
+  path: FloorWaypoint[]
   dwellMs: number
   queued: AgentActivity | null
   slotHeading: number
@@ -19,8 +19,13 @@ export interface AgentRecord {
   // How long its work has been over; null while it works.
   finishedForMs: number | null
   loungeSeatId: string | null
+  destinationVenueId?: string
+  leisureArrivedAtMs?: number
 }
-type Destination = Pick<AgentView, 'floorId' | 'roomId' | 'slotId' | 'x' | 'z' | 'heading'>
+type Destination = Pick<
+  AgentView,
+  'floorId' | 'roomId' | 'slotId' | 'x' | 'z' | 'heading' | 'elevation' | 'physicalFloorId'
+>
 const urgent = (attention: AgentAttention) =>
   ['permission', 'question', 'error', 'limited'].includes(attention)
 
@@ -30,7 +35,7 @@ export const LOUNGE_DELAY_MS = 20_000
 export function createAgent(
   session: SessionRef,
   destination: Destination,
-  path: Point[]
+  path: FloorWaypoint[]
 ): AgentRecord {
   const start = path[0] ?? destination
   return {
@@ -38,6 +43,9 @@ export function createAgent(
       ...destination,
       x: start.x,
       z: start.z,
+      elevation: start.elevation ?? destination.elevation,
+      physicalFloorId:
+        start.physicalFloorId === undefined ? destination.physicalFloorId : start.physicalFloorId,
       agentKey: session.key,
       activity: session.activity,
       attention: session.attention,
@@ -63,13 +71,14 @@ export function setFinished(agent: AgentRecord, isFinished: boolean): AgentRecor
 export function wantsLounge(agent: AgentRecord): boolean {
   return (
     agent.state !== 'leaving' &&
+    agent.path.length === 0 &&
     agent.view.place === undefined &&
     agent.finishedForMs !== null &&
     agent.finishedForMs >= LOUNGE_DELAY_MS
   )
 }
 
-function walk(agent: AgentRecord, heading: number, path: Point[]): AgentRecord {
+function walk(agent: AgentRecord, heading: number, path: FloorWaypoint[]): AgentRecord {
   return { ...agent, state: 'arriving', slotHeading: heading, path: path.map((p) => ({ ...p })) }
 }
 
@@ -77,18 +86,28 @@ function walk(agent: AgentRecord, heading: number, path: Point[]): AgentRecord {
 export function goToLounge(
   agent: AgentRecord,
   seat: Pick<Slot, 'id' | 'heading'>,
-  path: Point[]
+  path: FloorWaypoint[]
 ): AgentRecord {
   const walking = walk(agent, seat.heading, path)
   return { ...walking, view: { ...agent.view, place: 'lounge' }, loungeSeatId: seat.id }
 }
 
 function withoutPlace(agent: AgentRecord): AgentRecord {
-  const { place: _place, ...view } = agent.view
-  return { ...agent, view, loungeSeatId: null }
+  const { place: _place, venueId: _venueId, ...view } = agent.view
+  return {
+    ...agent,
+    view,
+    loungeSeatId: null,
+    destinationVenueId: undefined,
+    leisureArrivedAtMs: undefined
+  }
 }
 
-export function returnToDesk(agent: AgentRecord, heading: number, path: Point[]): AgentRecord {
+export function returnToDesk(
+  agent: AgentRecord,
+  heading: number,
+  path: FloorWaypoint[]
+): AgentRecord {
   return walk(withoutPlace(agent), heading, path)
 }
 
@@ -124,7 +143,7 @@ export function updateAgent(
   return next
 }
 
-export function leaveAgent(agent: AgentRecord, path: Point[]): AgentRecord {
+export function leaveAgent(agent: AgentRecord, path: FloorWaypoint[]): AgentRecord {
   return {
     ...withoutPlace(agent),
     state: 'leaving',
@@ -133,7 +152,11 @@ export function leaveAgent(agent: AgentRecord, path: Point[]): AgentRecord {
   }
 }
 
-export function tickAgent(agent: AgentRecord, dtMs: number): AgentRecord {
+export function tickAgent(
+  agent: AgentRecord,
+  dtMs: number,
+  move?: (from: AgentView, to: FloorWaypoint) => FloorWaypoint
+): AgentRecord {
   const next = {
     ...agent,
     view: { ...agent.view },
@@ -146,16 +169,44 @@ export function tickAgent(agent: AgentRecord, dtMs: number): AgentRecord {
     while (next.path.length) {
       const target = next.path[0],
         dx = target.x - next.view.x,
-        dz = target.z - next.view.z
-      const length = Math.hypot(dx, dz)
+        dz = target.z - next.view.z,
+        dy = (target.elevation ?? next.view.elevation ?? 0) - (next.view.elevation ?? 0)
+      const length = Math.hypot(dx, dz, dy)
+      const proposed =
+        length > distance
+          ? {
+              ...target,
+              x: next.view.x + (dx / length) * distance,
+              z: next.view.z + (dz / length) * distance,
+              elevation: (next.view.elevation ?? 0) + (dy / length) * distance,
+              physicalFloorId: dy !== 0 ? null : target.physicalFloorId
+            }
+          : target
+      const accepted = move?.(next.view, proposed) ?? proposed
+      if (Math.hypot(accepted.x - next.view.x, accepted.z - next.view.z) > 1e-8)
+        next.view.heading = Math.atan2(accepted.x - next.view.x, accepted.z - next.view.z)
+      next.view.x = accepted.x
+      next.view.z = accepted.z
+      if (accepted.elevation !== undefined) next.view.elevation = accepted.elevation
+      if (accepted.physicalFloorId !== undefined)
+        next.view.physicalFloorId = accepted.physicalFloorId
+      // A yield keeps the waypoint and walking state, but activity and lounge timers still advance.
+      if (
+        Math.hypot(
+          accepted.x - proposed.x,
+          accepted.z - proposed.z,
+          (accepted.elevation ?? next.view.elevation ?? 0) -
+            (proposed.elevation ?? next.view.elevation ?? 0)
+        ) > 1e-8
+      )
+        break
       if (length > distance) {
-        next.view.x += (dx / length) * distance
-        next.view.z += (dz / length) * distance
-        next.view.heading = Math.atan2(dx, dz)
         break
       }
       next.view.x = target.x
       next.view.z = target.z
+      if (target.elevation !== undefined) next.view.elevation = target.elevation
+      if (target.physicalFloorId !== undefined) next.view.physicalFloorId = target.physicalFloorId
       distance -= length
       next.path.shift()
     }

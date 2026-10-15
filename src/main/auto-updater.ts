@@ -1,11 +1,17 @@
 import { autoUpdater } from 'electron-updater'
 import { BrowserWindow } from 'electron'
 import { is } from '@electron-toolkit/utils'
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 import type { UpdaterStatusPayload } from '../renderer/lib/types'
 
 export class AutoUpdaterManager {
   private getWindows: (() => BrowserWindow | null)[]
   private checkInterval: NodeJS.Timeout | null = null
+  // Signed local bundles do not carry a published update feed.
+  private readonly hasUpdateConfiguration = existsSync(
+    join(process.resourcesPath ?? '', 'app-update.yml')
+  )
 
   constructor(
     getWindows: (() => BrowserWindow | null)[],
@@ -13,7 +19,7 @@ export class AutoUpdaterManager {
   ) {
     this.getWindows = getWindows
 
-    if (is.dev) return
+    if (is.dev || !this.hasUpdateConfiguration) return
 
     autoUpdater.autoDownload = false
     autoUpdater.autoInstallOnAppQuit = true
@@ -71,19 +77,28 @@ export class AutoUpdaterManager {
   // A failure also arrives as the 'error' event, which is what the windows are told; the
   // returned promise is settled here so it is not an unhandled rejection as well.
   checkForUpdates(): void {
-    if (!is.dev) void Promise.resolve(autoUpdater.checkForUpdates()).catch(() => undefined)
+    if (is.dev) return
+    if (!this.hasUpdateConfiguration) {
+      this.send({
+        status: 'error',
+        data: 'Updates are unavailable in this local build. Reinstall to update.'
+      })
+      return
+    }
+    void Promise.resolve(autoUpdater.checkForUpdates()).catch(() => undefined)
   }
 
   downloadUpdate(): void {
-    if (!is.dev) void Promise.resolve(autoUpdater.downloadUpdate()).catch(() => undefined)
+    if (!is.dev && this.hasUpdateConfiguration)
+      void Promise.resolve(autoUpdater.downloadUpdate()).catch(() => undefined)
   }
 
   quitAndInstall(): void {
-    autoUpdater.quitAndInstall()
+    if (!is.dev && this.hasUpdateConfiguration) autoUpdater.quitAndInstall()
   }
 
   startAutoCheck(intervalMs = 4 * 60 * 60 * 1000): void {
-    if (is.dev) return
+    if (is.dev || !this.hasUpdateConfiguration) return
     setTimeout(() => this.checkForUpdates(), 10_000)
     this.checkInterval = setInterval(() => this.checkForUpdates(), intervalMs)
   }

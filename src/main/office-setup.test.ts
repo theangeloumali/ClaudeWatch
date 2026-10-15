@@ -13,7 +13,8 @@ const { handle, execFilePromise, openTerminal, fork, assertOrcaTrusted } = vi.ho
 }))
 vi.mock('electron', () => ({
   ipcMain: { handle },
-  app: { isPackaged: false },
+  app: { isPackaged: false, getPath: () => '/unused-user-data', getAppPath: () => '/unused-app' },
+  shell: { openExternal: vi.fn() },
   screen: { getAllDisplays: () => [] },
   utilityProcess: { fork },
   BrowserWindow: vi.fn()

@@ -62,20 +62,27 @@ function groundOf(plan: TownPlan): Ground {
       park: inZone('park'),
       civic: inZone('civic')
     },
-    open: [...plan.promenades, plazaOf(plan.claim)],
+    open: plan.officeSites
+      ? [...plan.promenades, ...inZone('park')]
+      : [...plan.promenades, plazaOf(plan.claim)],
     crossings: new Set(plan.graph.nodes.map((node) => `${node.x}:${node.z}`)),
-    plazaStands: plazaStands(plan.claim)
+    plazaStands: plan.officeSites
+      ? sorted
+          .filter((lot) => lot.zone === 'park' || lot.zone === 'market' || lot.zone === 'civic')
+          .map((lot) => lot.door)
+      : plazaStands(plan.claim)
   }
 }
 
 // Where a citizen bound for `destination` ends up: a door, the middle of a park, or the plaza.
 function goalOf(ground: Ground, destination: Destination, pick: number): Point {
-  const stand = ground.plazaStands[Math.floor(pick * ground.plazaStands.length)]
+  const stand =
+    ground.plazaStands[Math.floor(pick * ground.plazaStands.length)] ?? ground.homes[0].door
   if (destination === 'plaza') return stand
   const lots = ground.lotsOf[destination]
   if (lots.length === 0) return stand
   const lot = lots[Math.floor(pick * lots.length)]
-  if (destination !== 'park') return lot.door
+  if (destination !== 'park' || ground.plan.officeSites) return lot.door
   // A park is walked into: where its two footpaths cross, when the claim has not cut it off.
   const [column, row] = lot.blockId.split(':').slice(1).map(Number)
   const middle = { x: (column + 0.5) * BLOCK_PITCH_M, z: (row + 0.5) * BLOCK_PITCH_M }
@@ -113,9 +120,8 @@ interface Walk {
 function walkBetween(ground: Ground, home: TownLot, goal: Point): Walk | null {
   const legs = roadPath(ground.net, home.door, goal)
   if (!legs || legs.length === 0) return null
-  const { claim } = ground.plan
-  const out = [home.door, ...sidePath(legs, claim, 'citizen'), goal]
-  const back = sidePath(reversed(legs), claim, 'citizen')
+  const out = [home.door, ...sidePath(legs, ground.plan, 'citizen'), goal]
+  const back = sidePath(reversed(legs), ground.plan, 'citizen')
   return { home, out, back, openShare: openShare([...out, ...back, home.door], ground.open) }
 }
 

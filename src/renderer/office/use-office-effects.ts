@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch } from 'react'
 import type { FocusResult } from '../../shared/office/types'
 import { newAttentionItems, type AttentionItem } from './logic/attention-queue'
-import { commandForKey, keyInputFrom, type OfficeCommand } from './logic/hotkeys'
+import {
+  commandForKey,
+  inspectorOwnsKeyboard,
+  keyInputFrom,
+  type OfficeCommand
+} from './logic/hotkeys'
 import { focusMessage } from './logic/interactions'
 import type { OfficeAction } from './logic/office-reducer'
 import { GEM_SPECS } from './logic/status-gem'
@@ -32,6 +37,8 @@ function actionForCommand(command: Exclude<OfficeCommand, OutsideCommand>): Offi
       return { type: 'company-numbered', number: command.number }
     case 'rotate':
       return { type: 'camera-rotated', direction: command.direction }
+    case 'tilt':
+      return { type: 'camera-tilted', direction: command.direction }
     case 'zoom':
       return { type: 'camera-zoomed', direction: command.direction }
     case 'fly-to-selected':
@@ -60,6 +67,7 @@ export function useOfficeHotkeys(
 ): void {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.defaultPrevented || inspectorOwnsKeyboard(event)) return
       const command = commandForKey(keyInputFrom(event), isWalking, hasPlayer)
       if (!command || (isListForced && command.type === 'toggle-list')) return
       event.preventDefault()

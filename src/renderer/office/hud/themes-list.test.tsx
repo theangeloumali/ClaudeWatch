@@ -59,11 +59,11 @@ const frame = makeFrame({
 })
 
 const barButton = (themeLabel: string): HTMLElement =>
-  screen.getByRole('button', { name: new RegExp(`^Floor theme: ${themeLabel}`) })
+  screen.getByRole('button', { name: new RegExp(`^Map theme: ${themeLabel}$`) })
 
-function openList(themeLabel = 'Neo Edo Steam'): HTMLElement {
+function openList(themeLabel = 'Corporate City'): HTMLElement {
   fireEvent.click(barButton(themeLabel))
-  return screen.getByRole('dialog', { name: 'Office themes' })
+  return screen.getByRole('dialog', { name: 'Map and office themes' })
 }
 
 function choose(list: HTMLElement, rowName: RegExp, themeLabel: string | RegExp): void {
@@ -72,17 +72,49 @@ function choose(list: HTMLElement, rowName: RegExp, themeLabel: string | RegExp)
 }
 
 describe('themes list', () => {
+  it('offers a visible map control and opens the same picker from Settings', () => {
+    setupHud(undefined, { frame })
+    expect(screen.getByRole('button', { name: /^Map theme: Corporate City/ })).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: /^Settings/ }))
+    const settings = screen.getByRole('dialog', { name: 'Office settings' })
+    fireEvent.click(within(settings).getByRole('button', { name: /^Change map theme/ }))
+    const themes = screen.getByRole('dialog', { name: 'Map and office themes' })
+    expect(screen.queryByRole('dialog', { name: 'Office settings' })).toBeNull()
+    fireEvent.click(within(themes).getByRole('button', { name: /^Map theme:/ }))
+    expect(within(themes).getAllByRole('radio')).toHaveLength(8)
+  })
+
+  it('changes the map default without deleting explicit company or project choices', () => {
+    setupHud(undefined, { frame, isViewOnly: true })
+    act(() => {
+      officeThemes.setCompanyTheme('c_a', 'brass-workshop')
+      officeThemes.setProjectTheme('p_b', 'violet-court')
+    })
+    const storedChoices = localStorage.getItem('claudewatch.office.themes')
+    fireEvent.click(screen.getByRole('button', { name: /^Map theme: Corporate City/ }))
+    const themes = screen.getByRole('dialog', { name: 'Map and office themes' })
+    choose(themes, /^Map theme:/, 'Quiet Grove')
+    expect(localStorage.getItem('claudewatch.office.theme')).toBe('quiet-grove')
+    expect(localStorage.getItem('claudewatch.office.themes')).toBe(storedChoices)
+    expect(
+      within(themes).getByRole('button', { name: /^Alpha: Brass Workshop/ })
+    ).toBeInTheDocument()
+    expect(within(themes).getByRole('button', { name: /^Web: Violet Court/ })).toBeInTheDocument()
+    expect(within(themes).getByRole('button', { name: /^Gamma: Quiet Grove/ })).toBeInTheDocument()
+  })
+
   it('opens from the bar button, which changes no theme by itself', () => {
     setupHud(undefined, { frame })
     const list = openList()
-    expect(barButton('Neo Edo Steam')).toHaveAttribute('aria-expanded', 'true')
+    expect(barButton('Corporate City')).toHaveAttribute('aria-expanded', 'true')
     expect(list.contains(document.activeElement)).toBe(true)
     expect(officeThemes.getAssignments()).toMatchObject({ companies: {}, projects: {} })
     expect(localStorage.getItem('claudewatch.office.theme')).toBeNull()
     for (const name of [
-      "Every office: Neo Edo Steam, the floor's theme",
-      'Alpha: Neo Edo Steam, follows the floor',
-      'Api: Neo Edo Steam, follows Alpha'
+      'Map theme: Corporate City, city and following offices',
+      'Every office: Corporate City, replace all office choices',
+      'Alpha: Corporate City, follows the floor',
+      'Api: Corporate City, follows Alpha'
     ])
       expect(within(list).getByRole('button', { name })).toBeInTheDocument()
   })
@@ -105,7 +137,7 @@ describe('themes list', () => {
       'Gamma: Quiet Grove, its own choice'
     ])
       expect(within(list).getByRole('button', { name })).toBeInTheDocument()
-    expect(barButton('Neo Edo Steam')).toBeInTheDocument()
+    expect(barButton('Corporate City')).toBeInTheDocument()
   })
 
   it('announces which office changed and that the others did not', () => {
@@ -184,9 +216,9 @@ describe('themes list', () => {
     expect(row).toHaveFocus()
 
     fireEvent.keyDown(row, { key: 'Escape' })
-    expect(screen.queryByRole('dialog', { name: 'Office themes' })).toBeNull()
-    expect(barButton('Neo Edo Steam')).toHaveFocus()
-    expect(barButton('Neo Edo Steam')).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByRole('dialog', { name: 'Map and office themes' })).toBeNull()
+    expect(barButton('Corporate City')).toHaveFocus()
+    expect(barButton('Corporate City')).toHaveAttribute('aria-expanded', 'false')
   })
 
   it('stays available on a page that may only watch', () => {

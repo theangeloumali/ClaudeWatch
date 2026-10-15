@@ -9,13 +9,17 @@ export function opensOfficeOnStart(
 }
 
 export interface OfficeWindowLike {
-  webContents: { send(channel: string, message: FeedMessage): void }
+  webContents: { send(channel: string, message: FeedMessage | boolean): void }
   focus(): void
   show(): void
   restore(): void
   isMinimized(): boolean
+  isVisible?(): boolean
   isDestroyed(): boolean
-  on(event: 'closed', listener: () => void): unknown
+  on(
+    event: 'closed' | 'show' | 'hide' | 'minimize' | 'restore' | 'ready-to-show',
+    listener: () => void
+  ): unknown
 }
 
 interface OfficeWindowDeps {
@@ -49,6 +53,11 @@ export class OfficeWindowController {
     const window = this.deps.createWindow()
     this.window = window
     this.unsubscribe = this.deps.host.onMessage((message) => this.send(message))
+    for (const event of ['show', 'hide', 'minimize', 'restore', 'ready-to-show'] as const) {
+      window.on(event, () => {
+        if (this.window === window) this.sendVisibility()
+      })
+    }
     window.on('closed', () => {
       if (this.window !== window) return
       this.unsubscribe?.()
@@ -59,8 +68,18 @@ export class OfficeWindowController {
 
   // The renderer asks for state once it has subscribed, so no hello is lost to a load race.
   ready(): void {
+    this.sendVisibility()
     const snapshot = this.deps.host.snapshot()
     if (snapshot) this.send({ type: 'hello', v: 1, snapshot })
+  }
+
+  private sendVisibility(): void {
+    const window = this.window
+    if (!window || window.isDestroyed()) return
+    window.webContents.send(
+      'office:visibility',
+      (window.isVisible?.() ?? true) && !window.isMinimized()
+    )
   }
 
   private send(message: FeedMessage): void {

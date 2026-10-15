@@ -56,28 +56,28 @@ function officeFrame(permissionAttention: 'permission' | 'none' = 'permission'):
     ],
     agents: [
       makeAgent({
-        agentKey: 'a',
+        agentKey: 'claude:a',
         floorId: 'p_abc~2',
         roomId: 'r1',
         label: 'office renderer',
         activity: 'editing'
       }),
       makeAgent({
-        agentKey: 'b',
+        agentKey: 'claude:b',
         floorId: 'p_abc~2',
         roomId: 'r2',
         label: 'listing search',
         attention: permissionAttention
       }),
       makeAgent({
-        agentKey: 'c',
+        agentKey: 'codex:c',
         floorId: 'p_abc~2',
         roomId: 'r3',
         label: 'widget sync',
         provider: 'codex',
         attention: 'permission'
       }),
-      makeAgent({ agentKey: 'd', floorId: 'p_abc~2', roomId: 'r4', label: 'plain shell' })
+      makeAgent({ agentKey: 'claude:d', floorId: 'p_abc~2', roomId: 'r4', label: 'plain shell' })
     ]
   })
 }

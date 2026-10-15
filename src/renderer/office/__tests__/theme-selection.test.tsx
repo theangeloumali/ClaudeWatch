@@ -8,10 +8,10 @@ beforeEach(() => localStorage.clear())
 // Here, not in the test: a spy left behind by a failing test would fail every test after it.
 afterEach(() => vi.restoreAllMocks())
 
-it('uses the team default and falls back for unknown stored ids', () => {
+it('keeps the legacy Neo Edo fallback for an unknown saved theme', () => {
   localStorage.setItem('claudewatch.office.theme', 'missing')
   const { result } = renderHook(useOfficeTheme)
-  expect(result.current.theme.id).toBe(themeForTeam().id)
+  expect(result.current.theme.id).toBe('neo-edo-steam')
 })
 
 it('renders with the default theme when the stored one cannot be read or written', () => {
@@ -61,7 +61,7 @@ it('says the floor default changed when T cycles with no office in focus', () =>
   const { result } = renderHook(useOfficeTheme)
   act(() => result.current.cycleTheme())
   expect(result.current.notice).toBe(
-    'The floor default is now Brass Workshop. Offices with their own theme keep it.'
+    'Map theme is now Neo Edo Steam. Offices with their own theme keep it.'
   )
   act(() => result.current.dismissNotice())
   expect(result.current.notice).toBe('')

@@ -49,6 +49,13 @@ export const STEAM = {
 
 export const SCENE_BACKGROUND = '#121629' // surface
 
+export const MONITOR_COLORS = {
+  background: SCENE_BACKGROUND,
+  text: '#EFE6D2', // paper
+  secondary: '#B3B9D6', // mist
+  divider: '#353D6C' // border
+} as const
+
 export interface RobotPalette {
   body: string
   trim: string

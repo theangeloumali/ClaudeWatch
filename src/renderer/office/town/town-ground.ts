@@ -8,7 +8,15 @@ import { campusStreet, plazaSquare } from './town-plaza'
 import { roadPromenades, type TownRoad } from './town-roads'
 
 // Lowest first: a later layer lies over an earlier one wherever they meet.
-const LAYERS = ['pad', 'campus', 'street', 'sidewalk', 'carriageway', 'promenade'] as const
+const LAYERS = [
+  'pad',
+  'campus',
+  'street',
+  'sidewalk',
+  'carriageway',
+  'promenade',
+  'marking'
+] as const
 type GroundLayer = (typeof LAYERS)[number]
 
 export interface GroundQuad extends Rect {
@@ -54,19 +62,146 @@ function strip(road: TownRoad, inset: number): Rect {
 // the campus over the part of a block the claim cuts, then roads, walks and the gate plaza.
 export function groundQuads(plan: TownPlan, dress: TownDress): GroundQuad[] {
   const { roads } = dress
-  return [
+  const quads = [
     ...plan.blocks.map((block) => quad('pad', block, dress.looks[block.zone].ground)),
-    quad('campus', plan.claim, dress.looks.park.ground),
-    quad('street', campusStreet(plan.claim), roads.sidewalk),
+    ...(plan.officeSites
+      ? plan.lots
+          .filter((lot) => lot.zone === 'park')
+          .map((lot) => ({
+            ...quad('pad', lot, dress.looks.park.ground),
+            y: GROUND_Y + LAYER_LIFT_M * 1.5
+          }))
+      : []),
+    ...(plan.officeSites ? [] : [quad('campus', plan.claim, dress.looks.park.ground)]),
+    ...(plan.officeSites ? [] : [quad('street', campusStreet(plan.claim), roads.sidewalk)]),
     ...plan.roads.map((road) => quad('sidewalk', strip(road, 0), roads.sidewalk)),
     ...plan.roads
       .filter((road) => road.class !== 'lane')
       .map((road) => quad('carriageway', strip(road, SIDEWALK_M[road.class]), roads.carriageway)),
-    ...roadPromenades(plan.roads, plan.claim).map((walk) =>
+    ...(plan.officeSites ? [] : roadPromenades(plan.roads, plan.claim)).map((walk) =>
       quad('promenade', walk, roads.promenade)
     ),
-    quad('promenade', plazaSquare(plan.claim), roads.promenade)
+    ...(plan.officeSites ? [] : [quad('promenade', plazaSquare(plan.claim), roads.promenade)]),
+    ...(plan.officeSites ? streetMarkings(plan.roads, dress) : [])
   ]
+  return plan.officeSites ? quads.map((ground) => ({ ...ground, y: ground.y - GROUND_Y })) : quads
+}
+
+const DASH_LENGTH_M = 3
+const DASH_PITCH_M = 6
+const CROSSWALK_DEPTH_M = 3
+const CROSSWALK_GAP_M = 0.9
+
+function roadStroke(options: {
+  road: TownRoad
+  from: number
+  to: number
+  offset: number
+  width: number
+  color: string
+}): GroundQuad {
+  const { road, from, to, offset, width, color } = options
+  const isAlongX = road.from.z === road.to.z
+  return quad(
+    'marking',
+    {
+      x: isAlongX ? (from + to) / 2 : road.from.x + offset,
+      z: isAlongX ? road.from.z + offset : (from + to) / 2,
+      width: isAlongX ? to - from : width,
+      depth: isAlongX ? width : to - from
+    },
+    color
+  )
+}
+
+function crossingsAlong(road: TownRoad, roads: readonly TownRoad[]) {
+  const isAlongX = road.from.z === road.to.z
+  const from = isAlongX ? road.from.x : road.from.z
+  const to = isAlongX ? road.to.x : road.to.z
+  const fixed = isAlongX ? road.from.z : road.from.x
+  return roads.flatMap((other) => {
+    if ((other.from.z === other.to.z) === isAlongX) return []
+    const position = isAlongX ? other.from.x : other.from.z
+    const low = isAlongX ? Math.min(other.from.z, other.to.z) : Math.min(other.from.x, other.to.x)
+    const high = isAlongX ? Math.max(other.from.z, other.to.z) : Math.max(other.from.x, other.to.x)
+    return position >= Math.min(from, to) &&
+      position <= Math.max(from, to) &&
+      fixed >= low &&
+      fixed <= high
+      ? [{ position, halfWidth: other.width / 2 }]
+      : []
+  })
+}
+
+// Paint and lane paths both consume each road's actual width, never the old campus lattice.
+function streetMarkings(roads: readonly TownRoad[], dress: TownDress): GroundQuad[] {
+  return roads.flatMap((road) => {
+    if (road.class === 'lane') return []
+    const isAlongX = road.from.z === road.to.z
+    const start = isAlongX ? Math.min(road.from.x, road.to.x) : Math.min(road.from.z, road.to.z)
+    const end = isAlongX ? Math.max(road.from.x, road.to.x) : Math.max(road.from.z, road.to.z)
+    const halfCarriageway = road.width / 2 - SIDEWALK_M[road.class]
+    const crossings = crossingsAlong(road, roads)
+    const marks: GroundQuad[] = []
+    const stroke = (from: number, to: number, offset: number, width: number) => {
+      if (from < start || to > end || to <= from) return
+      marks.push(roadStroke({ road, from, to, offset, width, color: dress.roads.sidewalk }))
+    }
+    for (let from = start + 0.5; from + DASH_LENGTH_M < end; from += DASH_PITCH_M) {
+      const to = from + DASH_LENGTH_M
+      if (
+        crossings.some(
+          (crossing) =>
+            from < crossing.position + crossing.halfWidth + 5 &&
+            to > crossing.position - crossing.halfWidth - 5
+        )
+      )
+        continue
+      if (road.class !== 'avenue') stroke(from, to, 0, 0.18)
+      if (road.class === 'avenue')
+        for (const side of [-1, 1]) stroke(from, to, (side * halfCarriageway) / 2, 0.14)
+    }
+    const cuts = [
+      ...new Set([
+        start,
+        end,
+        ...crossings
+          .flatMap((crossing) => [
+            crossing.position - crossing.halfWidth - 5,
+            crossing.position + crossing.halfWidth + 5
+          ])
+          .filter((position) => position > start && position < end)
+      ])
+    ].sort((first, second) => first - second)
+    for (let index = 1; index < cuts.length; index++) {
+      const from = cuts[index - 1],
+        to = cuts[index],
+        middle = (from + to) / 2
+      if (
+        crossings.some((crossing) => Math.abs(middle - crossing.position) < crossing.halfWidth + 5)
+      )
+        continue
+      for (const side of [-1, 1]) {
+        stroke(from, to, side * (halfCarriageway - 0.2), 0.12)
+        if (road.class === 'avenue') stroke(from, to, side * 0.14, 0.12)
+      }
+    }
+    for (const crossing of crossings) {
+      for (const side of [-1, 1]) {
+        const centre = crossing.position + side * (crossing.halfWidth + CROSSWALK_DEPTH_M / 2 + 0.7)
+        for (
+          let across = -halfCarriageway + 0.6;
+          across < halfCarriageway - 0.3;
+          across += CROSSWALK_GAP_M
+        )
+          stroke(centre - CROSSWALK_DEPTH_M / 2, centre + CROSSWALK_DEPTH_M / 2, across, 0.42)
+        const stop = crossing.position + side * (crossing.halfWidth + CROSSWALK_DEPTH_M + 1.4)
+        const approachLane = ((side * halfCarriageway) / 2) * (isAlongX ? 1 : -1)
+        stroke(stop - 0.12, stop + 0.12, approachLane, halfCarriageway - 0.3)
+      }
+    }
+    return marks
+  })
 }
 
 // Two triangles a quad, wound to face up, with its colour at every corner: one mesh, one draw.

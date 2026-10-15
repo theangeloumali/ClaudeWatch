@@ -3,7 +3,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { Object3D, type InstancedMesh } from 'three'
 import type { ThemeZoneGroup } from '../logic/office-themes'
 import { levelInUse } from '../logic/quality'
-import { groundHeight } from '../player/walk-ground'
+import { groundHeight, walkGround } from '../player/walk-ground'
 import type { Player } from '../player/walking'
 import { useQualityChoice } from '../quality-store'
 import type { FloorGeometry } from '../scene-model'
@@ -13,7 +13,12 @@ import type { TownPlan } from '../town/town-plan'
 import { themeIdsByZone, townTrips, type MoverKind } from '../town/town-trips'
 import { citizenGeometry } from './figure-parts'
 import { moverFigure, moverKinds } from './mover-kinds'
-import { routePose, walkedSec, type RoutePoint } from './route-pose'
+import { routePose, turnToward, walkedSec } from './route-pose'
+import { SceneBodies } from '../scene/BodySpace'
+import { advanceCitizen, citizenBodyId } from './crowd-movement'
+import { moverClock, moverRouteKey, type MoverClock } from './mover-clock'
+import { CITIZEN_POSITION_EPSILON } from './citizen-navigation'
+import { CITIZEN_BODY_RADIUS } from '../../../shared/office/body-footprints'
 
 interface MoverLayerProps {
   floor: FloorGeometry
@@ -26,6 +31,7 @@ interface MoverLayerProps {
   isReducedMotion: boolean
   // The settings panel's switch.
   hasVehicles: boolean
+  bodies?: SceneBodies
 }
 
 // A window coming back from hidden reports the whole gap as one frame: it is moved as this much.
@@ -44,16 +50,13 @@ const VEHICLE_HOLD_M = 1.4
 
 const scratch = new Object3D()
 
-function turnToward(from: number, to: number, share: number): number {
-  const gap = Math.atan2(Math.sin(to - from), Math.cos(to - from))
-  return from + gap * Math.min(1, share)
-}
-
 // The town's citizens and vehicles: one instanced draw per kind of figure, moved by writing
 // matrices. It asks for no frames of its own, so they move only on frames the scene draws anyway.
 export function MoverLayer(props: MoverLayerProps) {
   const { floor, plan, owners, floorTheme, zoneGroups, player, isReducedMotion } = props
   const { hasVehicles } = props
+  const bodies = useMemo(() => props.bodies ?? new SceneBodies(), [props.bodies])
+  const ground = useMemo(() => walkGround(floor, plan.lots, plan.extent), [floor, plan])
   const { pin, chosen } = useQualityChoice()
   const detail = levelInUse(pin, chosen)
   // Keyed by what they say, not by identity: a floor change that moves no lot keeps every trip,
@@ -82,15 +85,19 @@ export function MoverLayer(props: MoverLayerProps) {
   useEffect(() => () => geometries.forEach((geometry) => geometry.dispose()), [geometries])
 
   const meshesRef = useRef<(InstancedMesh | null)[]>([])
-  // Seconds on its route and the way it faces, by mover: every loop begins part-way round.
+  const clockRef = useRef<MoverClock | undefined>(undefined)
+  const tripsKey = trips.map(moverRouteKey).join('|')
+  // Presentation changes retain each unchanged route, even when the total mover count changes.
   const clock = useMemo(() => {
-    const onFoot: RoutePoint[] = []
-    return {
-      moved: Float32Array.from(trips, (trip) => trip.startSec),
-      headings: new Float32Array(trips.length),
-      onFoot
-    }
-  }, [trips])
+    const next = moverClock({
+      trips,
+      space: bodies,
+      isOpen: ground.isOpen,
+      previous: clockRef.current
+    })
+    clockRef.current = next
+    return next
+  }, [tripsKey, bodies])
 
   const place = (deltaSec: number): void => {
     const { moved, headings, onFoot } = clock
@@ -105,7 +112,22 @@ export function MoverLayer(props: MoverLayerProps) {
           : { others: onFoot, reach: NOSE_M[kind.kind], radius: VEHICLE_HOLD_M }
       kind.members.forEach((index, instance) => {
         const { route, speed } = trips[index]
-        if (deltaSec > 0)
+        if (deltaSec > 0 && !nose) {
+          const next = advanceCitizen({
+            trip: trips[index],
+            index,
+            pose: clock.positions[index],
+            walked: moved[index],
+            deltaSec,
+            space: bodies,
+            isOpen: ground.isOpen,
+            ground
+          })
+          clock.positions[index] = next.pose
+          moved[index] = next.walked
+          clock.strides[index] += next.distance
+          clock.isWalking[index] = next.distance > CITIZEN_POSITION_EPSILON
+        } else if (deltaSec > 0)
           moved[index] = walkedSec({
             route,
             speed,
@@ -115,13 +137,18 @@ export function MoverLayer(props: MoverLayerProps) {
             ...nose
           })
         const travelled = moved[index] * speed
-        const pose = routePose(route, travelled, speed)
+        const pose = nose ? routePose(route, travelled, speed) : clock.positions[index]
         if (!nose && !pose.isIndoors) onFoot.push(pose)
-        headings[index] =
-          deltaSec > 0
-            ? turnToward(headings[index], pose.heading, deltaSec * TURN_PER_SEC)
-            : pose.heading
-        const bob = nose ? 0 : Math.abs(Math.sin((travelled / STRIDE_M) * Math.PI)) * BOB_M
+        if (deltaSec > 0 && (nose || clock.isWalking[index]))
+          headings[index] = turnToward(
+            headings[index],
+            pose.heading,
+            nose ? deltaSec * TURN_PER_SEC : 1 - Math.exp(-deltaSec * TURN_PER_SEC)
+          )
+        const bob =
+          nose || !clock.isWalking[index]
+            ? 0
+            : Math.abs(Math.sin((clock.strides[index] / STRIDE_M) * Math.PI)) * BOB_M
         scratch.position.set(pose.x, groundHeight(floor, pose) + bob, pose.z)
         scratch.rotation.y = headings[index]
         // Gone indoors: there, but nothing of it drawn.
@@ -134,7 +161,17 @@ export function MoverLayer(props: MoverLayerProps) {
   }
 
   // Placed on every commit: under reduced motion this is where they stay, where their loops start.
-  useLayoutEffect(() => place(0))
+  useLayoutEffect(() => {
+    clock.positions.forEach((pose, index) => {
+      if (trips[index].kind === 'citizen' && !pose.isIndoors)
+        bodies.set({ id: citizenBodyId(index), x: pose.x, z: pose.z, radius: CITIZEN_BODY_RADIUS })
+    })
+    place(0)
+    return () =>
+      trips.forEach((trip, index) => {
+        if (trip.kind === 'citizen') bodies.remove(citizenBodyId(index))
+      })
+  }, [clock, bodies, trips, ground])
   useFrame((_state, deltaSec) => {
     if (!isReducedMotion) place(Math.min(deltaSec, MAX_STEP_SEC))
   })

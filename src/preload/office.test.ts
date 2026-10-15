@@ -31,11 +31,13 @@ describe('office preload', () => {
   it('forwards feed messages from main to the subscriber and unsubscribes cleanly', () => {
     const listener = vi.fn()
     const unsubscribe = api.onFeedMessage(listener)
-    const handler = ipcRenderer.on.mock.calls[0][1] as (event: unknown, message: unknown) => void
+    const registration = ipcRenderer.on.mock.calls.find(([channel]) => channel === 'office:feed')
+    const handler = registration?.[1]
+    if (typeof handler !== 'function') throw new Error('Feed subscription absent')
     handler({}, { type: 'resync' })
     unsubscribe()
 
-    expect(ipcRenderer.on.mock.calls[0][0]).toBe('office:feed')
+    expect(registration?.[0]).toBe('office:feed')
     expect(listener).toHaveBeenCalledWith({ type: 'resync' })
     expect(ipcRenderer.removeListener).toHaveBeenCalledWith('office:feed', handler)
   })

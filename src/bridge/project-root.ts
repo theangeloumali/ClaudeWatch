@@ -1,4 +1,4 @@
-import { basename, dirname, posix, win32 } from 'node:path'
+import { posix, win32 } from 'node:path'
 import { projectKey } from '../shared/office/project-key'
 import type { SessionRef } from '../shared/office/types'
 import { type BridgeIo, isDirectory, isMissing } from './io'
@@ -16,6 +16,7 @@ type Placement = Pick<
 >
 // The project office and the company a session belongs to: the company is the folder holding the project.
 export function placementOf({ root, worktree }: Project): Placement {
+  const { basename, dirname } = win32.isAbsolute(root) && !posix.isAbsolute(root) ? win32 : posix
   return {
     projectKey: projectKey(root),
     projectLabel: basename(root),

@@ -38,9 +38,17 @@ async function loadBuilderConfig(): Promise<Configuration> {
 }
 
 describe('electron-builder files', () => {
-  it('leaves the standalone web bundle out of the app package', async () => {
+  it('locates browser assets beside the compiled main bundle in development and packaging', async () => {
+    const setup = await readFile(resolve(process.cwd(), 'src/main/office-setup.ts'), 'utf-8')
+    expect(setup).toContain("loadStaticFiles(join(__dirname, '../office-web'))")
+    expect(setup).not.toContain("loadStaticFiles(join(app.getAppPath(), 'out/office-web'))")
+  })
+  it('includes manifest-verified browser assets in the app package', async () => {
     const config = await readFile(resolve(process.cwd(), 'electron-builder.yml'), 'utf-8')
-    expect(config).toMatch(/\nfiles:\n(?:[ \t]+- .*\n)*[ \t]+- '!out\/office-web\/\*\*\/\*'\n/)
+    expect(config).toContain('  - out/**/*')
+    expect(config).not.toContain("'!out/office-web/**/*'")
+    const metadata = JSON.parse(await readFile(resolve(process.cwd(), 'package.json'), 'utf-8'))
+    expect(metadata.scripts.build).toContain('npm run build:office-web')
   })
 
   // release-notes.md is gitignored, so a fresh checkout has it only once a build writes it.

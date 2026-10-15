@@ -18,6 +18,7 @@ import trayIconPath from '../../resources/tray/tray.png?asset'
 interface TrayManagerOptions {
   onOpenDashboard: () => void
   onOpenOffice?: () => void
+  onOpenOfficeBrowser?: () => void
   onFocusSession: (pid: number) => void
   onQuit: () => void
   onCheckForUpdates?: () => void
@@ -47,6 +48,7 @@ export class TrayManager {
   private popover: BrowserWindow | null = null
   private onOpenDashboard: () => void
   private onOpenOffice?: () => void
+  private onOpenOfficeBrowser?: () => void
   private onFocusSession: (pid: number) => void
   private onQuit: () => void
   private onCheckForUpdates?: () => void
@@ -70,6 +72,7 @@ export class TrayManager {
   constructor(options: TrayManagerOptions) {
     this.onOpenDashboard = options.onOpenDashboard
     this.onOpenOffice = options.onOpenOffice
+    this.onOpenOfficeBrowser = options.onOpenOfficeBrowser
     this.onFocusSession = options.onFocusSession
     this.onQuit = options.onQuit
     this.onCheckForUpdates = options.onCheckForUpdates
@@ -302,6 +305,12 @@ export class TrayManager {
       menuItems.push({
         label: 'Open Office',
         click: () => this.onOpenOffice?.()
+      })
+    }
+    if (this.onOpenOfficeBrowser) {
+      menuItems.push({
+        label: 'Open Office in Browser',
+        click: () => this.onOpenOfficeBrowser?.()
       })
     }
     if (this.onCheckForUpdates) {

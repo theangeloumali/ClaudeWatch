@@ -5,6 +5,7 @@ import { cn } from '../../lib/utils'
 import type { ZoomBand } from '../logic/camera-bands'
 import type { CardStatus, NameCard, ProjectStack } from '../logic/name-cards'
 import { CARD_STATUS_COLOR } from '../office-palette'
+import { GEM_SPECS } from '../logic/status-gem'
 import { OFFSCREEN, type CardAnchors } from './CardProjector'
 
 function StatusDot({ card, isLarge = false }: { card: NameCard; isLarge?: boolean }) {
@@ -51,8 +52,12 @@ export function NameCardLayer(props: NameCardLayerProps) {
     <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
       {props.cards.map((card) => {
         const isSelected = card.agentKey === props.selectedAgentKey
-        // Away from the desk band only the selected agent keeps its full card.
+        // Floor cards stay compact, but retain a textual activity line.
         const isCompact = props.band !== 'desk' && !isSelected
+        const detail =
+          card.status === 'working' && card.isAvailable !== false
+            ? `${GEM_SPECS.working.label} · ${card.detail}`
+            : card.detail
         if (card.kind === 'pill') {
           return (
             <span
@@ -61,7 +66,8 @@ export function NameCardLayer(props: NameCardLayerProps) {
               style={{ transform: OFFSCREEN }}
               className="absolute left-0 top-0 whitespace-nowrap rounded-full bg-white/90 px-1.5 py-px text-[10px] font-semibold text-neutral-800 shadow"
             >
-              {card.title}
+              <span>{card.title}</span>
+              <span className="block font-normal">{detail}</span>
             </span>
           )
         }
@@ -91,16 +97,14 @@ export function NameCardLayer(props: NameCardLayerProps) {
                   {card.title}
                 </span>
               </span>
-              {!isCompact && (
-                <span
-                  className={cn(
-                    'text-[10px]',
-                    attention ? 'pl-5 text-ink-soft' : 'pl-3.5 text-neutral-600'
-                  )}
-                >
-                  {card.detail}
-                </span>
-              )}
+              <span
+                className={cn(
+                  'text-[10px]',
+                  attention ? 'pl-5 text-ink-soft' : 'pl-3.5 text-neutral-600'
+                )}
+              >
+                {detail}
+              </span>
               {!isCompact && card.sessionKey && props.reviewableKeys.has(card.sessionKey) && (
                 // Mouse shortcut only: the layer is aria-hidden; the queue row has the keyboard Review.
                 <button
@@ -131,7 +135,7 @@ export function NameCardLayer(props: NameCardLayerProps) {
           ref={register(props.anchors.stacks, stack.projectKey)}
           style={{ transform: OFFSCREEN }}
           onClick={() => stack.zoneId && props.onFlyToZone(stack.zoneId)}
-          className="pointer-events-auto absolute left-0 top-0 whitespace-nowrap rounded-lg bg-neutral-900/90 px-2.5 py-1 text-[11px] font-semibold text-white shadow-md hover:bg-neutral-800"
+          className="pointer-events-auto absolute left-0 top-0 max-w-[min(360px,calc(100vw-1.5rem))] whitespace-normal rounded-lg bg-neutral-900/90 px-2.5 py-1 text-left text-[11px] font-semibold text-white shadow-md hover:bg-neutral-800"
         >
           {stack.text}
         </button>

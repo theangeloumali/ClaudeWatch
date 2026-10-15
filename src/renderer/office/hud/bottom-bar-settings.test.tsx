@@ -70,7 +70,7 @@ it('stays usable in the list view, where the scene controls are disabled', () =>
 it('shows one panel at a time: opening the themes closes the settings', () => {
   render(<Bar />)
   fireEvent.click(settingsButton())
-  const themes = screen.getByRole('button', { name: /^Floor theme/ })
+  const themes = screen.getByRole('button', { name: /^Map theme/ })
   fireEvent.click(themes)
   expect(panel()).toBeNull()
   expect(screen.getByText('Themes list')).toBeInTheDocument()
@@ -81,8 +81,8 @@ it('shows one panel at a time: opening the themes closes the settings', () => {
   expect(themes).toHaveAttribute('aria-expanded', 'false')
 })
 
-it('has no Walk button and no walking hint while the player is switched off', () => {
+it('offers a visible enable path and no walking hint while the player is switched off', () => {
   render(<Bar hasPlayer={false} isWalking />)
-  expect(screen.queryByRole('button', { name: /Walk/ })).toBeNull()
+  expect(screen.getByRole('button', { name: 'Enable player' })).toBeInTheDocument()
   expect(screen.queryByText(/to walk/)).toBeNull()
 })

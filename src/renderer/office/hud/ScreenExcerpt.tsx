@@ -5,7 +5,7 @@ export function ScreenExcerpt({ lines }: { lines: readonly string[] }) {
     <pre
       aria-label="Screen excerpt"
       tabIndex={0}
-      className="max-h-60 overflow-auto whitespace-pre rounded-md border border-border bg-surface p-2 font-mono text-[11px] leading-snug text-text-primary [.on-paper_&]:border-ink/25 [.on-paper_&]:bg-paper-shade [.on-paper_&]:text-ink"
+      className="max-h-60 min-w-0 overflow-auto overscroll-contain whitespace-pre rounded-md border border-border bg-surface p-2 font-mono text-[11px] leading-snug text-text-primary [[data-inspector-expanded=true]_&]:max-h-[60dvh] [[data-inspector-expanded=true]_&]:text-xs [.on-paper_&]:border-ink/25 [.on-paper_&]:bg-paper-shade [.on-paper_&]:text-ink"
     >
       {lines.length > 0 ? lines.join('\n') : 'The screen is empty.'}
     </pre>

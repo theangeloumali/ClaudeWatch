@@ -14,6 +14,7 @@ export interface RoadEdge {
   to: number
   class: RoadClass
   length: number
+  width?: number
 }
 export interface RoadGraph {
   nodes: RoadNode[]
@@ -45,48 +46,73 @@ export function roadGraph(roads: readonly TownRoad[], claim: Rect): RoadGraph {
   const edges: RoadEdge[] = []
   const idAt = new Map<string, number>()
   const nodeAt = ({ x, z }: Point): number => {
-    const place = `${x}:${z}`
+    const place = `${x.toFixed(6)}:${z.toFixed(6)}`
     const known = idAt.get(place)
     if (known !== undefined) return known
     nodes.push({ id: nodes.length, x, z })
     idAt.set(place, nodes.length - 1)
     return nodes.length - 1
   }
-  const join = (from: number, to: number, roadClass: RoadClass): void => {
-    edges.push({ from, to, class: roadClass, length: apart(nodes[from], nodes[to]) })
+  const join = (from: number, to: number, road: TownRoad): void => {
+    if (
+      from === to ||
+      edges.some(
+        (edge) => (edge.from === from && edge.to === to) || (edge.from === to && edge.to === from)
+      )
+    )
+      return
+    edges.push({
+      from,
+      to,
+      class: road.class,
+      length: apart(nodes[from], nodes[to]),
+      ...(road.id.startsWith('city-street:') ? { width: road.width } : {})
+    })
   }
 
   const edge = boundsOfZone(claim)
   const centre = boundsOfZone(grow(claim, -ROAD_WIDTH_M.boulevard / 2))
-  const joinedOn: number[] = []
+  const joinedRoads = [...roads]
   for (const road of roads.filter((each) => each.class !== 'boulevard')) {
-    const steps = apart(road.from, road.to) / LOT_PITCH_M
-    const along = Array.from({ length: steps + 1 }, (_, step) =>
-      nodeAt({
-        x: road.from.x + ((road.to.x - road.from.x) * step) / steps,
-        z: road.from.z + ((road.to.z - road.from.z) * step) / steps
-      })
-    )
-    along.slice(1).forEach((node, index) => join(along[index], node, road.class))
     for (const end of [road.from, road.to].filter((point) => isOnClaimSide(point, edge))) {
-      const onBoulevard = nodeAt({
+      const onBoulevard = {
         x: clamp(end.x, [centre.minX, centre.maxX]),
         z: clamp(end.z, [centre.minZ, centre.maxZ])
-      })
-      join(nodeAt(end), onBoulevard, road.class)
-      joinedOn.push(onBoulevard)
+      }
+      if (roads.some((candidate) => candidate.class === 'boulevard'))
+        joinedRoads.push({ ...road, from: end, to: onBoulevard })
     }
   }
-
-  for (const strip of roads.filter((each) => each.class === 'boulevard')) {
-    const isAlongX = strip.from.z === strip.to.z
-    const onStrip = joinedOn.filter((id) =>
-      isAlongX ? nodes[id].z === strip.from.z : nodes[id].x === strip.from.x
-    )
-    const along = [nodeAt(strip.from), ...onStrip, nodeAt(strip.to)].sort((a, b) =>
-      isAlongX ? nodes[a].x - nodes[b].x : nodes[a].z - nodes[b].z
-    )
-    along.slice(1).forEach((node, index) => join(along[index], node, 'boulevard'))
+  const liesOn = (point: Point, road: TownRoad): boolean =>
+    Math.abs(apart(road.from, point) + apart(point, road.to) - apart(road.from, road.to)) < 1e-6 &&
+    (Math.abs(road.from.x - road.to.x) < 1e-6
+      ? Math.abs(point.x - road.from.x) < 1e-6
+      : Math.abs(point.z - road.from.z) < 1e-6)
+  for (const road of joinedRoads) {
+    const length = apart(road.from, road.to)
+    if (length < 1e-6) continue
+    const points = [road.from, road.to]
+    for (let along = LOT_PITCH_M; along < length; along += LOT_PITCH_M)
+      points.push({
+        x: road.from.x + ((road.to.x - road.from.x) * along) / length,
+        z: road.from.z + ((road.to.z - road.from.z) * along) / length
+      })
+    for (const other of joinedRoads) {
+      for (const point of [other.from, other.to]) if (liesOn(point, road)) points.push(point)
+      const crossing =
+        road.from.x === road.to.x
+          ? { x: road.from.x, z: other.from.z }
+          : { x: other.from.x, z: road.from.z }
+      if (liesOn(crossing, road) && liesOn(crossing, other)) points.push(crossing)
+    }
+    const along = [
+      ...new Set(
+        points
+          .sort((first, second) => apart(road.from, first) - apart(road.from, second))
+          .map(nodeAt)
+      )
+    ]
+    along.slice(1).forEach((node, index) => join(along[index], node, road))
   }
   return { nodes, edges }
 }
