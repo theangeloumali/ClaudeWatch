@@ -69,7 +69,7 @@ function makeLounge(companyId: string): LoungeGeometry {
 }
 
 it('renders every floor surface through the theme kit', () => {
-  const theme = themeForTeam()
+  const theme = getTheme('neo-edo-steam')
   const floor = makeFloor({
     floorId: 'p1',
     rooms: [makeRoom({ id: 'r1' })],
@@ -152,7 +152,7 @@ it('draws each zone with its own theme, and the slab and lift once with the floo
     expect(roomIds(edo.kit.zone[part])).toEqual(['room_a'])
     expect(roomIds(brass.kit.zone[part])).toEqual(['room_b'])
   }
-  for (const part of ['Doorway', 'Desk', 'RoomDressing', 'RoomSign'] as const) {
+  for (const part of ['Doorway', 'Desk', 'RoomDressing'] as const) {
     expect(drawnBy(edo.kit.zone[part]).map((node) => node.props.room)).toEqual([
       mixedFloor.rooms[0]
     ])
@@ -160,6 +160,12 @@ it('draws each zone with its own theme, and the slab and lift once with the floo
       mixedFloor.rooms[1]
     ])
   }
+  expect(drawnBy(edo.kit.zone.RoomSign).map((node) => node.props.room)).toEqual([
+    mixedFloor.rooms[0]
+  ])
+  expect(drawnBy(brass.kit.zone.RoomSign).map((node) => node.props.room)).toEqual([
+    mixedFloor.rooms[1]
+  ])
   for (const part of ['Slab', 'Elevator'] as const) {
     expect(drawnBy(edo.kit.floor[part])).toHaveLength(1)
     expect(drawnBy(brass.kit.floor[part])).toHaveLength(0)

@@ -1,16 +1,24 @@
 import { useFrame } from '@react-three/fiber'
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { Vector3, type Camera } from 'three'
 import type { ZoomBand } from '../logic/camera-bands'
 import { cullCards, type CullCandidate } from '../logic/card-culling'
 import type { NameCard, ProjectStack } from '../logic/name-cards'
 import { cardSafeArea } from '../logic/zone-framing'
+import { hudSafeInsets, type InspectorLayout } from '../logic/hud-layout'
+import type { AgentView } from '../../../shared/office/types'
+import type { FloorGeometry } from '../scene-model'
+import { agentElevation, floorElevation } from './all-floor-model'
+import { findZone } from '../logic/zone-model'
 
 // Over an agent's head (scene/Robot.tsx draws agents 1.65 m tall).
 export const CARD_HEIGHT = 2.45
 const PILL_HEIGHT = 1.55
 const DOT_HEIGHT = 1.7
 const STACK_HEIGHT = 2.6
+const STACK_COLUMN_WIDTH = 360
+const STACK_GAP = 8
+const COMPACT_OFFICE_WIDTH = 1024
 export const OFFSCREEN = 'translate(-9999px, -9999px)'
 
 export interface CardAnchors {
@@ -30,6 +38,9 @@ interface CardProjectorProps {
   anchors: CardAnchors
   band: ZoomBand
   selectedAgentKey: string | null
+  inspectorLayout?: InspectorLayout
+  agents?: readonly AgentView[]
+  visibleFloors?: readonly FloorGeometry[]
 }
 
 // Writes a snapshot slot and returns 1 if it changed, so the idle check allocates nothing.
@@ -50,17 +61,69 @@ export function CardProjector({
   stacks,
   anchors,
   band,
-  selectedAgentKey
+  selectedAgentKey,
+  inspectorLayout,
+  agents,
+  visibleFloors
 }: CardProjectorProps) {
   const point = useMemo(() => new Vector3(), [])
-  // Element sizes change only with band or selection, so measure once per combination.
+  const measurementRevision = useRef(0)
+  const heights = useMemo(
+    () => new Map(agents?.map((agent) => [agent.agentKey, agentElevation(agent)])),
+    [agents]
+  )
+  const stackHeights = useMemo(
+    () =>
+      new Map(
+        stacks.map((stack) => {
+          const floor = visibleFloors?.find(
+            (candidate) => stack.zoneId !== null && !!findZone(candidate, stack.zoneId)
+          )
+          return [stack.projectKey, floor ? floorElevation(floor) : 0] as const
+        })
+      ),
+    [stacks, visibleFloors]
+  )
+  const invalidateRef = useRef<(() => void) | undefined>(undefined)
+  const observedKeys = [
+    ...cards.map((card) => `card:${card.agentKey}:${card.kind}`),
+    ...stacks.map((stack) => `stack:${stack.projectKey}`)
+  ]
+    .sort()
+    .join('\0')
+  // Font and wrapping changes invalidate measurements without per-frame React state.
+  useEffect(() => {
+    if (!observedKeys || typeof ResizeObserver !== 'function') return
+    const observer = new ResizeObserver(() => {
+      measurementRevision.current += 1
+      invalidateRef.current?.()
+    })
+    for (const element of [...anchors.cards.values(), ...anchors.stacks.values()]) {
+      observer.observe(element)
+    }
+    return () => observer.disconnect()
+  }, [anchors, observedKeys])
   const lastRef = useRef<{
     view: number[]
     cards: readonly NameCard[] | null
     stacks: readonly ProjectStack[] | null
     band: ZoomBand | null
     selectedAgentKey: string | null
-  }>({ view: [], cards: null, stacks: null, band: null, selectedAgentKey: null })
+    layout: InspectorLayout | undefined
+    measurements: number
+    heights: typeof heights | null
+    stackHeights: typeof stackHeights | null
+  }>({
+    view: [],
+    cards: null,
+    stacks: null,
+    band: null,
+    selectedAgentKey: null,
+    layout: undefined,
+    measurements: -1,
+    heights: null,
+    stackHeights: null
+  })
   const sizes = useMemo(
     () => new WeakMap<HTMLElement, { key: string; width: number; height: number }>(),
     []
@@ -85,7 +148,9 @@ export function CardProjector({
     return fresh
   }
 
-  useFrame(({ camera, size }) => {
+  useFrame((state) => {
+    const { camera, size } = state
+    invalidateRef.current = state.invalidate
     // Cards only move when the camera, the viewport or the inputs change; skip idle frames.
     const zoom = 'zoom' in camera && typeof camera.zoom === 'number' ? camera.zoom : 1
     const { position, quaternion } = camera
@@ -107,19 +172,64 @@ export function CardProjector({
       last.cards === cards &&
       last.stacks === stacks &&
       last.band === band &&
-      last.selectedAgentKey === selectedAgentKey
+      last.selectedAgentKey === selectedAgentKey &&
+      last.layout === inspectorLayout &&
+      last.measurements === measurementRevision.current &&
+      last.heights === heights &&
+      last.stackHeights === stackHeights
     if (isSameView) return
     last.cards = cards
     last.stacks = stacks
     last.band = band
     last.selectedAgentKey = selectedAgentKey
+    last.layout = inspectorLayout
+    last.measurements = measurementRevision.current
+    last.heights = heights
+    last.stackHeights = stackHeights
     // camera-controls moves the camera after three last built its matrix, and the renderer only
     // rebuilds it after this callback: without this the cards trail the canvas while it turns.
     camera.updateMatrixWorld()
 
+    if (band === 'building') {
+      for (const card of cards) {
+        const height =
+          (heights.get(card.agentKey) ?? 0) + (card.kind === 'card' ? CARD_HEIGHT : PILL_HEIGHT)
+        place(
+          anchors.cards.get(card.agentKey),
+          card.agentKey === selectedAgentKey ? toScreen(camera, size, card.x, height, card.z) : null
+        )
+      }
+      hideAll(anchors.dots)
+      const insets = hudSafeInsets(selectedAgentKey !== null, inspectorLayout)
+      const safe = { ...cardSafeArea(size, insets), top: insets.top }
+      const columnWidth = Math.min(STACK_COLUMN_WIDTH, Math.max(1, safe.right - safe.left))
+      let columnLeft = safe.left
+      let rowTop = safe.top
+      const summaryElements = stacks.flatMap((stack) => {
+        const element = anchors.stacks.get(stack.projectKey)
+        return element ? [element] : []
+      })
+      for (const element of summaryElements) element.style.maxWidth = `${columnWidth}px`
+      const summarySizes = summaryElements.map((element) => ({
+        element,
+        height: element.offsetHeight
+      }))
+      for (const { element, height } of summarySizes) {
+        if (rowTop + height > safe.bottom) {
+          rowTop = safe.top
+          columnLeft += columnWidth + STACK_GAP
+        }
+        const fits = columnLeft + columnWidth <= safe.right && rowTop + height <= safe.bottom
+        place(element, fits ? { x: columnLeft + columnWidth / 2, y: rowTop + height } : null)
+        rowTop += height + STACK_GAP
+      }
+      return
+    }
+
     if (band === 'desk') {
       for (const card of cards) {
-        const height = card.kind === 'card' ? CARD_HEIGHT : PILL_HEIGHT
+        const height =
+          (heights.get(card.agentKey) ?? 0) + (card.kind === 'card' ? CARD_HEIGHT : PILL_HEIGHT)
         place(anchors.cards.get(card.agentKey), toScreen(camera, size, card.x, height, card.z))
       }
       hideAll(anchors.dots)
@@ -136,15 +246,17 @@ export function CardProjector({
         camera,
         size,
         card.x,
-        card.kind === 'card' ? CARD_HEIGHT : PILL_HEIGHT,
+        (heights.get(card.agentKey) ?? 0) + (card.kind === 'card' ? CARD_HEIGHT : PILL_HEIGHT),
         card.z
       )
-      // Apprentice pills only show up close; the selected one always does.
-      if (!element || !at || (card.kind === 'pill' && !isSelected)) {
+      if (!element || !at) {
         place(element, null)
         continue
       }
-      const { width, height } = measure(element, `${band}:${isSelected}`)
+      const { width, height } = measure(
+        element,
+        `${band}:${isSelected}:${card.title}:${card.detail}:${card.status}:${measurementRevision.current}`
+      )
       positions.set(card.agentKey, at)
       candidates.push({
         agentKey: card.agentKey,
@@ -156,7 +268,10 @@ export function CardProjector({
       })
     }
 
-    const outcome = cullCards(candidates, cardSafeArea(size))
+    const outcome = cullCards(
+      candidates,
+      cardSafeArea(size, hudSafeInsets(selectedAgentKey !== null, inspectorLayout))
+    )
     for (const card of cards) {
       const isShown = outcome.cards.has(card.agentKey)
       if (positions.has(card.agentKey))
@@ -165,15 +280,24 @@ export function CardProjector({
           isShown ? (positions.get(card.agentKey) ?? null) : null
         )
       const dot = outcome.dots.has(card.agentKey)
-        ? toScreen(camera, size, card.x, DOT_HEIGHT, card.z)
+        ? toScreen(camera, size, card.x, (heights.get(card.agentKey) ?? 0) + DOT_HEIGHT, card.z)
         : null
       place(anchors.dots.get(card.agentKey), dot)
     }
     for (const stack of stacks) {
-      const isStacked = outcome.stackedProjects.has(stack.projectKey)
+      const isStacked =
+        size.width >= COMPACT_OFFICE_WIDTH && outcome.stackedProjects.has(stack.projectKey)
       place(
         anchors.stacks.get(stack.projectKey),
-        isStacked ? toScreen(camera, size, stack.x, STACK_HEIGHT, stack.z) : null
+        isStacked
+          ? toScreen(
+              camera,
+              size,
+              stack.x,
+              (stackHeights.get(stack.projectKey) ?? 0) + STACK_HEIGHT,
+              stack.z
+            )
+          : null
       )
     }
   })

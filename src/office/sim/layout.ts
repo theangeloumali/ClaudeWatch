@@ -1,4 +1,5 @@
 import type { SessionRef } from '../../shared/office/types'
+import type { WorldVenue } from '../../shared/office/world-document-types'
 import { LANE, packCompanies } from './allocation'
 import { draftCompany, settleCompany } from './projects'
 import type { FloorLayout, ZoneLayout } from './rooms'
@@ -7,6 +8,9 @@ export type { FloorLayout, LoungeLayout, RoomLayout, Slot, ZoneLayout } from './
 export interface LayoutMap {
   version: 1
   floors: FloorLayout[]
+  // Derived alongside floors; automatic adaptation never changes the saved document.
+  effectiveVenues?: readonly WorldVenue[]
+  streetBlocks?: { x: number; z: number; width: number; depth: number }[]
   reservations: Record<
     string,
     { floorId: string; plate: number; bay: number; companyKey: string; projectKey: string }

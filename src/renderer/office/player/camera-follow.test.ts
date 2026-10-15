@@ -22,7 +22,7 @@ describe('followShift', () => {
 })
 
 describe('followStep', () => {
-  // The safe area of this viewport runs from x 280 to 904, so its centre line is clear.
+  // The 296/320px panel columns leave a safe span from x 320 to 856.
   const inView = { x: 600, y: 400 }
   const offScreen = { x: 3000, y: 400 }
   const frame = { viewport: VIEWPORT, zoom: 30, deltaSec: 1 / 60, isReducedMotion: false }
@@ -44,14 +44,14 @@ describe('followStep', () => {
   })
 
   it('takes the last of a sweep in one frame and is then done', () => {
-    const last = followStep({ ...frame, onScreen: { x: 850, y: 400 } })
+    const last = followStep({ ...frame, onScreen: { x: 802, y: 400 } })
     expect(last.isSettled).toBe(true)
-    expect(last.right * frame.zoom).toBeCloseTo(850 - (904 - 75))
+    expect(last.right * frame.zoom).toBeCloseTo(802 - (856 - 75))
   })
 
   it('cuts straight to the player under reduced motion', () => {
     const step = followStep({ ...frame, onScreen: offScreen, isReducedMotion: true })
     expect(step.isSettled).toBe(true)
-    expect(step.right * frame.zoom).toBeCloseTo(3000 - (904 - 75))
+    expect(step.right * frame.zoom).toBeCloseTo(3000 - (856 - 75))
   })
 })

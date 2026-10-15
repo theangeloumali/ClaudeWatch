@@ -104,7 +104,9 @@ function workingSession(db: DatabaseSync): void {
 it('shows a running OpenCode process as a session, from its newest session in that folder', async () => {
   const { io, root } = setup(workingSession)
   const batch = await collectOpencode(root, io, undefined, NOW, 'darwin')
-  expect(batch.sources).toEqual([{ id: 'opencode', ok: true, detail: 'live' }])
+  expect(batch.sources).toEqual([
+    { id: 'opencode', ok: true, detail: 'live', checkedAtMs: NOW, staleAfterMs: 60000 }
+  ])
   expect(batch.sessions).toHaveLength(1)
   expect(batch.sessions[0]).toMatchObject({
     key: 'opencode:ses_root',
@@ -121,6 +123,7 @@ it('shows a running OpenCode process as a session, from its newest session in th
     currentTool: { name: 'bash', category: 'run' },
     startedAtMs: STARTED_AT,
     updatedAtMs: NOW - 2000,
+    observation: { sourceId: 'opencode', observedAtMs: NOW, staleAfterMs: 60000, coverage: 'own' },
     usage: {
       own: { input: 1200, output: 350, cacheWrite: 400, cacheRead: 9000 },
       subagents: { input: 0, output: 0, cacheWrite: 0, cacheRead: 0 },
@@ -131,6 +134,14 @@ it('shows a running OpenCode process as a session, from its newest session in th
         id: 'ses_child',
         type: 'explore',
         activity: 'thinking',
+        observation: {
+          sourceId: 'opencode',
+          observedAtMs: NOW,
+          staleAfterMs: 60000,
+          coverage: 'own'
+        },
+        attention: 'none',
+        currentTool: null,
         tokens: { input: 70, output: 25, cacheWrite: 10, cacheRead: 300 }
       }
     ],
@@ -317,7 +328,10 @@ it('keeps a quiet child session while a tool it started is still running', async
 it('says nothing and opens nothing when OpenCode is not running', async () => {
   const { io, root, opens } = setup(workingSession, {})
   const batch = await collectOpencode(root, io, undefined, NOW, 'darwin')
-  expect(batch).toEqual({ sessions: [], sources: [{ id: 'opencode', ok: true, detail: 'empty' }] })
+  expect(batch).toEqual({
+    sessions: [],
+    sources: [{ id: 'opencode', ok: true, detail: 'empty', checkedAtMs: NOW, staleAfterMs: 60000 }]
+  })
   expect(opens()).toBe(0)
 })
 
@@ -388,5 +402,77 @@ it('drops only the session whose data is not JSON, and says so', async () => {
   expect(batch.sessions.map((session) => session.key)).toEqual(['opencode:ses_root'])
   expect(batch.sources).toEqual([
     { id: 'opencode', ok: false, detail: 'OpenCode session data could not be read' }
+  ])
+})
+
+it('keeps process-backed reads for OpenCode 2 schemas without live idle state', async () => {
+  const { io, root } = setup(workingSession)
+  const readOpencode = io.readOpencode
+  io.readOpencode = (path, read) =>
+    readOpencode(path, (query) =>
+      read((statement, ...bindings) =>
+        statement === 'schemaVersion'
+          ? [{ name: 'session_v2', has_model: 0, has_live_state: 0 }]
+          : query(statement, ...bindings)
+      )
+    )
+
+  const batch = await collectOpencode(root, io, undefined, NOW, 'darwin')
+  expect(batch.sources[0]).toMatchObject({ ok: true, detail: 'live' })
+  expect(batch.sessions).toMatchObject([{ sessionId: 'ses_root', pid: 42, activity: 'running' }])
+})
+
+it('keeps Windows V2 model facts without assigning database sessions to a CLI process', async () => {
+  const io = fixtureIo()
+  const root = {
+    id: 'ses_root',
+    parent_id: null,
+    directory: 'C:/Users/dev/repo',
+    title: 'V2 work',
+    time_created: STARTED_AT,
+    time_updated: NOW - 1000,
+    model_provider_id: 'openai',
+    model_id: 'gpt-6.1-sol-fast'
+  }
+  io.readOpencode = async (_path, read) =>
+    read((statement, ...bindings) => {
+      switch (statement) {
+        case 'schemaVersion':
+          return [{ name: 'session_v2', has_model: 1, has_live_state: 1 }]
+        case 'v2RecentRoots':
+          return [root]
+        case 'v2ChildSessions':
+          return bindings[0] === root.id
+            ? [{ ...root, id: 'ses_child', parent_id: root.id, model_id: 'gpt-6.1-sol' }]
+            : []
+        case 'v2NewestMessage':
+          return [{ id: 'msg_live', role: 'assistant', time_created: NOW - 1000 }]
+        case 'v2MessageParts':
+          return [{ type: 'tool', tool: 'read', status: 'running' }]
+        default:
+          return []
+      }
+    })
+
+  const batch = await collectOpencode(
+    '/opencode',
+    io,
+    async () => [{ pid: 42, startedAtMs: STARTED_AT, lstart: START, argv: ['opencode.exe'] }],
+    NOW,
+    'win32'
+  )
+  expect(batch.sources[0]).toMatchObject({ ok: true, detail: 'live' })
+  expect(batch.sessions).toMatchObject([
+    {
+      key: 'opencode:ses_root',
+      provider: 'opencode',
+      cwd: 'C:\\Users\\dev\\repo',
+      pid: null,
+      host: 'unknown',
+      selectedModel: { providerId: 'openai', modelId: 'gpt-6.1-sol-fast' },
+      subagents: [
+        { id: 'ses_child', selectedModel: { providerId: 'openai', modelId: 'gpt-6.1-sol' } }
+      ]
+    }
   ])
 })

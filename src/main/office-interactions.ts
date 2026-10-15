@@ -3,6 +3,7 @@ import { parseAgentKey } from '../shared/office/agent-key'
 import { folderKey } from '../bridge/process-folders'
 import { needsHuman } from '../shared/office/attention'
 import { CONTROL_CHARACTER } from '../shared/unsafe-text'
+import { inertTerminalLines } from '../shared/office/observation-terminal'
 import type {
   FocusResult,
   InteractionFailure,
@@ -75,6 +76,7 @@ export class OfficeInteractions {
   private readonly reviews = new Map<string, { fingerprint: string; incarnationId: string }>()
   // Jumps run one at a time, so two quick clicks end on the second agent.
   private lastFocus: Promise<unknown> = Promise.resolve()
+  private peekRevision = 0
 
   constructor(private readonly deps: OfficeInteractionsDeps) {}
 
@@ -130,20 +132,83 @@ export class OfficeInteractions {
   }
 
   async peek(sessionKey: string): Promise<PeekResult> {
-    let lines: string[] = []
+    const requestRevision = ++this.peekRevision
+    const resolvedOwner = this.terminalOwner(sessionKey)
+    const sessionId = this.resolve(sessionKey)?.session.sessionId
+    if (!resolvedOwner || sessionId === undefined) return { ...fail('unknown-session'), lines: [] }
+    const owner = { ...resolvedOwner, sessionId }
+    const capture: Pick<PeekResult, 'lines' | 'capturedAtMs' | 'targetAgentKey' | 'terminal'> = {
+      lines: []
+    }
     let incarnationId = ''
-    const outcome = await this.withTerminal(sessionKey, async (terminal) => {
-      lines = visibleLines(await this.deps.orca.screen(terminal.handle))
+    let fingerprint = ''
+    const outcome = await this.withPane(owner, async (terminal) => {
+      if (!this.sameTerminalOwner(sessionKey, owner)) return fail('unknown-session')
+      const lines = visibleLines(await this.deps.orca.screen(terminal.handle))
+      const currentTerminal = owner.orcaPaneKey
+        ? await this.deps.orca.handleFor(owner.orcaPaneKey)
+        : null
+      const processStartedAtMs = owner.pid === null ? null : await this.deps.processStart(owner.pid)
+      if (
+        processStartedAtMs === null ||
+        processStartedAtMs !== owner.startedAtMs ||
+        !this.sameTerminalOwner(sessionKey, owner)
+      )
+        return fail('unknown-session')
+      if (
+        !currentTerminal ||
+        !paneServes(currentTerminal, owner, this.deps.platform ?? process.platform) ||
+        currentTerminal.handle !== terminal.handle ||
+        currentTerminal.incarnationId !== terminal.incarnationId ||
+        currentTerminal.worktreePath !== terminal.worktreePath ||
+        currentTerminal.agent !== terminal.agent
+      )
+        return fail('terminal-not-found')
+      if (requestRevision !== this.peekRevision) return fail('prompt-changed')
+      if (owner.pid === null || !owner.orcaPaneKey || !terminal.incarnationId)
+        return fail('terminal-not-found')
+      capture.lines = inertTerminalLines(lines)
+      capture.capturedAtMs = Date.now()
+      capture.targetAgentKey = sessionKey
+      capture.terminal = {
+        ownerAgentKey: sessionKey,
+        paneKey: owner.orcaPaneKey,
+        pid: owner.pid,
+        startedAtMs: owner.startedAtMs,
+        incarnationId: terminal.incarnationId
+      }
+      fingerprint = fingerprintOf(lines)
       incarnationId = terminal.incarnationId
       return { success: true }
     })
     // Only a session can be answered, so only a session's peek is a review.
-    if (!outcome.success || !this.session(sessionKey)) return { ...outcome, lines }
-    const fingerprint = fingerprintOf(lines)
+    if (!outcome.success) return { ...outcome, lines: [] }
+    if (!this.session(sessionKey)) return { ...outcome, ...capture }
     const live = new Set(this.deps.snapshot()?.sessions.map((s) => s.key))
     for (const key of this.reviews.keys()) if (!live.has(key)) this.reviews.delete(key)
     this.reviews.set(sessionKey, { fingerprint, incarnationId })
-    return { ...outcome, lines, fingerprint }
+    return { ...outcome, ...capture, fingerprint }
+  }
+
+  private sameTerminalOwner(
+    agentKey: string,
+    owner: PaneOwner & Pick<SessionRef, 'sessionId'>
+  ): boolean {
+    const current = this.terminalOwner(agentKey)
+    const fields = [
+      'provider',
+      'cwd',
+      'projectRoot',
+      'host',
+      'pid',
+      'startedAtMs',
+      'orcaPaneKey'
+    ] as const
+    return (
+      current !== null &&
+      this.resolve(agentKey)?.session.sessionId === owner.sessionId &&
+      fields.every((field) => current[field] === owner[field])
+    )
   }
 
   async start(projectKey: string, provider: ProviderId): Promise<InteractionResult> {
@@ -250,9 +315,9 @@ export class OfficeInteractions {
     if (owner.host !== 'orca' || !owner.orcaPaneKey) return fail('not-in-orca')
     // The snapshot is a few seconds old: the agent may have exited, or its pid been reused.
     // A dead process is refused outright, so a missing start time can never equal "no process".
-    const startedAtMs = owner.pid === null ? null : await this.deps.processStart(owner.pid)
-    if (startedAtMs === null || startedAtMs !== owner.startedAtMs) return fail('unknown-session')
     try {
+      const startedAtMs = owner.pid === null ? null : await this.deps.processStart(owner.pid)
+      if (startedAtMs === null || startedAtMs !== owner.startedAtMs) return fail('unknown-session')
       const terminal = await this.deps.orca.handleFor(owner.orcaPaneKey)
       if (!terminal || !paneServes(terminal, owner, this.deps.platform ?? process.platform))
         return fail('terminal-not-found')

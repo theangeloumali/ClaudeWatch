@@ -1,9 +1,11 @@
 import { useMemo } from 'react'
 import { DoubleSide } from 'three'
-import { doorSignPlacement, DESK_REACH } from '../logic/room-layout'
+import { doorSignPlacement } from '../logic/room-layout'
 import { signTexture } from '../scene/textures'
 import { Matte } from '../scene/InstancedParts'
 import { EDO } from './palettes'
+import { EDO_DESK_PARTS } from './edo-computer-parts'
+import { Parts } from './parts'
 import { Batch, Box, Cylinder, Lantern } from './primitives'
 import type { DeskProps, FloorProps, RoomProps } from './types'
 
@@ -46,16 +48,7 @@ export function EdoDoorway({ room }: RoomProps) {
 export function EdoDesk({ slot }: DeskProps) {
   return (
     <group position={[slot.x, 0, slot.z]} rotation={[0, slot.heading, 0]}>
-      <Box at={[0, 0.44, DESK_REACH]} size={[1.2, 0.09, 0.65]} color={EDO.wood} />
-      <Batch
-        color={EDO.wood}
-        points={[-0.45, 0.45].map((x) => ({ x, y: 0.21, z: DESK_REACH, rotationY: 0 }))}
-      >
-        <boxGeometry args={[0.1, 0.42, 0.5]} />
-      </Batch>
-      <Box at={[0, 0.66, DESK_REACH + 0.08]} size={[0.42, 0.35, 0.32]} color={EDO.brass} />
-      <Box at={[0, 0.66, DESK_REACH - 0.09]} size={[0.33, 0.25, 0.015]} color={EDO.copper} glow />
-      <Box at={[0, 0.495, DESK_REACH - 0.18]} size={[0.34, 0.025, 0.13]} color={EDO.ink} />
+      <Parts parts={EDO_DESK_PARTS} />
     </group>
   )
 }

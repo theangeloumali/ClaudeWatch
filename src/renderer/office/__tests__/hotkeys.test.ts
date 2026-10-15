@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { commandForKey, type KeyInput } from '../logic/hotkeys'
+import { commandForKey, inspectorOwnsKeyboard, keyInputFrom, type KeyInput } from '../logic/hotkeys'
 
 function key(value: string, overrides: Partial<KeyInput> = {}): KeyInput {
   return {
@@ -80,5 +80,39 @@ describe('commandForKey for the settings', () => {
     expect(commandForKey(key(','))).toEqual({ type: 'toggle-settings' })
     expect(commandForKey(key(','), true)).toEqual({ type: 'toggle-settings' })
     expect(commandForKey(key(',', { isTargetEditable: true }))).toBeNull()
+  })
+})
+
+describe('camera keyboard ownership', () => {
+  it('leaves textarea tilt and yaw keys alone', () => {
+    const field = document.createElement('textarea')
+    document.body.append(field)
+    for (const value of ['PageUp', 'PageDown', 'q', 'e']) {
+      const event = new KeyboardEvent('keydown', { key: value })
+      Object.defineProperty(event, 'target', { value: field })
+      expect(commandForKey(keyInputFrom(event))).toBeNull()
+    }
+    field.remove()
+  })
+
+  it('blocks global hotkeys while a modal owns focus', () => {
+    const dialog = document.createElement('div')
+    dialog.setAttribute('role', 'dialog')
+    dialog.setAttribute('aria-modal', 'true')
+    document.body.append(dialog)
+    expect(inspectorOwnsKeyboard(new KeyboardEvent('keydown', { key: 'PageUp' }))).toBe(true)
+    dialog.remove()
+  })
+
+  it('does not take PageDown from a List view row', () => {
+    const list = document.createElement('div')
+    list.setAttribute('data-camera-guard', '')
+    const row = document.createElement('button')
+    list.append(row)
+    document.body.append(list)
+    const event = new KeyboardEvent('keydown', { key: 'PageDown' })
+    Object.defineProperty(event, 'target', { value: row })
+    expect(commandForKey(keyInputFrom(event))).toBeNull()
+    list.remove()
   })
 })

@@ -14,7 +14,7 @@ import { UNSAFE_IN_A_NAME } from '../shared/unsafe-text'
 import { consoleRootScript, PROCESS_LIST_SCRIPT } from '../shared/windows-console'
 import { creationTicksScript } from './liveness'
 import {
-  OPENCODE_STATEMENTS,
+  OPENCODE_READ_STATEMENTS,
   OpencodeDbError,
   type OpencodeQuery,
   readOpencodeDb
@@ -179,7 +179,7 @@ function readOpencode<Result>(target: string, read: (query: OpencodeQuery) => Re
   if (basename(target) !== OPENCODE_DATABASE) throw forbidden('database')
   return readOpencodeDb(target, (run) =>
     read((statement, ...values) => {
-      if (!Object.hasOwn(OPENCODE_STATEMENTS, statement)) throw forbidden('statement')
+      if (!Object.hasOwn(OPENCODE_READ_STATEMENTS, statement)) throw forbidden('statement')
       return run(statement, ...values)
     })
   )

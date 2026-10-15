@@ -1,20 +1,23 @@
-import { CameraControlsImpl, Html } from '@react-three/drei'
+import { CameraControlsImpl } from '@react-three/drei'
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Vector3, type Group } from 'three'
 import type { AgentView } from '../../../shared/office/types'
-import { ISO_START_AZIMUTH } from '../logic/camera-bands'
+import { placeBody, PLAYER_BODY_RADIUS } from '../../../shared/office/body-footprints'
+import type { SceneBodies } from '../scene/BodySpace'
+import { ISO_POLAR, ISO_START_AZIMUTH } from '../logic/camera-bands'
+import { hudSafeInsets, type InspectorLayout } from '../logic/hud-layout'
 import { projectToScreen, screenAxes } from '../logic/zone-framing'
 import type { FloorGeometry } from '../scene-model'
 import { BEFORE_CONTROLS } from '../scene/use-camera-gestures'
 import { isStillClick, trackPress } from '../scene/ZonePickers'
 import type { Rect } from '../themes/lot-math'
 import { GROUND_Y } from '../themes/surroundings'
-import type { ThemePalette } from '../themes/types'
+import type { OfficeTheme, ThemePalette } from '../themes/types'
 import { followStep } from './camera-follow'
 import { playerGeometry } from './figure'
-import { TalkPrompt } from './TalkPrompt'
 import { groundHeight, walkGround, walkPath } from './walk-ground'
+import { sendPlayerToFloor } from './player-floor-routes'
 import { listenForWalkKeys } from './walk-keys'
 import { agentInReach, MAX_FRAME_SEC, sendPlayer, tickPlayer, type Player } from './walking'
 
@@ -22,14 +25,21 @@ interface PlayerLayerProps {
   player: Player
   isWalking: boolean
   floor: FloorGeometry
+  allFloors?: readonly FloorGeometry[]
   // Everything that stands on the ground: the town's lots and the plots of the belt.
   solids: readonly Rect[]
   // How far the player may be sent: the town's extent, or the floor's own without a town.
   extent: Rect
   agents: readonly AgentView[]
   palette: ThemePalette
+  geometryFactory?: OfficeTheme['playerGeometry']
   isReducedMotion: boolean
   onSelectAgent: (agentKey: string) => void
+  isCameraManuallyOwned?: boolean
+  hasInspector?: boolean
+  inspectorLayout?: InspectorLayout
+  onNearAgent?: (agentKey: string | null) => void
+  bodies?: SceneBodies
 }
 
 const FLAT = -Math.PI / 2
@@ -38,8 +48,6 @@ const PLATE_PICK_Y = 0.01
 const TURN_PER_SEC = 14
 const STRIDE_M = 0.7
 const BOB_M = 0.05
-// Above the agent's name card, which the prompt must not cover.
-const PROMPT_Y = 3.7
 // The first frame of a walk reports the idle gap before it: it is walked as one display frame.
 const FIRST_FRAME_SEC = 1 / 60
 const CAMERA_INPUTS = ['pointerdown', 'wheel'] as const
@@ -61,26 +69,81 @@ export function PlayerLayer(props: PlayerLayerProps) {
   const isFollowingRef = useRef(false)
   const target = useMemo(() => new Vector3(), [])
   const ground = useMemo(() => walkGround(floor, solids, extent), [floor, solids, extent])
-  const geometry = useMemo(() => playerGeometry(palette), [palette])
+  const grounds = useMemo(
+    () =>
+      new Map(
+        (props.allFloors ?? []).map((surface) => [
+          surface.floorId,
+          walkGround(
+            surface,
+            (surface.elevation ?? 0) === 0 ? solids : [],
+            (surface.elevation ?? 0) === 0 ? extent : surface
+          )
+        ])
+      ),
+    [props.allFloors, solids, extent]
+  )
+  const hasPlacedRef = useRef(false)
+  const physicalGround = () => {
+    const physical = grounds.get(player.physicalFloorId ?? '')
+    if (physical) return physical
+    const groundFloor = props.allFloors?.find((surface) => (surface.elevation ?? 0) === 0)
+    return (groundFloor && grounds.get(groundFloor.floorId)) || ground
+  }
+  const playerHeight = () =>
+    player.elevation ?? groundHeight(latestRef.current.floor, player.position)
+  const geometryFactory = props.geometryFactory ?? playerGeometry
+  const geometry = useMemo(() => geometryFactory(palette), [palette, geometryFactory])
   useEffect(() => () => geometry.dispose(), [geometry])
   const [nearAgent, setNearAgent] = useState<AgentView | null>(null)
   const latest = { ...props, nearAgent }
   const latestRef = useRef(latest)
   latestRef.current = latest
+  useEffect(() => {
+    props.onNearAgent?.(nearAgent?.agentKey ?? null)
+  }, [nearAgent?.agentKey, props.onNearAgent])
 
   const place = (heading: number, lift: number): void => {
     const figure = figureRef.current
     if (!figure) return
     const { x, z } = player.position
-    figure.position.set(x, groundHeight(latestRef.current.floor, player.position) + lift, z)
+    figure.position.set(x, playerHeight() + lift, z)
     figure.rotation.y = heading
   }
 
   useLayoutEffect(() => {
+    const position = hasPlacedRef.current
+      ? null
+      : placeBody({
+          body: {
+            id: 'owner-player',
+            ...player.position,
+            elevation: player.elevation,
+            radius: PLAYER_BODY_RADIUS
+          },
+          obstacles: props.bodies?.all() ?? [],
+          isOpen: physicalGround().isOpen
+        })
+    if (position) player.position = position
+    hasPlacedRef.current = true
+    props.bodies?.set({
+      id: 'owner-player',
+      ...player.position,
+      elevation: player.elevation,
+      connectorId: player.connectorId,
+      radius: PLAYER_BODY_RADIUS
+    })
     place(player.heading, 0)
     invalidate()
     // `floor` is here so it is placed again when the floor re-packs under it.
-  }, [player, floor, invalidate])
+  }, [player, floor, invalidate, props.bodies, ground])
+  useEffect(
+    () => () => {
+      props.bodies?.remove('owner-player')
+      props.onNearAgent?.(null)
+    },
+    [props.bodies, props.onNearAgent]
+  )
 
   useEffect(() => {
     player.onGoal = invalidate
@@ -91,9 +154,11 @@ export function PlayerLayer(props: PlayerLayerProps) {
 
   useEffect(() => {
     if (!isWalking) {
-      // Walking off: it stands where it was left.
-      player.path = []
+      // A committed connector transfer lands safely even after control is released.
+      if (!player.path.some((point) => point.connectorId)) player.path = []
+      player.held.clear()
       player.goal = null
+      isFollowingRef.current = false
       return
     }
     const stopFollowing = (): void => {
@@ -122,24 +187,36 @@ export function PlayerLayer(props: PlayerLayerProps) {
 
   // Agents walk too: one that comes up to a standing player is offered as well.
   useEffect(() => {
-    setNearAgent(isWalking ? agentInReach(player.position, agents) : null)
+    setNearAgent(
+      isWalking ? agentInReach({ ...player.position, elevation: player.elevation }, agents) : null
+    )
   }, [isWalking, agents, player])
 
   useFrame((state, deltaSec) => {
     const { isReducedMotion } = latestRef.current
-    if (!latestRef.current.isWalking) return
+    if (latestRef.current.isCameraManuallyOwned) isFollowingRef.current = false
+    if (!latestRef.current.isWalking && !player.path.some((point) => point.connectorId)) return
+    const activeGround = physicalGround()
     if (player.goal) {
-      player.path = walkPath(ground, player.position, player.goal).slice(1)
+      player.path = walkPath(activeGround, player.position, player.goal).slice(1)
       player.goal = null
     }
     const controls = state.controls instanceof CameraControlsImpl ? state.controls : null
     const azimuth = controls?.azimuthAngle ?? ISO_START_AZIMUTH
+    const polar = controls?.polarAngle ?? ISO_POLAR
     const before = player.position
     const frameSec = Math.min(deltaSec, wasMovingRef.current ? MAX_FRAME_SEC : FIRST_FRAME_SEC)
-    const hasMoved = tickPlayer(player, ground, frameSec, azimuth)
+    const hasMoved = tickPlayer(player, activeGround, frameSec, azimuth, props.bodies?.all() ?? [])
+    props.bodies?.set({
+      id: 'owner-player',
+      ...player.position,
+      elevation: player.elevation,
+      connectorId: player.connectorId,
+      radius: PLAYER_BODY_RADIUS
+    })
     const figure = figureRef.current
     if (hasMoved) {
-      isFollowingRef.current = true
+      if (!latestRef.current.isCameraManuallyOwned) isFollowingRef.current = true
       strideRef.current += Math.hypot(player.position.x - before.x, player.position.z - before.z)
       if (isReducedMotion || !figure) place(player.heading, 0)
       else
@@ -147,7 +224,10 @@ export function PlayerLayer(props: PlayerLayerProps) {
           turnToward(figure.rotation.y, player.heading, frameSec * TURN_PER_SEC),
           Math.abs(Math.sin((strideRef.current / STRIDE_M) * Math.PI)) * BOB_M
         )
-      const beside = agentInReach(player.position, latestRef.current.agents)
+      const beside = agentInReach(
+        { ...player.position, elevation: player.elevation },
+        latestRef.current.agents
+      )
       if (beside?.agentKey !== latestRef.current.nearAgent?.agentKey) setNearAgent(beside)
     } else if (strideRef.current !== 0) {
       // The frame after the last step: drop the bob and finish the turn.
@@ -162,19 +242,24 @@ export function PlayerLayer(props: PlayerLayerProps) {
         onScreen: projectToScreen(
           {
             x: player.position.x,
-            y: groundHeight(latestRef.current.floor, player.position),
+            y: playerHeight(),
             z: player.position.z
           },
-          { target: [target.x, target.y, target.z], zoom, azimuth },
+          { target: [target.x, target.y, target.z], zoom, azimuth, polar },
           state.size
         ),
         viewport: state.size,
         zoom,
         deltaSec: frameSec,
-        isReducedMotion
+        isReducedMotion,
+        isCameraManuallyOwned: latestRef.current.isCameraManuallyOwned,
+        insets: hudSafeInsets(
+          latestRef.current.hasInspector ?? false,
+          latestRef.current.inspectorLayout
+        )
       })
       if (step.right !== 0 || step.down !== 0) {
-        const axes = screenAxes(azimuth)
+        const axes = screenAxes(azimuth, polar)
         void controls.moveTo(
           target.x + axes.right[0] * step.right - axes.up[0] * step.down,
           target.y + axes.right[1] * step.right - axes.up[1] * step.down,
@@ -193,7 +278,18 @@ export function PlayerLayer(props: PlayerLayerProps) {
   const walkHere = (event: ThreeEvent<MouseEvent>): void => {
     if (!isStillClick(event)) return
     event.stopPropagation()
-    sendPlayer(player, event.point)
+    if (
+      props.allFloors &&
+      player.physicalFloorId !== floor.floorId &&
+      Math.abs(event.point.y - (floor.elevation ?? 0)) < 0.1
+    ) {
+      sendPlayerToFloor(player, {
+        fromFloor: props.allFloors.find((surface) => surface.floorId === player.physicalFloorId),
+        toFloor: floor,
+        destination: event.point,
+        allFloors: props.allFloors
+      })
+    } else if (!player.path.some((point) => point.connectorId)) sendPlayer(player, event.point)
   }
   const plate = { x: floor.x, z: floor.z }
   return (
@@ -215,7 +311,7 @@ export function PlayerLayer(props: PlayerLayerProps) {
             <meshBasicMaterial visible={false} />
           </mesh>
           <mesh
-            position={[plate.x, PLATE_PICK_Y, plate.z]}
+            position={[plate.x, (floor.elevation ?? 0) + PLATE_PICK_Y, plate.z]}
             rotation={[FLAT, 0, 0]}
             onPointerDown={trackPress}
             onClick={walkHere}
@@ -224,11 +320,6 @@ export function PlayerLayer(props: PlayerLayerProps) {
             <meshBasicMaterial visible={false} />
           </mesh>
         </>
-      )}
-      {nearAgent && (
-        <Html position={[nearAgent.x, PROMPT_Y, nearAgent.z]} center zIndexRange={[20, 0]}>
-          <TalkPrompt label={nearAgent.label} />
-        </Html>
       )}
     </>
   )

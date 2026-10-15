@@ -10,6 +10,7 @@ export type OfficeCommand =
   | { type: 'focus-terminal' }
   | { type: 'company-number'; number: number }
   | { type: 'rotate'; direction: -1 | 1 }
+  | { type: 'tilt'; direction: -1 | 1 }
   | { type: 'zoom'; direction: ZoomDirection }
   | { type: 'fly-to-selected' }
   | { type: 'toggle-walk' }
@@ -21,6 +22,7 @@ export interface KeyInput {
   isTargetEditable: boolean
   // A focused button or link owns Enter, so it must not also fly the camera.
   isTargetInteractive: boolean
+  isCameraBlocked?: boolean
 }
 
 // The keycaps the HUD shows for walking: the switch, and speaking to the agent beside the player.
@@ -40,6 +42,8 @@ const FIXED_COMMANDS: Record<string, OfficeCommand> = {
   g: { type: 'toggle-walk' },
   q: { type: 'rotate', direction: -1 },
   e: { type: 'rotate', direction: 1 },
+  pageup: { type: 'tilt', direction: 1 },
+  pagedown: { type: 'tilt', direction: -1 },
   '-': { type: 'zoom', direction: 'out' },
   '=': { type: 'zoom', direction: 'in' },
   '+': { type: 'zoom', direction: 'in' },
@@ -54,6 +58,8 @@ export function commandForKey(
   hasPlayer = true
 ): OfficeCommand | null {
   if (input.hasModifier || input.isTargetEditable) return null
+  if (input.isCameraBlocked && /^(q|e|pageup|pagedown|-|=|\+|enter|[1-9])$/i.test(input.key))
+    return null
   if (isWalking && walkKey(input.key)) return null
   if (input.key === 'Enter') return input.isTargetInteractive ? null : { type: 'fly-to-selected' }
   if (/^[1-9]$/.test(input.key)) return { type: 'company-number', number: Number(input.key) }
@@ -67,8 +73,19 @@ export function keyInputFrom(event: KeyboardEvent): KeyInput {
     key: event.key,
     hasModifier: event.metaKey || event.ctrlKey || event.altKey,
     isTargetEditable: Boolean(target?.closest('input, textarea, select, [contenteditable="true"]')),
-    isTargetInteractive: Boolean(target?.closest('button, a[href], summary'))
+    isTargetInteractive: Boolean(target?.closest('button, a[href], summary')),
+    isCameraBlocked:
+      Boolean(document.querySelector('[data-camera-guard]')) || isInsideScroller(event.target)
   }
+}
+
+export function inspectorOwnsKeyboard(event: Pick<Event, 'target'>): boolean {
+  const target = event.target instanceof Element ? event.target : null
+  return Boolean(
+    document.querySelector(
+      '[data-inspector-expanded="true"], [aria-modal="true"]:not([hidden]):not([aria-hidden="true"]), dialog[open]'
+    ) || target?.closest('[data-inspector-resizer]')
+  )
 }
 
 const SCROLLING_OVERFLOW = new Set(['auto', 'scroll'])

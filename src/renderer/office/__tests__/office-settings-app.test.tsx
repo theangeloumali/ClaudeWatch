@@ -65,13 +65,16 @@ it('stops walking when the player is switched off, and does not resume when it i
   fireEvent.click(screen.getByRole('button', { name: /^Settings/ }))
   fireEvent.click(screen.getByRole('switch', { name: 'Your character' }))
   expect(screen.getByText('Scene is standing')).toBeInTheDocument()
-  expect(screen.queryByRole('button', { name: /Walk/ })).toBeNull()
+  expect(screen.getByRole('button', { name: 'Enable player' })).toBeInTheDocument()
   // Its key is gone with it.
   fireEvent.keyDown(window, { key: 'g' })
   expect(screen.getByText('Scene is standing')).toBeInTheDocument()
 
   fireEvent.click(screen.getByRole('switch', { name: 'Your character' }))
-  expect(screen.getByRole('button', { name: /Walk/ })).toHaveAttribute('aria-pressed', 'false')
+  expect(screen.getByRole('button', { name: /Control player/ })).toHaveAttribute(
+    'aria-pressed',
+    'false'
+  )
   expect(screen.getByText('Scene is standing')).toBeInTheDocument()
 })
 
@@ -87,5 +90,5 @@ it('starts from the choices saved before the restart', async () => {
   act(() => officeSettings.set('player', false))
   render(<OfficeApp feed={feed()} />)
   await screen.findByText('Scene is standing')
-  expect(screen.queryByRole('button', { name: /Walk/ })).toBeNull()
+  expect(screen.getByRole('button', { name: 'Enable player' })).toBeInTheDocument()
 })

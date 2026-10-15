@@ -1,10 +1,13 @@
 import { brassWorkshop, neoEdoSteam } from './builtins'
+import { corporateCity } from './corporate-city'
+import { cyberpunkCity } from './cyberpunk-city'
+import { samuraiEmpire } from './samurai-empire'
 import { orbitalGarrison } from './orbital-garrison'
 import { quietGrove } from './quiet-grove'
 import type { OfficeTheme, RosterAgent, RosterEntry } from './types'
 import { violetCourt } from './violet-court'
 
-export const DEFAULT_THEME_ID = 'neo-edo-steam'
+export const DEFAULT_THEME_ID = 'corporate-city'
 const themes = new Map<string, OfficeTheme>()
 
 export function registerTheme(theme: OfficeTheme): void {
@@ -17,6 +20,9 @@ registerTheme(brassWorkshop)
 registerTheme(violetCourt)
 registerTheme(orbitalGarrison)
 registerTheme(quietGrove)
+registerTheme(samuraiEmpire)
+registerTheme(cyberpunkCity)
+registerTheme(corporateCity)
 
 export function getTheme(id: string): OfficeTheme {
   return themes.get(id) ?? neoEdoSteam

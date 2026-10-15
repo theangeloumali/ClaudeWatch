@@ -13,6 +13,7 @@ import OfficeScene from './OfficeScene'
 // Each layer is stood in for by a marker, so what the scene mounts can be read off the page.
 // The lights and the background are three.js elements, which the DOM cannot draw.
 vi.mock('@react-three/fiber', () => ({
+  useFrame: () => undefined,
   Canvas: ({ children }: { children?: ReactNode }) => (
     <div>
       {Children.toArray(children).filter(
@@ -26,6 +27,7 @@ vi.mock('./BatchedScene', () => ({
 }))
 vi.mock('./Horizon', () => ({ Horizon: () => <i data-layer="ground" /> }))
 vi.mock('./FloorView', () => ({ FloorView: () => <i data-layer="floor" /> }))
+vi.mock('./BuildingWindows', () => ({ BuildingWindows: () => null }))
 vi.mock('./Robot', () => ({
   RobotCrew: ({ agents }: { agents: readonly unknown[] }) => (
     <i data-layer="agents" data-count={agents.length} />
@@ -40,9 +42,17 @@ vi.mock('../town/TownView', async (original) => ({
   ),
   TownAmbient: ({ share }: { share: number }) => <i data-layer="ambient" data-share={share} />
 }))
-vi.mock('./ZonePickers', () => ({ ZonePickers: () => <i data-layer="pickers" /> }))
-vi.mock('./CardProjector', () => ({ CardProjector: () => <i data-layer="cards" /> }))
+vi.mock('./ZonePickers', async (original) => ({
+  ...(await original<typeof import('./ZonePickers')>()),
+  ZonePickers: () => <i data-layer="pickers" />
+}))
+vi.mock('./CardProjector', () => ({
+  CardProjector: () => <i data-layer="cards" />,
+  OFFSCREEN: 'translate(-10000px, -10000px)'
+}))
 vi.mock('./NameCards', () => ({ NameCardLayer: () => null }))
+vi.mock('./OfficeNames', () => ({ OfficeNameLayer: () => null, OfficeNameProjector: () => null }))
+vi.mock('./WorkstationScreens', () => ({ WorkstationScreens: () => null }))
 vi.mock('./CameraRig', () => ({
   CameraRig: ({ scene }: { scene: object }) => (
     <i data-layer="camera" data-scene={JSON.stringify(scene)} />
@@ -120,9 +130,59 @@ function mount(off: readonly OfficeSettingKey[] = []) {
 }
 
 const TOWN = ['roads', 'town', 'tower', 'ambient']
+
+it('renders real agents on all three usable storeys in the same canvas', () => {
+  const allFloors = [0, 5.5, 11].map((elevation, index) => ({
+    ...floor,
+    floorId: `building:one:${index + 1}`,
+    elevation,
+    buildingId: 'building:one',
+    floorNumber: index + 1
+  }))
+  const allAgents = allFloors.map((surface, index) =>
+    makeAgent({
+      agentKey: `claude:floor-${index}`,
+      floorId: surface.floorId,
+      ...{ physicalFloorId: surface.floorId, elevation: surface.elevation }
+    })
+  )
+  const { container } = render(
+    <OfficeScene
+      theme={themeForTeam()}
+      floors={allFloors.map((surface) => ({
+        floorId: surface.floorId,
+        label: surface.label,
+        attentionCount: 0
+      }))}
+      sessions={[]}
+      floor={allFloors[0]}
+      agents={allAgents}
+      {...{ visibleFloors: allFloors }}
+      cards={[]}
+      stacks={[]}
+      selectedAgentKey={null}
+      wallsMode="cutaway"
+      cameraRequest={null}
+      metrics={{ fps: 0, frameMs: 0, drawCalls: 0, triangles: 0 }}
+      onSelectAgent={vi.fn()}
+      onFlyToAgent={vi.fn()}
+      onFlyToZone={vi.fn()}
+      reviewableKeys={new Set()}
+      onReview={vi.fn()}
+      speakingAgentKey={null}
+    />
+  )
+  expect(container.querySelectorAll('[data-layer="floor"]')).toHaveLength(3)
+  const crews = [...container.querySelectorAll('[data-layer="agents"]')]
+  expect(crews).toHaveLength(3)
+  expect(crews.map((crew) => crew.getAttribute('data-count'))).toEqual(['1', '1', '1'])
+  for (const layer of ['camera', 'governor', 'citizens', 'metrics']) {
+    expect(container.querySelectorAll(`[data-layer="${layer}"]`)).toHaveLength(1)
+  }
+  expect(container.querySelectorAll('[data-layer="tower"]')).toHaveLength(0)
+})
 const ALWAYS = ['ground', 'floor', 'agents', 'pickers', 'cards', 'camera', 'governor', 'metrics']
-// The town of a first start: a village, the default size.
-const { plan, green } = townOf(floor, null, 'full', 'village')
+const { plan, green } = townOf(floor, null, 'full', 'city')
 
 it('mounts the whole living world while every switch is on', () => {
   const { layer, layers } = mount()
@@ -149,13 +209,13 @@ it('frames the whole town, to its last road, while the town is on', () => {
   expect(JSON.parse(layer('player')?.dataset.extent ?? '{}')).toEqual(plan.extent)
 })
 
-it('frames and walks the larger town once the owner picks a city', () => {
-  officeSettings.setTownSize('city')
+it('frames and walks the smaller town once the owner picks a village', () => {
+  officeSettings.setTownSize('village')
   const { layer } = mount()
-  const city = townOf(floor, null, 'full', 'city').plan
-  expect(JSON.parse(layer('camera')?.dataset.scene ?? '{}')).toMatchObject(city.extent)
-  expect(JSON.parse(layer('player')?.dataset.extent ?? '{}')).toEqual(city.extent)
-  expect(city.extent.width).toBeGreaterThan(plan.extent.width)
+  const village = townOf(floor, null, 'full', 'village').plan
+  expect(JSON.parse(layer('camera')?.dataset.scene ?? '{}')).toMatchObject(village.extent)
+  expect(JSON.parse(layer('player')?.dataset.extent ?? '{}')).toEqual(village.extent)
+  expect(village.extent.width).toBeLessThan(plan.extent.width)
 })
 
 it('closes the town’s lots and the belt’s plots to the player, and hands the citizens the plan', () => {

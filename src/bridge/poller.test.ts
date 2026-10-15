@@ -80,7 +80,7 @@ it('keeps two-second cadence when collection takes time', async () => {
   stop()
 })
 
-it('posts no patch for a tick that changed nothing, only a keepalive when the feed has been quiet', async () => {
+it('publishes new record observations without advancing the reported activity timestamp', async () => {
   vi.useFakeTimers()
   const entry = registryEntry()
   const io = fixtureIo({ '/claude/sessions/42.json': JSON.stringify(entry), '/repo/.git': null })
@@ -99,14 +99,26 @@ it('posts no patch for a tick that changed nothing, only a keepalive when the fe
   await vi.advanceTimersByTimeAsync(2000)
   expect(messages).toHaveLength(2)
   await vi.advanceTimersByTimeAsync(14_000)
-  expect(messages).toHaveLength(2)
+  expect(messages).toHaveLength(9)
   await vi.advanceTimersByTimeAsync(2000)
-  expect(messages[2]).toEqual({ type: 'patch', v: 1, seq: 10, upserts: [], removed: [] })
+  expect(messages[9]).toMatchObject({
+    type: 'patch',
+    v: 1,
+    seq: 10,
+    removed: [],
+    upserts: [
+      {
+        key: 'claude:a',
+        updatedAtMs: 0,
+        observation: { observedAtMs: Date.now(), coverage: 'own' }
+      }
+    ]
+  })
   // A change is posted by the tick that sees it, under that tick's revision.
   live = false
   await vi.advanceTimersByTimeAsync(2000)
-  expect(messages[3]).toMatchObject({ type: 'patch', seq: 11, removed: ['claude:a'] })
-  expect(messages).toHaveLength(4)
+  expect(messages[10]).toMatchObject({ type: 'patch', seq: 11, removed: ['claude:a'] })
+  expect(messages).toHaveLength(11)
   stop()
 })
 
@@ -286,7 +298,7 @@ it('re-sends a session for its token counters at most every ten seconds', async 
     const patch = messages.length > posted ? messages.at(-1) : undefined
     outputs.push(patch?.type === 'patch' ? patch.upserts[0]?.usage?.own.output : undefined)
   }
-  expect(outputs).toEqual([undefined, undefined, undefined, undefined, 51])
+  expect(outputs).toEqual([1, 1, 1, 1, 51])
   stop()
 })
 

@@ -1,0 +1,15 @@
+flowchart TD
+  inputs["Current main + verified functional delta"] --> integration["Integrate + version 1.3.5"]
+  integration --> gates["Tests, runtime and review"]
+  gates --> candidate["Sign, notarize and verify candidate"]
+  candidate --> ship["PR to main, tag, install, publish and verify downloads"]
+  ship --> close["Final evidence and clean close"]
+%% ---
+flowchart TD
+  registry["Registry-proven leads"] -->|live identity| collect["Existing transcript and worker feed"]
+  native["Native process and cwd"] -->|explicit or unique claim| collect
+  collect -->|sessions and live children| sim["Shared snapshot and simulation"]
+  sim -->|frames| app["Native Office"]
+  sim -->|frames| browser["Browser Office"]
+  app -->|same workers| views["Scene, minimap and List"]
+  browser -->|same workers| views

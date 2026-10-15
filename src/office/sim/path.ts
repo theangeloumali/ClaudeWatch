@@ -8,6 +8,8 @@ export interface NavGrid {
   cellSize: number
   origin: Point
   blocked: string[]
+  // Dynamic crowd grids already have a bitmap; static callers retain their string cell keys.
+  blockedCells?: Uint8Array
 }
 
 class Frontier {
@@ -73,10 +75,12 @@ export function findPath(grid: NavGrid, from: Point, to: Point): Point[] {
   const [sx, sz] = cell(from),
     [tx, tz] = cell(to)
   const size = grid.width * grid.height
-  const blocked = new Uint8Array(size)
-  for (const key of grid.blocked) {
-    const [x, z] = key.split(',').map(Number)
-    blocked[z * grid.width + x] = 1
+  const blocked = grid.blockedCells ?? new Uint8Array(size)
+  if (!grid.blockedCells) {
+    for (const key of grid.blocked) {
+      const [x, z] = key.split(',').map(Number)
+      blocked[z * grid.width + x] = 1
+    }
   }
   const valid = (x: number, z: number) =>
     x >= 0 && z >= 0 && x < grid.width && z < grid.height && !blocked[z * grid.width + x]

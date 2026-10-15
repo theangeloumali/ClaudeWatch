@@ -116,6 +116,22 @@ xcode-select --install
 
 ## Quick Start
 
+### Live Office in your browser
+
+Right-click the ClaudeWatch menu-bar icon and choose **Open Office in Browser**.
+Keep the app running: it serves the same live city at `http://127.0.0.1:43127/office.html`
+and opens your default browser through a private, one-use launcher. Opening the plain
+address without that launcher does not authorize access to session data.
+
+This mode is local to this Mac and view-only: it cannot send messages, answer permissions,
+capture terminals or start agents. Browser themes, roof visibility and saved layouts are
+stored separately from the native Office. Reopen through the tray after restarting the app;
+the browser keeps its local choices. If port 43127 is occupied, the app reports it instead
+of closing another program or moving your browser storage to a different address.
+
+Developer builds include the browser assets with `npm run build`. The existing
+`npm run office:preview` remains a separate fixture preview, not a live session view.
+
 ```bash
 # 1. Clone the repository
 git clone <repo-url> ClaudeWatch

@@ -145,8 +145,23 @@ describe('OfficeInteractions agent keys', () => {
 
   it('issues a review only for a key that respond accepts: a session, never a teammate', async () => {
     snapshot.sessions = [session({ subagents: [teammate()] })]
+    const beforeCaptureMs = Date.now()
     const peeked = await interactions.peek('claude:s1#x')
-    expect(peeked).toEqual({ success: true, lines: IDLE_SCREEN })
+    expect(peeked).toEqual({
+      success: true,
+      lines: IDLE_SCREEN,
+      capturedAtMs: expect.any(Number),
+      targetAgentKey: 'claude:s1#x',
+      terminal: {
+        ownerAgentKey: 'claude:s1#x',
+        paneKey: 'tab2:leaf2',
+        pid: snapshot.sessions[0].subagents[0].pid,
+        startedAtMs: snapshot.sessions[0].subagents[0].startedAtMs,
+        incarnationId: expect.any(String)
+      }
+    })
+    expect(peeked.capturedAtMs).toBeGreaterThanOrEqual(beforeCaptureMs)
+    expect(peeked.capturedAtMs).toBeLessThanOrEqual(Date.now())
     expect((await interactions.peek('claude:s1')).fingerprint).toMatch(/^[0-9a-f]{64}$/)
   })
 

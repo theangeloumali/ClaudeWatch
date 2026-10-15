@@ -1,8 +1,16 @@
-import type { AgentView, FeedMessage, SessionRef } from '../../shared/office/types'
+import type { AgentView, FeedMessage, SessionRef, SourceHealth } from '../../shared/office/types'
 import { clamp } from '../../shared/range'
+import { BodyPassages } from '../../shared/office/body-passages'
+import {
+  bodyStep,
+  bodyFits,
+  placeBody,
+  SUBAGENT_BODY_RADIUS,
+  WORKER_BODY_RADIUS,
+  type BodyFootprint
+} from '../../shared/office/body-footprints'
 import {
   createAgent,
-  goToLounge,
   leaveAgent,
   returnToDesk,
   setFinished,
@@ -11,27 +19,52 @@ import {
   type AgentRecord
 } from './behaviour'
 import { buildLayout, type LayoutMap, type LoungeLayout } from './layout'
-import { loungeSeats, loungesByRoom } from './lounge'
-import { PathCache } from './navigation'
-import type { Point } from './path'
+import { loungesByRoom } from './lounge'
+import type { PathCache } from './navigation'
+import { MovementRecovery } from './movement-recovery'
 import { placements } from './placements'
+import { FloorRoutes, floorElevation, floorEntrance } from './world-floor-routes'
+import { VenueBookings, type WorldVenue } from './world-venues'
+import { reconcileLeisure } from './world-leisure'
+import {
+  recoverWorkerRoute,
+  resumeUnseatedWorker,
+  relayoutWorker,
+  waitsForMovingBody,
+  workerNavigation
+} from './worker-navigation'
+export type { WorldVenue } from './world-venues'
 
-// A walker can stand outside a floor that shrank, where the grid has no way: it then walks
-// straight there, so it is never left behind and never jumps.
-function wayTo(paths: PathCache, from: Point, to: Point): Point[] {
-  const path = paths.get(from, to)
-  return path.length ? path : [from, to].map(({ x, z }) => ({ x, z }))
+function agentBody(view: AgentView): BodyFootprint {
+  return {
+    id: view.agentKey,
+    x: view.x,
+    z: view.z,
+    elevation: view.elevation ?? 0,
+    connectorId:
+      'connectorId' in view && typeof view.connectorId === 'string' ? view.connectorId : undefined,
+    radius: view.isSubagent ? SUBAGENT_BODY_RADIUS : WORKER_BODY_RADIUS
+  }
 }
 
-const NO_LOUNGES: ReadonlyMap<string, LoungeLayout> = new Map()
-
 export class World {
+  private readonly routes = new FloorRoutes()
+  private readonly venueBookings = new VenueBookings()
+  private readonly connectorOccupants = new Map<string, string>()
+  private baseline: LayoutMap = { version: 1, floors: [], reservations: {} }
+  private sources: readonly SourceHealth[] = []
+  private nowMs = 0
   private sessions = new Map<string, SessionRef>()
   private agents = new Map<string, AgentRecord>()
+  private arrivals = new Map<string, AgentRecord>()
+  private bodyObstacles: readonly BodyFootprint[] = []
+  private departurePaths = new Map<string, PathCache>()
+  private readonly recovery = new MovementRecovery()
+  private readonly passages = new BodyPassages()
+  private movementTick = 0
   private map: LayoutMap = { version: 1, floors: [], reservations: {} }
   // From storage: read for order and bays by the first build, never walked on.
   private savedMap: LayoutMap | undefined
-  private paths: PathCache | null = null
   // The floor `paths` and `lounges` were made for.
   private floorJson = ''
   private lounges = new Map<string, LoungeLayout>()
@@ -42,12 +75,21 @@ export class World {
   private hasLoungeTrips: boolean
 
   // `loungeTrips: false` keeps finished agents at their desks.
-  constructor(options: { saved?: LayoutMap; loungeTrips?: boolean } = {}) {
+  constructor(
+    private readonly options: {
+      saved?: LayoutMap
+      loungeTrips?: boolean
+      resolveLayout?: (baseLayout: LayoutMap, sessions: readonly SessionRef[]) => LayoutMap
+      getVenueTargets?: () => readonly WorldVenue[]
+      now?: () => number
+    } = {}
+  ) {
     this.hasLoungeTrips = options.loungeTrips ?? true
     this.savedMap = options.saved && structuredClone(options.saved)
   }
 
   apply(message: FeedMessage): void {
+    this.syncClock()
     if (message.type === 'resync') {
       this.ready = false
       return
@@ -68,50 +110,117 @@ export class World {
       for (const session of message.upserts) sessions.set(session.key, structuredClone(session))
       sequence = message.seq
     }
+    this.reconcile(sessions, message.type === 'hello' && this.sequence === -1)
+    this.helloRevision = helloRevision
+    this.sequence = sequence
+    this.ready = true
+    this.sources =
+      message.type === 'hello'
+        ? structuredClone(message.snapshot.sources)
+        : structuredClone(message.sources ?? this.sources)
+    if (message.type === 'hello') this.nowMs = Math.max(this.nowMs, message.snapshot.generatedAtMs)
+    this.seatLounges()
+  }
+
+  refreshLayout(): void {
+    this.syncClock()
+    this.reconcile(this.sessions, false)
+    this.seatLounges()
+  }
+
+  baseLayout(): LayoutMap {
+    return structuredClone(this.baseline)
+  }
+
+  private syncClock(): void {
+    const current = this.options.now?.()
+    if (current !== undefined && Number.isFinite(current))
+      this.nowMs = Math.max(this.nowMs, current)
+  }
+
+  private reconcile(sessions: Map<string, SessionRef>, isInitial: boolean): void {
     const oldMap = this.map
-    const map = buildLayout([...sessions.values()], this.savedMap ?? this.map)
+    const baseline = buildLayout([...sessions.values()], this.savedMap ?? this.baseline)
+    const map =
+      this.options.resolveLayout?.(structuredClone(baseline), [...sessions.values()]) ?? baseline
     const held = new Map(
-      [...this.agents]
+      [...this.arrivals, ...this.agents]
         .filter(([, agent]) => agent.state !== 'leaving')
         .map(([key, agent]) => [key, agent.view])
     )
     const desired = placements([...sessions.values()], map, held)
     this.sessions = sessions
     this.map = map
+    this.baseline = baseline
     this.savedMap = undefined
-    this.helloRevision = helloRevision
-    this.sequence = sequence
-    // A patch is applied only once ready, so only a hello changes this.
-    this.ready = true
     // Routes and lounges follow from the floor alone: while it stands as it was, the routes
     // already found are kept rather than searched for again.
-    const floorJson = JSON.stringify(this.map.floors[0])
+    const previousPaths = new Map(
+      oldMap.floors.map((floor) => [floor.id, this.routes.paths(floor.id)])
+    )
+    this.routes.update(
+      this.map,
+      [...this.agents.values()].flatMap((agent) =>
+        agent.view.physicalFloorId ? [agent.view.physicalFloorId] : []
+      )
+    )
+    const floorJson = JSON.stringify(this.map.floors)
     const isSameFloor = floorJson === this.floorJson
-    if (!isSameFloor || !this.paths) {
-      this.paths = new PathCache(this.map.floors[0])
-      this.lounges = loungesByRoom(this.map.floors[0])
+    if (!isSameFloor) {
+      this.lounges = new Map(this.map.floors.flatMap((floor) => [...loungesByRoom(floor)]))
       this.floorJson = floorJson
     }
-    const paths = this.paths
-    const oldPaths =
-      isSameFloor || !oldMap.floors[0]?.zones ? paths : new PathCache(oldMap.floors[0])
     const active = new Set(desired.map((p) => p.session.key))
+    for (const key of this.arrivals.keys()) if (!active.has(key)) this.arrivals.delete(key)
     for (const [key, agent] of this.agents) {
       if (active.has(key) || agent.state === 'leaving') continue
-      const floor = oldMap.floors.find((f) => f.id === agent.view.floorId)!
-      const room = floor.rooms.find((r) => r.id === agent.view.roomId)!
-      const door = room.slots.find((s) => s.id === 'door')!
+      const floor =
+        this.routes.floor(agent.view.physicalFloorId) ??
+        oldMap.floors.find((f) => f.id === agent.view.floorId)
+      if (!floor) continue
+      const oldPaths = previousPaths.get(floor.id) ?? this.routes.paths(floor.id)!
+      const room = floor.rooms.find((r) => r.id === agent.view.roomId)
+      const door = room?.slots.find((s) => s.id === 'door')
       // From the lounge it walks straight out: its office door is not on the way.
       const exit =
         agent.view.place === 'lounge'
           ? oldPaths.get(agent.view, floor.elevator)
-          : oldPaths.via(agent.view, door, floor.elevator)
-      this.agents.set(key, leaveAgent(agent, exit))
+          : door
+            ? oldPaths.via(agent.view, door, floor.elevator)
+            : oldPaths.get(agent.view, floor.elevator)
+      const departure = this.options.resolveLayout
+        ? this.routes.toGround(agent.view, floor, agent.view.place === 'lounge' ? undefined : door)
+        : exit
+      this.agents.set(key, leaveAgent(agent, departure))
+      this.venueBookings.release(key)
+      this.departurePaths.set(key, oldPaths)
+      this.passages.clear(key)
     }
-    const oldRooms = new Map(oldMap.floors[0]?.rooms.map((r) => [r.id, r]))
+    const oldRooms = new Map(
+      oldMap.floors.flatMap((floor) =>
+        floor.rooms.map((room) => [`${floor.id}\n${room.id}`, room] as const)
+      )
+    )
     for (const placement of desired) {
-      const { session, room, slot, floorId, isSubagent, isFinished } = placement
-      const existing = this.agents.get(session.key)
+      const { session, room, slot, floorId, isSubagent } = placement
+      const isFinished =
+        placement.isFinished ||
+        (session.observation?.coverage === 'own' &&
+          (session.attention === 'none' || session.attention === 'done') &&
+          (session.activity === 'idle' || session.attention === 'done'))
+      const floor = this.map.floors.find((candidate) => candidate.id === floorId)!
+      const paths = this.routes.paths(floorId)!
+      const previousAgent = this.agents.get(session.key)
+      const existing =
+        previousAgent && this.options.resolveLayout
+          ? relayoutWorker({
+              agent: previousAgent,
+              previousFloors: oldMap.floors,
+              floors: map.floors
+            })
+          : previousAgent
+      const waiting = this.arrivals.get(session.key)
+      this.departurePaths.delete(session.key)
       if (existing?.view.place === 'lounge') {
         const updated = setFinished(
           updateAgent(existing, session.activity, session.attention),
@@ -124,28 +233,33 @@ export class World {
           slotId: slot.id,
           label: session.name
         })
+        if (!isFinished) this.passages.clear(session.key)
         this.agents.set(
           session.key,
           isFinished
             ? updated
-            : returnToDesk(updated, slot.heading, wayTo(paths, updated.view, slot))
+            : returnToDesk(updated, slot.heading, this.routes.toFloor(updated.view, floor, slot))
         )
         continue
       }
-      const oldSlot = oldRooms.get(room.id)?.slots.find((s) => s.id === slot.id)
+      const oldSlot = oldRooms
+        .get(`${existing?.view.floorId ?? floorId}\n${room.id}`)
+        ?.slots.find((s) => s.id === slot.id)
       if (
         existing &&
         oldSlot &&
         existing.state !== 'leaving' &&
         existing.view.roomId === room.id &&
-        existing.view.slotId === slot.id
+        existing.view.slotId === slot.id &&
+        existing.view.floorId === floorId &&
+        (existing.path.length > 0 || (existing.view.elevation ?? 0) === floorElevation(floor))
       ) {
         const hasSeatMoved = oldSlot.x !== slot.x || oldSlot.z !== slot.z
         const isSeated =
           existing.path.length === 0 &&
           existing.view.x === oldSlot.x &&
           existing.view.z === oldSlot.z
-        if (!hasSeatMoved || isSeated) {
+        if (!hasSeatMoved || (isSeated && !this.options.resolveLayout)) {
           const updated = updateAgent(existing, session.activity, session.attention)
           updated.view.label = session.name
           // Its office slid along with a neighbour that grew: it goes with its desk, seated.
@@ -162,45 +276,167 @@ export class World {
         slotId: slot.id,
         x: slot.x,
         z: slot.z,
-        heading: slot.heading
+        heading: slot.heading,
+        elevation: floorElevation(floor),
+        physicalFloorId: floorId
       }
-      // A robot already on the floor (given another seat, on its way when its seat moved, or
-      // walking out when its session came back) walks from where it stands. Sessions already running when the office opens are
-      // at their desks; only later arrivals walk in from the gate.
-      const route = existing ? wayTo(paths, existing.view, slot) : []
-      const entrance = message.type === 'hello' ? [] : paths.via(elevator, door, slot)
+      // Initial source actors are seated; every later arrival or reassignment walks from its body.
+      const route = existing ? this.routes.toFloor(existing.view, floor, slot) : []
+      const groundStart = {
+        ...destination,
+        ...floorEntrance(floor),
+        elevation: 0,
+        physicalFloorId: null,
+        agentKey: session.key,
+        activity: session.activity,
+        attention: session.attention,
+        provider: session.provider,
+        isSubagent,
+        label: session.name
+      }
+      const entrance = isInitial
+        ? []
+        : this.options.resolveLayout
+          ? this.routes.toFloor(groundStart, floor, slot, door)
+          : paths.via(elevator, door, slot)
       const agent = createAgent(session, destination, route.length ? route : entrance)
+      this.passages.clear(session.key)
+      this.recovery.clear(session.key)
       agent.view.isSubagent = isSubagent
+      if (existing)
+        Object.assign(agent.view, {
+          x: existing.view.x,
+          z: existing.view.z,
+          elevation: existing.view.elevation,
+          physicalFloorId: existing.view.physicalFloorId
+        })
+      if (waiting) {
+        const updated = updateAgent(waiting, session.activity, session.attention)
+        agent.dwellMs = updated.dwellMs
+        agent.queued = updated.queued
+        agent.view.activity = updated.view.activity
+      }
       // A desk that moved does not restart its wait for the lounge.
-      agent.finishedForMs = existing?.finishedForMs ?? null
-      this.agents.set(session.key, setFinished(agent, isFinished))
+      agent.finishedForMs = existing?.finishedForMs ?? waiting?.finishedForMs ?? null
+      if (!existing && !isInitial) {
+        this.arrivals.set(session.key, setFinished(agent, isFinished))
+      } else {
+        this.arrivals.delete(session.key)
+        this.agents.set(session.key, setFinished(agent, isFinished))
+      }
     }
-    this.seatLounges()
+    this.activateArrivals()
+  }
+
+  private bodies(): BodyFootprint[] {
+    return [...this.agents.values()]
+      .map((agent) => agentBody(agent.view))
+      .concat(this.bodyObstacles)
+  }
+
+  private activateArrivals(): void {
+    if (!this.arrivals.size) return
+    const obstacles = this.bodies()
+    const arrivalDistance = (agent: AgentRecord): number => {
+      const floor = this.map.floors.find((candidate) => candidate.id === agent.view.floorId)
+      const destination = agent.path.at(-1)
+      if (!floor || !destination) return 0
+      const portal = this.options.resolveLayout ? floorEntrance(floor) : floor.elevator
+      return Math.hypot(destination.x - portal.x, destination.z - portal.z)
+    }
+    // Fill deeper seats first so a new front row does not fence in workers walking behind it.
+    for (const [key, agent] of [...this.arrivals].sort(
+      ([first, firstAgent], [second, secondAgent]) =>
+        arrivalDistance(secondAgent) - arrivalDistance(firstAgent) || first.localeCompare(second)
+    )) {
+      const floor = this.map.floors.find((candidate) => candidate.id === agent.view.floorId)
+      const paths = this.routes.paths(floor?.id)
+      if (!floor || !paths) continue
+      const portal = this.options.resolveLayout ? floorEntrance(floor) : floor.elevator
+      // Admit the next body after its predecessor clears the door, not a whole converging roster.
+      const hasEntryTraffic = [...this.agents.values()].some(
+        (walker) =>
+          walker.state === 'arriving' &&
+          walker.view.floorId === floor.id &&
+          (walker.view.physicalFloorId === null ||
+            Math.hypot(walker.view.x - portal.x, walker.view.z - portal.z) < 2)
+      )
+      if (hasEntryTraffic) continue
+      const room = floor.rooms.find((candidate) => candidate.id === agent.view.roomId)
+      const seat = room?.slots.find((slot) => slot.id === agent.view.slotId)
+      const door = room?.slots.find((slot) => slot.id === 'door')
+      if (!seat || !door) continue
+      const entrancePoint = portal
+      const entrance = this.options.resolveLayout
+        ? agent.path
+        : paths.via(floor.elevator, door, seat)
+      if (!entrance.length) continue
+      const body = {
+        ...agentBody(agent.view),
+        x: entrancePoint.x,
+        z: entrancePoint.z,
+        elevation: 0
+      }
+      const start = placeBody({
+        body,
+        obstacles,
+        isOpen: (point) =>
+          (this.options.resolveLayout
+            ? Math.hypot(point.x - body.x, point.z - body.z) <= 24
+            : paths.isOpen(point)) &&
+          !floor.zones.some(
+            (zone) =>
+              Math.abs(point.x - zone.x) < zone.width / 2 &&
+              Math.abs(point.z - zone.z) < zone.depth / 2
+          )
+      })
+      // An entrance with no room keeps its real session queued, never stacked or seated by fiat.
+      if (!start) continue
+      const queue =
+        start.x === body.x && start.z === body.z
+          ? []
+          : this.options.resolveLayout
+            ? [start, entrancePoint].map((point) => ({
+                ...point,
+                elevation: 0,
+                physicalFloorId: null
+              }))
+            : paths.get(start, floor.elevator)
+      if ((start.x !== body.x || start.z !== body.z) && !queue.length) continue
+      const view = {
+        ...agent.view,
+        ...start,
+        elevation: 0,
+        physicalFloorId: this.options.resolveLayout ? null : floor.id
+      }
+      this.agents.set(key, {
+        ...agent,
+        state: 'arriving',
+        view,
+        path: queue.length ? [...queue, ...entrance.slice(1)] : entrance
+      })
+      this.arrivals.delete(key)
+      obstacles.push(agentBody(view))
+    }
   }
 
   // Sends waiting agents to a free lounge seat, sitters to a seat the map moved, and sitters
   // whose seat is gone back to their desks.
   private seatLounges(): void {
-    const paths = this.paths
-    if (!paths) return
-    // With trips off no seat is on offer, so nobody sets out and every sitter walks back.
-    const lounges = this.hasLoungeTrips ? this.lounges : NO_LOUNGES
-    for (const [key, seat] of loungeSeats([...this.agents.values()], lounges)) {
-      const agent = this.agents.get(key)
-      if (!agent) continue
-      const isAway = agent.view.place === 'lounge'
-      if (seat) {
-        const target = agent.path.at(-1) ?? agent.view
-        if (isAway && target.x === seat.x && target.z === seat.z) continue
-        this.agents.set(key, goToLounge(agent, seat, wayTo(paths, agent.view, seat)))
-        continue
-      }
-      const desk = this.map.floors[0].rooms
-        .find((r) => r.id === agent.view.roomId)
-        ?.slots.find((s) => s.id === agent.view.slotId)
-      if (isAway && desk)
-        this.agents.set(key, returnToDesk(agent, desk.heading, wayTo(paths, agent.view, desk)))
-    }
+    reconcileLeisure({
+      agents: this.agents,
+      sessions: [...this.sessions.values()],
+      sources: this.sources,
+      connected: this.ready,
+      nowMs: this.nowMs,
+      hasTrips: this.hasLoungeTrips,
+      venues: this.options.getVenueTargets?.() ?? [],
+      bookings: this.venueBookings,
+      map: this.map,
+      routes: this.routes,
+      lounges: this.lounges,
+      clearPassage: (key) => this.passages.clear(key)
+    })
   }
 
   // Takes effect at the next step: agents in the lounge walk back, or waiting ones set out.
@@ -208,14 +444,151 @@ export class World {
     this.hasLoungeTrips = hasLoungeTrips
   }
 
+  setBodyObstacles(bodies: readonly BodyFootprint[]): void {
+    this.bodyObstacles = bodies.map((body) => ({ ...body }))
+  }
+
+  private moveAgent(agent: AgentRecord): AgentRecord {
+    agent = resumeUnseatedWorker(agent, this.routes)
+    if (agent.path.length === 0) return tickAgent(agent, 100)
+    const departure = this.departurePaths.get(agent.view.agentKey)
+    const obstacles = this.bodies()
+    const walkers = [...this.agents.values()].flatMap((walker) => {
+      const to = walker.path.find(
+        (point) => Math.hypot(point.x - walker.view.x, point.z - walker.view.z) > 1e-8
+      )
+      return to ? [{ body: agentBody(walker.view), to }] : []
+    })
+    let hasYielded = false
+    const next = tickAgent(agent, 100, (from, to) => {
+      if (to.connectorId && to.elevation !== from.elevation) {
+        const occupant = this.connectorOccupants.get(to.connectorId)
+        if (occupant && occupant !== from.agentKey)
+          return {
+            x: from.x,
+            z: from.z,
+            elevation: from.elevation,
+            physicalFloorId: from.physicalFloorId
+          }
+        const candidate = {
+          ...agentBody(from),
+          x: to.x,
+          z: to.z,
+          elevation: to.elevation,
+          connectorId: to.connectorId
+        }
+        if (!bodyFits(candidate, obstacles))
+          return {
+            x: from.x,
+            z: from.z,
+            elevation: from.elevation,
+            physicalFloorId: from.physicalFloorId
+          }
+        this.connectorOccupants.set(to.connectorId, from.agentKey)
+        return to
+      }
+      const navigation = workerNavigation({ routes: this.routes, from, to, departure })
+      const body = agentBody(from)
+      const hasClosedStart = !navigation.isOpen(from)
+      if (waitsForMovingBody({ body, to, obstacles, walkers, isOpen: navigation.isOpen })) {
+        hasYielded = true
+        return {
+          ...to,
+          x: from.x,
+          z: from.z,
+          elevation: from.elevation,
+          physicalFloorId: from.physicalFloorId
+        }
+      }
+      const moved = bodyStep({
+        body,
+        to: this.passages.guide({
+          isExiting: agent.state === 'leaving',
+          body,
+          to,
+          obstacles,
+          walkers,
+          tick: this.movementTick,
+          isOpen: navigation.isOpen,
+          routeTo: (target) => navigation.around(body, target, obstacles)
+        }),
+        obstacles,
+        // A layout may build a wall under a walker or shrink away; let that walker escape it.
+        isOpen: (point) =>
+          navigation.isOpen(point) ||
+          (hasClosedStart && Math.hypot(point.x - from.x, point.z - from.z) <= 0.140001)
+      })
+      hasYielded ||= Math.hypot(moved.x - to.x, moved.z - to.z) > 1e-8
+      return {
+        ...to,
+        ...moved,
+        elevation: from.elevation,
+        physicalFloorId:
+          Math.hypot(moved.x - to.x, moved.z - to.z) <= 1e-8
+            ? to.physicalFloorId
+            : from.physicalFloorId
+      }
+    })
+    const activeConnector = next.path[0]?.connectorId
+    next.view.connectorId =
+      next.view.physicalFloorId === null && (next.view.elevation ?? 0) !== 0
+        ? activeConnector
+        : undefined
+    for (const [connector, occupant] of this.connectorOccupants)
+      if (
+        occupant === agent.view.agentKey &&
+        !next.path.some((point) => point.connectorId === connector)
+      )
+        this.connectorOccupants.delete(connector)
+    const key = agent.view.agentKey
+    const recovery = this.recovery.record({
+      id: key,
+      position: next.view,
+      waypoint: next.path[0],
+      hasYielded
+    })
+    const target = next.path.at(-1)
+    // Brief direct steps can still circle a wall corner; recover from lack of waypoint progress.
+    if (target && recovery.canRepath) {
+      const route = recoverWorkerRoute({
+        agent: next,
+        routes: this.routes,
+        paths: departure ?? this.routes.paths(next.view.physicalFloorId),
+        obstacles,
+        body: agentBody(next.view)
+      })
+      if (route.length) {
+        next.path = route
+        if (recovery.isStalled) this.passages.clear(key)
+      }
+      this.recovery.retried(key)
+    }
+    return next
+  }
+
   step(dtMs: number): AgentView[] {
+    this.syncClock()
+    this.activateArrivals()
     this.accumulatedMs += Number.isFinite(dtMs) ? clamp(dtMs, [0, 1000]) : 0
     while (this.accumulatedMs >= 100) {
-      for (const [key, agent] of this.agents) {
-        const next = tickAgent(agent, 100)
-        if (next.removed) this.agents.delete(key)
-        else this.agents.set(key, next)
+      if (!this.options.now) this.nowMs += 100
+      const ordered = [...this.agents].sort(([first], [second]) => first.localeCompare(second))
+      const offset = this.movementTick++ % Math.max(1, ordered.length)
+      for (const [key, agent] of [...ordered.slice(offset), ...ordered.slice(0, offset)]) {
+        const next = this.moveAgent(agent)
+        if (next.removed) {
+          this.agents.delete(key)
+          this.departurePaths.delete(key)
+          this.recovery.clear(key)
+          this.passages.clear(key)
+        } else this.agents.set(key, next)
       }
+      for (const [key, agent] of this.arrivals)
+        this.arrivals.set(
+          key,
+          tickAgent(agent, 100, (from) => from)
+        )
+      this.activateArrivals()
       this.seatLounges()
       this.accumulatedMs -= 100
     }

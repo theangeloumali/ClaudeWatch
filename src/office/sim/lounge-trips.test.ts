@@ -184,6 +184,21 @@ it.each([
   expect(view(sim, 'a')).toMatchObject({ ...at(seat(sim, 0)), place: 'lounge' })
 })
 
+it('retains finished eligibility after an off/on setting cycle and walks each leg', () => {
+  const sim = open([done('a')])
+  run(sim, SETTLE_S)
+  sim.setLoungeTrips(false)
+  run(sim, SETTLE_S)
+  expect(view(sim, 'a')).toMatchObject(at(deskOf(sim, 'a')))
+  expect(view(sim, 'a').place).toBeUndefined()
+
+  sim.setLoungeTrips(true)
+  sim.step(100)
+  expect(view(sim, 'a')).toMatchObject({ ...at(deskOf(sim, 'a')), place: 'lounge' })
+  run(sim, SETTLE_S)
+  expect(view(sim, 'a')).toMatchObject({ ...at(seat(sim, 0)), place: 'lounge' })
+})
+
 it('walks back to a desk that moved while it was in the lounge', () => {
   // The earlier project gains desk columns, which pushes this agent's own office along.
   const sim = open([done('a'), ...mates(1)])

@@ -1,0 +1,104 @@
+import { createElement } from 'react'
+import { expect, it, vi } from 'vitest'
+import { Texture } from 'three'
+import {
+  agentsOn,
+  companyThemes,
+  DRAW_CEILING,
+  measure,
+  report,
+  TRIANGLE_CEILING
+} from '../../themes/live-budget.test-utils'
+import { getTheme } from '../../themes/registry'
+import { groupZonesByTheme } from '../../logic/office-themes'
+import { mergedDraws } from '../../themes/scene.test-utils'
+import { WorkstationScreens } from '../../scene/WorkstationScreens'
+import { buildWorkstationDisplays } from '../../logic/workstation-displays'
+import { makeFrame, makeSession } from '../fixtures'
+import { MoverLayer } from '../../citizens/MoverLayer'
+import { townOf } from '../../town/use-town-plan'
+import { playerGeometry } from '../../player/figure'
+
+vi.mock('react', async (original) => ({
+  ...(await original<typeof import('react')>()),
+  memo: (component: unknown) => component,
+  useMemo: (factory: () => unknown) => factory(),
+  useRef: (current: unknown) => ({ current }),
+  useEffect: () => undefined,
+  useLayoutEffect: () => undefined
+}))
+vi.mock('@react-three/fiber', () => ({ useFrame: () => undefined }))
+vi.mock('@react-three/drei', () => ({ CameraControlsImpl: class {} }))
+vi.mock('../../quality-store', () => ({
+  useQualityChoice: () => ({ pin: 'full', chosen: 'full' })
+}))
+vi.mock('../../scene/textures', () => ({
+  signTexture: () => new Texture(),
+  blobShadowTexture: () => new Texture()
+}))
+vi.mock('../../scene/monitor-texture', () => ({ monitorTexture: () => new Texture() }))
+
+it.each([20, 40, 60])(
+  'measures %i samurai workers, real display meshes and decorative movers together',
+  (count) => {
+    const themeIds = ['samurai-empire', 'corporate-city', 'neo-edo-steam']
+    for (const themes of [...themeIds.map((theme) => [theme]), themeIds]) {
+      const { floor, agents } = agentsOn(count === 60 ? 10 : 4, count)
+      const themeIdFor = companyThemes(themes)
+      const floorTheme = getTheme(themes[0])
+      expect(floorTheme.id).toBe(themes[0])
+      const base = measure({ floor, agents, floorTheme, themeIdFor })
+      const zoneGroups = groupZonesByTheme(floor, themeIdFor)
+      const roomThemes = new Map(
+        zoneGroups.flatMap((group) => group.rooms.map((room) => [room.id, group.themeId] as const))
+      )
+      const displays = buildWorkstationDisplays({
+        floor,
+        frame: makeFrame({
+          floors: [floor],
+          agents: [...agents],
+          sessions: floor.rooms.flatMap((room) =>
+            room.sessionKey ? [makeSession({ key: room.sessionKey })] : []
+          )
+        }),
+        workstationForRoom: (id) => getTheme(roomThemes.get(id) ?? floorTheme.id).workstation
+      })
+      expect(displays).toHaveLength(count)
+      const monitors = mergedDraws(createElement(WorkstationScreens, { displays }))
+      expect(monitors.draws).toBe(count)
+      expect(monitors.triangles).toBe(count * 2)
+      const town = townOf(floor, null, 'full')
+      const movers = mergedDraws(
+        createElement(MoverLayer, {
+          floor,
+          plan: town.plan,
+          owners: town.owners,
+          floorTheme,
+          zoneGroups,
+          player: null,
+          isReducedMotion: true,
+          hasVehicles: true
+        })
+      )
+      const total = {
+        ...base,
+        draws: base.draws + monitors.draws + movers.draws,
+        triangles: base.triangles + monitors.triangles + movers.triangles
+      }
+      const geometry = (floorTheme.playerGeometry ?? playerGeometry)(floorTheme.palette)
+      const owner = mergedDraws(
+        createElement(
+          'mesh',
+          { geometry },
+          createElement('meshStandardMaterial', { vertexColors: true })
+        )
+      )
+      total.draws += owner.draws
+      total.triangles += owner.triangles
+      geometry.dispose()
+      report(`${themes.join(' + ')} ${count} incl. screens, movers and player`, total)
+      expect(total.draws).toBeLessThanOrEqual(DRAW_CEILING)
+      expect(total.triangles).toBeLessThanOrEqual(TRIANGLE_CEILING)
+    }
+  }
+)

@@ -138,6 +138,47 @@ describe('TownView', () => {
     expect(stepped.lots.props.revision).not.toBe(view().lots.props.revision)
   })
 
+  it('updates a moved lot even when the claim and lot count stay the same', () => {
+    const town = townOf(PAIR_FLOOR, null, 'full')
+    const zoneGroups = groupZonesByTheme(PAIR_FLOOR, themeIdFor)
+    const initial = elements(TownView({ town, floor: PAIR_FLOOR, floorTheme: north, zoneGroups }))
+    const movedLot = town.plan.lots.find((lot) => !lot.isLandmark)!
+    const moved = {
+      ...town,
+      plan: {
+        ...town.plan,
+        lots: town.plan.lots.map((lot) =>
+          lot.id === movedLot.id ? { ...lot, x: lot.x + 12 } : lot
+        )
+      }
+    }
+    const updated = elements(
+      TownView({ town: moved, floor: PAIR_FLOOR, floorTheme: north, zoneGroups })
+    )
+    expect(updated.find((node) => node.type === BatchedScene)?.props.revision).not.toBe(
+      initial.find((node) => node.type === BatchedScene)?.props.revision
+    )
+    const placed = updated.flatMap((node) =>
+      node.type === LotFill ? (node.props.placed ?? []) : []
+    )
+    expect(placed.find(({ lot }) => lot.id === movedLot.id)?.lot.x).toBe(movedLot.x + 12)
+  })
+
+  it('updates moved garden geometry without changing its identity or theme', () => {
+    const town = townOf(PAIR_FLOOR, null, 'full')
+    const zoneGroups = groupZonesByTheme(PAIR_FLOOR, themeIdFor)
+    const batchesFor = (current: typeof town) =>
+      elements(
+        TownView({ town: current, floor: PAIR_FLOOR, floorTheme: north, zoneGroups })
+      ).filter((node) => node.type === BatchedScene)
+    const initial = batchesFor(town)
+    const moved = {
+      ...town,
+      green: town.green.map((plot, index) => (index === 0 ? { ...plot, x: plot.x + 0.01 } : plot))
+    }
+    expect(batchesFor(moved)[1].props.revision).not.toBe(initial[1].props.revision)
+  })
+
   it('rebuilds both batches when a company or the floor changes theme', () => {
     const first = view()
     const oneTheme = view(PAIR_FLOOR, north, () => north.id)

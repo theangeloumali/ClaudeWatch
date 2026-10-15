@@ -39,6 +39,8 @@ interface FollowFrame {
   zoom: number
   deltaSec: number
   isReducedMotion: boolean
+  insets?: Parameters<typeof cardSafeArea>[1]
+  isCameraManuallyOwned?: boolean
 }
 
 // This frame's camera move, in metres along screen-right and screen-down. `isSettled` is false
@@ -48,11 +50,13 @@ export function followStep(frame: FollowFrame): {
   down: number
   isSettled: boolean
 } {
+  if (frame.isCameraManuallyOwned) return { right: 0, down: 0, isSettled: true }
   const margin = Math.min(
     FOLLOW_MARGIN_PX.max,
     Math.max(FOLLOW_MARGIN_PX.min, FOLLOW_MARGIN_M * frame.zoom)
   )
-  const shift = followShift(frame.onScreen, cardSafeArea(frame.viewport), margin)
+  const area = cardSafeArea(frame.viewport, frame.insets)
+  const shift = followShift(frame.onScreen, { ...area, top: frame.insets?.top ?? area.top }, margin)
   const reach = Math.hypot(shift.x, shift.y)
   if (reach === 0) return { right: 0, down: 0, isSettled: true }
   const limit = frame.isReducedMotion ? reach : Math.min(reach, FOLLOW_PX_PER_SEC * frame.deltaSec)

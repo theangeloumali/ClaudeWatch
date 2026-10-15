@@ -57,7 +57,7 @@ export function useOfficeTheme(focusedZone?: ZoneGeometry) {
   const [notice, setNotice] = useState('')
   const [theme, setTheme] = useState(() => {
     const stored = readStored(THEME_STORAGE_KEY)
-    return listThemes().find((candidate) => candidate.id === stored) ?? themeForTeam()
+    return stored === null ? themeForTeam() : getTheme(stored)
   })
   useEffect(() => {
     if (!hasChosenTheme) return
@@ -68,6 +68,13 @@ export function useOfficeTheme(focusedZone?: ZoneGeometry) {
     const timer = setTimeout(() => setNotice(''), NOTICE_MS)
     return () => clearTimeout(timer)
   }, [notice])
+
+  const chooseMapTheme = useCallback((themeId: string): void => {
+    const chosenTheme = getTheme(themeId)
+    setHasChosenTheme(true)
+    setTheme(chosenTheme)
+    setNotice(`Map theme is now ${chosenTheme.label}. Offices with their own theme keep it.`)
+  }, [])
 
   // A null theme puts a company or project back to following its parent.
   const chooseTheme = useCallback(
@@ -91,16 +98,14 @@ export function useOfficeTheme(focusedZone?: ZoneGeometry) {
   // T changes the office the camera last flew to, and the floor default before any flight.
   const cycleTheme = useCallback(() => {
     if (focusedZone && zoneThemeId) return chooseTheme(focusedZone, themeAfter(zoneThemeId).id)
-    const next = themeAfter(theme.id)
-    setHasChosenTheme(true)
-    setTheme(next)
-    setNotice(`The floor default is now ${next.label}. Offices with their own theme keep it.`)
-  }, [focusedZone, zoneThemeId, chooseTheme, theme.id])
+    chooseMapTheme(themeAfter(theme.id).id)
+  }, [focusedZone, zoneThemeId, chooseTheme, chooseMapTheme, theme.id])
   const dismissNotice = useCallback(() => setNotice(''), [])
 
   return {
     theme,
     chooseTheme,
+    chooseMapTheme,
     cycleTheme,
     cycleScope: focusedZone?.label ?? null,
     notice,

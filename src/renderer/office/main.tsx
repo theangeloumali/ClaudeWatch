@@ -29,13 +29,13 @@ function findBridge(onLost: () => void): FeedSource | null {
 async function resolveFeed(onLost: () => void): Promise<OfficeFeed | null> {
   const bridge = findBridge(onLost)
   if (bridge) {
-    const feed = createLiveFeed(bridge, { storage: browserStorage() })
+    const feed = createLiveFeed(bridge, { storage: browserStorage(), worldEditing: true })
     // Only a tab the standalone server launched can be view-only; the app's window never is.
     return window.officeBridge || !isViewOnlyPage(window) ? feed : { ...feed, isViewOnly: true }
   }
   if (!isPreviewBuild) return null
   const { createFixtureFeed } = await import('./fixture/fixture-feed')
-  return createFixtureFeed()
+  return createFixtureFeed({ worldEditing: true })
 }
 
 const container = document.getElementById('root')

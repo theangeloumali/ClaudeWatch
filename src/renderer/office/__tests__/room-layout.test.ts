@@ -7,7 +7,8 @@ import {
   roomWallSegments,
   wallHeight,
   WALL_HEIGHT_FULL,
-  WALL_HEIGHT_LOW
+  WALL_HEIGHT_LOW,
+  ROOM_DOOR_WIDTH
 } from '../logic/room-layout'
 import { makeRoom } from './fixtures'
 
@@ -48,7 +49,7 @@ describe('roomWallSegments', () => {
     const doorWallLength = segments
       .filter((segment) => segment.normalZ === 1)
       .reduce((sum, segment) => sum + segment.length, 0)
-    expect(doorWallLength).toBeCloseTo(room.width - 1.1)
+    expect(doorWallLength).toBeCloseTo(room.width - ROOM_DOOR_WIDTH)
   })
 })
 
@@ -77,9 +78,11 @@ describe('floorWallSegments', () => {
       const doorWall = segments.filter(
         (segment) => segment.roomId === candidate.id && segment.normalZ === 1
       )
-      // Two pieces either side of a 1.1 m gap in a 6 m wall.
+      // Every room uses the shared doorway width, not its flatMap index.
       expect(doorWall).toHaveLength(2)
-      expect(doorWall.reduce((total, segment) => total + segment.length, 0)).toBeCloseTo(4.9)
+      expect(doorWall.reduce((total, segment) => total + segment.length, 0)).toBeCloseTo(
+        candidate.width - ROOM_DOOR_WIDTH
+      )
     }
   })
 })

@@ -92,9 +92,11 @@ const promo = (is2x: boolean): PromoStatus => ({
 })
 
 const onFocusSession = vi.fn()
+const onOpenOfficeBrowser = vi.fn()
 const createTray = (platform: NodeJS.Platform = 'darwin'): TrayManager =>
   new TrayManager({
     onOpenDashboard: vi.fn(),
+    onOpenOfficeBrowser,
     onFocusSession,
     onQuit: vi.fn(),
     preloadPath: '/preload.js',
@@ -142,6 +144,12 @@ describe('TrayManager context menu', () => {
     expect(onFocusSession).toHaveBeenCalledExactlyOnceWith(77)
     click(menu.find((item) => item.label?.includes('app')))
     expect(onFocusSession).toHaveBeenLastCalledWith(4242)
+  })
+
+  it('offers the browser Office through its explicit tray action', () => {
+    click(openMenu().find((entry) => entry.label === 'Open Office in Browser'))
+    expect(onOpenOfficeBrowser).toHaveBeenCalledOnce()
+    expect(onFocusSession).not.toHaveBeenCalled()
   })
 
   it('keeps the headline and the overflow line as plain labels', () => {

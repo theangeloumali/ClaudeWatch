@@ -1,4 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite'
+import { OPENCODE_V2_STATEMENTS } from './opencode-v2-db'
 
 // Everything the bridge may ask OpenCode's database. Each statement names its columns, its bound
 // and its index: with the index gone it fails instead of scanning a table of a million rows.
@@ -77,7 +78,15 @@ export const OPENCODE_STATEMENTS = {
     ORDER BY part.key DESC LIMIT 16`
 } as const
 
-export type OpencodeStatement = keyof typeof OPENCODE_STATEMENTS
+export const OPENCODE_READ_STATEMENTS = {
+  ...OPENCODE_STATEMENTS,
+  ...OPENCODE_V2_STATEMENTS,
+  // Pre-idle V2 tables still need the process-backed compatibility reader.
+  schemaVersion: `SELECT name, has_model, EXISTS (
+      SELECT 1 FROM pragma_table_info('session_v2') WHERE name = 'time_idle'
+    ) AS has_live_state FROM (${OPENCODE_V2_STATEMENTS.schemaVersion})`
+}
+export type OpencodeStatement = keyof typeof OPENCODE_READ_STATEMENTS
 export type OpencodeRow = Record<string, unknown>
 export type OpencodeQuery = (
   statement: OpencodeStatement,
@@ -149,7 +158,7 @@ export function readOpencodeDb<Result>(
       const asked = isOpencode2 ? (OPENCODE_2_OF.get(statement) ?? statement) : statement
       let prepared
       try {
-        prepared = db.prepare(OPENCODE_STATEMENTS[asked])
+        prepared = db.prepare(OPENCODE_READ_STATEMENTS[asked])
       } catch (error) {
         throw failureOf(error, 'changed')
       }

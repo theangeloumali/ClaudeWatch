@@ -1,5 +1,5 @@
 import { createAppWindow } from './window-factory'
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, dialog } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import { ProcessMonitor } from './process-monitor'
@@ -135,7 +135,12 @@ app.whenReady().then(() => {
   })
   const office = setupOffice(terminalResolver, store, tracker, accounts)
   // Before any window exists, so each one is watched from its creation.
-  paceBridgeByWindows(app, () => BrowserWindow.getAllWindows(), office.setPollInterval)
+  paceBridgeByWindows(
+    app,
+    () => BrowserWindow.getAllWindows(),
+    office.setPollInterval,
+    office.hasBrowserWatchers
+  )
   const focusSession = (pid: number): void => void office.focusSession(pid)
 
   // Initialize notifications and sound player
@@ -155,6 +160,16 @@ app.whenReady().then(() => {
   trayManager = new TrayManager({
     onOpenDashboard: showDashboard,
     onOpenOffice: office.open,
+    onOpenOfficeBrowser: () => {
+      void office
+        .openBrowser()
+        .catch((error: unknown) =>
+          dialog.showErrorBox(
+            'Browser Office could not open',
+            error instanceof Error ? error.message : 'Please restart the app and try again.'
+          )
+        )
+    },
     onFocusSession: focusSession,
     onQuit: () => {
       app.isQuitting = true

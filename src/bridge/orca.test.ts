@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { claimPanes, OrcaSource, parseOrcaEnvironment, readOrcaEnvironment } from './orca'
-import { ORCA_CLI } from '../shared/orca-bundle'
+import { ORCA_CLI, orcaBundle } from '../shared/orca-bundle'
 import { POWERSHELL } from '../shared/platform-process'
 import { consoleRootScript, PROCESS_LIST_SCRIPT } from '../shared/windows-console'
 import { fixtureIo, missing, session } from './__fixtures__/helpers'
@@ -243,6 +243,7 @@ it('lets only the earliest session keep a pane that several sessions report', ()
 })
 
 describe('Orca panes on Windows, where no process environment can be read', () => {
+  const WINDOWS_CLI = orcaBundle('win32').cli
   // FILETIME strings one second apart, oldest first.
   const at = (second: number): string => String(134363332080000000n + BigInt(second) * 10000000n)
   // Sessions 42 and 44 run under Git Bash in the Orca pane whose shell is 7; sh's parent has
@@ -266,11 +267,11 @@ describe('Orca panes on Windows, where no process environment can be read', () =
     runScript.mock.calls.filter(([script]) => script === PROCESS_LIST_SCRIPT).length
 
   const windowsIo = (panes: { pid: number; paneKey: string }[]): ReturnType<typeof fixtureIo> => {
-    const io = fixtureIo({ [ORCA_CLI]: '' })
+    const io = fixtureIo({ [WINDOWS_CLI]: '' })
     io.exec = vi.fn(async (file: string, args: string[]) => {
       if (file === POWERSHELL) return answerScript(args.at(-1) ?? '')
-      if (file === ORCA_CLI && args[0] === 'diagnostics') return diagnostics(panes)
-      if (file === ORCA_CLI) return '{"ok":true,"result":{"worktrees":[]}}'
+      if (file === WINDOWS_CLI && args[0] === 'diagnostics') return diagnostics(panes)
+      if (file === WINDOWS_CLI) return '{"ok":true,"result":{"worktrees":[]}}'
       throw new Error(`not allowed: ${file}`)
     })
     return io
@@ -286,7 +287,7 @@ describe('Orca panes on Windows, where no process environment can be read', () =
       orcaPaneKey: 'tab:leaf'
     })
     const calls = vi.mocked(io.exec).mock.calls
-    expect(calls.map(([file]) => file)).toEqual([POWERSHELL, POWERSHELL, ORCA_CLI])
+    expect(calls.map(([file]) => file)).toEqual([POWERSHELL, POWERSHELL, WINDOWS_CLI])
     expect(calls.map(([, args]) => args.at(-1))).toEqual(
       expect.arrayContaining([PROCESS_LIST_SCRIPT, consoleRootScript(42), '--json'])
     )

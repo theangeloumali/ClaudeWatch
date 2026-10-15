@@ -1,5 +1,5 @@
 import type { SessionRef, SourceHealth, SubagentRef } from '../shared/office/types'
-import { ORCA_CLI } from '../shared/orca-bundle'
+import { orcaBundle } from '../shared/orca-bundle'
 import { POWERSHELL, powershellArgs, programName } from '../shared/platform-process'
 import {
   ancestry,
@@ -80,13 +80,15 @@ function panesByShell(diagnostics: string): Map<number, string> {
 // is one: for any other session they would cost seconds and say nothing.
 async function readWindowsPaneKey(
   pid: number,
-  { exec, treeOf }: OrcaLookup
+  { exec, treeOf, platform }: OrcaLookup
 ): Promise<string | null> {
   const chain = ancestry(await treeOf(pid), pid)
   // Read before the process showed up: not proof that it runs outside Orca.
   if (!chain.length) throw new Error('process not listed yet')
   if (!chain.some((node) => programName(node.name) === 'orca')) return null
-  const panes = panesByShell(await exec(ORCA_CLI, ['diagnostics', 'memory', '--json']))
+  const panes = panesByShell(
+    await exec(orcaBundle(platform).cli, ['diagnostics', 'memory', '--json'])
+  )
   const shell = chain.find((node) => panes.has(node.pid))
   return shell ? (panes.get(shell.pid) ?? null) : null
 }
@@ -138,7 +140,7 @@ const MAX_RETRY_MS = 60_000
 export class OrcaSource {
   private nextPoll = 0
   private delay = FIRST_RETRY_MS
-  private health: SourceHealth = { id: 'orca', ok: true, detail: 'not polled' }
+  private health: SourceHealth = { id: 'orca', ok: false, detail: 'not polled' }
   private environments = new Map<string, { value: OrcaEnvironment; retryAt: number }>()
   // One enumeration of every process serves all of a tick's new sessions.
   private listing: { now: number; processes: Promise<Map<number, ProcessNode>> } | null = null
@@ -153,14 +155,21 @@ export class OrcaSource {
   async poll(now: number): Promise<SourceHealth> {
     if (now < this.nextPoll) return { ...this.health }
     try {
-      await this.io.stat(ORCA_CLI)
-      const response = jsonObject(await this.io.exec(ORCA_CLI, ['worktree', 'ps', '--json']))
+      const cli = orcaBundle(this.platform).cli
+      await this.io.stat(cli)
+      const response = jsonObject(await this.io.exec(cli, ['worktree', 'ps', '--json']))
       if (!response || response.ok === false) throw new Error('invalid response')
-      this.health = { id: 'orca', ok: true, detail: 'available' }
+      this.health = {
+        id: 'orca',
+        ok: true,
+        detail: 'available',
+        checkedAtMs: now,
+        staleAfterMs: HEALTHY_POLL_MS
+      }
       this.delay = FIRST_RETRY_MS
       this.nextPoll = now + HEALTHY_POLL_MS
     } catch {
-      this.health = { id: 'orca', ok: false, detail: 'unavailable' }
+      this.health = { ...this.health, ok: false, detail: 'unavailable' }
       this.nextPoll = now + this.delay
       this.delay = Math.min(this.delay * 2, MAX_RETRY_MS)
     }

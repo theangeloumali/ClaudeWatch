@@ -2,7 +2,6 @@ const STATUSES = ['busy', 'idle', 'waiting', 'shell'] as const
 type RegistryStatus = (typeof STATUSES)[number]
 const isStatus = (value: unknown): value is RegistryStatus =>
   STATUSES.some((status) => status === value)
-const SESSION_ID = /^[\w-]+$/
 
 export interface RegistryEntry {
   pid: number
@@ -18,13 +17,16 @@ export interface RegistryEntry {
 import { join } from 'node:path'
 import { isAbsoluteFolder } from '../shared/platform-process'
 import type { SessionRef, SourceHealth } from '../shared/office/types'
+import { OBSERVATION_STALE_AFTER_MS } from '../shared/office/observation'
 import { type BridgeIo, isMissing, jsonObject } from './io'
-import { forgetGoneExcept, liveStartedAt } from './liveness'
+import { forgetGoneExcept, liveStartedAt, OPEN_TOOL_HOLD_MS, quietFor } from './liveness'
 import { sessionFromRegistry, sessionFromTeammate } from './claude'
+import { claudeProcessKey, discoverClaudeProcesses } from './claude-processes'
+import { CLAUDE_SESSION_ID as SESSION_ID } from './claude-transcripts'
 import { resolveProject } from './project-root'
 import { pruneTranscripts, readTranscript, transcriptPath } from './transcript-tail'
 import { listAgentFiles, liveSubagents } from './subagents'
-import { type ProcessRow, readProcessTable } from './process-table'
+import { identityOf, type ProcessRow, readProcessTable } from './process-table'
 import { type Teammate, type TeammateProcess, teammateProcesses, TeammateSource } from './teammates'
 import type { SessionFiles } from './usage-tracker'
 
@@ -101,23 +103,40 @@ export async function collectClaude(
     (teammateTable ??= table().then(teammateProcesses))
   const uniqueRoots = [...new Set(roots)]
   const liveSessionIds = new Set<string>()
+  const liveProcesses = new Set<string>()
   // One live entry as a session, with its agents, its team and the transcripts behind them.
   const collectSession = async (
     root: string,
-    entry: RegistryEntry,
-    startedAtMs: number
+    candidate: { entry: RegistryEntry; startedAtMs: number; path?: string | null }
   ): Promise<Collected> => {
+    const { entry, startedAtMs } = candidate
     const project = await resolveProject(entry.cwd, io, now, platform)
-    const path = await transcriptPath(root, entry.cwd, entry.sessionId, io)
-    const transcript = path ? await readTranscript(path, io) : { tool: null, error: false }
+    const path =
+      candidate.path === undefined
+        ? await transcriptPath(root, entry.cwd, entry.sessionId, io)
+        : candidate.path
+    const transcript = path
+      ? await readTranscript(path, io)
+      : { tool: null, error: false, mtimeMs: 0 }
     const agentFiles = path ? await listAgentFiles(path, io) : []
     const agents = await liveSubagents(agentFiles, io, now)
     // A team that cannot be read costs the lead its teammates, never the lead itself.
-    const team = await teammates
-      .collect(root, entry.sessionId, entry.cwd, processes, now)
-      .catch(() => null)
+    const team =
+      candidate.path === null
+        ? []
+        : await teammates
+            .collect(root, entry.sessionId, entry.cwd, processes, now)
+            .catch(() => null)
+    const quietMs = path ? quietFor(now, transcript.mtimeMs) : null
+    const observedEntry: RegistryEntry =
+      candidate.path !== undefined &&
+      (agents.length ||
+        team?.length ||
+        (transcript.tool && quietMs !== null && quietMs < OPEN_TOOL_HOLD_MS))
+        ? { ...entry, status: 'busy' }
+        : entry
     const session = sessionFromRegistry(
-      entry,
+      observedEntry,
       transcript,
       [...agents, ...(team ?? []).map((teammate) => teammate.ref)],
       project.root,
@@ -129,7 +148,16 @@ export async function collectClaude(
       teammate.transcripts
     ])
     return {
-      session,
+      session: {
+        ...session,
+        key: claudeProcessKey(io, { pid: entry.pid, startedAtMs, sessionId: entry.sessionId }),
+        observation: {
+          sourceId: `claude:${root}`,
+          observedAtMs: now,
+          staleAfterMs: OBSERVATION_STALE_AFTER_MS,
+          coverage: 'own'
+        }
+      },
       hasTeam: team !== null,
       files: path ? { main: path, agents: agentFiles, teammates: new Map(teamTranscripts) } : null
     }
@@ -152,7 +180,10 @@ export async function collectClaude(
       for (const file of files.filter((name) => /^\d+\.json$/.test(name))) {
         try {
           const entry = parseRegistry(await io.readText(join(root, 'sessions', file)), platform)
-          if (!entry) continue
+          if (!entry) {
+            reads.push(Promise.resolve('failed'))
+            continue
+          }
           entries.push(entry)
           // An unreadable table proves nothing either way: each pid is then asked about.
           const rows = await table().catch(() => [])
@@ -167,8 +198,14 @@ export async function collectClaude(
           )
           if (startedAtMs === null) continue
           isLiveNow.set(record, startedAtMs)
+          const processKey = identityOf({ pid: entry.pid, startedAtMs })
+          if (liveSessionIds.has(entry.sessionId) || liveProcesses.has(processKey)) {
+            if (health.ok) health.detail = 'live'
+            continue
+          }
           liveSessionIds.add(entry.sessionId)
-          reads.push(collectSession(root, entry, startedAtMs).catch(settled))
+          liveProcesses.add(processKey)
+          reads.push(collectSession(root, { entry, startedAtMs }).catch(settled))
         } catch (error) {
           reads.push(Promise.resolve(settled(error)))
         }
@@ -192,6 +229,10 @@ export async function collectClaude(
         health.ok = false
         health.detail = 'liveness unknown'
       }
+      if (health.ok) {
+        health.checkedAtMs = now
+        health.staleAfterMs = OBSERVATION_STALE_AFTER_MS
+      }
     } catch (error) {
       if (!isMissing(error)) {
         health.ok = false
@@ -202,6 +243,51 @@ export async function collectClaude(
     sources.push(health)
   }
   forgetGoneExcept(io, entries)
+  if (platform !== 'win32' && uniqueRoots.length) {
+    const onFailure = (root = uniqueRoots[0]): void => {
+      const health = sources.find((source) => source.id === `claude:${root}`)
+      if (!health?.ok) return
+      health.ok = false
+      health.detail = 'process discovery failed'
+      delete health.checkedAtMs
+      delete health.staleAfterMs
+    }
+    try {
+      const discovered = await discoverClaudeProcesses({
+        roots: uniqueRoots,
+        io,
+        rows: await table(),
+        claimed: { sessionIds: liveSessionIds, processes: liveProcesses },
+        now,
+        platform,
+        onFailure
+      })
+      for (const candidate of discovered) {
+        try {
+          const collected = await collectSession(candidate.root, candidate)
+          sessions.push(collected.session)
+          liveSessionIds.add(candidate.entry.sessionId)
+          if (collected.files) transcripts.set(collected.session.key, collected.files)
+          const health = sources.find((source) => source.id === `claude:${candidate.root}`)
+          if (health?.ok) {
+            health.detail = 'live'
+            health.checkedAtMs = now
+            health.staleAfterMs = OBSERVATION_STALE_AFTER_MS
+            if (!collected.hasTeam) {
+              health.ok = false
+              health.detail = 'team read failed'
+              delete health.checkedAtMs
+              delete health.staleAfterMs
+            }
+          }
+        } catch (error) {
+          if (!isMissing(error)) onFailure(candidate.root)
+        }
+      }
+    } catch {
+      onFailure()
+    }
+  }
   // Who has no lead cannot be told while a registry is unread: it may hold the lead.
   if (sources.every((source) => source.ok)) {
     const parents = (await processes().catch(() => [])).map((p) => p.parentSessionId)

@@ -4,7 +4,7 @@ import { EDO } from '../themes/palettes'
 import { MARKER_Y, playerGeometry } from './figure'
 import { TalkPrompt } from './TalkPrompt'
 import { listenForWalkKeys } from './walk-keys'
-import { createPlayer, sendPlayer } from './walking'
+import { createPlayer, sendPlayer, tickPlayer } from './walking'
 
 describe('listenForWalkKeys', () => {
   let stop = (): void => {}
@@ -48,6 +48,28 @@ describe('listenForWalkKeys', () => {
     document.body.append(field)
     fireEvent.keyDown(field, { key: 'w' })
     fireEvent.keyDown(field, { key: 'x' })
+    expect(player.held.size).toBe(0)
+    expect(onTalk).not.toHaveBeenCalled()
+  })
+  it('stops held movement when focus transfers into an input in the same window', () => {
+    const { player } = setup()
+    fireEvent.keyDown(window, { key: 'w' })
+    tickPlayer(player, { isOpen: () => true }, 1 / 60, 0)
+    const before = { ...player.position }
+    const field = document.createElement('input')
+    document.body.append(field)
+    field.focus()
+    tickPlayer(player, { isOpen: () => true }, 1 / 60, 0)
+    expect(player.position).toEqual(before)
+    expect(player.held.size).toBe(0)
+  })
+  it('does not steal movement or inspection keys while a modal owns the keyboard', () => {
+    const { player, onTalk } = setup()
+    const modal = document.createElement('div')
+    modal.setAttribute('aria-modal', 'true')
+    document.body.append(modal)
+    fireEvent.keyDown(window, { key: 'w' })
+    fireEvent.keyDown(window, { key: 'x' })
     expect(player.held.size).toBe(0)
     expect(onTalk).not.toHaveBeenCalled()
   })

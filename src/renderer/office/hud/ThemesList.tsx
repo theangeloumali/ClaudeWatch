@@ -30,6 +30,7 @@ interface ThemesListProps {
   // The office T changes; null while it still changes the floor default.
   cycleScope: string | null
   onChoose: ChooseTheme
+  onChooseMapTheme: (themeId: string) => void
   onClose: () => void
 }
 
@@ -152,6 +153,7 @@ export function ThemesList({
   choiceCount,
   cycleScope,
   onChoose,
+  onChooseMapTheme,
   onClose
 }: ThemesListProps) {
   const titleId = useId()
@@ -178,7 +180,7 @@ export function ThemesList({
       id={id}
       role="dialog"
       aria-labelledby={titleId}
-      className="absolute bottom-full left-1/2 z-10 mb-2 w-[23rem] max-w-[calc(100vw-1.5rem)] -translate-x-1/2"
+      className="absolute bottom-full left-1/2 z-30 mb-2 w-[23rem] max-w-[calc(100vw-1.5rem)] -translate-x-1/2"
       onKeyDown={(event) => {
         if (event.key === 'Escape') onClose()
       }}
@@ -186,7 +188,7 @@ export function ThemesList({
       <Plate faceClassName="flex max-h-[60vh] flex-col gap-1.5 overflow-y-auto p-3">
         <div className="flex items-center gap-2">
           <h2 id={titleId} ref={titleRef} tabIndex={-1} className={`${PLATE_TITLE_CLASS} flex-1`}>
-            Office themes
+            Map and office themes
           </h2>
           <button
             type="button"
@@ -200,10 +202,31 @@ export function ThemesList({
         <ul className="flex flex-col gap-0.5">
           <li className="flex flex-col">
             <ListRow
+              label="Map theme"
+              labelClassName="text-body"
+              theme={floorTheme}
+              status="city and following offices"
+              isOpen={openKey === 'map'}
+              onToggle={() => toggle('map')}
+            >
+              {(dismiss) => (
+                <ThemePicker
+                  zoneLabel="whole map"
+                  themeId={floorTheme.id}
+                  onChoose={(themeId) => {
+                    if (themeId) onChooseMapTheme(themeId)
+                  }}
+                  onDismiss={dismiss}
+                />
+              )}
+            </ListRow>
+          </li>
+          <li className="flex flex-col">
+            <ListRow
               label={EVERY_OFFICE.label}
               labelClassName="text-body"
               theme={floorTheme}
-              status="the floor's theme"
+              status="replace all office choices"
               isOpen={openKey === 'floor'}
               onToggle={() => toggle('floor')}
             >
@@ -233,7 +256,7 @@ export function ThemesList({
         <p className="text-caption text-text-secondary">
           {cycleScope
             ? `The T key changes ${cycleScope}, the office the camera last flew to.`
-            : 'The T key changes the floor default until the camera flies to an office.'}
+            : 'The T key changes the map default until the camera flies to an office.'}
         </p>
       </Plate>
     </div>

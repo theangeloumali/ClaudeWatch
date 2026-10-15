@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 
 export function useNow(intervalMs: number): number {
-  const [now, setNow] = useState(() => Date.now())
+  const [, setNow] = useState(() => Date.now())
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), intervalMs)
     return () => clearInterval(timer)
   }, [intervalMs])
-  return now
+  // A feed update between ticks must not be evaluated against an older display clock.
+  return Date.now()
 }

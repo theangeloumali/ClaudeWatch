@@ -515,7 +515,16 @@ describe('OfficeInteractions', () => {
       expect(await interactions.peek('claude:s1')).toEqual({
         success: true,
         lines: ['a', 'b'],
-        fingerprint: expect.stringMatching(/^[0-9a-f]{64}$/)
+        fingerprint: expect.stringMatching(/^[0-9a-f]{64}$/),
+        capturedAtMs: expect.any(Number),
+        targetAgentKey: 'claude:s1',
+        terminal: {
+          ownerAgentKey: 'claude:s1',
+          paneKey: 'tab1:leaf1',
+          pid: 1,
+          startedAtMs: 1,
+          incarnationId: 'inc_1'
+        }
       })
     })
 

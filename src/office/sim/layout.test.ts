@@ -219,7 +219,20 @@ it('keeps a company north of the street where it stands when one of its projects
     expect(deeper.depth).toBeGreaterThan(company.depth)
     // The street side stays put; the company grows away from it.
     expect(deeper.z + deeper.depth / 2).toBe(company.z + company.depth / 2)
-    for (const live of crew) expect(roomOf(after, live.key)).toEqual(roomOf(before, live.key))
+    for (const live of crew) {
+      const previous = roomOf(before, live.key)!
+      expect(roomOf(after, live.key)).toEqual({
+        ...previous,
+        x: expect.closeTo(previous.x, 10),
+        z: expect.closeTo(previous.z, 10),
+        door: { x: expect.closeTo(previous.door.x, 10), z: expect.closeTo(previous.door.z, 10) },
+        slots: previous.slots.map((slot) => ({
+          ...slot,
+          x: expect.closeTo(slot.x, 10),
+          z: expect.closeTo(slot.z, 10)
+        }))
+      })
+    }
     expect(deeper.lounge!.slots.slice(0, 4)).toEqual(company.lounge!.slots.slice(0, 4))
     expectClearLanes(after)
   }
@@ -228,7 +241,12 @@ it('keeps a company north of the street where it stands when one of its projects
   const busier = [{ ...lead, subagents: workers(12) }, ...crew.slice(1)]
   const withTeamRow = buildLayout([...south, ...busier], before)
   expectHeldInPlace(withTeamRow)
-  expect(teamSeat(withTeamRow)).toEqual(teamSeat(before))
+  const heldTeamSeat = teamSeat(before)!
+  expect(teamSeat(withTeamRow)).toEqual({
+    ...heldTeamSeat,
+    x: expect.closeTo(heldTeamSeat.x, 10),
+    z: expect.closeTo(heldTeamSeat.z, 10)
+  })
 
   // A fifth session adds a desk row; as on the south side, only the team area moves past it.
   expectHeldInPlace(buildLayout([...south, ...crew, inCompany('north', '1', 'fifth')], before))
@@ -262,8 +280,9 @@ it('has no team area without subagents, and one only as large as the overflow ne
   expect(teamFor(0)).toBeUndefined()
   // Two guests fit at the desk's own guest seats.
   expect(teamFor(2)).toBeUndefined()
-  expect(teamFor(3)).toEqual([1, 4, 4])
-  expect(teamFor(7)).toEqual([5, 6, 8])
+  // Body-sized aisles require a 2.6 m seat pitch, not the former 2 m pitch.
+  expect(teamFor(3)).toEqual([1, 4.6, 4.6])
+  expect(teamFor(7)).toEqual([5, 12.4, 7.2])
 })
 
 const many = (count: number) =>

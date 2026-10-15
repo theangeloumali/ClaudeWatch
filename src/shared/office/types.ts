@@ -3,6 +3,13 @@
 
 export type ProviderId = 'claude' | 'codex' | 'opencode'
 
+// Selected configuration, not proof of which model is currently executing.
+export interface SelectedModelRef {
+  providerId: string
+  modelId: string
+  variant?: string
+}
+
 export type AgentActivity =
   | 'idle'
   | 'thinking'
@@ -22,6 +29,13 @@ export type SessionHost = 'terminal' | 'orca' | 'vscode' | 'unknown'
 export interface CurrentTool {
   name: string
   category: ToolCategory
+}
+
+export interface AgentObservation {
+  sourceId: string
+  observedAtMs: number
+  staleAfterMs: number
+  coverage: 'own' | 'unknown'
 }
 
 // Tokens counted from a transcript. Numbers only, never text.
@@ -46,6 +60,7 @@ export interface SubagentRef {
   id: string
   type: string
   activity: AgentActivity
+  selectedModel?: SelectedModelRef
   // A teammate is an agent-team member with its own process and pane; a subagent runs inside
   // its parent. Absent means subagent.
   kind?: 'subagent' | 'teammate'
@@ -56,6 +71,9 @@ export interface SubagentRef {
   startedAtMs?: number
   orcaPaneKey?: string | null
   tokens?: TokenCounts | null
+  observation?: AgentObservation
+  currentTool?: CurrentTool | null
+  attention?: AgentAttention
 }
 
 export type AccountConfidence = 'exact' | 'inferred' | 'unattributed'
@@ -72,6 +90,7 @@ export interface AccountRef {
 export interface SessionRef {
   key: string // `${provider}:${sessionId}`
   provider: ProviderId
+  selectedModel?: SelectedModelRef
   sessionId: string
   pid: number | null
   name: string // session name, else the cwd basename
@@ -98,12 +117,16 @@ export interface SessionRef {
   usage?: SessionUsage | null
   accountKey?: string | null
   accountConfidence?: AccountConfidence
+  observation?: AgentObservation
 }
 
 export interface SourceHealth {
   id: string
   ok: boolean
   detail: string
+  // The last successful source check, not the latest poll of its cached result.
+  checkedAtMs?: number
+  staleAfterMs?: number
 }
 
 export interface OfficeSnapshot {
@@ -129,6 +152,10 @@ export type FeedMessage =
 
 // What the renderer draws for one agent; produced by the sim, never by raw events.
 export interface AgentView {
+  elevation?: number
+  physicalFloorId?: string | null
+  venueId?: string
+  connectorId?: string
   agentKey: string
   floorId: string
   roomId: string
@@ -173,6 +200,17 @@ export interface PeekResult extends InteractionResult {
   lines: string[]
   // Identifies exactly what was shown; respond() refuses if the screen no longer matches it.
   fingerprint?: string
+  capturedAtMs?: number
+  targetAgentKey?: string
+  terminal?: TerminalProvenance
+}
+
+export interface TerminalProvenance {
+  ownerAgentKey: string
+  paneKey: string
+  pid: number
+  startedAtMs: number
+  incarnationId: string
 }
 
 // Where a focus request landed: the agent's exact pane, only the Orca app (the pane could not

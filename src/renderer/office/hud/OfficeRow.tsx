@@ -1,10 +1,12 @@
 import { ChevronDown, Diamond } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { useId, type ReactNode } from 'react'
 import { agentCountLabel, needsYouLabel } from '../logic/floor-model'
 import type { OfficeProjectRow } from '../logic/zone-model'
 import type { OfficeTheme } from '../themes/types'
 import { ROW_CLASS } from './hud-styles'
 import { formatTotal } from '../../deck/tokens'
+import { summariseActivity, type ActivitySummary } from '../logic/activity-summary'
+import { ActivityBreakdown } from './ActivityBreakdown'
 
 type RowCounts = Pick<OfficeProjectRow, 'label' | 'zoneId' | 'agentCount' | 'attentionCount'>
 
@@ -25,6 +27,7 @@ interface ZoneButtonProps {
   onFlyToZone: (zoneId: string) => void
   // The zone's name, set in the face its level uses.
   children: ReactNode
+  activity?: ActivitySummary
 }
 
 // Flies the camera to a company or project. A row without a zone yet is shown, not clickable.
@@ -34,32 +37,47 @@ export function ZoneButton({
   isPartial,
   focusedZoneId,
   onFlyToZone,
-  children
+  children,
+  activity
 }: ZoneButtonProps) {
   const isCurrent = row.zoneId !== null && row.zoneId === focusedZoneId
+  const descriptionId = useId()
   return (
-    <button
-      type="button"
-      aria-label={rowName(row, tokens, isPartial)}
-      aria-current={isCurrent ? 'true' : undefined}
-      disabled={row.zoneId === null}
-      onClick={() => row.zoneId && onFlyToZone(row.zoneId)}
-      className={ROW_CLASS}
-    >
-      {children}
-      {row.attentionCount > 0 && (
-        <span className="flex items-center gap-0.5 text-xs font-semibold text-text-primary">
-          <Diamond aria-hidden="true" className="size-3 fill-seal stroke-paper" />
-          {row.attentionCount}
+    <div className="flex min-w-0 flex-1 flex-col">
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-2">
+        <button
+          type="button"
+          aria-label={rowName(row, tokens, isPartial)}
+          aria-describedby={descriptionId}
+          aria-current={isCurrent ? 'true' : undefined}
+          disabled={row.zoneId === null}
+          onClick={() => row.zoneId && onFlyToZone(row.zoneId)}
+          className={`${ROW_CLASS} col-span-2 col-start-1 row-start-1 grid grid-cols-subgrid`}
+        >
+          {children}
+        </button>
+        <span
+          aria-hidden="true"
+          className="pointer-events-none col-start-2 row-start-1 flex items-center gap-2 px-1.5"
+        >
+          {row.attentionCount > 0 && (
+            <span className="flex items-center gap-0.5 text-xs font-semibold text-text-primary">
+              <Diamond aria-hidden="true" className="size-3 fill-seal stroke-paper" />
+              {row.attentionCount}
+            </span>
+          )}
+          <span className="text-caption tabular-nums text-text-tertiary">{row.agentCount}</span>
+          {tokens !== undefined && (
+            <span className="min-w-[2.75rem] text-right text-xs tabular-nums text-accent">
+              {formatTotal(tokens, isPartial)}
+            </span>
+          )}
         </span>
-      )}
-      <span className="text-caption tabular-nums text-text-tertiary">{row.agentCount}</span>
-      {tokens !== undefined && (
-        <span className="min-w-[2.75rem] text-right text-xs tabular-nums text-accent">
-          {formatTotal(tokens, isPartial)}
-        </span>
-      )}
-    </button>
+      </div>
+      <span id={descriptionId} className="px-1.5 pb-1">
+        <ActivityBreakdown summary={activity ?? summariseActivity([], false)} />
+      </span>
+    </div>
   )
 }
 
