@@ -1,10 +1,10 @@
 # Mac 1.3.5 full-build release
 
-Status: approved. Angelo requested installation, release and merge to main at 1.3.5, then selected **Full build (Recommended)**: the verified Office/city build with minimap, OpenCode selected-model facts, citizen-boundary and venue-canopy corrections. Work runs in an isolated release worktree; the original dirty checkout and private signing files remain untouched.
+Status: **signed local 1.3.5 installed and reopened; public release and main merge blocked by Apple's pending agreements.** Draft PR #12 contains the complete source. Angelo requested installation, release and merge to main at 1.3.5, then selected **Full build (Recommended)**: the verified Office/city build with minimap, OpenCode selected-model facts, citizen-boundary and venue-canopy corrections. The original dirty checkout and private signing files remain untouched.
 
-| Ticket              | Status                        | Source link                                   | Conversation                                                                |
-| ------------------- | ----------------------------- | --------------------------------------------- | --------------------------------------------------------------------------- |
-| none — needs filing | Release authorized; no PR yet | https://github.com/theangeloumali/ClaudeWatch | "okay install and release this and merge this to main this should be 1.3.5" |
+| Ticket              | Status                                                         | Source link                                           | Conversation                                                                |
+| ------------------- | -------------------------------------------------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------- |
+| none — needs filing | Draft PR #12; local installation verified; public release held | https://github.com/theangeloumali/ClaudeWatch/pull/12 | "okay install and release this and merge this to main this should be 1.3.5" |
 
 ## Release contract
 
@@ -26,9 +26,9 @@ Validated: `node /Users/angeloumali/Desktop/Work/ZKidz/ClaudeWatch/recordings/re
 
 Root cause: `src/bridge/registry.ts:151–183` discovers lead sessions only from `root/sessions/<pid>.json`; `src/bridge/poller.ts:94–105` provides the process table but there is no native-Claude process fallback. As a result all children of an unregistered lead disappear before rendering, while source health still says live. The release is held until live process-backed discovery and executable count/identity regressions cover this path. Preserve registry-proven sessions, process ownership/start identities, child liveness and no-duplicate rules; do not invent completed workers, modify CLI settings/hooks, or scan entire transcripts/databases.
 
-| Ticket              | Status                                                               | Source link                                                                                                              | Conversation                                                                                                  |
-| ------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
-| none — needs filing | Reproduced release blocker; missing native Claude leads and children | /Users/angeloumali/Desktop/Work/ZKidz/ClaudeWatch/recordings/release-1.3.5-2026-10-15/claude-discovery-reproduction.json | "I notice an issue where I do have a lot of Claude agents but it's not fucking showing on the fucking office" |
+| Ticket              | Status                                    | Source link                                           | Conversation                                                                                                  |
+| ------------------- | ----------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| none — needs filing | Fixed and locally installed; draft PR #12 | https://github.com/theangeloumali/ClaudeWatch/pull/12 | "I notice an issue where I do have a lot of Claude agents but it's not fucking showing on the fucking office" |
 
 Add a test-first native process fallback using existing process/folder/transcript discovery primitives. Test resumed leads without registry, a fresh native CLI process, source start/PID identity, shared-folder claim isolation, empty/missing registry, completed-child exclusion and duplicate avoidance when a registry later appears. Verify the same live PropApp process and its eligible child identities reach both feed and scene before the release proceeds. This is a reproduced correctness fix inside the approved full release, not a new provider integration.
 
@@ -47,7 +47,7 @@ Additional validation of that same identity defect: `conversation-done-identity-
 
 The Codex collector/child-observation correction and its tests are one isolated backend slice. The reducer identity guard and its source-observation tests are an independent primary-owned slice; they run in parallel and join before focused/full verification, simplification, audits and the one allowed independent-review rerun. Public-release boundaries remain unchanged.
 
-Remediation verification: the hosted-child suite now has 25 passing cases, source-observation recovery has eight, and the complete bridge/Office-service run passes 560 tests. The rebuilt full suite passes **5,006 tests, zero failures, 18 platform-specific skips**; lint, both typechecks, native/web builds and refreshed native/desktop/mobile runtime checks pass. The same review pair is checking this bounded remediation before the single independent-review rerun.
+Remediation verification: the hosted-child suite now has 25 passing cases, source-observation recovery has eight, and the complete bridge/Office-service run passes 560 tests. The rebuilt full suite passes **5,006 tests, zero failures, 18 platform-specific skips**; lint, both typechecks, native/web builds and refreshed native/desktop/mobile runtime checks pass. QA/security approved the bounded remediation; the independent working-tree rerun and final release-branch review both approved with no blocking findings.
 
 The owner receives one installed Mac version 1.3.5 with the previously verified city, eight themes, single-storey defaults, saved authored layouts, minimap and provider/model facts. Venue canopies no longer cover office workers, and Hide roofs includes awnings. Existing Windows behavior remains in main. Users can download authenticated, signed/notarized Mac installers, and update metadata points at artifacts with matching version, size and hashes. GitHub main, the release tag, package version and shipped source agree. No credentials, private profiles, local recording code or generated media enter the PR.
 
@@ -59,6 +59,25 @@ The owner receives one installed Mac version 1.3.5 with the previously verified 
 - [ ] Phase 4 — build signed/notarized arm64 and x64 Mac DMG/ZIP artifacts locally with publication disabled; validate version/ASAR/runtime/widget, artifact hashes and update manifests. Verify: actual signatures and notarization/Gatekeeper checks pass; candidate runs with isolated copied data.
 - [ ] Phase 5 — push release branch and complete PR, merge to main through GitHub, fetch/verify merged tree, tag its exact commit, install the matching arm64 artifact with immediate verified backups, publish v1.3.5 and verify downloads/update manifests. Verify: installed About/runtime version 1.3.5, normal reopen, saved-data comparisons, matching remote hashes and public release/PR URLs.
 - [ ] Phase 6 — final source-stable MP4 evidence, checklist/gauge/learning close, local reports/HTML twins and task-owned worktree cleanup. Verify: final files exist, original dirty checkout unchanged, no secrets/media published and no outstanding review findings.
+
+### Verified local delivery and public hold
+
+- Source commit `a0a589a6e48197eb631d339b22d3356c0b12cd52` is pushed on `release/1.3.5`; [draft PR #12](https://github.com/theangeloumali/ClaudeWatch/pull/12) targets main. Documentation-only close records do not change the installed source.
+- Phase 4 local subset passed: fresh arm64 ZIP, exact packaged source/build-output hashes, complete required dependency graph, ten browser-manifest files, app/widget strict Developer ID signatures, hardened runtime and architecture checks. Candidate runtime and 60-second minimize/resume checks passed. Notarization and Gatekeeper approval did not pass; this is not a public-distribution artifact.
+- The shared `node_modules` symlink initially caused eleven required transitive dependencies to be omitted even though packaging succeeded. The verifier rejected that archive before installation. Replacing only the task-owned symlink with a physical copy of the same locked dependencies produced the verified complete build; no dependency versions or original dependency directory changed.
+- Phase 5 local subset passed: `/Applications/ClaudeWatch.app` reports 1.3.5, exactly matches the verified candidate and reopens normally. Immediate rollback app/data copies are retained at `/Users/angeloumali/Library/Application Support/ClaudeWatch-install-backups/20261015-224337/`. App ASAR SHA-256: `87bdc1d204818f114d661e9ca9aa00226f96ee51aa56b1bdfffeae70b2d0a605`. Saved settings, layouts, themes and identity comparisons passed; the installed runtime has no missing/duplicate detected workers or errors.
+- Phase 6 local evidence is complete: frame-checked H.264/AAC MP4s cover the signed native app, desktop web and mobile web. Final recording samples independently show six current Claude actors on each surface, all present without duplicates; counts change as real jobs finish. The Desktop checklist, impact evidence, local HTML twins and canonical learning capture are recorded. No existing tracker ticket or Slack source message was supplied, so none was fabricated or marked complete.
+- Public notarization, Intel/full distribution packaging, public tagging, publication, download verification and main merge remain blocked on Apple agreement processing and account access. Phases 4–6 remain unchecked because the whole public-release contract is not complete. No ready PR, public release or merge is claimed.
+
+### Measured result
+
+- Native process-backed discovery is now usable without registry records. The 33 discovery/ownership regressions pass, and the installed scene matches the detected live feed without missing or duplicate identities.
+- Explicit active hosted descendants survive a quiet parent on cold start. The 25 collector regressions cover nested lineage, exclusions, age, bounds and totals.
+- Conversation recovery no longer inherits another conversation's workers or completion badge. Eight source-observation tests pass; the full suite passes 5,006 tests across 407 files, with zero failures and 18 platform-specific skips.
+- The complete Office/minimap/selected-model build is installed and demonstrated on native, desktop and mobile surfaces. Ten final-master frames were inspected; no source code changed after recording.
+- The source integration commit adds 39,617 lines and removes 1,440. This is a large feature integration, not a size-reduction refactor; the strict dead-code scan is clean and all 733 locked dependency entries are unchanged. At the first push there was one verified source commit; no unpushed source work remains.
+
+Resume from draft PR #12 after account access is restored: validate the exact notarytool profile, rebuild both architectures from the then-current reviewed release source with publication disabled, prove actual notarization and Gatekeeper approval, then complete the already authorized main merge, exact tag, public release and download verification. Do not reuse the unnotarized local ZIP as if it had passed those gates.
 
 ## Dependency flow
 
