@@ -65,7 +65,7 @@ Finding ids below (`seating-1`, `P3` …) refer to those reports.
 - [x] Phase 2 — Door, departures and honest cards: ungameable churn gates, cycle-only tie-break, body-blocked bound, gate skips blocked arrivers, subagents fade at desks, "Leaving" and honest unknown cards
 - [x] Phase 3 — Legacy town decision, one street source, one crosswalk source, the sidewalk network, lane-centre vehicles (P1, P2, P3, P6)
 - [x] Phase 4 — Citizens on the network: pedestrian ground, deadlock breaker that survives replans, zebra right-of-way, ambient loops
-- [ ] Phase 5 — Roaming agents via the leisure system: idle or done roam the sidewalks, unknown stays seated, working returns; guarded move of arrivals onto the network
+- [x] Phase 5 — Roaming agents via the leisure system: idle or done roam the sidewalks, unknown stays seated, working returns; guarded move of arrivals onto the network
 - [x] Phase 6 — Render fixes: facade layer steps, cutaway hysteresis, desk-band card culling, context loss, canvas metrics
 - [ ] Phase 7 — Performance: static and dynamic batches, motion out of React, cached batch keys, memoised validation, shader prewarm, host-served world document
 - [ ] Phase 8 — Release and repo hygiene: one version line (1.4.1), honest Windows updater status, main-checkout mode noise, worktree cleanup
@@ -725,7 +725,7 @@ Two corrections from verify-render-perf:
 
 ---
 
-## Phase 7 — Performance (@lena-perf, after Phases 2, 4, 5, 6; ITEM CW-PERF)
+## Phase 7 — Performance (@lena-perf-a batches · @lena-perf-b feed; after Phases 2, 4, 5, 6; ITEM CW-PERF)
 
 **Verify:**
 
@@ -968,6 +968,22 @@ Phases 1, 2, 3 and 6 run in parallel, as do Phases 4 and 5. Wall-clock with the 
   - The jam breaker is city-only until Task 8.3.
   - Motion moved into `mover-step.ts`, so the replays run the shipped step.
 - Lead follow-up `d00037d`: vehicles still stop for the **player** mid-block. Removing nose-holding had let cars drive through the owner's character.
+
+### Phase 5 (merged `a07df0b`)
+
+- 2 commits RED→GREEN. On the integration branch with Phase 4, sim + renderer + office-live + shared: **3,289 tests pass, 0 fail**, and both `tsc` are clean.
+- Door replay with roaming on: stillInside 0, unseated 0, queued 0, slowest seating 26.1 s.
+- Live 10-min capture (builder's server, 583 samples): 4 idle agents walked sidewalks (3 loop and 3 venue outings), 0 samples on a carriageway outside a crosswalk, 0 unknown or working agents off their desks.
+- Deviations:
+  - An outing alternates venue → loop, then goes home.
+  - One `ROAMER_CAP = 8`, measured: 4 and 8 pass the door swap at 0.08 and 0.13 ms a step; 12 left 3 unseated at 1.73 ms a step. The sim has no quality level.
+  - `planRoam` rotates through the 3 nearest loops, because there is no RNG in the sim.
+  - Return bound is 90 s, because one-way runs send returners round the block.
+  - The arcade walk budget in `worker-city-lifecycle` went 150 → 300 s.
+  - An unstamped agent in an observed feed now stays home (owner rule).
+  - The arrival gate ignores walkers still on sidewalk legs.
+  - Task 5.2 applies to walks from another building only; applied to every street leg it left 4 teammates unseated.
+- Re-check after Phase 4 (lead, running): the live capture on the integration build checks the zebra crawl the builder saw before Phase 4's citizens landed.
 
 ### Phase 8 (in progress)
 
