@@ -35,12 +35,21 @@ export const SHARED_BATCH = 'sharedBatch'
 
 const SHARED_KEY = 'shared:'
 
+const batchRoots = new WeakSet<Object3D>()
+
 // A batched root keeps its own world matrices: frozen when static, refreshed by updateMeshBatches
 // each frame otherwise. The renderer's pass over its thousands of parts would repeat that work.
 export function createBatchRoot(): Group {
   const root = new Group()
   root.updateMatrixWorld = () => undefined
+  batchRoots.add(root)
   return root
+}
+
+// A batch nested in another owns its subtree, so each rebuilds and freezes alone (perf-11).
+function traverseOwn(root: Object3D, visit: (object: Object3D) => void): void {
+  visit(root)
+  for (const child of root.children) if (!batchRoots.has(child)) traverseOwn(child, visit)
 }
 
 function colorOf(material: Material): Color | null {
@@ -126,7 +135,7 @@ function tintInstances(batch: InstancedMesh, sources: readonly SourceMesh[]): vo
 
 export function createMeshBatches(root: Group): MeshBatch[] {
   const groups = new Map<string, SourceMesh[]>()
-  root.traverse((object) => {
+  traverseOwn(root, (object) => {
     if (!(object instanceof Mesh) || Array.isArray(object.material)) return
     const key = batchKey(object, object.material)
     if (!key) return
@@ -262,7 +271,7 @@ export function releaseMeshBatches(root: Group, batches: readonly MeshBatch[]): 
 // matrix on every frame, and a town is thousands of objects.
 export function freezeMatrices(root: Object3D): void {
   root.updateWorldMatrix(true, true)
-  root.traverse((object) => {
+  traverseOwn(root, (object) => {
     object.matrixAutoUpdate = false
     object.matrixWorldNeedsUpdate = false
   })
@@ -270,7 +279,7 @@ export function freezeMatrices(root: Object3D): void {
 
 // Before they are placed again: positions set since the freeze are taken up here.
 export function thawMatrices(root: Object3D): void {
-  root.traverse((object) => {
+  traverseOwn(root, (object) => {
     object.matrixAutoUpdate = true
   })
   root.updateWorldMatrix(true, true)

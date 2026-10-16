@@ -3,6 +3,7 @@ import { Children, isValidElement, type ReactNode } from 'react'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { AgentView } from '../../../shared/office/types'
 import { makeAgent, makeFloor, makeRoom } from '../__tests__/fixtures'
+import type { FloorGeometry } from '../scene-model'
 import { themeForTeam } from '../themes/registry'
 import OfficeScene from './OfficeScene'
 
@@ -28,9 +29,10 @@ afterEach(() => {
 const floor = makeFloor({ floorId: 'f1', label: 'Main', rooms: [makeRoom({ id: 'r1' })] })
 const theme = themeForTeam()
 
-function scene(agents: readonly AgentView[]) {
+function scene(agents: readonly AgentView[], visibleFloors?: readonly FloorGeometry[]) {
   return (
     <OfficeScene
+      visibleFloors={visibleFloors}
       theme={theme}
       floors={[{ floorId: 'f1', label: 'Main', attentionCount: 0 }]}
       sessions={[]}
@@ -78,4 +80,15 @@ it('changes the revision when an agent joins, leaves or changes provider or role
   expect(left).toBe(alone)
   expect(switched).not.toBe(alone)
   expect(subagent).not.toBe(switched)
+})
+
+// perf-11: storeys batch their robots apart, so the floor batch stands through roster churn.
+it('with storeys drawn, keeps the floor revision when an agent joins, leaves or roams', () => {
+  const storeys = [floor]
+  const view = render(scene([walker(0)], storeys))
+  view.rerender(scene([walker(0), makeAgent({ agentKey: 'claude:b' })], storeys))
+  view.rerender(scene([walker(0, { roomId: 'r2', physicalFloorId: null })], storeys))
+  view.rerender(scene([walker(0)], storeys))
+  expect(revisions).toHaveLength(4)
+  expect(new Set(revisions).size).toBe(1)
 })
