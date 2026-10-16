@@ -157,5 +157,5 @@ it.each([20, 40, 60, 512])(
     expect(draws).toBeLessThanOrEqual(DRAW_CEILING)
     expect(triangles).toBeLessThanOrEqual(TRIANGLE_CEILING)
   },
-  30000
+  90_000
 )

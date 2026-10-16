@@ -25,6 +25,9 @@ import { TOWN_DISTRICTS } from '../town/town-zones'
 import { townOn } from '../town/movers.test-utils'
 import { median } from '../town/town.test-utils'
 
+// Full sim or scene builds: the 5 s default times out under multi-agent load (health-9).
+vi.setConfig({ testTimeout: 60_000 })
+
 vi.mock('react', async (original) => ({
   ...(await original<typeof import('react')>()),
   useMemo: (factory: () => object) => factory(),
@@ -93,7 +96,7 @@ it('draws less of everything as the town gets smaller, three themes and 60 agent
   expect(village.triangles).toBeLessThan(city.triangles)
   expect(village.draws).toBeLessThanOrEqual(city.draws)
   // Three full merges of a ten-company floor: slow when the suite runs beside other work.
-}, 30_000)
+}, 90_000)
 
 // A stand-in for a theme that shares no part with another: Brass's cost, merged only with itself.
 function unshared<Props extends object>(Component: ComponentType<Props>): ComponentType<Props> {

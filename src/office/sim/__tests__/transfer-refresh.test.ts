@@ -1,9 +1,12 @@
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { session } from '../fixtures'
 import { World } from '../world'
 import { buildLayout } from '../layout'
 import { resolveEffectiveWorld } from '../effective-world'
 import { createWorldDocument } from '../../../shared/office/world-document'
+
+// Full sim or scene builds: the 5 s default times out under multi-agent load (health-9).
+vi.setConfig({ testTimeout: 60_000 })
 
 it('preserves an active lift route during equivalent source observations', () => {
   const sessions = [session('one')]
