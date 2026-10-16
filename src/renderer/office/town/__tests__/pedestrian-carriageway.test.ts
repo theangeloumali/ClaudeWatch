@@ -272,6 +272,19 @@ describe.each([
       onDivider: 0
     })
   })
+
+  it('closes each transit and runabout loop on its lanes, never cutting a corner', () => {
+    const diagonals = build()
+      .trips.filter((trip) => trip.kind === 'transit' || trip.kind === 'runabout')
+      .flatMap((trip) =>
+        trip.route.points.slice(1).flatMap((to, index) => {
+          const from = trip.route.points[index]
+          const isDiagonal = Math.abs(to.x - from.x) > 1e-6 && Math.abs(to.z - from.z) > 1e-6
+          return isDiagonal ? [`${trip.kind} ${from.x.toFixed(2)}:${from.z.toFixed(2)}`] : []
+        })
+      )
+    expect(diagonals).toEqual([])
+  })
 })
 
 // Citizen rows: RED until Phase 4 moves citizens onto the sidewalk network.
