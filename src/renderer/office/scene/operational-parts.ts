@@ -10,6 +10,7 @@ import { box, cylinder, SIDES, turned, type PartSpec } from '../themes/parts'
 import type { BuildingExteriorProfile } from '../themes/physical-building-parts'
 import type { OfficeTheme } from '../themes/types'
 import { PHYSICAL_STOREY_HEIGHT } from './all-floor-model'
+import { FACADE_LAYER_STEP_M } from './building-window-parts'
 
 export const STRUCTURAL_SIDES = ['north', 'east', 'south', 'west'] as const
 const COLUMN_WIDTH = 0.16
@@ -17,6 +18,8 @@ const FASCIA_HEIGHT = 0.12
 const BEAM_HEIGHT = 0.2
 const MAX_RAFTER_REACH = 1.2
 const ROOM_INLAY_Y = 0.034
+// flicker-1: frame tops sit a layer step below the facade's continuous top band.
+const FRAME_TOP = PHYSICAL_STOREY_HEIGHT - FACADE_LAYER_STEP_M
 
 // dry-new: existing glazing/crowns have no exposed load-bearing frame or slab-edge fascia.
 export function slabFasciaParts({
@@ -83,8 +86,8 @@ export function perimeterStructureParts({
       const z = segment.z - floor.z + (isAlongX ? (-normal.z * columnEnvelope) / 2 : along)
       return [
         columnShape(
-          [x, PHYSICAL_STOREY_HEIGHT / 2, z],
-          [columnWidth, PHYSICAL_STOREY_HEIGHT, columnWidth],
+          [x, FRAME_TOP / 2, z],
+          [columnWidth, FRAME_TOP, columnWidth],
           profile.frameColor
         ),
         box([x, 0.08, z], [columnEnvelope, 0.16, columnEnvelope], theme.palette.stone),
@@ -96,14 +99,16 @@ export function perimeterStructureParts({
       ]
     })
   })
-  const edgeX = normal.x * (floor.width / 2 - columnWidth / 2)
-  const edgeZ = normal.z * (floor.depth / 2 - columnWidth / 2)
-  const beamY = PHYSICAL_STOREY_HEIGHT - BEAM_HEIGHT / 2
+  // The beam's room face gives way a step: offset-canopy's facade is exactly two columns deep.
+  const beamDepth = columnWidth - FACADE_LAYER_STEP_M
+  const edgeX = normal.x * (floor.width / 2 - beamDepth / 2)
+  const edgeZ = normal.z * (floor.depth / 2 - beamDepth / 2)
+  const beamY = FRAME_TOP - BEAM_HEIGHT / 2
   const rafterReach = Math.min(MAX_RAFTER_REACH, crossSpan * 0.12)
   parts.push(
     box(
       [edgeX, beamY, edgeZ],
-      isAlongX ? [span, BEAM_HEIGHT, columnWidth] : [columnWidth, BEAM_HEIGHT, span],
+      isAlongX ? [span, BEAM_HEIGHT, beamDepth] : [beamDepth, BEAM_HEIGHT, span],
       profile.frameColor
     )
   )

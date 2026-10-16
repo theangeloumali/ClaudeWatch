@@ -1,5 +1,6 @@
 import type { FloorGeometry } from '../scene-model'
 import { floorElevation, PHYSICAL_STOREY_HEIGHT } from '../scene/all-floor-model'
+import { FACADE_LAYER_STEP_M } from '../scene/building-window-parts'
 import { ROOM_DOOR_WIDTH } from '../logic/room-layout'
 import { draw, hashOf } from './lot-math'
 import { box, cylinder, lit, type PartSpec } from './parts'
@@ -145,12 +146,22 @@ export function buildingCrown({
       theme.id === 'cyberpunk-city' ? palette.ink : palette.paper
     )
   ]
+  // flicker-1: parapet ends stand a layer step past the slab ends instead of on their plane.
+  const parapetOverhang = 0.4 + 2 * FACADE_LAYER_STEP_M
   for (const side of [-1, 1]) {
     parts.push(
-      box(at(0, 0.28, (side * floor.depth) / 2), [floor.width + 0.4, 0.4, 0.3], palette.lacquer)
+      box(
+        at(0, 0.28, (side * floor.depth) / 2),
+        [floor.width + parapetOverhang, 0.4, 0.3],
+        palette.lacquer
+      )
     )
     parts.push(
-      box(at((side * floor.width) / 2, 0.28, 0), [0.3, 0.4, floor.depth + 0.4], palette.lacquer)
+      box(
+        at((side * floor.width) / 2, 0.28, 0),
+        [0.3, 0.4, floor.depth + parapetOverhang],
+        palette.lacquer
+      )
     )
   }
   const height = profile.crownHeight
@@ -315,10 +326,11 @@ function appendThemeCrown(
         )
       )
     )
+    // Grown a layer step on each side: its outer face otherwise lands on a split lantern's.
     parts.push(
       box(
         at(-profile.handedness * floor.width * 0.32, 0.5, floor.depth * 0.12),
-        [floor.width * 0.1, 0.8, floor.depth * 0.42],
+        [floor.width * 0.1 + 2 * FACADE_LAYER_STEP_M, 0.8, floor.depth * 0.42],
         palette.lacquer
       )
     )
@@ -362,7 +374,7 @@ export function buildingEntrance({
       facade.push(
         box(
           [profile.handedness * (halfDoor + 0.55), 1.6 + rib * 0.6, 0.2],
-          [0.65, 0.18, 0.24],
+          [0.65, 0.18, 0.24 + 2 * FACADE_LAYER_STEP_M],
           palette.copper
         )
       )
