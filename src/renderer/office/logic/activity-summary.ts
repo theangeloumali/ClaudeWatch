@@ -37,7 +37,7 @@ export function isActivityAvailable(
 }
 
 // An observing bridge stamps every session it reads; fixtures and older feeds carry none.
-export function hasOwnRecords(frame: Pick<OfficeFrame, 'sessions'>): boolean {
+function hasOwnRecords(frame: Pick<OfficeFrame, 'sessions'>): boolean {
   return frame.sessions.some(
     (session) =>
       session.observation !== undefined ||

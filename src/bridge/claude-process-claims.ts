@@ -10,7 +10,7 @@ import {
 } from './claude-transcripts'
 
 const SESSION_FLAG = /^(?:--resume|--session-id|-r)(?:=(.*))?$/
-export const HOST_ARGUMENT = /^--(?:chrome-native-host|agent-id|parent-session-id)(?:=|$)/
+const HOST_ARGUMENT = /^--(?:chrome-native-host|agent-id|parent-session-id)(?:=|$)/
 const UTILITY_COMMAND =
   /^(?:--help|--version|-h|-v|help|update|install|uninstall|doctor|auth|mcp|setup-token)$/
 

@@ -21,7 +21,6 @@ export function useSceneFloorData(options: {
   sources?: readonly SourceHealth[]
   connected?: boolean
   selectedAgentKey: string | null
-  speakingAgentKey: string | null
   areRoofsVisible?: boolean
   viewMode?: 'city' | 'office'
   focusedFloorId?: string | null

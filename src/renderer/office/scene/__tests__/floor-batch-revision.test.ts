@@ -23,24 +23,21 @@ const crew = (count: number): AgentView[] =>
 function revisionOf(options: {
   agents: readonly AgentView[]
   selectedAgentKey?: string | null
-  speakingAgentKey?: string | null
 }): string {
   return useSceneFloorData({
     floor,
     theme: getTheme('corporate-city'),
     sessions: [],
     selectedAgentKey: null,
-    speakingAgentKey: null,
     ...options
   }).revision
 }
 
 describe('floor batch revision', () => {
-  it('selecting or speaking to an agent does not rebuild the batches', () => {
+  it('selecting an agent does not rebuild the batches', () => {
     const agents = crew(3)
     const idle = revisionOf({ agents })
     expect(revisionOf({ agents, selectedAgentKey: 'claude:1' })).toBe(idle)
-    expect(revisionOf({ agents, speakingAgentKey: 'claude:1' })).toBe(idle)
   })
 
   it('rebuilds when a robot changes room, because it is re-parented', () => {
