@@ -8,6 +8,7 @@ import { buildWorkstationDisplays } from '../logic/workstation-displays'
 import { getTheme } from '../themes/registry'
 import { floorElevation, groundEnvelope, physicalFloorId } from './all-floor-model'
 import { physicalZoneGroups } from './MultiFloorLayer'
+import { AUTHORED_WORKER_LIMIT } from './scene-density'
 
 // dry-new: one geometry revision and theme resolution serve every supplied physical storey.
 export function useSceneFloorData(options: {
@@ -107,6 +108,10 @@ export function useSceneFloorData(options: {
         `${agent.agentKey}|${agent.provider}|${agent.isSubagent}|${agent.roomId}|${physicalFloorId(agent)}`
     )
     .join(' ')
+  // A selection or a reply only adds a ring or a puff, drawn on its own (perf-3). In overview
+  // the selected worker swaps its model (Robot.tsx), so there it still rebuilds.
+  const modelSwapKey =
+    options.agents.length > AUTHORED_WORKER_LIMIT ? options.selectedAgentKey : null
   const revision = useMemo(
     () =>
       JSON.stringify([
@@ -117,8 +122,7 @@ export function useSceneFloorData(options: {
           [...group.companies, ...group.projects, ...group.rooms].map(({ id }) => id)
         ]),
         rosterKey,
-        options.selectedAgentKey,
-        options.speakingAgentKey,
+        modelSwapKey,
         options.areRoofsVisible ?? true,
         options.viewMode,
         options.focusedFloorId,
@@ -129,8 +133,7 @@ export function useSceneFloorData(options: {
       surfaces,
       zoneGroups,
       rosterKey,
-      options.selectedAgentKey,
-      options.speakingAgentKey,
+      modelSwapKey,
       options.areRoofsVisible,
       options.viewMode,
       options.focusedFloorId,

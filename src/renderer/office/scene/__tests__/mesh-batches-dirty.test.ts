@@ -1,7 +1,21 @@
 // perf-1: a dynamic batch rewrites and uploads only the parts that moved or changed visibility.
-import { BoxGeometry, Group, InstancedMesh, Matrix4, Mesh, MeshStandardMaterial } from 'three'
-import { describe, expect, it } from 'vitest'
-import { createBatchRoot, createMeshBatches, updateMeshBatches } from '../mesh-batches'
+// perf-3: a rebuild reuses each part's batch key instead of serialising it again.
+import {
+  BoxGeometry,
+  BufferGeometry,
+  Group,
+  InstancedMesh,
+  Matrix4,
+  Mesh,
+  MeshStandardMaterial
+} from 'three'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  createBatchRoot,
+  createMeshBatches,
+  releaseMeshBatches,
+  updateMeshBatches
+} from '../mesh-batches'
 
 const MATRIX_FLOATS = 16
 
@@ -86,5 +100,37 @@ describe('mesh batches: dirty instances', () => {
     walls.instanceMatrix.needsUpdate = true
     updateMeshBatches(root, batches)
     expect(batchedMatrix(batches[0].mesh, 1).elements[5]).toBeCloseTo(0.4)
+  })
+})
+
+describe('mesh batches: rebuilds', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  it('serialises a shared geometry at most once across a rebuild', () => {
+    const toJson = vi.spyOn(BufferGeometry.prototype, 'toJSON')
+    const { root } = rootWithThreeDesks()
+    releaseMeshBatches(root, createMeshBatches(root))
+    createMeshBatches(root)
+    expect(toJson.mock.calls.length).toBeLessThanOrEqual(1)
+  })
+
+  it('keys a material changed between builds anew', () => {
+    const root = createBatchRoot()
+    const geometry = new BoxGeometry(1, 1, 1)
+    const [plain, lamp] = [0, 1].map(() => new MeshStandardMaterial({ roughness: 0.8 }))
+    root.add(new Mesh(geometry, plain), new Mesh(geometry, lamp))
+    releaseMeshBatches(root, createMeshBatches(root))
+    // React assigns a changed prop in place; nothing bumps the material's version.
+    lamp.emissive.set('orange')
+    expect(createMeshBatches(root)).toHaveLength(0)
+  })
+
+  it('a part removed since the build is no longer drawn', () => {
+    const { root, desks } = rootWithThreeDesks()
+    const batches = createMeshBatches(root)
+    root.remove(desks[1])
+    updateMeshBatches(root, batches)
+    expect(batchedMatrix(batches[0].mesh, 1).elements[0]).toBe(0)
+    expect(batchedMatrix(batches[0].mesh, 2).elements[12]).toBe(4)
   })
 })

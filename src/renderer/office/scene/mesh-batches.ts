@@ -5,7 +5,9 @@ import {
   InstancedMesh,
   Matrix4,
   Mesh,
+  MeshStandardMaterial,
   Texture,
+  type BufferGeometry,
   type Material,
   type Object3D
 } from 'three'
@@ -45,6 +47,51 @@ function colorOf(material: Material): Color | null {
   return 'color' in material && material.color instanceof Color ? material.color : null
 }
 
+// Keys outlive a rebuild (perf-3). A geometry never changes once built: new args make a new one.
+const shapeKeys = new WeakMap<BufferGeometry, string>()
+// A material is changed in place by React, which bumps no version; these are the props the
+// scene sets, and a cached key stands only while they match.
+const surfaceKeys = new WeakMap<Material, { props: string; key: string }>()
+
+function shapeKey(geometry: BufferGeometry): string {
+  let key = shapeKeys.get(geometry)
+  if (key === undefined) {
+    const { uuid, metadata, ...shape } = geometry.toJSON()
+    void uuid
+    void metadata
+    key = JSON.stringify(shape)
+    shapeKeys.set(geometry, key)
+  }
+  return key
+}
+
+function liveProps(material: Material): string {
+  const props: unknown[] = [material.version, material.side, material.toneMapped, material.opacity]
+  if (material instanceof MeshStandardMaterial)
+    props.push(
+      material.roughness,
+      material.metalness,
+      material.emissive.getHex(),
+      material.emissiveIntensity
+    )
+  return props.join('|')
+}
+
+function surfaceKey(material: Material): string {
+  const props = liveProps(material)
+  const cached = surfaceKeys.get(material)
+  if (cached?.props === props) return cached.key
+  // Colour is left out of the key: it is applied per instance, so parts alike in everything
+  // else share one draw whatever their colour or theme.
+  const { uuid, metadata, color, ...surface } = material.toJSON()
+  void uuid
+  void metadata
+  void color
+  const key = JSON.stringify(surface)
+  surfaceKeys.set(material, { props, key })
+  return key
+}
+
 function batchKey(mesh: Mesh, material: Material): string | null {
   if (!material.visible) return null
   const sharedBatch: unknown = mesh.userData[SHARED_BATCH]
@@ -54,18 +101,7 @@ function batchKey(mesh: Mesh, material: Material): string | null {
   // before serialising: a material's JSON carries its texture's image.
   if ('map' in material && material.map instanceof Texture) return null
   if (!('parameters' in mesh.geometry)) return null
-  const geometry = mesh.geometry.toJSON()
-  const shading = material.toJSON()
-  const { uuid: geometryId, metadata: geometryMetadata, ...shape } = geometry
-  // Colour is left out of the key: it is applied per instance, so parts alike in everything
-  // else share one draw whatever their colour or theme.
-  const { uuid: materialId, metadata: materialMetadata, color, ...surface } = shading
-  void geometryId
-  void geometryMetadata
-  void materialId
-  void materialMetadata
-  void color
-  return JSON.stringify([shape, surface])
+  return `${shapeKey(mesh.geometry)}${surfaceKey(material)}`
 }
 
 const WHITE = new Color(1, 1, 1)
@@ -144,16 +180,23 @@ const matrix = new Matrix4()
 const instance = new Matrix4()
 const hidden = new Matrix4().makeScale(0, 0, 0)
 
+// The root of the pass in progress: set by prepareRoot with inverseRoot.
+let passRoot: Object3D | null = null
+
+// Above the root, a hidden ancestor hides the batch itself. A source React has unmounted since
+// the build never reaches the root, and is hidden too.
 function isVisible(object: Object3D): boolean {
   for (let current: Object3D | null = object; current; current = current.parent) {
+    if (current === passRoot) return true
     if (!current.visible) return false
   }
-  return true
+  return false
 }
 
 function prepareRoot(root: Group): void {
   root.updateWorldMatrix(true, true)
   inverseRoot.copy(root.matrixWorld).invert()
+  passRoot = root
 }
 
 function instanceVersionOf(mesh: Mesh): number {
