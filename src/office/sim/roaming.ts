@@ -20,6 +20,10 @@ const NEARBY_LOOPS = 3
 // Within a body's reach of a walk it is on that walk; farther off it is at a door.
 const ON_WALK_M = 1.25
 const SAME_POINT_M = 1e-6
+// Finer than any carriageway is wide.
+const ROAD_SAMPLE_M = 0.25
+// Only the point test is read; a zero box keeps the unused grid empty.
+const NO_GRID = { x: 0, z: 0, width: 0, depth: 0 }
 
 export type RoutePoint = WorldPoint
 
@@ -28,18 +32,34 @@ export interface CityWalks {
   network: SidewalkNetwork
   loops: readonly RoutePoint[][]
   isWalkable: (point: WorldPoint) => boolean
+  // Whether walking straight through `route` keeps off every carriageway, zebras included.
+  staysOffRoad: (route: readonly WorldPoint[]) => boolean
 }
+
+const apart = (a: WorldPoint, b: WorldPoint): number => Math.hypot(b.x - a.x, b.z - a.z)
 
 export function cityWalks(roads: readonly TownRoad[]): CityWalks {
   const network = sidewalkNetwork(roads, crosswalks(roads))
   // Read before any door attaches, so each loop keeps the entry it was given.
   const loops = ambientLoops(network)
-  // Only the point test is read; a zero box keeps the unused grid empty.
-  const { isOpen } = pedestrianGround(network, { x: 0, z: 0, width: 0, depth: 0 })
-  return { network, loops, isWalkable: isOpen }
+  const { isOpen } = pedestrianGround(network, NO_GRID)
+  // Zebras shut too: a straight line over one is not a walk along its crossing.
+  const { isOpen: isOffRoad } = pedestrianGround({ ...network, zebras: [] }, NO_GRID)
+  const isLegOffRoad = (from: WorldPoint, to: WorldPoint): boolean => {
+    const steps = Math.max(1, Math.ceil(apart(from, to) / ROAD_SAMPLE_M))
+    return Array.from({ length: steps + 1 }, (_, step) => ({
+      x: from.x + ((to.x - from.x) * step) / steps,
+      z: from.z + ((to.z - from.z) * step) / steps
+    })).every(isOffRoad)
+  }
+  return {
+    network,
+    loops,
+    isWalkable: isOpen,
+    staysOffRoad: (route) =>
+      route.every((point, index) => index === 0 || isLegOffRoad(route[index - 1], point))
+  }
 }
-
-const apart = (a: WorldPoint, b: WorldPoint): number => Math.hypot(b.x - a.x, b.z - a.z)
 
 // The node a walker at `point` joins at: ahead of it on the walk it is on, so it keeps the
 // walk's one-way direction (A3), or its door's node when it stands off every walk.
