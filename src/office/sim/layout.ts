@@ -1,4 +1,5 @@
 import type { SessionRef } from '../../shared/office/types'
+import type { TownRoad } from '../../shared/office/town-roads'
 import type { WorldVenue } from '../../shared/office/world-document-types'
 import { LANE, packCompanies } from './allocation'
 import { draftCompany, settleCompany } from './projects'
@@ -11,6 +12,8 @@ export interface LayoutMap {
   // Derived alongside floors; automatic adaptation never changes the saved document.
   effectiveVenues?: readonly WorldVenue[]
   streetBlocks?: { x: number; z: number; width: number; depth: number }[]
+  // Derived like effectiveVenues: the city streets the renderer lays, never persisted.
+  streets?: readonly TownRoad[]
   reservations: Record<
     string,
     { floorId: string; plate: number; bay: number; companyKey: string; projectKey: string }

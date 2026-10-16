@@ -1,23 +1,18 @@
-import type {
-  WorldBuilding,
-  WorldFootprint,
-  WorldPoint
-} from '../../../shared/office/world-document'
+import type { WorldFootprint, WorldPoint } from './world-document-types'
 import {
   CITY_MAIN_CORRIDOR_METRES,
   cityBlocksFor,
   cityGrid,
   cityStreetWidth
-} from '../../../shared/office/city-block-layout'
+} from './city-block-layout'
+import { cityAccessRoads } from './city-access'
 import type { TownRoad } from './town-roads'
-import type { FloorGeometry } from '../scene-model'
-import { cityAccessRoads } from '../../../shared/office/city-access'
 
 // dry-new: lattice roads cannot connect arbitrary plots; reuse the simulation's sparse corner router.
-export type DistrictSite = WorldFootprint &
-  Pick<Partial<FloorGeometry>, 'entrance' | 'zones'> &
-  Pick<Partial<WorldBuilding>, 'companyKey' | 'themeId'>
+export type DistrictSite = WorldFootprint & { entrance?: WorldPoint }
 
+// The sim (LayoutMap.streets), the renderer's town plan and the editor preview all lay their
+// streets here, from the same ground sites, so walkers and paint agree.
 export function districtStreets(options: {
   sites: readonly DistrictSite[]
   obstacles: readonly WorldFootprint[]
