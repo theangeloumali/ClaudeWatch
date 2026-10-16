@@ -151,12 +151,15 @@ export async function collectClaude(
       session: {
         ...session,
         key: claudeProcessKey(io, { pid: entry.pid, startedAtMs, sessionId: entry.sessionId }),
-        observation: {
-          sourceId: `claude:${root}`,
-          observedAtMs: now,
-          staleAfterMs: OBSERVATION_STALE_AFTER_MS,
-          coverage: 'own'
-        }
+        // A lead found without its transcript has nothing observed: unknown, not idle (seating-6).
+        ...(candidate.path !== null && {
+          observation: {
+            sourceId: `claude:${root}`,
+            observedAtMs: now,
+            staleAfterMs: OBSERVATION_STALE_AFTER_MS,
+            coverage: 'own'
+          }
+        })
       },
       hasTeam: team !== null,
       files: path ? { main: path, agents: agentFiles, teammates: new Map(teamTranscripts) } : null

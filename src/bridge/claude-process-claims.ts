@@ -35,8 +35,9 @@ export function claudeSessionClaim(argv: string[]): string | null {
   for (let index = 1; index < argv.length && argv[index] !== '--'; index++) {
     const flag = SESSION_FLAG.exec(argv[index])
     if (!flag) continue
+    // A following flag means the picker: value-less, so it claims nothing (health-6).
     const sessionId = flag[1] ?? argv[index + 1]
-    return isClaudeSessionId(sessionId) ? sessionId : ''
+    return isClaudeSessionId(sessionId) && !sessionId.startsWith('-') ? sessionId : ''
   }
   return null
 }
