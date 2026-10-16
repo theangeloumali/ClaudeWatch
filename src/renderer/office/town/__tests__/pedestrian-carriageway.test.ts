@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { CITIZEN_BODY_RADIUS } from '../../../../shared/office/body-footprints'
 import { SIDEWALK_M } from '../../../../shared/office/town-roads'
-import { citizenGround } from '../../citizens/city-sidewalks'
-import { advanceCitizen, citizenBodyId } from '../../citizens/crowd-movement'
+import { citizenGround, citySidewalks } from '../../citizens/city-sidewalks'
+import { citizenBodyId } from '../../citizens/crowd-movement'
 import { moverClock } from '../../citizens/mover-clock'
-import { routePhase, routePose, walkedSec, type RoutePoint } from '../../citizens/route-pose'
+import { stepMovers } from '../../citizens/mover-step'
+import { routePhase, routePose, type RoutePoint } from '../../citizens/route-pose'
+import { NOSE_M, zebraTraffic } from '../../citizens/zebra-traffic'
 import { SceneBodies } from '../../scene/BodySpace'
 import { reversed } from '../road-net'
-import type { MoverKind } from '../town-trips'
 import {
   isAsphalt,
   liveCity,
@@ -27,12 +28,7 @@ const STILL_M = 1e-3
 const DWELL_SEC = 1
 // Longer than a walker waits for a crossing to clear: standing still this long is a jam.
 const JAM_LIMIT_SEC = 10
-// MoverLayer's NOSE_M and VEHICLE_HOLD_M.
-const NOSE_M: Record<Exclude<MoverKind, 'citizen'>, number> = {
-  transit: 3,
-  freight: 2,
-  runabout: 1.4
-}
+// How near a vehicle's front a walker holds it up.
 const VEHICLE_HOLD_M = 1.4
 const VEHICLE_BODY_M = 1.2
 
@@ -121,7 +117,7 @@ function vehicleLanes(scenario: Scenario) {
   return { samples, offLane, onDivider }
 }
 
-// MoverLayer.place, replayed headless: citizens step among bodies, vehicles hold for anyone on foot.
+// MoverLayer's motion, replayed headless through the same step.
 function replay(scenario: Scenario, seconds: number, deltaSec: number) {
   const { plan, trips, floor } = scenario
   const spotOf = roadSurface(plan)
@@ -129,6 +125,8 @@ function replay(scenario: Scenario, seconds: number, deltaSec: number) {
   const space = new SceneBodies()
   const ground = citizenGround(floor, plan)
   const clock = moverClock({ trips, space, isOpen: ground.isOpen })
+  const { waitsFor } = clock
+  const traffic = zebraTraffic(trips, citySidewalks(plan))
   clock.positions.forEach((pose, index) => {
     if (trips[index].kind === 'citizen' && !pose.isIndoors)
       space.set({ id: citizenBodyId(index), x: pose.x, z: pose.z, radius: CITIZEN_BODY_RADIUS })
@@ -151,34 +149,22 @@ function replay(scenario: Scenario, seconds: number, deltaSec: number) {
     stillSec.delete(index)
   }
   for (let frame = 0; frame < Math.round(seconds / deltaSec); frame++) {
-    const onFoot: RoutePoint[] = []
+    const before = [...clock.positions]
+    const walked = Float64Array.from(clock.moved)
+    stepMovers({ trips, clock, space, ground, player: null, waitsFor, traffic, deltaSec })
+    const onFoot = clock.onFoot
     for (const index of citizens) {
-      const trip = trips[index]
-      const before = clock.positions[index]
-      const next = advanceCitizen({
-        trip,
-        index,
-        pose: before,
-        walked: clock.moved[index],
-        deltaSec,
-        space,
-        isOpen: ground.isOpen,
-        ground,
-        waitsFor: clock.waitsFor
-      })
-      clock.positions[index] = next.pose
-      clock.moved[index] = next.walked
-      const pose = next.pose
+      const pose = clock.positions[index]
       if (pose.isIndoors) {
         close(index)
         stuckSec.delete(index)
         continue
       }
-      onFoot.push(pose)
-      const isStill = Math.hypot(pose.x - before.x, pose.z - before.z) < STILL_M
+      const trip = trips[index]
+      const isStill = Math.hypot(pose.x - before[index].x, pose.z - before[index].z) < STILL_M
       if (!onAsphalt(pose) || !isStill) close(index)
       else stillSec.set(index, (stillSec.get(index) ?? 0) + deltaSec)
-      if (!isStill || routePhase(trip.route, next.walked, trip.speed).isWaiting)
+      if (!isStill || routePhase(trip.route, clock.moved[index], trip.speed).isWaiting)
         stuckSec.delete(index)
       else {
         const stuck = (stuckSec.get(index) ?? 0) + deltaSec
@@ -189,26 +175,14 @@ function replay(scenario: Scenario, seconds: number, deltaSec: number) {
     for (const index of vehicles) {
       const trip = trips[index]
       const nose = trip.kind === 'citizen' ? 0 : NOSE_M[trip.kind]
-      const walked = clock.moved[index]
-      const next = walkedSec({
-        route: trip.route,
-        speed: trip.speed,
-        walked,
-        deltaSec,
-        player: null,
-        others: onFoot,
-        reach: nose,
-        radius: VEHICLE_HOLD_M
-      })
-      clock.moved[index] = next
-      if (next === walked) {
-        const front = routePose(trip.route, (walked + deltaSec) * trip.speed + nose, trip.speed)
+      if (clock.moved[index] === walked[index]) {
+        const front = routePose(trip.route, walked[index] * trip.speed + nose, trip.speed)
         const blocker = onFoot.find(
           (walker) => Math.hypot(front.x - walker.x, front.z - walker.z) < VEHICLE_HOLD_M
         )
         if (blocker && onAsphalt(blocker)) heldByRoadWalkerSec += deltaSec
       }
-      const body = routePose(trip.route, next * trip.speed, trip.speed)
+      const body = routePose(trip.route, clock.moved[index] * trip.speed, trip.speed)
       overlaps += onFoot.filter(
         (walker) => Math.hypot(walker.x - body.x, walker.z - body.z) < VEHICLE_BODY_M
       ).length
@@ -228,6 +202,15 @@ function replay(scenario: Scenario, seconds: number, deltaSec: number) {
 let cityReplayResult: ReturnType<typeof replay> | undefined
 const cityReplay = (): ReturnType<typeof replay> =>
   (cityReplayResult ??= replay(liveCity(), 900, 1 / 20))
+
+// The same city with every mover that much further round its loop: other meetings.
+function laterCity(offsetSec: number): Scenario {
+  const city = liveCity()
+  return {
+    ...city,
+    trips: city.trips.map((trip) => ({ ...trip, startSec: trip.startSec + offsetSec }))
+  }
+}
 
 describe('pedestrian carriageway: road geometry', () => {
   it('keeps a road width when a walk is reversed', () => {
@@ -304,6 +287,13 @@ describe('pedestrian carriageway on the live city', () => {
       },
       JSON.stringify(result)
     ).toEqual({ spawnedOnRoad: 0, stillOnRoadEvents: 0, heldByRoadWalkerSec: 0 })
+  }, 300_000)
+
+  it('keeps every vehicle 1.2 m clear of every walker', () => {
+    const overlaps = [cityReplay(), replay(laterCity(251), 900, 1 / 20)].map(
+      (result) => result.overlapFrames
+    )
+    expect(overlaps).toEqual([0, 0])
   }, 300_000)
 
   it('never leaves a citizen jammed', () => {

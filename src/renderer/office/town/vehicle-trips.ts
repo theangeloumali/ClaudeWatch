@@ -1,3 +1,5 @@
+import type { Crosswalk } from '../../../shared/office/crosswalks'
+import type { WorldFootprint } from '../../../shared/office/world-document-types'
 import type { CitizenRoute, RoutePoint } from '../citizens/route-pose'
 import { boundsOfZone } from '../logic/zone-framing'
 import { between, draw, grow, hashOf } from '../themes/lot-math'
@@ -198,4 +200,78 @@ export function vehicleTrips(town: TownInput, count: number): Trip[] {
       }
     ]
   })
+}
+
+const EPSILON_M = 1e-6
+
+// Where a vehicle's route crosses one zebra, in metres along it: its front holds at `holdAt`,
+// the zebra's stop line, and its route leaves the band at `clearAt`.
+export interface ZebraPass {
+  zebra: number
+  holdAt: number
+  clearAt: number
+}
+
+// The share of `from`→`to` strictly inside `rect`, or null (Liang–Barsky).
+function spanInside(
+  from: RoutePoint,
+  to: RoutePoint,
+  rect: WorldFootprint
+): [number, number] | null {
+  let [low, high] = [0, 1]
+  const sides = [
+    [from.x - to.x, from.x - (rect.x - rect.width / 2)],
+    [to.x - from.x, rect.x + rect.width / 2 - from.x],
+    [from.z - to.z, from.z - (rect.z - rect.depth / 2)],
+    [to.z - from.z, rect.z + rect.depth / 2 - from.z]
+  ]
+  for (const [toward, room] of sides) {
+    if (Math.abs(toward) < EPSILON_M) {
+      if (room < EPSILON_M) return null
+      continue
+    }
+    if (toward < 0) low = Math.max(low, room / toward)
+    else high = Math.min(high, room / toward)
+  }
+  return high - low > EPSILON_M ? [low, high] : null
+}
+
+// A crosswalk's setback: from its stop line to the near edge of its band.
+function stopGapOf(crossing: Crosswalk, zebra: WorldFootprint): number {
+  const [line] = crossing.stopLines
+  return crossing.axis === 'z'
+    ? Math.abs(line.x - zebra.x) - zebra.width / 2
+    : Math.abs(line.z - zebra.z) - zebra.depth / 2
+}
+
+// Every zebra a vehicle's route drives over, turn-outs included, as stop-line events from
+// crosswalks() (P6b). `zebras` are the crossings' painted bands, in the same order.
+export function zebraPasses(
+  route: CitizenRoute,
+  crossings: readonly Crosswalk[],
+  zebras: readonly WorldFootprint[]
+): ZebraPass[] {
+  const passes: ZebraPass[] = []
+  let start = 0
+  route.points.slice(1).forEach((to, index) => {
+    const from = route.points[index]
+    const length = Math.hypot(to.x - from.x, to.z - from.z)
+    zebras.forEach((zebra, zebraIndex) => {
+      const span = spanInside(from, to, zebra)
+      if (!span) return
+      const [enter, leave] = [start + span[0] * length, start + span[1] * length]
+      const ongoing = passes.findIndex(
+        (pass) => pass.zebra === zebraIndex && Math.abs(pass.clearAt - enter) < EPSILON_M
+      )
+      if (ongoing >= 0) passes[ongoing] = { ...passes[ongoing], clearAt: leave }
+      else
+        passes.push({
+          zebra: zebraIndex,
+          holdAt: enter - stopGapOf(crossings[zebraIndex], zebra),
+          clearAt: leave
+        })
+    })
+    start += length
+  })
+  return passes
 }

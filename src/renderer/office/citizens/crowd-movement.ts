@@ -1,7 +1,8 @@
 import {
   placeBody,
   CITIZEN_BODY_RADIUS,
-  type BodyFootprint
+  type BodyFootprint,
+  type BodyPoint
 } from '../../../shared/office/body-footprints'
 import type { SceneBodies } from '../scene/BodySpace'
 import type { Trip } from '../town/town-trips'
@@ -26,8 +27,10 @@ const CLOCK_BOUNDARY_MARGIN_SEC = 1e-6
 const STUCK_YIELD_SEC = 1.5
 const RETREAT_M = 1.25
 
-// What a citizen standing at a stop on its route waits for: no body.
+// What a citizen waits for when no body is in its way: the end of a stop on its route, or
+// traffic clearing its zebra.
 const AT_STOP = '(at a stop)'
+const AT_KERB = '(at the kerb)'
 const CITIZEN_ID_PREFIX = 'citizen:'
 export const citizenBodyId = (index: number): string => `${CITIZEN_ID_PREFIX}${index}`
 const citizenIndexOf = (bodyId: string): number => Number(bodyId.slice(CITIZEN_ID_PREFIX.length))
@@ -75,6 +78,8 @@ interface CitizenStep {
   // The crowd's wait-for graph: a stuck citizen's body id to the body in its way. Given, jams
   // are broken; without it a blocked citizen waits for ever.
   waitsFor?: Map<string, string>
+  // False for a step onto a zebra a vehicle is driving over: the walker waits at the kerb.
+  canStepOnto?: (from: BodyPoint, to: BodyPoint) => boolean
 }
 
 // The citizens in a wait-for cycle through `bodyId`; none when its wait ends at someone free.
@@ -154,6 +159,10 @@ export function advanceCitizen(options: CitizenStep) {
       deltaSec: remainingSec,
       giveWay: navigation.stuckSec >= STUCK_YIELD_SEC ? giveWayOf(options, walked) : undefined
     })
+    if (step.distance > 0 && options.canStepOnto?.(pose, step.point) === false) {
+      waitsFor?.set(bodyId, AT_KERB)
+      break
+    }
     const blockerId = step.distance > 0 ? undefined : step.navigation.blockerId
     if (blockerId) waitsFor?.set(bodyId, blockerId)
     else waitsFor?.delete(bodyId)

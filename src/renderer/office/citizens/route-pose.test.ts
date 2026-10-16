@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { HOLD_RADIUS_M, routePose, walkedSec, type CitizenRoute } from './route-pose'
+import { loopMetres, routePose, type CitizenRoute } from './route-pose'
 
 // A 10 m square walked clockwise on the map: east, south, west, north.
 const SQUARE: CitizenRoute = {
@@ -56,23 +56,12 @@ describe('routePose on a loop', () => {
   })
 })
 
-describe('walkedSec', () => {
-  const step = { route: SQUARE, speed: 2, walked: 1, deltaSec: 0.1 }
-
-  it('walks on when nothing is in the way', () => {
-    expect(walkedSec({ ...step, player: null })).toBeCloseTo(1.1)
-    expect(walkedSec({ ...step, player: { x: 2.2, z: 4 } })).toBeCloseTo(1.1)
-  })
-
-  it('holds short of the player', () => {
-    expect(walkedSec({ ...step, player: { x: 2.2 + HOLD_RADIUS_M / 2, z: 0 } })).toBe(1)
-  })
-
-  it('holds a vehicle whose nose would reach a citizen on its lane', () => {
-    const cart = { ...step, player: null, reach: 2, radius: 1.4 }
-    expect(walkedSec({ ...cart, others: [{ x: 5, z: 0 }] })).toBe(1)
-    // On the pavement beside the lane, or already passed: no hold.
-    expect(walkedSec({ ...cart, others: [{ x: 5, z: 1.5 }] })).toBeCloseTo(1.1)
-    expect(walkedSec({ ...cart, others: [{ x: 1, z: 0 }] })).toBeCloseTo(1.1)
+describe('loopMetres', () => {
+  it('takes a loop’s waits out of how far round it is', () => {
+    const route: CitizenRoute = { ...SQUARE, stops: [{ at: 10, sec: 4, isIndoors: false }] }
+    expect(loopMetres(route, 9, 2)).toBe(9)
+    expect(loopMetres(route, 17.9, 2)).toBe(10)
+    expect(loopMetres(route, 20, 2)).toBe(12)
+    expect(loopMetres(route, 48 + 5, 2)).toBe(5)
   })
 })
