@@ -1,3 +1,4 @@
+import { observeAgent } from '../../../shared/office/observation'
 import type { AgentActivity, AgentView, ProviderId } from '../../../shared/office/types'
 import { stateOfAttention } from '../../deck/roster'
 import type { OfficeFrame } from '../scene-model'
@@ -18,6 +19,8 @@ export const ACTIVITY_SUMMARY_LABELS = {
   issues: 'Issues'
 } as const
 export const ACTIVITY_UNAVAILABLE_LABEL = 'Activity unavailable'
+// A worker on its way out, as the sim reports it (seating-5).
+export const LEAVING_LABEL = 'Leaving'
 
 export function isActivityAvailable(
   frame: Pick<OfficeFrame, 'connected' | 'sources'>,
@@ -30,6 +33,30 @@ export function isActivityAvailable(
         !source.ok &&
         providers.some((provider) => source.id === provider || source.id.startsWith(`${provider}:`))
     )
+  )
+}
+
+// An observing bridge stamps every session it reads; fixtures and older feeds carry none.
+export function hasOwnRecords(frame: Pick<OfficeFrame, 'sessions'>): boolean {
+  return frame.sessions.some(
+    (session) =>
+      session.observation !== undefined ||
+      session.subagents.some((member) => member.observation !== undefined)
+  )
+}
+
+// Where records exist, an agent's activity is shown only from its own fresh one (MISSED-1).
+export function isAgentActivityAvailable(
+  frame: OfficeFrame,
+  agent: Pick<AgentView, 'agentKey' | 'provider'>,
+  nowMs = Date.now()
+): boolean {
+  if (!hasOwnRecords(frame)) return isActivityAvailable(frame, [agent.provider])
+  const evidence = observeAgent({ ...frame, agentKey: agent.agentKey, nowMs })
+  return (
+    evidence.status === 'fresh' &&
+    evidence.activity !== undefined &&
+    evidence.attention !== undefined
   )
 }
 

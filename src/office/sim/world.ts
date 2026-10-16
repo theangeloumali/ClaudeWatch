@@ -659,10 +659,11 @@ export class World {
     return [...this.agents.values()]
       .sort((a, b) => a.view.agentKey.localeCompare(b.view.agentKey))
       .map((a) => {
+        const view: AgentView =
+          a.state === 'leaving' ? { ...a.view, isLeaving: true } : { ...a.view }
         const fadedMs = this.fading.get(a.view.agentKey)
-        return fadedMs === undefined
-          ? { ...a.view }
-          : { ...a.view, fade: fadedMs / DEPARTURE_FADE_MS }
+        if (fadedMs !== undefined) view.fade = fadedMs / DEPARTURE_FADE_MS
+        return view
       })
   }
 
