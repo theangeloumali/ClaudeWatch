@@ -5,6 +5,9 @@ import type { AgentView } from '../../../shared/office/types'
 import type { OfficeFrame } from '../scene-model'
 import { buildFixtureFrame, createFixtureFeed } from './fixture-feed'
 
+// Full sim or scene builds: the 5 s default times out under multi-agent load (health-9).
+vi.setConfig({ testTimeout: 60_000 })
+
 const frame = buildFixtureFrame(0, 1_000_000)
 
 describe('seeded preview sessions', () => {

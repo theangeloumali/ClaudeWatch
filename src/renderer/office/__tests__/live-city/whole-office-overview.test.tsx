@@ -26,6 +26,9 @@ import { makeAgent, makeFloor, makeFrame, makeRoom, makeSession, makeZone } from
 import { createWorldDocumentStore } from '../../../office-live/world-document-store'
 import { buildLayout } from '../../../../office/sim/layout'
 
+// Full sim or scene builds: the 5 s default times out under multi-agent load (health-9).
+vi.setConfig({ testTimeout: 60_000 })
+
 type SceneProps = ComponentProps<typeof OfficeScene>
 
 // dry-new: existing scene mocks cover settings, not physical visibility or overview framing.
