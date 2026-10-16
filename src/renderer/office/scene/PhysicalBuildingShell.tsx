@@ -4,6 +4,7 @@ import { Vector3, type Group } from 'three'
 import type { FloorGeometry } from '../scene-model'
 import type { OfficeTheme } from '../themes/types'
 import { doorSide, SIDE_NORMAL, type WallsMode } from '../logic/room-layout'
+import { createSideCutaway } from '../logic/facade-cutaway'
 import { box, Parts } from '../themes/parts'
 import {
   buildingCrown,
@@ -68,7 +69,8 @@ export function PhysicalBuildingShell({
     [ordered, focused, theme.palette.stone]
   )
   const entranceFacade = useRef<Group>(null)
-  const cameraPosition = useMemo(() => new Vector3(), [])
+  const forward = useMemo(() => new Vector3(), [])
+  const cutaway = useMemo(() => createSideCutaway<'entrance'>(), [])
   const entrance = ground?.entrance ?? {
     x: ground?.x ?? 0,
     z: (ground?.z ?? 0) + (ground?.depth ?? 0) / 2
@@ -77,11 +79,7 @@ export function PhysicalBuildingShell({
   const entranceHeading = Math.atan2(entranceNormal.x, entranceNormal.z)
   useFrame(({ camera }) => {
     if (!entranceFacade.current) return
-    camera.getWorldPosition(cameraPosition)
-    const isNear =
-      (cameraPosition.x - entrance.x) * entranceNormal.x +
-        (cameraPosition.z - entrance.z) * entranceNormal.z >=
-      0
+    const isNear = cutaway.isOpen('entrance', camera.getWorldDirection(forward), entranceNormal)
     const isOpen = focused === ground || !areRoofsVisible
     entranceFacade.current.visible =
       !isOpen || wallsMode === 'up' || (wallsMode === 'cutaway' && !isNear)
