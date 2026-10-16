@@ -206,3 +206,25 @@ export function forgetExited(running: RunningProcess[], ...memories: Map<string,
 
 // An agent bundled in an app (ChatGPT, Orca helpers) runs from inside the bundle; not a session.
 export const isInsideAppBundle = (folder: string): boolean => /\.app\/Contents(\/|$)/.test(folder)
+
+// The program file each process runs, which a `ps` row cannot carry whole: a bundle path with a
+// space before its `.app` leaves no bundle in argv[0] (health-2). macOS is asked once per process,
+// matched by start time; Windows argv is exact. Unanswered, a process is kept, as before.
+export async function withoutBundledPrograms<Process extends RunningProcess>(
+  io: BridgeIo,
+  programs: Map<string, string>,
+  processes: Process[],
+  platform: NodeJS.Platform
+): Promise<Process[]> {
+  if (platform !== 'darwin') return processes
+  forgetExited(processes, programs)
+  const unknown = processes.filter((process) => !programs.has(identityOf(process)))
+  if (unknown.length) {
+    const pids = unknown.map(({ pid }) => pid).join(',')
+    const output = await io
+      .exec('/bin/ps', ['-o', 'pid=,lstart=,comm=', '-p', pids])
+      .catch(() => '')
+    for (const row of parseProcessTable(output)) programs.set(identityOf(row), row.argv.join(' '))
+  }
+  return processes.filter((process) => !isInsideAppBundle(programs.get(identityOf(process)) ?? ''))
+}

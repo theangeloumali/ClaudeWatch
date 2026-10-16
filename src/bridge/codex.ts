@@ -38,7 +38,8 @@ import {
   type ProcessRow,
   readProcessTable,
   rememberedFolder,
-  type SessionOwner
+  type SessionOwner,
+  withoutBundledPrograms
 } from './process-table'
 
 // A Codex app-server: the host of desktop, IDE and plugin threads.
@@ -136,6 +137,8 @@ interface Remembered {
   folders: Map<string, string>
   // The placeholder key a process without a rollout was first shown under, by pid and start time.
   placeholders: Map<string, string>
+  // The program file each candidate process runs, by pid and start time.
+  programs: Map<string, string>
   // What each live rollout's tail held, by path, with the size and time of the file it was read from.
   tails: Map<
     string,
@@ -248,6 +251,7 @@ export async function collectCodex(
         childTotals: new Map(),
         folders: new Map(),
         placeholders: new Map(),
+        programs: new Map(),
         tails: new Map()
       })
     )
@@ -257,7 +261,12 @@ export async function collectCodex(
   const liveTails = new Set<string>()
   try {
     const rows = await readProcesses()
-    const processes = codexProcesses(rows, platform)
+    const processes = await withoutBundledPrograms(
+      io,
+      memory.programs,
+      codexProcesses(rows, platform),
+      platform
+    )
     const isHosting = rows.some(isAppServer)
     const rollouts =
       processes.length || isHosting

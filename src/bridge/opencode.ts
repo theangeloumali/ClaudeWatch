@@ -40,7 +40,8 @@ import {
   type ProcessRow,
   readProcessTable,
   rememberedFolder,
-  type SessionOwner
+  type SessionOwner,
+  withoutBundledPrograms
 } from './process-table'
 import { discoverV2Roots, MAX_V2_BATCH, MAX_V2_LIVE_ROOTS, withoutV2Models } from './opencode-v2-db'
 import { placementOf, resolveProject } from './project-root'
@@ -368,6 +369,8 @@ interface Remembered {
   folders: Map<string, string>
   // The placeholder key a process without a session was first shown under, by pid and start time.
   placeholders: Map<string, string>
+  // The program file each candidate process runs, by pid and start time.
+  programs: Map<string, string>
   // Last tick's rows, for a tick that finds the database and its agents unchanged.
   answers: Answers | null
 }
@@ -413,15 +416,26 @@ export async function collectOpencode(
   const health: SourceHealth = { id: 'opencode', ok: true, detail: 'empty' }
   try {
     const rows = await readProcesses()
-    const processes = opencodeProcesses(rows, platform)
     const isHosting = rows.some(isOpencodeService)
     let memory = remembered.get(io)
     if (!memory) {
       remembered.set(
         io,
-        (memory = { folders: new Map(), placeholders: new Map(), liveRootIds: [], answers: null })
+        (memory = {
+          folders: new Map(),
+          placeholders: new Map(),
+          programs: new Map(),
+          liveRootIds: [],
+          answers: null
+        })
       )
     }
+    const processes = await withoutBundledPrograms(
+      io,
+      memory.programs,
+      opencodeProcesses(rows, platform),
+      platform
+    )
     const { folders, placeholders, liveRootIds } = memory
     forgetExited(processes, folders, placeholders)
     const running = newestFirst(await locate(io, folders, processes, health, platform))

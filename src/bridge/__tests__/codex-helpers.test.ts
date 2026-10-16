@@ -1,5 +1,6 @@
-import { expect, it } from 'vitest'
-import { codexProcesses } from '../codex'
+import { expect, it, vi } from 'vitest'
+import { fixtureIo } from '../__fixtures__/helpers'
+import { codexProcesses, collectCodex } from '../codex'
 import { opencodeProcesses } from '../opencode-activity'
 import { parseProcessTable } from '../process-table'
 
@@ -28,4 +29,24 @@ it('takes no opencode an app bundles for an OpenCode agent', () => {
     ].join('\n')
   )
   expect(opencodeProcesses(rows, 'darwin').map(({ pid }) => pid)).toEqual([52])
+})
+
+// A space before `.app` leaves no bundle in argv[0] at all: `…/computer-use/Codex`.
+it('asks macOS for the program file when ps split a bundle path before its .app', async () => {
+  const program =
+    '/Users/a/.codex/computer-use/Codex Computer Use.app/Contents/MacOS/SkyComputerUseService'
+  const io = fixtureIo()
+  io.exec = async (file, args) => {
+    if (file !== '/bin/ps') return 'p8602\nn/\n'
+    if (args[0] === '-xo') return `8602 ${START} ${program}\n4242 ${START} codex --yolo\n`
+    return `8602 ${START} ${program}\n 4242 ${START} /opt/homebrew/bin/codex\n`
+  }
+  const collect = () => collectCodex('/codex', io, undefined, false, Date.now(), 'darwin')
+  const asked = vi.spyOn(io, 'exec')
+  const { sessions } = await collect()
+  await collect()
+
+  expect(sessions.map(({ pid }) => pid)).toEqual([4242])
+  // Asked once per process, not once per tick.
+  expect(asked.mock.calls.filter(([, args]) => args.includes('pid=,lstart=,comm='))).toHaveLength(1)
 })

@@ -7,7 +7,8 @@ import {
   newestFirst,
   placeholderId,
   type ProcessRow,
-  type SessionOwner
+  type SessionOwner,
+  withoutBundledPrograms
 } from './process-table'
 import type { RegistryEntry } from './registry'
 import {
@@ -28,6 +29,7 @@ const SEARCH_AGAIN_MS = 30_000
 interface Remembered {
   folders: Map<string, string>
   placeholders: Map<string, string>
+  programs: Map<string, string>
   claims: Map<string, ClaudeTranscript>
   searchedAt: Map<string, number>
 }
@@ -38,6 +40,7 @@ function memoryOf(io: BridgeIo): Remembered {
     memory = {
       folders: new Map(),
       placeholders: new Map(),
+      programs: new Map(),
       claims: new Map(),
       searchedAt: new Map()
     }
@@ -73,9 +76,14 @@ export async function discoverClaudeProcesses(options: {
   const explicitIds = new Map(
     native.map((process) => [identityOf(process), claudeSessionClaim(process.argv)])
   )
-  const waiting = newestFirst(
-    native.filter((process) => !options.claimed.processes.has(identityOf(process)))
+  // A registry vouches for a claimed process; only the rest are asked what program they run.
+  const unclaimed = await withoutBundledPrograms(
+    io,
+    memory.programs,
+    native.filter((process) => !options.claimed.processes.has(identityOf(process))),
+    platform
   )
+  const waiting = newestFirst(unclaimed)
     .sort(
       (a, b) =>
         Number(explicitIds.get(identityOf(b)) !== null) -
@@ -83,10 +91,8 @@ export async function discoverClaudeProcesses(options: {
     )
     .slice(0, MAX_PROCESSES)
   const reserved = new Set([...taken, ...[...explicitIds.values()].filter(isClaudeSessionId)])
-  const owners = native.filter(
-    (process) =>
-      !options.claimed.processes.has(identityOf(process)) &&
-      !isClaudeSessionId(explicitIds.get(identityOf(process)))
+  const owners = unclaimed.filter(
+    (process) => !isClaudeSessionId(explicitIds.get(identityOf(process)))
   )
   const folders = await locateClaudeClaimOwners({
     io,
