@@ -9,9 +9,10 @@ import type { RoutePoint } from './route-pose'
 import {
   entersCrossedZebra,
   isHeldAtZebra,
+  isHeldByPlayer,
+  type ZebraTraffic,
   zebrasCrossed,
-  zebrasInUse,
-  type ZebraTraffic
+  zebrasInUse
 } from './zebra-traffic'
 
 // Workers above this are on a floor, not in the street.
@@ -72,9 +73,10 @@ export function stepMovers(step: MoverStep): void {
     if (trip.kind === 'citizen') return
     const walked = moved[index]
     const isHeld =
-      traffic && inUse?.size
+      (traffic && inUse?.size
         ? isHeldAtZebra({ traffic, trip, index, walked, deltaSec, inUse })
-        : false
+        : false) ||
+      (player !== null && isHeldByPlayer(trip, walked, deltaSec, player))
     if (!isHeld) moved[index] = walked + deltaSec
   })
 }

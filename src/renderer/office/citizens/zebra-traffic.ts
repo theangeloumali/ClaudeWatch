@@ -3,7 +3,7 @@ import type { WorldFootprint } from '../../../shared/office/world-document-types
 import type { MoverKind, Trip } from '../town/town-trips'
 import { zebraPasses, type ZebraPass } from '../town/vehicle-trips'
 import type { CitySidewalks } from './city-sidewalks'
-import { loopMetres, type RoutePoint } from './route-pose'
+import { loopMetres, routePose, type RoutePoint } from './route-pose'
 
 // How far ahead of its middle a vehicle's front is; its back is as far behind.
 export const NOSE_M: Record<Exclude<MoverKind, 'citizen'>, number> = {
@@ -13,6 +13,8 @@ export const NOSE_M: Record<Exclude<MoverKind, 'citizen'>, number> = {
 }
 // Someone this near a zebra, off its kerb end, is about to cross it.
 const WALKER_REACH_M = 1
+// How near the player a vehicle's front stops.
+const PLAYER_HOLD_M = 1.4
 const EPSILON_M = 1e-6
 
 // A city's zebras and where each vehicle's loop drives over them; the campus town has none.
@@ -91,6 +93,22 @@ export function zebrasCrossed(
         crossed.add(pass.zebra)
   })
   return crossed
+}
+
+// The player walks anywhere, so a vehicle stops short of it mid-block too, not only at zebras.
+export function isHeldByPlayer(
+  trip: Trip,
+  walked: number,
+  deltaSec: number,
+  player: RoutePoint
+): boolean {
+  if (trip.kind === 'citizen') return false
+  const front = routePose(
+    trip.route,
+    (walked + deltaSec) * trip.speed + NOSE_M[trip.kind],
+    trip.speed
+  )
+  return Math.hypot(front.x - player.x, front.z - player.z) < PLAYER_HOLD_M
 }
 
 // Whether a vehicle's next step would carry its front over the stop line of a zebra in use.
