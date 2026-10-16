@@ -6,6 +6,7 @@ import { OfficeWindowController } from './office-window'
 import { createAppWindow, handleTrusted } from './window-factory'
 import { PaneFocus } from './pane-focus'
 import { createOfficeService } from '../office-host/office-service'
+import { createHostWorld, SHARED_WORLD_PATH, withWorld } from '../office-host/host-world'
 import type { FocusResult, OfficeSnapshot } from '../shared/office/types'
 import { execFilePromise } from './platform/exec'
 import type { SessionTracker } from './session-tracker'
@@ -68,7 +69,8 @@ export function setupOffice(
     Pick<
       AccountLedger,
       'ingestBridgeMessage' | 'observeSessions' | 'isWatchingAccounts' | 'onWatchingChange'
-    >
+    >,
+  worldPath = SHARED_WORLD_PATH
 ): Office {
   const bridge = new BridgeHost({
     spawn: () => {
@@ -89,8 +91,10 @@ export function setupOffice(
   bridge.onMessage(() => accounts.observeSessions(bridge.snapshot()?.sessions ?? []))
   accounts.onWatchingChange(() => bridge.restart())
   const host = withAccounts(bridge, accounts)
+  // One saved city for the window, the Browser Office and the standalone ports (health-13).
+  const world = createHostWorld(worldPath)
   const controller = new OfficeWindowController({
-    host,
+    host: withWorld(host, world),
     createWindow: () => createOfficeWindow(store),
     activate: () => app.focus({ steal: true })
   })
@@ -101,7 +105,8 @@ export function setupOffice(
     run: execFilePromise,
     terminalOf: async (pid) => (await terminalResolver.resolve(pid)).terminalType,
     isInteractive: true,
-    runScript: runInteractivePowerShell
+    runScript: runInteractivePowerShell,
+    world
   })
   const browser = createBrowserOffice({
     loadFiles: () => loadStaticFiles(join(__dirname, '../office-web')),
@@ -110,7 +115,8 @@ export function setupOffice(
       host: withoutAccounts(bridge),
       run: execFilePromise,
       terminalOf: async (pid) => (await terminalResolver.resolve(pid)).terminalType,
-      isInteractive: false
+      isInteractive: false,
+      world
     }),
     openExternal: (url) => shell.openExternal(url)
   })
@@ -135,6 +141,7 @@ export function setupOffice(
   )
   handle('office:ready', () => controller.ready())
   handle('office:focus', (_event, agentKey: unknown) => service.focus(agentKey))
+  handle('office:world-save', (_event, document: unknown) => service.saveWorld(document))
 
   return {
     open: (options) => controller.open(options),

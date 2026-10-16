@@ -21,6 +21,8 @@ import { filetimeToMs, powershellScriptOf, startTimeQuery } from '../shared/plat
 import { PARSED_OUTPUT_ENV } from '../shared/ps'
 import { runInteractivePowerShell } from '../shared/powershell-host'
 import { processTreeOf, type RunScript } from '../shared/windows-console'
+import type { WorldSaveReply } from '../shared/office/world-sync'
+import { withWorld, type HostWorld } from './host-world'
 
 const PS_OPTIONS = { timeout: 5000, env: PARSED_OUTPUT_ENV }
 
@@ -34,6 +36,8 @@ interface OfficeServiceDeps {
   platform?: NodeJS.Platform
   // Runs the Windows scripts that carry only a pid; the kept PowerShell host when not given.
   runScript?: RunScript
+  // The saved city every page of this host shows; absent, pages keep their own.
+  world?: HostWorld
 }
 
 // What the Office can do, whichever transport carries it. Arguments are `unknown` because
@@ -46,6 +50,8 @@ export interface OfficeService {
   respond(sessionKey: unknown, decision: unknown, fingerprint: unknown): Promise<InteractionResult>
   peek(sessionKey: unknown): Promise<PeekResult>
   startAgent(projectKey: unknown, provider: unknown): Promise<InteractionResult>
+  // Only an interactive page may change the city; every page is sent the new one.
+  saveWorld(document: unknown): Promise<WorldSaveReply>
   focusProcess(owner: PaneOwner): Promise<FocusResult>
   // When the process with this pid started (epoch ms), or null when no such process runs.
   processStart(pid: number): Promise<number | null>
@@ -65,7 +71,8 @@ export function createOfficeService({
   terminalOf,
   isInteractive,
   platform = process.platform,
-  runScript = runInteractivePowerShell
+  runScript = runInteractivePowerShell,
+  world
 }: OfficeServiceDeps): OfficeService {
   const isWindows = platform === 'win32'
   const orcaCli = createOrcaCli(run, undefined, platform)
@@ -116,12 +123,18 @@ export function createOfficeService({
     }
   })
 
+  const feed = world ? withWorld(host, world) : host
+
   return {
     subscribe: (listener) => {
-      const snapshot = host.snapshot()
+      const snapshot = feed.snapshot()
       if (snapshot) listener({ type: 'hello', v: 1, snapshot })
-      return host.onMessage(listener)
+      return feed.onMessage(listener)
     },
+    saveWorld: async (document) =>
+      world && isInteractive
+        ? world.save(document)
+        : { success: false, reason: 'not-permitted', document: world?.current() ?? null },
     focus: (agentKey) => interactions.focus(asString(agentKey)),
     send: (sessionKey, text) => interactions.send(asString(sessionKey), asString(text)),
     respond: async (sessionKey, decision, fingerprint) =>

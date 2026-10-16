@@ -1,8 +1,10 @@
 import { World } from '../../office/sim/world'
 import { buildLayout, type LayoutMap } from '../../office/sim/layout'
 import { effectiveWorldKey, resolveEffectiveWorld } from '../../office/sim/effective-world'
-import { createWorldDocument } from '../../shared/office/world-document'
+import { createWorldDocument, parseWorldDocument } from '../../shared/office/world-document'
 import { createWorldDocumentStore, type WorldDocumentStore } from './world-document-store'
+import { hostWorldStorage, type HostWorldStorage } from './host-world-storage'
+import type { WorldSaveReply } from '../../shared/office/world-sync'
 import { listThemes } from '../office/themes/registry'
 import { isJsonObject } from '../../shared/json-object'
 import { applyFeed } from '../../shared/office/apply-feed'
@@ -34,6 +36,8 @@ export interface FeedSource {
   ): Promise<InteractionResult>
   peek(sessionKey: string): Promise<PeekResult>
   start(projectKey: string, provider: ProviderId): Promise<InteractionResult>
+  // Saves the city on the host every page shares; a source without it keeps the page's own.
+  saveWorld?(document: unknown): Promise<WorldSaveReply>
 }
 
 interface LayoutStorage {
@@ -67,6 +71,14 @@ function isLayoutMap(value: unknown): value is LayoutMap {
         floor.zones.every((zone) => isObjectArray(zone.children))
     )
   )
+}
+
+// A host that keeps the city sends it in its hello, null while it holds none. It is checked here
+// like any document read from storage.
+function receiveHostWorld(storage: HostWorldStorage | null, snapshot: OfficeSnapshot): void {
+  if (!storage || !('world' in snapshot)) return
+  const parsed = snapshot.world === null ? null : parseWorldDocument(snapshot.world)
+  if (parsed === null || parsed.success) storage.receive(parsed?.document ?? null)
 }
 
 // Storage is null, or throws, where site data is blocked, and anything else in it is not a
@@ -112,6 +124,9 @@ export function createLiveFeed(
 
   const start = (): (() => void) => {
     const saved = loadLayout(options.storage)
+    const saveWorld = source.saveWorld?.bind(source)
+    const hostStorage =
+      options.worldEditing && saveWorld ? hostWorldStorage(options.storage, saveWorld) : null
     let resolvedKey = ''
     let resolvedLayout: LayoutMap | undefined
     const resolveLayout = (base: LayoutMap, sessions: readonly SessionRef[]): LayoutMap => {
@@ -195,10 +210,11 @@ export function createLiveFeed(
       lastKnownSnapshot = snapshot
       feedReceivedAtMs = now()
       feedRevision = snapshot.rev
+      if (message.type === 'hello') receiveHostWorld(hostStorage, snapshot)
       if (options.worldEditing && !documentStore) {
         const initialLayout = buildLayout(snapshot.sessions, saved)
         documentStore = createWorldDocumentStore({
-          storage: options.storage,
+          storage: hostStorage ?? options.storage,
           getLayout: () => (world.baseLayout().floors.length ? world.baseLayout() : initialLayout),
           getSessions: () => snapshot?.sessions ?? lastKnownSnapshot?.sessions ?? [],
           knownThemeIds: listThemes().map((theme) => theme.id)

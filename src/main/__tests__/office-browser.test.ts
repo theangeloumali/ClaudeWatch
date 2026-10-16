@@ -29,7 +29,8 @@ const service = {
   send: vi.fn(),
   respond: vi.fn(),
   peek: vi.fn(),
-  startAgent: vi.fn()
+  startAgent: vi.fn(),
+  saveWorld: vi.fn()
 }
 
 beforeEach(async () => {
