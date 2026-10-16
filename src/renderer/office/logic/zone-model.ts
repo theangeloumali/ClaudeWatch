@@ -6,6 +6,7 @@ import { sessionForAgent } from './floor-model'
 import { doorSignPlacement, roomWallSegments, type WallSegment } from './room-layout'
 import {
   combineActivity,
+  hasObservedFeed,
   isActivityAvailable,
   summariseActivity,
   type ActivitySummary
@@ -136,14 +137,7 @@ function evidencedActivity({
   agents: readonly AgentView[]
   isAvailable: boolean
 }): ActivitySummary {
-  const hasOwnMetadata =
-    frame.feedReceivedAtMs !== undefined ||
-    frame.sessions.some(
-      (session) =>
-        session.observation !== undefined ||
-        session.subagents.some((member) => member.observation !== undefined)
-    )
-  if (!hasOwnMetadata) return summariseActivity(agents, isAvailable)
+  if (!hasObservedFeed(frame)) return summariseActivity(agents, isAvailable)
   const reports = agents.map((agent) =>
     observeAgent({ ...frame, agentKey: agent.agentKey, nowMs: Date.now() })
   )

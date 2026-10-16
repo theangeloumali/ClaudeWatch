@@ -45,6 +45,13 @@ export function hasOwnRecords(frame: Pick<OfficeFrame, 'sessions'>): boolean {
   )
 }
 
+// A live feed or any stamped record means activity comes from evidence, not presence.
+export function hasObservedFeed(
+  frame: Pick<OfficeFrame, 'sessions' | 'feedReceivedAtMs'>
+): boolean {
+  return frame.feedReceivedAtMs !== undefined || hasOwnRecords(frame)
+}
+
 // Where records exist, an agent's activity is shown only from its own fresh one (MISSED-1).
 export function isAgentActivityAvailable(
   frame: OfficeFrame,
