@@ -1,4 +1,7 @@
-import { cityVenueSite } from '../../../../shared/office/city-access'
+import {
+  LIVE_OFFICES,
+  liveVenueSites
+} from '../../../../shared/office/__tests__/live-city-streets.test-utils'
 import type { RoutePoint } from '../../citizens/route-pose'
 import { groundEnvelope } from '../../scene/all-floor-model'
 import type { FloorGeometry } from '../../scene-model'
@@ -11,26 +14,6 @@ import { groundQuads } from '../town-ground'
 import type { TownPlan } from '../town-plan'
 import { townTrips, type Trip } from '../town-trips'
 import { townOf } from '../use-town-plan'
-
-// The live City view on 2026-10-16: x, z, width, depth, entrance z (entrance x = x).
-const LIVE_OFFICES = [
-  [35.80769230769231, 20.173076923076923, 21.615384615384613, 12.346153846153847, 14],
-  [-35.80769230769231, 26.3, 30.015384615384612, 24.6, 14],
-  [-35.80769230769231, 77.17307692307692, 21.615384615384613, 12.346153846153847, 71],
-  [-35.80769230769231, -96, 42.61538461538461, 38, -115],
-  [-35.80769230769231, -46.82692307692308, 21.615384615384613, 12.346153846153847, -53],
-  [35.80769230769231, -47, 12, 12, -53],
-  [35.80769230769231, -109, 12, 12, -115],
-  [35.80769230769231, 77, 12, 12, 71]
-] as const
-// Venue centres; each is 12 x 10 with its entrance 5 m north.
-const LIVE_VENUES = [
-  [-99.92307692307692, -48],
-  [99.92307692307692, -48],
-  [-99.92307692307692, 19],
-  [99.92307692307692, 19],
-  [-99.92307692307692, -110]
-] as const
 
 const SAMPLE_M = 0.25
 
@@ -53,11 +36,11 @@ export function liveCity(): Scenario {
       entrance: { x, z: entranceZ }
     })
   )
-  const venues = LIVE_VENUES.map(([x, z]) =>
-    cityVenueSite({ footprint: { x, z, width: 12, depth: 10 }, entrance: { x: 0, z: -5 } })
-  )
   const floor = groundEnvelope(floors, floors[0])
-  const town = distributedTown(townOf(floor, null, 'full', 'city'), [...floors, ...venues])
+  const town = distributedTown(townOf(floor, null, 'full', 'city'), [
+    ...floors,
+    ...liveVenueSites()
+  ])
   const trips = townTrips({
     plan: town.plan,
     owners: town.owners,
