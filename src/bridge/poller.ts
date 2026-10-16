@@ -17,7 +17,11 @@ import { type ProcessRow, readProcessTable } from './process-table'
 import { diff, emptySnapshot, reduce } from './reducer'
 import { TeammateSource } from './teammates'
 import { UsageThrottle } from './usage-throttle'
+import { loadUsageOffsets, saveUsageOffsets } from './usage-offsets'
 import { type TranscriptDelta, UsageTracker } from './usage-tracker'
+
+// A lost save costs only a re-read of what was counted since, so saves are rare (health-4).
+const SAVE_OFFSETS_EVERY_MS = 30_000
 
 export interface PollerOptions {
   io?: BridgeIo
@@ -34,6 +38,8 @@ export interface PollerOptions {
   derivesAccounts?: boolean
   // Decides how each source finds its processes and reads their paths.
   platform?: NodeJS.Platform
+  // Where transcript counts are kept between bridges; without it every start counts from byte 0.
+  usageOffsetsPath?: string
 }
 export class BridgePoller {
   private snapshot = emptySnapshot()
@@ -58,6 +64,9 @@ export class BridgePoller {
   private readonly onCodexTotals: PollerOptions['onCodexTotals']
   private readonly derivesAccounts: boolean
   private readonly platform: NodeJS.Platform
+  private readonly usageOffsetsPath: string | null
+  private hasResumedUsage = false
+  private offsetsSavedAtMs = -Infinity
   private pending: Promise<OfficeSnapshot> | null = null
   constructor(options: PollerOptions = {}) {
     this.io = options.io ?? systemIo
@@ -72,6 +81,7 @@ export class BridgePoller {
     this.onUsage = options.onUsage
     this.onCodexTotals = options.onCodexTotals
     this.derivesAccounts = options.derivesAccounts ?? false
+    this.usageOffsetsPath = options.usageOffsetsPath ?? null
   }
   tick(): Promise<OfficeSnapshot> {
     if (this.pending) return this.pending
@@ -106,7 +116,10 @@ export class BridgePoller {
     ])
     // The first snapshot goes out with usage unknown, so no window waits on a first scan: that
     // scan reads nothing, and only notes the transcripts a session leaving before the next had.
+    await this.resumeUsage()
+    const wasBehind = this.usage.isBehind
     await this.scanUsage(claude, now, this.snapshot.rev > 0 ? undefined : 0)
+    await this.saveUsage(now, wasBehind)
     const paneHolders = [...claude.sessions, ...opencode.sessions]
     this.orca.prune(paneHolders)
     const enriched = claimPanes(
@@ -140,6 +153,21 @@ export class BridgePoller {
     const liveKeys = new Set(sessions.map((session) => session.key))
     for (const key of this.postedCodex.keys()) if (!liveKeys.has(key)) this.postedCodex.delete(key)
     if (changed.length) this.onCodexTotals(changed)
+  }
+
+  private async resumeUsage(): Promise<void> {
+    if (!this.usageOffsetsPath || this.hasResumedUsage) return
+    this.hasResumedUsage = true
+    this.usage.resume(await loadUsageOffsets(this.usageOffsetsPath))
+  }
+
+  // Once caught up, then every half minute; a save that fails leaves the last one in place.
+  private async saveUsage(now: number, wasBehind: boolean): Promise<void> {
+    if (!this.usageOffsetsPath) return
+    const hasCaughtUp = wasBehind && !this.usage.isBehind
+    if (!hasCaughtUp && Math.abs(now - this.offsetsSavedAtMs) < SAVE_OFFSETS_EVERY_MS) return
+    this.offsetsSavedAtMs = now
+    await saveUsageOffsets(this.usageOffsetsPath, this.usage.offsets()).catch(() => undefined)
   }
 
   private async scanUsage(claude: ClaudeBatch, now: number, budgetBytes?: number): Promise<void> {

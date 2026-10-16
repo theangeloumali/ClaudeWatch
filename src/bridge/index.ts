@@ -14,11 +14,15 @@ const ONCE_MAX_TICKS = 30
 
 export async function main(args = process.argv.slice(2), port?: BridgePort): Promise<void> {
   const roots = [join(homedir(), '.claude')]
+  let usageOffsetsPath: string | undefined
   for (let index = 0; index < args.length; index++) {
     if (args[index] === '--root' && args[index + 1]) roots.push(resolve(args[++index]))
+    else if (args[index] === '--usage-offsets' && args[index + 1])
+      usageOffsetsPath = resolve(args[++index])
   }
   const poller = new BridgePoller({
     claudeRoots: roots,
+    ...(usageOffsetsPath && { usageOffsetsPath }),
     ...(args.includes('--accounts') && { derivesAccounts: true }),
     // Only a parent listens for added tokens; a one-shot run prints the snapshot alone.
     ...(port && {
