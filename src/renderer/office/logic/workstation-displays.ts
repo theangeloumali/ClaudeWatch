@@ -5,6 +5,7 @@ import { STATE_COLOR } from '../office-palette'
 import {
   agentActivityDetail,
   ACTIVITY_UNAVAILABLE_LABEL,
+  hasOwnRecords,
   isActivityAvailable
 } from './activity-summary'
 import { sessionForAgent } from './floor-model'
@@ -30,16 +31,13 @@ export function buildWorkstationDisplays({
 }): WorkstationDisplay[] {
   const rooms = new Map(floor.rooms.map((room) => [room.id, room]))
   return frame.agents.flatMap((agent) => {
-    if (agent.floorId !== floor.floorId || agent.place === 'lounge') return []
+    // Away from the desk, or walking out while it may already be someone else's.
+    if (agent.floorId !== floor.floorId || agent.place === 'lounge' || agent.isLeaving) return []
     const slot = rooms.get(agent.roomId)?.seats.find((seat) => seat.slotId === agent.slotId)
     const spec = workstationForRoom(agent.roomId)
     if (!slot || !spec) return []
     const session = sessionForAgent(frame, agent)
-    const hasObservation =
-      frame.feedReceivedAtMs !== undefined ||
-      frame.sessions.some(
-        (record) => record.observation || record.subagents.some((member) => member.observation)
-      )
+    const hasObservation = frame.feedReceivedAtMs !== undefined || hasOwnRecords(frame)
     const evidence = observeAgent({ ...frame, agentKey: agent.agentKey, nowMs: Date.now() })
     const isAvailable =
       !!session &&

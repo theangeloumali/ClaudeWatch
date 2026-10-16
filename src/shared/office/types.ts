@@ -170,7 +170,14 @@ export interface AgentView {
   label: string
   // Absent means the agent is at its own desk.
   place?: 'lounge'
+  // Set by the sim while a departed agent walks out or fades (seating-5).
+  isLeaving?: true
+  // How far a departing agent has faded out where it stands, 0–1; absent while fully here.
+  fade?: number
 }
+
+// How long a departing agent takes to fade out where it stands.
+export const DEPARTURE_FADE_MS = 500
 
 // Why an office interaction did not happen; the UI turns each into plain words.
 export const INTERACTION_FAILURES = [

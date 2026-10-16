@@ -39,19 +39,20 @@ export function workerNavigation(options: {
   }
 }
 
+// The id of the moving body this one queues behind, or null when it may step.
 export function waitsForMovingBody(options: {
   body: BodyFootprint
   to: Point
   walkers: readonly { body: BodyFootprint; to: Point }[]
   obstacles: readonly BodyFootprint[]
   isOpen: (point: Point) => boolean
-}): boolean {
-  if (canSweepBody(options)) return false
+}): string | null {
+  if (canSweepBody(options)) return null
   const dx = options.to.x - options.body.x
   const dz = options.to.z - options.body.z
   const motionLength = Math.hypot(dx, dz)
-  if (motionLength <= BODY_CLEARANCE_EPSILON) return false
-  return options.walkers.some((walker) => {
+  if (motionLength <= BODY_CLEARANCE_EPSILON) return null
+  const leader = options.walkers.find((walker) => {
     if (walker.body.id === options.body.id || !bodiesShareElevation(options.body, walker.body))
       return false
     const gapX = walker.body.x - options.body.x
@@ -68,6 +69,36 @@ export function waitsForMovingBody(options: {
       (dx * forwardX + dz * forwardZ) / (motionLength * otherMotionLength) > 0.5
     )
   })
+  return leader?.body.id ?? null
+}
+
+// The lowest id on each wait cycle that can step goes; queues, including one behind a cycle,
+// keep waiting. A total id order would reorder legitimate queues (seating-1, verifier E1).
+export function waitCycleLeaders(
+  waits: ReadonlyMap<string, string>,
+  canStep: (id: string) => boolean = () => true
+): Set<string> {
+  const leaders = new Set<string>()
+  const settled = new Set<string>()
+  for (const start of waits.keys()) {
+    const trail: string[] = []
+    const onTrail = new Set<string>()
+    let at: string | undefined = start
+    while (at !== undefined && !settled.has(at) && !onTrail.has(at)) {
+      trail.push(at)
+      onTrail.add(at)
+      at = waits.get(at)
+    }
+    if (at !== undefined && onTrail.has(at)) {
+      const [leader] = trail
+        .slice(trail.indexOf(at))
+        .filter(canStep)
+        .sort((first, second) => first.localeCompare(second))
+      if (leader !== undefined) leaders.add(leader)
+    }
+    for (const id of trail) settled.add(id)
+  }
+  return leaders
 }
 
 export function recoverWorkerRoute(options: {

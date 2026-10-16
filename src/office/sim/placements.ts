@@ -1,5 +1,5 @@
 import { agentKey } from '../../shared/office/agent-key'
-import type { SessionRef } from '../../shared/office/types'
+import type { SessionRef, SubagentRef } from '../../shared/office/types'
 import type { LayoutMap, RoomLayout, Slot } from './layout'
 import { GUEST_DESK_IDS, teamSeatsFor } from './rooms'
 
@@ -9,6 +9,8 @@ export interface Placement {
   slot: Slot
   floorId: string
   isSubagent: boolean
+  // Set for guests: whose crew it is in, and whether it is a subagent or a teammate.
+  member?: { leadKey: string; kind: NonNullable<SubagentRef['kind']> }
   // Its work is over for now, so it may go and sit in the lounge.
   isFinished: boolean
 }
@@ -28,6 +30,7 @@ export function placements(
   )
   const result: Placement[] = []
   const seated: { session: SessionRef; room: RoomLayout; slotId: string }[] = []
+  const members = new Map<string, NonNullable<Placement['member']>>()
   const unseated: { session: SessionRef; team: RoomLayout }[] = []
   const takenSeats = new Map<string, Set<string>>()
   const teamKey = (companyKey: string, projectKey: string | null) => `${companyKey}\n${projectKey}`
@@ -60,15 +63,19 @@ export function placements(
         (a, b) =>
           Number(b.kind === 'teammate') - Number(a.kind === 'teammate') || a.id.localeCompare(b.id)
       )
-      .map((subagent) => ({
-        ...session,
-        key: agentKey(session.key, subagent.id),
-        // A teammate is known by its own name; a subagent only by its type.
-        name: subagent.name ?? subagent.type,
-        activity: subagent.activity,
-        attention: subagent.attention ?? 'none',
-        observation: subagent.observation
-      }))
+      .map((subagent) => {
+        const key = agentKey(session.key, subagent.id)
+        members.set(key, { leadKey: session.key, kind: subagent.kind ?? 'subagent' })
+        return {
+          ...session,
+          key,
+          // A teammate is known by its own name; a subagent only by its type.
+          name: subagent.name ?? subagent.type,
+          activity: subagent.activity,
+          attention: subagent.attention ?? 'none',
+          observation: subagent.observation
+        }
+      })
     const seatOf = (guest: SessionRef, room: RoomLayout): string | undefined =>
       held.get(guest.key)?.roomId === room.id ? held.get(guest.key)!.slotId : undefined
     const freeDesks = new Set<string>(GUEST_DESK_IDS)
@@ -121,6 +128,7 @@ export function placements(
       slot: room.slots.find((s) => s.id === slotId)!,
       floorId: floorByRoom.get(room)!,
       isSubagent: true,
+      member: members.get(session.key),
       // A guest has no attention of its own: only a teammate gone quiet for a minute reports
       // idle, and a subagent is listed as thinking until it drops off the list.
       isFinished: session.activity === 'idle'

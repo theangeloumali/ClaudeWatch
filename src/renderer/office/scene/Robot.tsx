@@ -2,7 +2,7 @@ import { useFrame, type ThreeEvent } from '@react-three/fiber'
 import { useLayoutEffect, useMemo, useRef, type ReactElement } from 'react'
 import type { Group } from 'three'
 import { AGENT_SCALE, SUBAGENT_SCALE } from '../../../shared/office/figure-scale'
-import type { AgentView } from '../../../shared/office/types'
+import { DEPARTURE_FADE_MS, type AgentView } from '../../../shared/office/types'
 import type { WorldVenue } from '../../../shared/office/world-document'
 import type { FloorGeometry } from '../scene-model'
 import { approach, approachAngle, moodFor, robotPose } from '../logic/character-pose'
@@ -47,6 +47,19 @@ export interface RobotMotion {
   travelDistance: number
 }
 
+// Batched robot parts share opaque materials, so a departing robot fades by shrinking away over
+// the sim's fade; reduced motion skips the animation and the robot simply goes (seating-4).
+export function presenceAfter(
+  presence: number,
+  agent: Pick<AgentView, 'fade'>,
+  delta: number,
+  isReducedMotion: boolean
+): number {
+  const target = agent.fade === undefined || isReducedMotion ? 1 : 0
+  const step = (delta * 1000) / DEPARTURE_FADE_MS
+  return target > presence ? Math.min(target, presence + step) : Math.max(target, presence - step)
+}
+
 function phaseFor(key: string): number {
   let hash = 0
   for (const char of key) hash = (hash * 31 + char.charCodeAt(0)) >>> 0
@@ -68,6 +81,7 @@ export function Robot({
 }: RobotProps) {
   const rig = useRobotRig()
   const rootRef = useRef<Group>(null)
+  const presenceRef = useRef<Group>(null)
   const isOverviewModel = isOverview && !isSelected
   const Model = isOverviewModel ? OverviewWorker : theme.robot.Model
   const agentRef = useRef(agent)
@@ -112,6 +126,9 @@ export function Robot({
       root.position.z - previousZ
     )
     root.rotation.y = approachAngle(root.rotation.y, target.heading, delta, TURN_RATE)
+    const presence = presenceRef.current
+    if (presence)
+      presence.scale.setScalar(presenceAfter(presence.scale.x, target, delta, isReducedMotion))
     if (motions) {
       const motion = motions.get(target.agentKey) ?? {
         x: 0,
@@ -165,52 +182,54 @@ export function Robot({
 
   return (
     <group ref={rootRef} scale={agent.isSubagent ? SUBAGENT_SCALE : AGENT_SCALE}>
-      <mesh
-        position={[0, 0.012, 0]}
-        rotation={[-Math.PI / 2, 0, 0]}
-        userData={SHADOW_BATCH}
-        renderOrder={SHADOW_RENDER_ORDER}
-      >
-        <planeGeometry args={[0.9, 0.9]} />
-        <meshBasicMaterial map={blobShadowTexture()} transparent depthWrite={false} />
-      </mesh>
-      {isSelected && (
-        <mesh position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-          <ringGeometry args={[0.42, 0.52, 40]} />
-          <meshBasicMaterial color={theme.palette.glow} toneMapped={false} />
+      <group ref={presenceRef}>
+        <mesh
+          position={[0, 0.012, 0]}
+          rotation={[-Math.PI / 2, 0, 0]}
+          userData={SHADOW_BATCH}
+          renderOrder={SHADOW_RENDER_ORDER}
+        >
+          <planeGeometry args={[0.9, 0.9]} />
+          <meshBasicMaterial map={blobShadowTexture()} transparent depthWrite={false} />
         </mesh>
-      )}
-      <Model
-        agent={agent}
-        skin={theme.robot.skins[agent.provider]}
-        rosterIndex={rosterIndex}
-        rig={rig}
-        isReducedMotion={isReducedMotion}
-      />
-      {isSpeaking && (
-        // Speech puff after a message is sent; OfficeApp clears it after about 1.5 s.
-        <group position={[0.32, 1.32, 0]}>
-          <mesh scale={[0.24, 0.16, 0.08]}>
-            <sphereGeometry args={[1, 16, 10]} />
-            <meshBasicMaterial color={theme.palette.steam} />
+        {isSelected && (
+          <mesh position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+            <ringGeometry args={[0.42, 0.52, 40]} />
+            <meshBasicMaterial color={theme.palette.glow} toneMapped={false} />
           </mesh>
-          <mesh position={[-0.13, -0.13, 0]} scale={0.045}>
-            <sphereGeometry args={[1, 8, 6]} />
-            <meshBasicMaterial color={theme.palette.steam} />
-          </mesh>
-        </group>
-      )}
-      {/* Invisible, simple hit target: raycasting one capsule beats raycasting every part. */}
-      <mesh
-        position={[0, 0.6, 0]}
-        onClick={select}
-        onDoubleClick={fly}
-        onPointerOver={() => (document.body.style.cursor = 'pointer')}
-        onPointerOut={() => (document.body.style.cursor = '')}
-      >
-        <capsuleGeometry args={[0.32, 0.6, 2, 8]} />
-        <meshBasicMaterial visible={false} />
-      </mesh>
+        )}
+        <Model
+          agent={agent}
+          skin={theme.robot.skins[agent.provider]}
+          rosterIndex={rosterIndex}
+          rig={rig}
+          isReducedMotion={isReducedMotion}
+        />
+        {isSpeaking && (
+          // Speech puff after a message is sent; OfficeApp clears it after about 1.5 s.
+          <group position={[0.32, 1.32, 0]}>
+            <mesh scale={[0.24, 0.16, 0.08]}>
+              <sphereGeometry args={[1, 16, 10]} />
+              <meshBasicMaterial color={theme.palette.steam} />
+            </mesh>
+            <mesh position={[-0.13, -0.13, 0]} scale={0.045}>
+              <sphereGeometry args={[1, 8, 6]} />
+              <meshBasicMaterial color={theme.palette.steam} />
+            </mesh>
+          </group>
+        )}
+        {/* Invisible, simple hit target: raycasting one capsule beats raycasting every part. */}
+        <mesh
+          position={[0, 0.6, 0]}
+          onClick={select}
+          onDoubleClick={fly}
+          onPointerOver={() => (document.body.style.cursor = 'pointer')}
+          onPointerOut={() => (document.body.style.cursor = '')}
+        >
+          <capsuleGeometry args={[0.32, 0.6, 2, 8]} />
+          <meshBasicMaterial visible={false} />
+        </mesh>
+      </group>
     </group>
   )
 }
