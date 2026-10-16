@@ -66,7 +66,7 @@ Finding ids below (`seating-1`, `P3` …) refer to those reports.
 - [ ] Phase 3 — Legacy town decision, one street source, one crosswalk source, the sidewalk network, lane-centre vehicles (P1, P2, P3, P6)
 - [ ] Phase 4 — Citizens on the network: pedestrian ground, deadlock breaker that survives replans, zebra right-of-way, ambient loops
 - [ ] Phase 5 — Roaming agents via the leisure system: idle or done roam the sidewalks, unknown stays seated, working returns; guarded move of arrivals onto the network
-- [ ] Phase 6 — Render fixes: facade layer steps, cutaway hysteresis, desk-band card culling, context loss, canvas metrics
+- [x] Phase 6 — Render fixes: facade layer steps, cutaway hysteresis, desk-band card culling, context loss, canvas metrics
 - [ ] Phase 7 — Performance: static and dynamic batches, motion out of React, cached batch keys, memoised validation, shader prewarm, host-served world document
 - [ ] Phase 8 — Release and repo hygiene: one version line (1.4.1), honest Windows updater status, main-checkout mode noise, worktree cleanup
 - [ ] Phase 9 — Integration: full gate chain, live re-measure on real data, local install, STOP for Angelo's look
@@ -892,4 +892,20 @@ Phases 1, 2, 3 and 6 run in parallel, as do Phases 4 and 5. Wall-clock with the 
 
 ## Results
 
-Filled in Phase 9.
+### Phase 6 (merged `e4abffc`)
+
+- RED→GREEN across 5 commits. `npx vitest run src/renderer/office`: 236 files, 2,830 tests pass on the integration branch; `tsc` (web) is clean.
+- Flicker plane sweep (`flicker/idpass.mjs`, builder's own server): Project floor **16 px** (was 1,408), City **8 px** (was 406). What remains is same-colour corner overlaps and ground/lot intersection lines, which the flicker report already ruled out.
+- Deviations:
+  - The entrance door carve no longer cuts at building corners.
+  - The offset-canopy beam's inner face gives way 5 mm.
+  - The service-ribs entrance ribs are 2 steps deeper.
+  - The "+N more" card badge sits in the aria-hidden card layer.
+  - `invalidate()` loads through a dynamic `@react-three/fiber` import.
+
+### Phase 8 (in progress)
+
+- `f855f25`: version 1.4.1; Windows reports a missing update feed instead of "up to date".
+- Main checkout: mode-only changes 90 → 0.
+- 35 merged agent worktrees removed (2.2 GB). The one with untracked `labs/` was archived first to `.claude/archive/worktree-wip-2026-10-16/`.
+- Still to do: the six dirty feature worktrees, which wait until Phase 4 is done because Phase 3 reads two of them.
