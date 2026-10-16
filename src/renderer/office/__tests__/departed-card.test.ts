@@ -21,7 +21,7 @@ describe('a departing worker card', () => {
           isSubagent: true,
           label: 'lena',
           activity: 'running',
-          isLeaving: true
+          place: 'leaving'
         })
       ]
     })
@@ -35,7 +35,7 @@ describe('a departing worker card', () => {
     const departed = makeFrame({
       ...frame,
       sessions: [],
-      agents: [{ ...frame.agents[0], agentKey: frame.sessions[0].key, isLeaving: true }]
+      agents: [{ ...frame.agents[0], agentKey: frame.sessions[0].key, place: 'leaving' }]
     })
     const [card] = buildNameCards(departed, 'f1', null)
     expect(card).toMatchObject({ detail: LEAVING_LABEL, isAvailable: false, sessionKey: null })

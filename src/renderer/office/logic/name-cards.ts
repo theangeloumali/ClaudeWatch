@@ -90,7 +90,7 @@ export function buildNameCards(
         identity && agent.isSubagent === (identity.member !== undefined)
           ? identity.session
           : undefined
-      const isLeaving = agent.isLeaving === true
+      const isLeaving = agent.place === 'leaving'
       const isAvailable =
         !isLeaving && session !== undefined && isAgentActivityAvailable(frame, agent)
       const detail = (toolName?: string): string =>

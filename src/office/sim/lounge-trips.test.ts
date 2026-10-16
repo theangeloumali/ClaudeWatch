@@ -218,7 +218,7 @@ it('leaves through the gate from the lounge when its session ends there', () => 
   const office = officeOf(sim, 'a')
   patch(sim, [], ['a'])
   expect(view(sim, 'a')).toMatchObject(at(lounging))
-  expect(view(sim, 'a').place).toBeUndefined()
+  expect(view(sim, 'a').place).toBe('leaving')
 
   const walk = run(sim, SETTLE_S).flatMap((views) => views.filter((a) => a.agentKey === 'a'))
   expect(walk.length).toBeGreaterThan(0)

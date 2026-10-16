@@ -33,7 +33,7 @@ it('holds a collision-safe yielding route for blocked converging traffic', () =>
     tick: 0,
     routeTo: (target: { x: number; z: number }) => [yielding, target]
   }
-  expect(waitsForMovingBody(options)).toBe(false)
+  expect(waitsForMovingBody(options)).toBeNull()
   const guided = passages.guide(options)
   expect(guided).not.toEqual(requested)
   const moved = bodyStep({ ...options, to: guided })
@@ -123,7 +123,7 @@ it.each([
       tick: 0,
       routeTo: (target: { x: number; z: number }) => [body, target]
     }
-    expect(waitsForMovingBody(options)).toBe(shouldWait)
+    expect(waitsForMovingBody(options)).toBe(shouldWait ? 'a' : null)
     expect(new BodyPassages().guide(options)).toEqual(to)
   }
 )

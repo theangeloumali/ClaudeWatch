@@ -93,10 +93,10 @@ describe('departures: fade at the desk, walk out, or fade when stuck', () => {
   it('marks every departing view as leaving, walking or fading (seating-5)', () => {
     const { world, crew } = seatedWorld([member('helper'), member('mate', 'teammate')])
     crew([])
-    const marks = new Set<boolean | undefined>()
+    const marks = new Set<string | undefined>()
     for (let tick = 0; tick < 30; tick++)
-      for (const view of world.step(TICK_MS)) if (view.agentKey !== LEAD) marks.add(view.isLeaving)
-    expect([...marks]).toEqual([true])
+      for (const view of world.step(TICK_MS)) if (view.agentKey !== LEAD) marks.add(view.place)
+    expect([...marks]).toEqual(['leaving'])
   })
 
   it('fades a leaver held in its office door after 15 s, where it stands', () => {

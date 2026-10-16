@@ -14,7 +14,7 @@ describe('departed worker name-card truth', () => {
       const departedFrame = makeFrame({
         ...frame,
         sessions: [],
-        agents: [{ ...frame.agents[0], agentKey: departedRootKey, isLeaving: true }]
+        agents: [{ ...frame.agents[0], agentKey: departedRootKey, place: 'leaving' }]
       })
 
       expect(isActivityAvailable(departedFrame, ['claude'])).toBe(true)
@@ -47,7 +47,7 @@ describe('departed worker name-card truth', () => {
             isSubagent: true,
             label: 'Explore',
             activity: 'reading',
-            isLeaving: true
+            place: 'leaving'
           })
         ]
       })
