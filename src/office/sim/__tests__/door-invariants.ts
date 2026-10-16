@@ -10,8 +10,9 @@ export const TICK_MS = 100
 // Ghosting (verifier E6) breaks the clearance check, teleporting (E7) the step check.
 const CLEARANCE_SLACK_METRES = 0.02
 const MAX_STEP_METRES = 0.14 + 1e-6
-// A stuck leaver fades within 15 s of being body-blocked, then takes 0.5 s to go.
-const BLOCKED_LIMIT_MS = 15_000 + 500 + TICK_MS
+// A stuck leaver fades after 15 s of yielding and takes 0.5 s to go. Distance from an anchor
+// starts the clock a few unyielded ticks sooner than the sim's count, hence the extra second.
+const BLOCKED_LIMIT_MS = 15_000 + 500 + 1_000
 const PROGRESS_METRES = 0.5
 
 const footprint = (view: AgentView): BodyFootprint => ({

@@ -5,7 +5,7 @@ import { resolveEffectiveWorld } from '../effective-world'
 import { session, subagent } from '../fixtures'
 import type { LayoutMap, RoomLayout } from '../layout'
 import { World } from '../world'
-import { CLEARED, runDoorChurn } from './door-churn-harness'
+import { CLEARED, runDoorChurn, runMixedSwap } from './door-churn-harness'
 import { TICK_MS } from './door-invariants'
 
 // Full sim churn: the 5 s default times out under load (health-9).
@@ -34,6 +34,17 @@ describe('door churn: a crew turning over through one lobby door', () => {
     // The roam rule must send both out, or this is the plain churn (MISSED-3).
     expect(roamersSetOut).toBe(2)
     expect(result).toEqual({ ...CLEARED, roamersReturned: 2 })
+  })
+
+  // Review Focus 1, with a subagent crew as the owner's teams run them. A teammate crew's
+  // walk-outs take about 52 s to clear the same door.
+  it('clears a mixed swap with two roamers returning', () => {
+    const { roamersAtKiosk, doorClearAtMs, unseated } = runMixedSwap(60_000)
+    expect(roamersAtKiosk).toBe(true)
+    expect({ isDoorClearWithin30s: (doorClearAtMs ?? Infinity) <= 30_000, unseated }).toEqual({
+      isDoorClearWithin30s: true,
+      unseated: 0
+    })
   })
 })
 

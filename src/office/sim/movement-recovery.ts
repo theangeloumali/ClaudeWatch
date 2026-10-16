@@ -82,8 +82,12 @@ export class MovementRecovery {
         isStalled ||
         (yieldedTicks >= REPATH_YIELD_TICKS && yieldedTicks % REPATH_YIELD_TICKS === 0),
       isStalled,
-      isBodyBlocked: (this.blocked.get(id)?.ticks ?? 0) >= BODY_BLOCKED_TICKS
+      isBodyBlocked: this.isBodyBlocked(id)
     }
+  }
+
+  isBodyBlocked(id: string): boolean {
+    return (this.blocked.get(id)?.ticks ?? 0) >= BODY_BLOCKED_TICKS
   }
 
   retried(id: string): void {

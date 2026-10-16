@@ -325,7 +325,8 @@ export class World {
           : paths.via(elevator, door, slot)
       const agent = createAgent(session, destination, route.length ? route : entrance)
       this.passages.clear(session.key)
-      this.recovery.clear(session.key)
+      // A body re-routed where it stands stays as blocked as it was (seating-3).
+      if (!existing) this.recovery.clear(session.key)
       this.fading.delete(session.key)
       agent.view.isSubagent = isSubagent
       if (existing)
@@ -379,10 +380,12 @@ export class World {
       if (!floor || !paths) continue
       const portal = this.options.resolveLayout ? floorEntrance(floor) : floor.elevator
       // Admit the next body after its predecessor clears the door, not a whole converging roster.
+      // A predecessor stuck there no longer holds the door for the crew behind it (seating-3).
       const hasEntryTraffic = [...this.agents.values()].some(
         (walker) =>
           walker.state === 'arriving' &&
           walker.view.floorId === floor.id &&
+          !this.recovery.isBodyBlocked(walker.view.agentKey) &&
           (walker.view.physicalFloorId === null ||
             Math.hypot(walker.view.x - portal.x, walker.view.z - portal.z) < 2)
       )
