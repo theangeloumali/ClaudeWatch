@@ -817,8 +817,8 @@ Owns:
 
 **Files:** Modify `package.json:3` (→ `1.4.1`), `src/main/auto-updater.ts:62-74`, `src/renderer/hooks/useUpdater.ts` (new status), `src/main/build-config.test.ts`. Test: `auto-updater.test.ts`, `build-config.test.ts`
 
-- [ ] RED tests: "ERR_UPDATER_CHANNEL_FILE_NOT_FOUND on win32 surfaces `unavailable-for-platform`", and "package.json version ≥ highest published v\* tag" (fixture list).
-- [ ] Implement, verify, and commit `fix(release): 1.4.1 keeps one version line; Windows reports a missing feed`.
+- [x] RED tests: "ERR_UPDATER_CHANNEL_FILE_NOT_FOUND on win32 surfaces `unavailable-for-platform`", and "package.json version ≥ highest published v\* tag" (fixture list).
+- [x] Implement, verify, and commit `fix(release): 1.4.1 keeps one version line; Windows reports a missing feed`.
 
 ### Task 8.3: Retire the unreachable legacy campus town (A6; Phase 3 FOUND)
 
@@ -834,11 +834,11 @@ Reachability is proven: `main.tsx:32` (live feed) and `main.tsx:38` (fixture fee
 
 Done in the main checkout. Nothing here is committed on this branch.
 
-- [ ] Run `git -C <main> diff --summary | awk '/mode change 100644 => 100755/{print $NF}' | (cd <main> && xargs chmod 644)`, then verify `git -C <main> diff --summary | grep -c 'mode change'` prints `0`.
-- [ ] For each dirty `.claude/.worktree/*` and `agent-af8a47e1b24452f40` that has no live process cwd inside it (`lsof +D` empty):
+- [x] Run `git -C <main> diff --summary | awk '/mode change 100644 => 100755/{print $NF}' | (cd <main> && xargs chmod 644)`, then verify `git -C <main> diff --summary | grep -c 'mode change'` prints `0`.
+- [x] For each dirty `.claude/.worktree/*` and `agent-af8a47e1b24452f40` that has no live process cwd inside it (`lsof +D` empty):
   - write `git -C <wt> diff HEAD > <main>/.claude/archive/worktree-wip-2026-10-16/<name>.patch` and tar its untracked files into the same folder;
   - then run `git worktree remove --force <wt>`.
-- [ ] Run `git worktree remove` on the 34 clean merged agent worktrees. Verify that `git worktree list` shows only main, office-audit, office-health and any live worktree.
+- [x] Run `git worktree remove` on the 34 clean merged agent worktrees. Verify that `git worktree list` shows only main, office-audit, office-health and any live worktree. As built: 35 agent and 6 merged phase worktrees removed, then the three merged Phase 5b/7a/7b ones; `live-city-overview-fix` stays (live cwd).
 
 ---
 
