@@ -17,7 +17,7 @@ const WALKER_REACH_M = 1
 const PLAYER_HOLD_M = 1.4
 const EPSILON_M = 1e-6
 
-// A city's zebras and where each vehicle's loop drives over them; the campus town has none.
+// A city's zebras and where each vehicle's loop drives over them.
 export interface ZebraTraffic {
   crossings: readonly Crosswalk[]
   // Their painted bands, in the same order.
@@ -26,11 +26,7 @@ export interface ZebraTraffic {
   passes: readonly (readonly ZebraPass[])[]
 }
 
-export function zebraTraffic(
-  trips: readonly Trip[],
-  sidewalks: CitySidewalks | null
-): ZebraTraffic | null {
-  if (!sidewalks) return null
+export function zebraTraffic(trips: readonly Trip[], sidewalks: CitySidewalks): ZebraTraffic {
   const { crossings, network } = sidewalks
   return {
     crossings,

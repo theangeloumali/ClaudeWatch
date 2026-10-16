@@ -5,10 +5,8 @@ import { Elevator } from './BrassElevator'
 import { signTexture } from '../scene/textures'
 import { doorSignPlacement, DESK_REACH } from '../logic/room-layout'
 import { Matte } from '../scene/InstancedParts'
-import { BRASS } from './palettes'
 import { Batch, Box } from './primitives'
-import { ThemeTower } from './WorldArchitecture'
-import type { DeskProps, FloorProps, RoomProps, RoomsProps, TowerProps } from './types'
+import type { DeskProps, FloorProps, RoomProps, RoomsProps } from './types'
 
 export function BrassSlab({ floor }: FloorProps) {
   return (
@@ -102,7 +100,4 @@ export function BrassRoomSign({ room }: RoomProps) {
 
 export function BrassElevator(props: FloorProps) {
   return <Elevator {...props} />
-}
-export function BrassTower(props: TowerProps) {
-  return <ThemeTower {...props} palette={BRASS} />
 }

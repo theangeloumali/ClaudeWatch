@@ -1,7 +1,6 @@
 import { Box3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import { citizenGeometry } from '../../citizens/figure-parts'
-import { buildCorporateTower, CorporateTower } from '../../themes/corporate-city/CorporateTower'
 import {
   CORPORATE_MATERIALS,
   CORPORATE_PALETTE,
@@ -13,7 +12,6 @@ import { CORPORATE_TOWN } from '../../themes/corporate-city/town'
 import { expectInsideLot } from '../../themes/lot-box.test-utils'
 import type { PartSpec } from '../../themes/parts'
 import { boundsOf, EPSILON, expectOnItsPlot, sizeOf } from '../../themes/town-bounds.test-utils'
-import type { TowerProps } from '../../themes/types'
 import { UNIT_SHAPES } from '../../themes/unit-parts'
 import { dressLot, type DressableLot } from '../../town/town-dress'
 import { planTown } from '../../town/town-plan'
@@ -38,17 +36,6 @@ const FOOTPRINTS = [
 
 function boundsOfAll(parts: readonly PartSpec[]): Box3 {
   return parts.reduce((bounds, part) => bounds.union(boundsOf(part)), new Box3())
-}
-
-function towerProps(count: number): TowerProps {
-  return {
-    floors: Array.from({ length: count }, (_, index) => ({
-      floorId: `floor-${index}`,
-      label: `Office ${index}`,
-      attentionCount: index % 2,
-      agentCount: index + 1
-    }))
-  }
 }
 
 describe('Corporate City town assets', () => {
@@ -138,18 +125,6 @@ describe('Corporate City town assets', () => {
       expectInsideLot(placed)
       expect(placed).toEqual(dressLot(lot, 0, CORPORATE_TOWN))
     }
-    const landmark = plan.lots.find((lot) => lot.zone === 'civic' && lot.isLandmark)
-    expect(landmark).toBeDefined()
-    if (!landmark) throw new Error('The campus plan has no civic landmark')
-    expectInsideLot({
-      lot: landmark,
-      key: landmark.id,
-      at: [landmark.x, 0, landmark.z],
-      turn: 0,
-      scale: 1,
-      design: 'CorporateTower',
-      parts: buildCorporateTower(towerProps(30))
-    })
   })
 
   it('declares honest prop bounds, every garden role and light pedestrian surfaces', () => {
@@ -232,33 +207,5 @@ describe('Corporate City town assets', () => {
     expect(
       new Set(parts.map((part) => `${part.shape}:${part.color}:${part.glow ?? false}`)).size
     ).toBeLessThanOrEqual(24)
-  })
-
-  it('builds a bounded standalone headquarters from the actual TowerProps', () => {
-    expect(typeof CorporateTower).toBe('function')
-    for (const count of [0, 1, 30]) {
-      const props = towerProps(count)
-      const before = JSON.stringify(props)
-      const parts = buildCorporateTower(props)
-      const bounds = boundsOfAll(parts)
-      expect(bounds.min.y).toBeCloseTo(0)
-      expect(bounds.max.y).toBeLessThanOrEqual(13)
-      expect(bounds.max.x - bounds.min.x).toBeLessThanOrEqual(5)
-      expect(bounds.max.z - bounds.min.z).toBeLessThanOrEqual(5)
-      expect(parts.length).toBeLessThanOrEqual(48)
-      expect(parts.some((part) => part.color === CORPORATE_MATERIALS.glass)).toBe(true)
-      expect(parts.filter((part) => part.shape === 'cone')).toEqual([])
-      expect(parts).toEqual(buildCorporateTower(props))
-      expect(JSON.stringify(props)).toBe(before)
-    }
-  })
-
-  it('fits the actual civic lot supplied by the world layer, including a low narrow site', () => {
-    const plot = { width: 0.9, depth: 4.2, maxHeight: 0.65 }
-    const parts = buildCorporateTower({ ...towerProps(30), plot })
-    const bounds = boundsOfAll(parts)
-    expect(bounds.max.x - bounds.min.x).toBeLessThanOrEqual(plot.width)
-    expect(bounds.max.z - bounds.min.z).toBeLessThanOrEqual(plot.depth)
-    expect(bounds.max.y).toBeLessThanOrEqual(plot.maxHeight)
   })
 })

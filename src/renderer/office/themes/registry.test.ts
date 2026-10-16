@@ -46,7 +46,6 @@ describe('theme registry', () => {
       ]) {
         expect(typeof Reflect.get(theme.kit.zone, key)).toBe('function')
       }
-      expect(typeof theme.world.Tower).toBe('function')
       for (const provider of ['claude', 'codex'] as const) {
         expect(theme.robot.skins[provider]).toMatchObject({
           body: expect.any(String),

@@ -50,15 +50,13 @@ export function OfficeNameProjector({
   band,
   hasInspector,
   inspectorLayout,
-  cards,
-  showsPhysicalFloors = false
+  cards
 }: OfficeNamesProps & {
   cardAnchors: CardAnchors
   band: ZoomBand
   hasInspector: boolean
   inspectorLayout?: InspectorLayout
   cards?: readonly NameCard[]
-  showsPhysicalFloors?: boolean
 }) {
   const point = useMemo(() => new Vector3(), [])
   const last = useRef<{
@@ -68,7 +66,6 @@ export function OfficeNameProjector({
     layout?: InspectorLayout
     band?: ZoomBand
     hasInspector?: boolean
-    showsPhysicalFloors?: boolean
   }>({ pose: '' })
   useFrame(({ camera, size }) => {
     camera.updateMatrixWorld()
@@ -79,8 +76,7 @@ export function OfficeNameProjector({
       last.current.cards === cards &&
       last.current.layout === inspectorLayout &&
       last.current.band === band &&
-      last.current.hasInspector === hasInspector &&
-      last.current.showsPhysicalFloors === showsPhysicalFloors
+      last.current.hasInspector === hasInspector
     )
       return
     last.current = {
@@ -89,8 +85,7 @@ export function OfficeNameProjector({
       cards,
       layout: inspectorLayout,
       band,
-      hasInspector,
-      showsPhysicalFloors
+      hasInspector
     }
     const insets = hudSafeInsets(hasInspector, inspectorLayout)
     const safe = { ...cardSafeArea(size, insets), top: insets.top }
@@ -122,8 +117,7 @@ export function OfficeNameProjector({
       if (!element) continue
       element.style.transform = OFFSCREEN
       if (
-        (band === 'building' &&
-          (!showsPhysicalFloors || (label.kind === 'room' && !label.isSelected))) ||
+        (band === 'building' && label.kind === 'room' && !label.isSelected) ||
         (band === 'desk' && !label.isSelected && label.kind !== 'room') ||
         shown >= MAX_OFFICE_NAMES
       )

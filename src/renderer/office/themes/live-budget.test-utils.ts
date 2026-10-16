@@ -1,4 +1,10 @@
-import { createElement, isValidElement, type ReactElement, type ReactNode } from 'react'
+import {
+  createElement,
+  isValidElement,
+  type ComponentProps,
+  type ReactElement,
+  type ReactNode
+} from 'react'
 import { expect } from 'vitest'
 import type { AgentView } from '../../../shared/office/types'
 import { makeSession } from '../__tests__/fixtures'
@@ -9,10 +15,11 @@ import { FloorView } from '../scene/FloorView'
 import { Horizon } from '../scene/Horizon'
 import { RobotCrew } from '../scene/Robot'
 import { BatchedScene } from '../scene/BatchedScene'
-import { TowerView } from '../scene/WorldView'
+import { CitySceneryCutaway } from '../scene/CitySceneryCutaway'
 import { groundBuffers, groundQuads } from '../town/town-ground'
 import { dressOf, TownAmbient, TownView } from '../town/TownView'
 import type { TownSize } from '../town/town-grid'
+import { distributedTown } from '../town/distributed-town'
 import { townOf, type Town } from '../town/use-town-plan'
 import { getTheme, listThemes } from './registry'
 import { mergedDraws, type DrawCount } from './scene.test-utils'
@@ -39,9 +46,12 @@ export interface Composition {
 }
 
 // Each BatchedScene under a layer merges on its own at runtime, so each is counted on its own.
+// The city's lots sit inside its scenery cutaway, which is opened to reach their batches.
 function batchDraws(layer: ReactNode): DrawCount {
   const batches = (node: ReactNode): ReactElement<{ children?: ReactNode }>[] => {
     if (Array.isArray(node)) return node.flatMap(batches)
+    if (isValidElement<ComponentProps<typeof CitySceneryCutaway>>(node))
+      if (node.type === CitySceneryCutaway) return batches(CitySceneryCutaway(node.props))
     if (!isValidElement<{ children?: ReactNode }>(node)) return []
     return node.type === BatchedScene ? [node] : batches(node.props.children)
   }
@@ -57,7 +67,7 @@ function batchDraws(layer: ReactNode): DrawCount {
     )
 }
 
-// An upper bound: every thought dot and steam puff at once, and the world at building zoom.
+// An upper bound: every thought dot and steam puff at once.
 export function measure({
   floor,
   agents,
@@ -87,18 +97,8 @@ export function measure({
       onFly: () => undefined
     })
   ])
-  // The town of a first start at full detail: the most there is to draw.
-  const town = suppliedTown ?? townOf(floor, null, 'full', townSize)
-  const world = batchDraws(
-    TowerView({
-      plan: town.plan,
-      theme: floorTheme,
-      band: 'building',
-      floors: [
-        { floorId: floor.floorId, label: floor.label, agentCount: agents.length, attentionCount: 2 }
-      ]
-    })
-  )
+  // The city of a first start at full detail, round the floor's own site.
+  const town = suppliedTown ?? distributedTown(townOf(floor, null, 'full', townSize), [floor])
   const horizon = mergedDraws(
     createElement(Horizon, {
       box: { ...town.plan.extent, minY: GROUND_Y, maxY: 1 },
@@ -120,16 +120,14 @@ export function measure({
     roadCount: town.plan.roads.length,
     townRebuildMs,
     focusedDraws: focused.draws,
-    worldDraws: world.draws,
     horizonDraws: horizon.draws,
     // The ground, the town's lots and the belt: shared by every theme on the floor.
     townDraws,
     // What the themes add of their own around the offices: their ambient life.
     surroundingsDraws: ambient.draws,
-    draws: focused.draws + world.draws + horizon.draws + townDraws + ambient.draws,
+    draws: focused.draws + horizon.draws + townDraws + ambient.draws,
     triangles:
       focused.triangles +
-      world.triangles +
       horizon.triangles +
       ground.positions.length / 9 +
       buildings.triangles +
@@ -159,7 +157,7 @@ export function agentsOn(
 
 export function report(name: string, result: ReturnType<typeof measure>): void {
   console.info(
-    `${name}: ${result.draws} draw calls (${result.worldDraws} tower, ${result.townDraws} town on ${result.lotCount} lots, ${result.surroundingsDraws} ambient), ${result.triangles} triangles`
+    `${name}: ${result.draws} draw calls (${result.townDraws} town on ${result.lotCount} lots, ${result.surroundingsDraws} ambient), ${result.triangles} triangles`
   )
 }
 

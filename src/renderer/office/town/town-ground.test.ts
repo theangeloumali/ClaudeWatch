@@ -2,15 +2,14 @@ import { Color } from 'three'
 import { describe, expect, it } from 'vitest'
 import { EDO } from '../themes/palettes'
 import { contains, type Rect } from '../themes/lot-math'
-import { GROUND_Y } from '../themes/surroundings'
+import { distributedTown } from './distributed-town'
 import { fallbackDress } from './fallback-dress'
-import { campusClaim, neededClaim } from './town-claim'
+import { SIDEWALK_M } from './town-grid'
 import { groundBuffers, groundQuads, type GroundQuad } from './town-ground'
-import { planTown } from './town-plan'
-import { TOWN_DISTRICTS } from './town-zones'
 import { LARGE_FLOOR, roadStrip } from './town.test-utils'
+import { townOf } from './use-town-plan'
 
-const plan = planTown(campusClaim(neededClaim(LARGE_FLOOR), null), 'full')
+const { plan } = distributedTown(townOf(LARGE_FLOOR, null, 'full'), [LARGE_FLOOR])
 const dress = fallbackDress(EDO)
 const quads = groundQuads(plan, dress)
 const of = (layer: GroundQuad['layer']): GroundQuad[] =>
@@ -18,72 +17,53 @@ const of = (layer: GroundQuad['layer']): GroundQuad[] =>
 const same = (a: Rect, b: Rect): boolean => contains(a, b) && contains(b, a)
 
 describe('groundQuads', () => {
-  it('lays a pad under every block in its zone’s ground colour', () => {
+  it('lays a pad under every block and park in its zone’s ground colour', () => {
     const pads = of('pad')
-    expect(pads).toHaveLength(plan.blocks.length)
+    const parks = plan.lots.filter((lot) => lot.zone === 'park')
+    expect(pads).toHaveLength(plan.blocks.length + parks.length)
     for (const block of plan.blocks) {
       const pad = pads.find((quad) => same(quad, block))
       expect(pad?.color, block.id).toBe(dress.looks[block.zone].ground)
     }
-    expect(new Set(pads.map((pad) => pad.color)).size).toBe(TOWN_DISTRICTS.length)
-  })
-
-  it('covers the part of a block the claim cuts with the campus ground', () => {
-    const [campus] = of('campus')
-    expect(same(campus, plan.claim)).toBe(true)
-    expect(campus.y).toBeGreaterThan(of('pad')[0].y)
+    for (const park of parks) {
+      const pad = pads.find((quad) => same(quad, park))
+      expect(pad?.color, park.id).toBe(dress.looks.park.ground)
+    }
   })
 
   it('paves every road, with a carriageway down each one a vehicle may use', () => {
     const paved = of('sidewalk')
     const driven = of('carriageway')
+    expect(plan.roads.length).toBeGreaterThan(0)
     for (const road of plan.roads) {
       const strip = roadStrip(road)
       expect(
         paved.some((quad) => contains(quad, strip)),
         road.id
       ).toBe(true)
-      // The boulevard's is carried past its ends to square the corners off.
-      const lanes = driven.filter(
-        (quad) =>
-          quad.x === strip.x &&
-          quad.z === strip.z &&
-          quad.width > quad.depth === strip.width > strip.depth
-      )
-      expect(lanes.length > 0, road.id).toBe(road.class !== 'lane')
+      // A stub can be shorter than it is wide, so its direction is read off its ends.
+      const kerbs = SIDEWALK_M[road.class] * 2
+      const carriageway =
+        road.from.z === road.to.z
+          ? { ...strip, depth: strip.depth - kerbs }
+          : { ...strip, width: strip.width - kerbs }
+      expect(
+        driven.some((quad) => same(quad, carriageway)),
+        road.id
+      ).toBe(road.class !== 'lane')
     }
     for (const quad of driven) expect(quad.color).toBe(dress.roads.carriageway)
     for (const quad of paved) expect(quad.color).toBe(dress.roads.sidewalk)
   })
 
-  it('lays the median, the boulevard’s inner walk and the gate plaza on top, in the light colour', () => {
-    const walks = of('promenade')
-    // Four sides of the boulevard, the avenue's median and the plaza.
-    expect(walks.length).toBeGreaterThanOrEqual(6)
-    const top = Math.max(...quads.map((quad) => quad.y))
-    for (const walk of walks) {
-      expect(walk.color).toBe(dress.roads.promenade)
-      expect(walk.y).toBe(top)
-    }
-    const plaza = walks.find((walk) => contains(walk, { x: -19, z: 0, width: 1, depth: 1 }))
-    expect(plaza).toBeDefined()
-  })
-
-  it('stacks the layers in order, all between the horizon ground and the floor plate', () => {
-    const order: GroundQuad['layer'][] = [
-      'pad',
-      'campus',
-      'street',
-      'sidewalk',
-      'carriageway',
-      'promenade'
-    ]
+  it('stacks the layers in order, all just above the ground the offices stand on', () => {
+    const order: GroundQuad['layer'][] = ['pad', 'sidewalk', 'carriageway', 'marking']
     const heights = order.map((layer) => of(layer)[0].y)
     expect([...heights].sort((a, b) => a - b)).toEqual(heights)
     expect(new Set(heights).size).toBe(order.length)
     for (const quad of quads) {
-      expect(quad.y).toBeGreaterThan(GROUND_Y)
-      expect(quad.y).toBeLessThan(GROUND_Y + 0.1)
+      expect(quad.y).toBeGreaterThan(0)
+      expect(quad.y).toBeLessThan(0.1)
     }
   })
 })

@@ -54,7 +54,7 @@ function turnOut(scenario: Scenario) {
 }
 
 function moversOn(scenario: Scenario, trips: Trip[], space: SceneBodies) {
-  const ground = citizenGround(scenario.floor, scenario.plan)
+  const ground = citizenGround(scenario.plan)
   const clock = moverClock({ trips, space, isOpen: ground.isOpen })
   const traffic = zebraTraffic(trips, citySidewalks(scenario.plan))
   const step = () =>

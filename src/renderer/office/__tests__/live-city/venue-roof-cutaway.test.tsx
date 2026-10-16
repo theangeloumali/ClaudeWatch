@@ -44,6 +44,8 @@ const floor = makeFloor({ floorId: 'venue-cutaway' })
 const sceneProps: ComponentProps<typeof OfficeScene> = {
   theme,
   floor,
+  visibleFloors: [floor],
+  allFloors: [floor],
   floors: [{ floorId: floor.floorId, label: floor.label, attentionCount: 0 }],
   sessions: [],
   venues,

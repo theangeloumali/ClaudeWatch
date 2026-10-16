@@ -1,68 +1,26 @@
 import type { Point } from '../../../office/sim/path'
 import type { CitizenRoute, RoutePoint } from '../citizens/route-pose'
-import type { Rect } from '../themes/lot-math'
-import type { Leg, Traveller } from './road-net'
-import { AVENUE_MEDIAN_M, ROAD_WIDTH_M, SIDEWALK_M } from './town-grid'
+import type { Leg } from './road-net'
+import { ROAD_WIDTH_M, SIDEWALK_M } from './town-grid'
 import type { RoadClass } from './town-roads'
-import type { TownPlan } from './town-plan'
 
-const carriageway = (road: Exclude<RoadClass, 'lane'>): number =>
-  ROAD_WIDTH_M[road] / 2 - SIDEWALK_M[road]
-
-// How far to the right of a road's centre line each traveller keeps.
-export const KEEP_RIGHT_M: Record<Traveller, Record<RoadClass, number>> = {
-  citizen: {
-    // On the median, and on the boulevard's inner sidewalk (see INNER_SIDEWALK_M).
-    avenue: AVENUE_MEDIAN_M / 4,
-    boulevard: SIDEWALK_M.boulevard / 4,
-    collector: ROAD_WIDTH_M.collector / 2 - SIDEWALK_M.collector / 2,
-    lane: ROAD_WIDTH_M.lane / 4
-  },
-  vehicle: {
-    avenue: (AVENUE_MEDIAN_M / 2 + carriageway('avenue')) / 2,
-    boulevard: carriageway('boulevard') / 2,
-    collector: carriageway('collector') / 2,
-    lane: 0
-  }
-}
-// The middle of the boulevard's inner sidewalk, from its centre line: the promenade.
-const INNER_SIDEWALK_M = ROAD_WIDTH_M.boulevard / 2 - SIDEWALK_M.boulevard / 2
 // A city lane's centre as a share of the half-carriageway. An avenue runs two lanes each way,
 // split by the dashes at half, and traffic keeps to the outer one (clearspent-4).
 const cityLaneShare = (road: RoadClass): number => (road === 'avenue' ? 0.75 : 0.5)
 
-// Where a traveller is beside a leg's centre line: to the right of the way it is going, and for
-// a citizen on the boulevard, over on the sidewalk next to the campus.
-function besideOf(
-  leg: Leg,
-  context: Rect | Pick<TownPlan, 'claim' | 'officeSites'>,
-  traveller: Traveller
-): Point {
-  const claim = 'claim' in context ? context.claim : context
-  const isCity = 'claim' in context && Boolean(context.officeSites)
+// Where a vehicle drives beside a leg's centre line: in its lane, on the city's keep-left side.
+function besideOf(leg: Leg): Point {
   const ahead = { x: Math.sign(leg.to.x - leg.from.x), z: Math.sign(leg.to.z - leg.from.z) }
   const halfWidth = (leg.width ?? ROAD_WIDTH_M[leg.class]) / 2
-  // City citizens walk the sidewalk network instead (citizen-trips.ts).
-  const keep = !isCity
-    ? KEEP_RIGHT_M[traveller][leg.class]
-    : (halfWidth - SIDEWALK_M[leg.class]) * cityLaneShare(leg.class)
-  const direction = isCity ? -1 : 1
-  const beside = { x: -ahead.z * keep * direction, z: ahead.x * keep * direction }
-  if (traveller !== 'citizen' || leg.class !== 'boulevard') return beside
-  return ahead.x !== 0
-    ? { x: beside.x, z: beside.z + Math.sign(claim.z - leg.from.z) * INNER_SIDEWALK_M }
-    : { x: beside.x + Math.sign(claim.x - leg.from.x) * INNER_SIDEWALK_M, z: beside.z }
+  const keep = (halfWidth - SIDEWALK_M[leg.class]) * cityLaneShare(leg.class)
+  return { x: ahead.z * keep, z: -ahead.x * keep }
 }
 
-// The line a traveller really takes along the legs: each one moved to its side of the road, the
-// corners joined where the two lines cross.
-export function sidePath(
-  legs: readonly Leg[],
-  context: Rect | Pick<TownPlan, 'claim' | 'officeSites'>,
-  traveller: Traveller
-): RoutePoint[] {
+// The line a vehicle really takes along the legs: each one moved to its lane, the corners joined
+// where the two lines cross.
+export function sidePath(legs: readonly Leg[]): RoutePoint[] {
   const moved = legs.map((leg) => {
-    const beside = besideOf(leg, context, traveller)
+    const beside = besideOf(leg)
     return {
       from: { x: leg.from.x + beside.x, z: leg.from.z + beside.z },
       to: { x: leg.to.x + beside.x, z: leg.to.z + beside.z },

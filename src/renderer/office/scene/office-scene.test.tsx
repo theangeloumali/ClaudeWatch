@@ -33,6 +33,8 @@ function renderScene() {
       floors={[{ floorId: 'f1', label: 'Main', attentionCount: 1 }]}
       sessions={[session]}
       floor={floor}
+      visibleFloors={[floor]}
+      allFloors={[floor]}
       agents={agents}
       cards={buildNameCards(frame, 'f1', null)}
       stacks={[]}
@@ -55,7 +57,7 @@ const cardButtons = (): HTMLElement[] => screen.getAllByRole('button', { hidden:
 
 it('puts the image role on the canvas, not around the card buttons', () => {
   renderScene()
-  const picture = screen.getByRole('img', { name: 'Isometric view of the Main floor' })
+  const picture = screen.getByRole('img', { name: 'Isometric view of 1 physical office floor' })
   const buttons = cardButtons()
   expect(buttons.map((button) => button.textContent)).toContain('Review')
   for (const button of buttons) expect(picture.contains(button)).toBe(false)

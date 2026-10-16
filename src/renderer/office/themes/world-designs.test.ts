@@ -13,7 +13,6 @@ import { EDO_PROPS } from './EdoProps'
 import { EDO_BUILDINGS } from './EdoSurroundings'
 import type { Plot } from './lot-kit'
 import type { PartSpec } from './parts'
-import { lotBase } from './surroundings'
 
 // The box a part fills, with its rotation applied.
 function boundsOf(part: PartSpec): Box3 {
@@ -116,7 +115,8 @@ describe.each([
   it('dresses every lot of a real town, under its limit, the same on every start', () => {
     expect(townLots.length).toBeGreaterThan(20)
     for (const lot of townLots) {
-      const baseY = lotBase(lot, floor)
+      // Every city lot stands on the ground at 0, as dressCityDistrict stands it.
+      const baseY = 0
       const placed = dressLot(lot, baseY, dress)
       expect(placed).toEqual(dressLot(lot, baseY, dress))
       expect(placed.parts.length).toBeGreaterThan(0)

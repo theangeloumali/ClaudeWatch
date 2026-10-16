@@ -7,8 +7,6 @@ import { agentsForFloor, layoutFloor } from '../../fixture/fixture-layout'
 import { groupZonesByTheme, type ThemedZone } from '../../logic/office-themes'
 import { FloorView } from '../../scene/FloorView'
 import { RobotCrew } from '../../scene/Robot'
-import { TowerView } from '../../scene/WorldView'
-import { townOf } from '../../town/use-town-plan'
 import { getTheme } from '../registry'
 import { useRobotRig } from '../rig'
 import { quietGrove } from './index'
@@ -27,7 +25,6 @@ vi.mock('../../scene/textures', () => ({
 }))
 
 const DRAW_CEILING = 300
-const WORLD_DRAW_BUDGET = 60
 const ZONE_KIT_DRAW_BUDGET = 35
 const EDO = 'neo-edo-steam'
 const GROVE_ID = 'quiet-grove'
@@ -73,18 +70,9 @@ function measure(companyCount: number, floorThemeId: string, themeIds: readonly 
     onSelect: () => undefined,
     onFly: () => undefined
   })
-  const world = mergedDraws(
-    createElement(TowerView, {
-      plan: townOf(floor, null, 'full').plan,
-      theme: floorTheme,
-      band: 'building',
-      floors: [{ floorId: floor.floorId, label: floor.label, agentCount: 20, attentionCount: 2 }]
-    })
-  ).draws
   const otherThemes = zoneGroups.filter((zoneGroup) => zoneGroup.themeId !== GROVE_ID)
   return {
-    world,
-    total: mergedDraws([kit(zoneGroups), crew]).draws + world,
+    total: mergedDraws([kit(zoneGroups), crew]).draws,
     // What the grove's own zone parts add to a floor, robots and signs aside.
     groveKit: mergedDraws(kit(zoneGroups)).untextured - mergedDraws(kit(otherThemes)).untextured
   }
@@ -93,9 +81,8 @@ function measure(companyCount: number, floorThemeId: string, themeIds: readonly 
 describe('Quiet Grove draw budget', () => {
   it('fits a 20-agent floor of its own inside the draw ceiling', () => {
     const result = measure(1, GROVE_ID, [GROVE_ID])
-    console.info(`quiet grove alone: ${result.total} draws (${result.world} world)`)
+    console.info(`quiet grove alone: ${result.total} draws`)
     expect(result.total).toBeLessThanOrEqual(DRAW_CEILING)
-    expect(result.world).toBeLessThanOrEqual(WORLD_DRAW_BUDGET)
   })
 
   it('fits four companies alternating Neo Edo Steam and Quiet Grove inside the ceiling', () => {

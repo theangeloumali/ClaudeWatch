@@ -26,6 +26,8 @@ afterEach(() => {
 })
 
 const floor = makeFloor({ floorId: 'f1', label: 'Main', rooms: [makeRoom({ id: 'r1' })] })
+// One list for every render, as the feed keeps its floors while their geometry stands.
+const floors = [floor]
 const theme = themeForTeam()
 
 function scene(agents: readonly AgentView[]) {
@@ -35,6 +37,8 @@ function scene(agents: readonly AgentView[]) {
       floors={[{ floorId: 'f1', label: 'Main', attentionCount: 0 }]}
       sessions={[]}
       floor={floor}
+      visibleFloors={floors}
+      allFloors={floors}
       agents={agents}
       cards={[]}
       stacks={[]}

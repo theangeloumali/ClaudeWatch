@@ -10,13 +10,11 @@ import { LotFill } from '../themes/LotFill'
 import { dressCityDistrict } from '../themes/city-district-parts'
 import { thinnedLots } from '../themes/lot-thinning'
 import { getTheme } from '../themes/registry'
-import { GROUND_Y, lotBase } from '../themes/surroundings'
 import type { OfficeTheme } from '../themes/types'
 import { fallbackDress } from './fallback-dress'
 import { placeGardenPiece } from './garden-pieces'
 import { townSteamStacks } from './town-ambient'
-import { dressLot, type TownDress } from './town-dress'
-import type { TownLot } from './town-lots'
+import type { TownDress } from './town-dress'
 import type { TownPlan } from './town-plan'
 import { themeIdsByZone } from './town-trips'
 import type { Town } from './use-town-plan'
@@ -24,11 +22,6 @@ import type { Town } from './use-town-plan'
 // A theme's own town, or one made from its palette until it has drawn one.
 export function dressOf(theme: OfficeTheme): TownDress {
   return theme.town ?? fallbackDress(theme.palette)
-}
-
-// Where the floor theme's tower stands. The world layer draws this lot, in every zoom band.
-export function townLandmark(plan: TownPlan): TownLot | undefined {
-  return plan.lots.find((lot) => lot.zone === 'civic' && lot.isLandmark)
 }
 
 interface TownProps {
@@ -85,64 +78,47 @@ interface DressedLot {
 
 let dressedCache: { revision: string; lots: DressedLot[] } | null = null
 
-// Every lot but the landmark's, in its theme. TownView and TownAmbient share one dressing per
-// revision: the movers keep to exactly what was drawn, and nothing is dressed twice.
+// Every lot in its theme. TownView and TownAmbient share one dressing per revision: the movers
+// keep to exactly what was drawn, and nothing is dressed twice.
 function dressedTown(plan: TownPlan, themeIdOf: ThemeFinder, revision: string): DressedLot[] {
   if (dressedCache?.revision !== revision) {
-    const landmark = plan.officeSites ? undefined : townLandmark(plan)
-    const lots = plan.lots
-      .filter((lot) => lot !== landmark)
-      .map((lot) => {
-        const themeId = themeIdOf(lot)
-        const dress = dressOf(getTheme(themeId))
-        return {
-          themeId,
-          placed: plan.officeSites ? dressCityDistrict(lot, dress) : dressLot(lot, GROUND_Y, dress)
-        }
-      })
+    const lots = plan.lots.map((lot) => {
+      const themeId = themeIdOf(lot)
+      return { themeId, placed: dressCityDistrict(lot, dressOf(getTheme(themeId))) }
+    })
     dressedCache = { revision, lots }
   }
   return dressedCache.lots
 }
 
-// The buildings of the zoned town and the planted belt round the campus, each merged once.
-// The belt has its own batch so that ordinary growth of the plate never rebuilds the town.
+// The buildings of the city and its planted belt, each merged once. The belt has its own batch
+// so that ordinary growth of the plate never rebuilds the town.
 export function TownView(props: TownProps) {
   const { town, floor } = props
   const inspectionFloor = props.focusedFloor ?? floor
   const isInspecting = props.viewMode === 'office'
-  const isCity = Boolean(town.plan.officeSites)
   const { themeIdOf, lotsRevision } = useLotThemes(props)
   const beltRevision = useMemo(
-    () =>
-      JSON.stringify(
-        town.green.map((plot) => [plot, isCity ? 0 : lotBase(plot, floor), themeIdOf(plot)])
-      ),
-    [town.green, floor, themeIdOf, isCity]
+    () => JSON.stringify(town.green.map((plot) => [plot, themeIdOf(plot)])),
+    [town.green, themeIdOf]
   )
   // The same elements while a revision stands: an agent's step re-renders the scene, and React
   // must find nothing to do here.
-  const lots = useMemo(() => {
-    const placed = dressedTown(town.plan, themeIdOf, lotsRevision).map((each) => each.placed)
-    if (isCity)
-      return (
-        <CitySceneryCutaway
-          placed={placed}
-          floor={inspectionFloor}
-          revision={lotsRevision}
-          isInspecting={isInspecting}
-        />
-      )
-    return (
-      <BatchedScene revision={lotsRevision} isStatic>
-        <LotFill placed={placed} />
-      </BatchedScene>
-    )
+  const lots = useMemo(
+    () => (
+      <CitySceneryCutaway
+        placed={dressedTown(town.plan, themeIdOf, lotsRevision).map((each) => each.placed)}
+        floor={inspectionFloor}
+        revision={lotsRevision}
+        isInspecting={isInspecting}
+      />
+    ),
     // `lotsRevision` stands for the plan and for every lot's theme.
-  }, [lotsRevision, isCity, inspectionFloor, isInspecting])
+    [lotsRevision, inspectionFloor, isInspecting]
+  )
   const belt = useMemo(() => {
     const placed = town.green.map((plot) =>
-      placeGardenPiece(plot, isCity ? 0 : lotBase(plot, floor), dressOf(getTheme(themeIdOf(plot))))
+      placeGardenPiece(plot, 0, dressOf(getTheme(themeIdOf(plot))))
     )
     return (
       <BatchedScene revision={beltRevision} isStatic>

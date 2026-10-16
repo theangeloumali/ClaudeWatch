@@ -49,7 +49,7 @@ export function MoverLayer(props: MoverLayerProps) {
   const { floor, plan, owners, floorTheme, zoneGroups, player, isReducedMotion } = props
   const { hasVehicles } = props
   const bodies = useMemo(() => props.bodies ?? new SceneBodies(), [props.bodies])
-  const ground = useMemo(() => citizenGround(floor, plan), [floor, plan])
+  const ground = useMemo(() => citizenGround(plan), [plan])
   const { pin, chosen } = useQualityChoice()
   const detail = levelInUse(pin, chosen)
   // Keyed by what they say, not by identity: a floor change that moves no lot keeps every trip,
@@ -92,9 +92,6 @@ export function MoverLayer(props: MoverLayerProps) {
     return next
   }, [tripsKey, bodies])
 
-  // Only the city's one-way sidewalks leave a jammed walker no room to step aside; the campus
-  // town's walkers keep waiting (citizens-2).
-  const waitsFor = plan.officeSites ? clock.waitsFor : undefined
   const traffic = useMemo(() => zebraTraffic(trips, citySidewalks(plan)), [trips, plan])
 
   const place = (deltaSec: number): void => {
@@ -106,7 +103,8 @@ export function MoverLayer(props: MoverLayerProps) {
         space: bodies,
         ground,
         player: player?.position ?? null,
-        waitsFor,
+        // One-way sidewalks leave a jammed walker no room to step aside (citizens-2).
+        waitsFor: clock.waitsFor,
         traffic,
         deltaSec
       })
