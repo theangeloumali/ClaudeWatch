@@ -11,7 +11,7 @@ import {
 import { Plate } from '../components/deck/Plate'
 import { BUTTON_QUIET_COMPACT_CLASS } from '../components/deck/deck-styles'
 import { cn } from '../lib/utils'
-import { useNow } from '../hooks/useNow'
+import { OFFICE_BLURRED_TICK_MS, useOfficeNow } from './use-office-now'
 import { useOfficeTheme } from './hooks'
 import { mainAgentForSession } from './logic/floor-model'
 import { canRespond } from './logic/interactions'
@@ -113,7 +113,7 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
   const navigationRef = useRef<HTMLDivElement>(null)
   const footerRef = useRef<HTMLDivElement>(null)
   const [navigationHeight, setNavigationHeight] = useState(0)
-  const nowMs = useNow(1000)
+  const nowMs = useOfficeNow(OFFICE_BLURRED_TICK_MS)
 
   const is3DAvailable = hasWebGL && !hasSceneFailed
   const isShowingList = state.isListView || !is3DAvailable

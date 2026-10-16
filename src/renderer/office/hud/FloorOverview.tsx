@@ -6,7 +6,7 @@ import {
 import { observeAgent } from '../../../shared/office/observation'
 import { BUTTON_QUIET_COMPACT_CLASS, PLATE_TITLE_CLASS } from '../../components/deck/deck-styles'
 import { Plate } from '../../components/deck/Plate'
-import { useNow } from '../../hooks/useNow'
+import { useOfficeNow } from '../use-office-now'
 import type { OfficeFrame } from '../scene-model'
 import { ROW_CLASS } from './hud-styles'
 import { cn } from '../../lib/utils'
@@ -25,7 +25,7 @@ export function FloorOverview({
   onSelectAgent,
   focusedFloorId
 }: FloorOverviewProps) {
-  const nowMs = useNow(1000)
+  const nowMs = useOfficeNow()
   const summaries = buildFloorActivitySummaries({ ...frame, nowMs })
   const byFloorId = new Map(summaries.map((summary) => [summary.floorId, summary]))
   const floors = [...frame.floors].sort(compareFloors)

@@ -2,7 +2,7 @@ import { Eye } from 'lucide-react'
 import { useEffect, useId, useState } from 'react'
 import type { PeekResult, TerminalProvenance } from '../../../shared/office/types'
 import { BUTTON_QUIET_COMPACT_CLASS } from '../../components/deck/deck-styles'
-import { useNow } from '../../hooks/useNow'
+import { useOfficeNow } from '../use-office-now'
 import { cn } from '../../lib/utils'
 import { failureMessage } from '../logic/interactions'
 import { ScreenExcerpt } from './ScreenExcerpt'
@@ -66,7 +66,7 @@ function PeekCapture({
 }: PeekPanelProps & { hasExpired: boolean; onExpire: () => void }) {
   const [request, run] = useRequest(FAILED)
   const [receivedAtMs, setReceivedAtMs] = useState<number>()
-  const nowMs = useNow(1000)
+  const nowMs = useOfficeNow()
   const result = request.status === 'done' ? request.result : null
   const capturedAtMs = validTimestamp(result?.capturedAtMs)
   const expiryBase =
