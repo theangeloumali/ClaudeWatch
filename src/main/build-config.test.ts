@@ -130,3 +130,20 @@ it('allows the exact React refresh preamble without allowing arbitrary inline sc
   expect(html).toContain(`'sha256-${hash}'`)
   expect(html).not.toMatch(/script-src[^;]*'unsafe-inline'/)
 })
+
+describe('repository ignores', () => {
+  // A signing key once sat untracked in the repo root, one `git add -A` from a public push (health-1).
+  it('ignores signing certificates, keys and profiles', async () => {
+    const ignored = (await readFile(resolve(process.cwd(), '.gitignore'), 'utf-8')).split('\n')
+    for (const pattern of [
+      '*.p12',
+      '*.cer',
+      '*.certSigningRequest',
+      '*.pem',
+      '*.key',
+      '*.mobileprovision'
+    ]) {
+      expect(ignored).toContain(pattern)
+    }
+  })
+})
