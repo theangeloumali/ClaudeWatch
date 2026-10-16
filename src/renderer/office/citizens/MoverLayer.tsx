@@ -3,22 +3,24 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { Object3D, type InstancedMesh } from 'three'
 import type { ThemeZoneGroup } from '../logic/office-themes'
 import { levelInUse } from '../logic/quality'
-import { groundHeight, walkGround } from '../player/walk-ground'
+import { groundHeight } from '../player/walk-ground'
 import type { Player } from '../player/walking'
 import { useQualityChoice } from '../quality-store'
 import type { FloorGeometry } from '../scene-model'
 import { getTheme } from '../themes/registry'
 import type { OfficeTheme } from '../themes/types'
 import type { TownPlan } from '../town/town-plan'
-import { themeIdsByZone, townTrips, type MoverKind } from '../town/town-trips'
+import { themeIdsByZone, townTrips } from '../town/town-trips'
 import { citizenGeometry } from './figure-parts'
 import { moverFigure, moverKinds } from './mover-kinds'
-import { routePose, turnToward, walkedSec } from './route-pose'
+import { routePose, turnToward } from './route-pose'
 import { SceneBodies } from '../scene/BodySpace'
-import { advanceCitizen, citizenBodyId } from './crowd-movement'
+import { citizenBodyId } from './crowd-movement'
 import { moverClock, moverRouteKey, type MoverClock } from './mover-clock'
-import { CITIZEN_POSITION_EPSILON } from './citizen-navigation'
 import { CITIZEN_BODY_RADIUS } from '../../../shared/office/body-footprints'
+import { citizenGround, citySidewalks } from './city-sidewalks'
+import { stepMovers } from './mover-step'
+import { zebraTraffic } from './zebra-traffic'
 
 interface MoverLayerProps {
   floor: FloorGeometry
@@ -39,15 +41,6 @@ const MAX_STEP_SEC = 0.25
 const TURN_PER_SEC = 7
 const STRIDE_M = 0.3
 const BOB_M = 0.02
-// How far ahead of its middle a vehicle's nose is, and how near that may come to anyone on foot:
-// under the 1.5 m between a lane's middle and the pavement beside it.
-const NOSE_M: Record<Exclude<MoverKind, 'citizen'>, number> = {
-  transit: 3,
-  freight: 2,
-  runabout: 1.4
-}
-const VEHICLE_HOLD_M = 1.4
-
 const scratch = new Object3D()
 
 // The town's citizens and vehicles: one instanced draw per kind of figure, moved by writing
@@ -56,7 +49,7 @@ export function MoverLayer(props: MoverLayerProps) {
   const { floor, plan, owners, floorTheme, zoneGroups, player, isReducedMotion } = props
   const { hasVehicles } = props
   const bodies = useMemo(() => props.bodies ?? new SceneBodies(), [props.bodies])
-  const ground = useMemo(() => walkGround(floor, plan.lots, plan.extent), [floor, plan])
+  const ground = useMemo(() => citizenGround(floor, plan), [floor, plan])
   const { pin, chosen } = useQualityChoice()
   const detail = levelInUse(pin, chosen)
   // Keyed by what they say, not by identity: a floor change that moves no lot keeps every trip,
@@ -99,54 +92,40 @@ export function MoverLayer(props: MoverLayerProps) {
     return next
   }, [tripsKey, bodies])
 
+  // Only the city's one-way sidewalks leave a jammed walker no room to step aside; the campus
+  // town's walkers keep waiting (citizens-2).
+  const waitsFor = plan.officeSites ? clock.waitsFor : undefined
+  const traffic = useMemo(() => zebraTraffic(trips, citySidewalks(plan)), [trips, plan])
+
   const place = (deltaSec: number): void => {
-    const { moved, headings, onFoot } = clock
-    const playerAt = player?.position ?? null
-    // Citizens come first in the trips, so by the time a vehicle moves this holds them all.
-    onFoot.length = 0
+    const { moved, headings } = clock
+    if (deltaSec > 0)
+      stepMovers({
+        trips,
+        clock,
+        space: bodies,
+        ground,
+        player: player?.position ?? null,
+        waitsFor,
+        traffic,
+        deltaSec
+      })
     kinds.forEach((kind, kindIndex) => {
       const mesh = meshesRef.current[kindIndex]
-      const nose =
-        kind.kind === 'citizen'
-          ? null
-          : { others: onFoot, reach: NOSE_M[kind.kind], radius: VEHICLE_HOLD_M }
+      const isVehicle = kind.kind !== 'citizen'
       kind.members.forEach((index, instance) => {
         const { route, speed } = trips[index]
-        if (deltaSec > 0 && !nose) {
-          const next = advanceCitizen({
-            trip: trips[index],
-            index,
-            pose: clock.positions[index],
-            walked: moved[index],
-            deltaSec,
-            space: bodies,
-            isOpen: ground.isOpen,
-            ground
-          })
-          clock.positions[index] = next.pose
-          moved[index] = next.walked
-          clock.strides[index] += next.distance
-          clock.isWalking[index] = next.distance > CITIZEN_POSITION_EPSILON
-        } else if (deltaSec > 0)
-          moved[index] = walkedSec({
-            route,
-            speed,
-            walked: moved[index],
-            deltaSec,
-            player: playerAt,
-            ...nose
-          })
-        const travelled = moved[index] * speed
-        const pose = nose ? routePose(route, travelled, speed) : clock.positions[index]
-        if (!nose && !pose.isIndoors) onFoot.push(pose)
-        if (deltaSec > 0 && (nose || clock.isWalking[index]))
+        const pose = isVehicle
+          ? routePose(route, moved[index] * speed, speed)
+          : clock.positions[index]
+        if (deltaSec > 0 && (isVehicle || clock.isWalking[index]))
           headings[index] = turnToward(
             headings[index],
             pose.heading,
-            nose ? deltaSec * TURN_PER_SEC : 1 - Math.exp(-deltaSec * TURN_PER_SEC)
+            isVehicle ? deltaSec * TURN_PER_SEC : 1 - Math.exp(-deltaSec * TURN_PER_SEC)
           )
         const bob =
-          nose || !clock.isWalking[index]
+          isVehicle || !clock.isWalking[index]
             ? 0
             : Math.abs(Math.sin((clock.strides[index] / STRIDE_M) * Math.PI)) * BOB_M
         scratch.position.set(pose.x, groundHeight(floor, pose) + bob, pose.z)

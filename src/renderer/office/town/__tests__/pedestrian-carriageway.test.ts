@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { CITIZEN_BODY_RADIUS } from '../../../../shared/office/body-footprints'
 import { SIDEWALK_M } from '../../../../shared/office/town-roads'
-import { advanceCitizen, citizenBodyId } from '../../citizens/crowd-movement'
+import { citizenGround, citySidewalks } from '../../citizens/city-sidewalks'
+import { citizenBodyId } from '../../citizens/crowd-movement'
 import { moverClock } from '../../citizens/mover-clock'
-import { routePose, walkedSec, type RoutePoint } from '../../citizens/route-pose'
-import { walkGround } from '../../player/walk-ground'
+import { stepMovers } from '../../citizens/mover-step'
+import { routePhase, routePose, type RoutePoint } from '../../citizens/route-pose'
+import { NOSE_M, zebraTraffic } from '../../citizens/zebra-traffic'
 import { SceneBodies } from '../../scene/BodySpace'
-import { reversed, roadNet, roadPath, type Leg } from '../road-net'
-import type { MoverKind } from '../town-trips'
-import { sidePath } from '../trip-paths'
+import { reversed } from '../road-net'
 import {
   isAsphalt,
   liveCity,
@@ -26,12 +26,9 @@ import {
 
 const STILL_M = 1e-3
 const DWELL_SEC = 1
-// MoverLayer's NOSE_M and VEHICLE_HOLD_M.
-const NOSE_M: Record<Exclude<MoverKind, 'citizen'>, number> = {
-  transit: 3,
-  freight: 2,
-  runabout: 1.4
-}
+// Longer than a walker waits for a crossing to clear: standing still this long is a jam.
+const JAM_LIMIT_SEC = 10
+// How near a vehicle's front a walker holds it up.
 const VEHICLE_HOLD_M = 1.4
 const VEHICLE_BODY_M = 1.2
 
@@ -47,33 +44,6 @@ function routeIntrusions(scenario: Scenario) {
       }
   const onRoad = Object.values(byPart).reduce((sum, count) => sum + count, 0)
   return { onRoad, byPart }
-}
-
-// What `reversed` should return: the same legs, the other way, each with its own width.
-const reversedKeepingWidth = (legs: readonly Leg[]): Leg[] =>
-  legs.map((leg) => ({ ...leg, from: leg.to, to: leg.from })).reverse()
-
-function backPathCompare(scenario: Scenario) {
-  const { plan, trips } = scenario
-  const spotOf = roadSurface(plan)
-  const net = roadNet(plan, 'citizen')
-  const doorOf = new Map(plan.lots.map((lot) => [lot.id, lot.door]))
-  const asphaltSamples = (points: readonly RoutePoint[]): number =>
-    points
-      .slice(1)
-      .flatMap((to, index) => samplesOf(points[index], to))
-      .filter((point) => isAsphalt(spotOf(point))).length
-  let shipped = 0
-  let widthKept = 0
-  for (const trip of trips.filter((each) => each.kind === 'citizen')) {
-    const door = trip.homeId ? doorOf.get(trip.homeId) : undefined
-    const goal = partsOf(trip).find(({ part }) => part === 'leave-goal')?.from
-    const legs = door && goal ? roadPath(net, door, goal) : null
-    if (!legs) continue
-    shipped += asphaltSamples(sidePath(reversed(legs), plan, 'citizen'))
-    widthKept += asphaltSamples(sidePath(reversedKeepingWidth(legs), plan, 'citizen'))
-  }
-  return { shipped, widthKept }
 }
 
 // For every freight run, the lane offsets its outbound and return halves keep on each street.
@@ -147,14 +117,16 @@ function vehicleLanes(scenario: Scenario) {
   return { samples, offLane, onDivider }
 }
 
-// MoverLayer.place, replayed headless: citizens step among bodies, vehicles hold for anyone on foot.
+// MoverLayer's motion, replayed headless through the same step.
 function replay(scenario: Scenario, seconds: number, deltaSec: number) {
   const { plan, trips, floor } = scenario
   const spotOf = roadSurface(plan)
   const onAsphalt = (point: RoutePoint): boolean => isAsphalt(spotOf(point))
   const space = new SceneBodies()
-  const ground = walkGround(floor, plan.lots, plan.extent)
+  const ground = citizenGround(floor, plan)
   const clock = moverClock({ trips, space, isOpen: ground.isOpen })
+  const { waitsFor } = clock
+  const traffic = zebraTraffic(trips, citySidewalks(plan))
   clock.positions.forEach((pose, index) => {
     if (trips[index].kind === 'citizen' && !pose.isIndoors)
       space.set({ id: citizenBodyId(index), x: pose.x, z: pose.z, radius: CITIZEN_BODY_RADIUS })
@@ -166,6 +138,9 @@ function replay(scenario: Scenario, seconds: number, deltaSec: number) {
   ).length
   // Seconds each citizen has stood still on asphalt; a run of a second or more is one event.
   const stillSec = new Map<number, number>()
+  // Seconds each citizen has stood still anywhere, outside a wait on its route.
+  const stuckSec = new Map<number, number>()
+  let longestStuckSec = 0
   let stillOnRoadEvents = 0
   let heldByRoadWalkerSec = 0
   let overlaps = 0
@@ -174,55 +149,40 @@ function replay(scenario: Scenario, seconds: number, deltaSec: number) {
     stillSec.delete(index)
   }
   for (let frame = 0; frame < Math.round(seconds / deltaSec); frame++) {
-    const onFoot: RoutePoint[] = []
+    const before = [...clock.positions]
+    const walked = Float64Array.from(clock.moved)
+    stepMovers({ trips, clock, space, ground, player: null, waitsFor, traffic, deltaSec })
+    const onFoot = clock.onFoot
     for (const index of citizens) {
-      const trip = trips[index]
-      const before = clock.positions[index]
-      const next = advanceCitizen({
-        trip,
-        index,
-        pose: before,
-        walked: clock.moved[index],
-        deltaSec,
-        space,
-        isOpen: ground.isOpen,
-        ground
-      })
-      clock.positions[index] = next.pose
-      clock.moved[index] = next.walked
-      const pose = next.pose
+      const pose = clock.positions[index]
       if (pose.isIndoors) {
         close(index)
+        stuckSec.delete(index)
         continue
       }
-      onFoot.push(pose)
-      const isStill = Math.hypot(pose.x - before.x, pose.z - before.z) < STILL_M
+      const trip = trips[index]
+      const isStill = Math.hypot(pose.x - before[index].x, pose.z - before[index].z) < STILL_M
       if (!onAsphalt(pose) || !isStill) close(index)
       else stillSec.set(index, (stillSec.get(index) ?? 0) + deltaSec)
+      if (!isStill || routePhase(trip.route, clock.moved[index], trip.speed).isWaiting)
+        stuckSec.delete(index)
+      else {
+        const stuck = (stuckSec.get(index) ?? 0) + deltaSec
+        stuckSec.set(index, stuck)
+        longestStuckSec = Math.max(longestStuckSec, stuck)
+      }
     }
     for (const index of vehicles) {
       const trip = trips[index]
       const nose = trip.kind === 'citizen' ? 0 : NOSE_M[trip.kind]
-      const walked = clock.moved[index]
-      const next = walkedSec({
-        route: trip.route,
-        speed: trip.speed,
-        walked,
-        deltaSec,
-        player: null,
-        others: onFoot,
-        reach: nose,
-        radius: VEHICLE_HOLD_M
-      })
-      clock.moved[index] = next
-      if (next === walked) {
-        const front = routePose(trip.route, (walked + deltaSec) * trip.speed + nose, trip.speed)
+      if (clock.moved[index] === walked[index]) {
+        const front = routePose(trip.route, walked[index] * trip.speed + nose, trip.speed)
         const blocker = onFoot.find(
           (walker) => Math.hypot(front.x - walker.x, front.z - walker.z) < VEHICLE_HOLD_M
         )
         if (blocker && onAsphalt(blocker)) heldByRoadWalkerSec += deltaSec
       }
-      const body = routePose(trip.route, next * trip.speed, trip.speed)
+      const body = routePose(trip.route, clock.moved[index] * trip.speed, trip.speed)
       overlaps += onFoot.filter(
         (walker) => Math.hypot(walker.x - body.x, walker.z - body.z) < VEHICLE_BODY_M
       ).length
@@ -232,8 +192,23 @@ function replay(scenario: Scenario, seconds: number, deltaSec: number) {
   return {
     spawnedOnRoad,
     stillOnRoadEvents,
+    longestStuckSec: Math.round(longestStuckSec * 10) / 10,
     heldByRoadWalkerSec: Math.round(heldByRoadWalkerSec * 10) / 10,
     overlapFrames: overlaps
+  }
+}
+
+// The 15-minute live-city replay, run once for the rows that read it.
+let cityReplayResult: ReturnType<typeof replay> | undefined
+const cityReplay = (): ReturnType<typeof replay> =>
+  (cityReplayResult ??= replay(liveCity(), 900, 1 / 20))
+
+// The same city with every mover that much further round its loop: other meetings.
+function laterCity(offsetSec: number): Scenario {
+  const city = liveCity()
+  return {
+    ...city,
+    trips: city.trips.map((trip) => ({ ...trip, startSec: trip.startSec + offsetSec }))
   }
 }
 
@@ -243,11 +218,6 @@ describe('pedestrian carriageway: road geometry', () => {
       { from: { x: 0, z: 0 }, to: { x: 12, z: 0 }, class: 'collector', width: 8 }
     ])
     expect(leg.width).toBe(8)
-  })
-
-  it('walks the live city back on the sidewalk, as it walked out', () => {
-    const compare = backPathCompare(liveCity())
-    expect(compare.shipped).toBe(compare.widthKept)
   })
 
   it('sits a freight return leg on its own lane offset', () => {
@@ -289,13 +259,26 @@ describe.each([
 
 // Citizen rows: RED until Phase 4 moves citizens onto the sidewalk network.
 describe('pedestrian carriageway on the live city', () => {
+  it('shuts the citizens’ ground on unmarked asphalt and opens it on a zebra', () => {
+    const { plan, floor } = liveCity()
+    const ground = citizenGround(floor, plan)
+    const spotOf = roadSurface(plan)
+    const centreLines = plan.roads
+      .filter((road) => road.class !== 'lane')
+      .flatMap((road) => samplesOf(road.from, road.to))
+    const zebras = centreLines.filter((point) => spotOf(point) === 'zebra')
+    const wrong = centreLines.filter((point) => ground.isOpen(point) === isAsphalt(spotOf(point)))
+    expect(zebras.length).toBeGreaterThan(0)
+    expect(wrong.length, JSON.stringify(wrong.slice(0, 6))).toBe(0)
+  })
+
   it('keeps every citizen route off unmarked asphalt', () => {
     const result = routeIntrusions(liveCity())
     expect(result.onRoad, JSON.stringify(result.byPart)).toBe(0)
   })
 
   it('never leaves a citizen standing on asphalt, or holding up traffic', () => {
-    const result = replay(liveCity(), 900, 1 / 20)
+    const result = cityReplay()
     expect(
       {
         spawnedOnRoad: result.spawnedOnRoad,
@@ -304,5 +287,17 @@ describe('pedestrian carriageway on the live city', () => {
       },
       JSON.stringify(result)
     ).toEqual({ spawnedOnRoad: 0, stillOnRoadEvents: 0, heldByRoadWalkerSec: 0 })
+  }, 300_000)
+
+  it('keeps every vehicle 1.2 m clear of every walker', () => {
+    const overlaps = [cityReplay(), replay(laterCity(251), 900, 1 / 20)].map(
+      (result) => result.overlapFrames
+    )
+    expect(overlaps).toEqual([0, 0])
+  }, 300_000)
+
+  it('never leaves a citizen jammed', () => {
+    const result = cityReplay()
+    expect(result.longestStuckSec, JSON.stringify(result)).toBeLessThan(JAM_LIMIT_SEC)
   }, 300_000)
 })
