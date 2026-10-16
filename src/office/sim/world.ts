@@ -36,6 +36,7 @@ import {
   recoverWorkerRoute,
   resumeUnseatedWorker,
   relayoutWorker,
+  waitCycleLeaders,
   waitsForMovingBody,
   workerNavigation
 } from './worker-navigation'
@@ -72,6 +73,10 @@ export class World {
   // Departing agents fading out in place, with how long each has faded.
   private readonly fading = new Map<string, number>()
   private readonly passages = new BodyPassages()
+  // Who waited on whom last tick, and who could have stepped; one of each cycle steps now.
+  private waitEdges = new Map<string, string>()
+  private steppable = new Set<string>()
+  private cycleLeaders = new Set<string>()
   private movementTick = 0
   private map: LayoutMap = { version: 1, floors: [], reservations: {} }
   // From storage: read for order and bays by the first build, never walked on.
@@ -510,7 +515,13 @@ export class World {
       const navigation = workerNavigation({ routes: this.routes, from, to, departure })
       const body = agentBody(from)
       const hasClosedStart = !navigation.isOpen(from)
-      if (waitsForMovingBody({ body, to, obstacles, walkers, isOpen: navigation.isOpen })) {
+      const leader = waitsForMovingBody({ body, to, obstacles, walkers, isOpen: navigation.isOpen })
+      if (leader && !this.waitEdges.has(from.agentKey)) {
+        this.waitEdges.set(from.agentKey, leader)
+        const step = bodyStep({ body, to, obstacles, isOpen: navigation.isOpen })
+        if (Math.hypot(step.x - from.x, step.z - from.z) > 1e-6) this.steppable.add(from.agentKey)
+      }
+      if (leader && !this.cycleLeaders.has(from.agentKey)) {
         hasYielded = true
         return {
           ...to,
@@ -616,6 +627,10 @@ export class World {
     this.accumulatedMs += Number.isFinite(dtMs) ? clamp(dtMs, [0, 1000]) : 0
     while (this.accumulatedMs >= 100) {
       if (!this.options.now) this.nowMs += 100
+      const steppable = this.steppable
+      this.cycleLeaders = waitCycleLeaders(this.waitEdges, (id) => steppable.has(id))
+      this.waitEdges = new Map()
+      this.steppable = new Set()
       const ordered = [...this.agents].sort(([first], [second]) => first.localeCompare(second))
       const offset = this.movementTick++ % Math.max(1, ordered.length)
       for (const [key, agent] of [...ordered.slice(offset), ...ordered.slice(0, offset)]) {
