@@ -206,25 +206,25 @@ These five conditions are what most likely bite Angelo, and none of the findings
 
 **Files:** Modify `.gitignore`; main checkout `.git/info/exclude` (local, uncommitted); Test `src/main/build-config.test.ts`
 
-- [ ] Write RED: `build-config.test.ts` › "ignores signing material", which reads `.gitignore` and expects lines `*.p12`, `*.cer`, `*.certSigningRequest`, `*.pem`, `*.key`, `*.mobileprovision`. Run `npx vitest run src/main/build-config.test.ts`; expect FAIL.
-- [ ] Add the six patterns to `.gitignore`. Append the same lines to `/Users/angeloumali/Desktop/Work/ZKidz/ClaudeWatch/.git/info/exclude`.
-- [ ] Verify: the test passes, and `git -C /Users/angeloumali/Desktop/Work/ZKidz/ClaudeWatch check-ignore -q 5KKD87VK6F.p12` exits 0.
-- [ ] Commit `chore: never stage signing certificates or keys`.
+- [x] Write RED: `build-config.test.ts` › "ignores signing material", which reads `.gitignore` and expects lines `*.p12`, `*.cer`, `*.certSigningRequest`, `*.pem`, `*.key`, `*.mobileprovision`. Run `npx vitest run src/main/build-config.test.ts`; expect FAIL.
+- [x] Add the six patterns to `.gitignore`. Append the same lines to `/Users/angeloumali/Desktop/Work/ZKidz/ClaudeWatch/.git/info/exclude`.
+- [x] Verify: the test passes, and `git -C /Users/angeloumali/Desktop/Work/ZKidz/ClaudeWatch check-ignore -q 5KKD87VK6F.p12` exits 0.
+- [x] Commit `chore: never stage signing certificates or keys`.
 
 ### Task 0.2: The gate can go green on a loaded machine (health-9)
 
 **Files:** Modify the 8 heavy files listed in health-9 (`seated-agents.test.ts`, `body-collision.test.ts`, `worker-city-lifecycle.test.ts`, `scale-budget.test.tsx`, `steam-frames.test.tsx`, `town-trips.test.ts`, `corporate-city/budget.test.tsx`, `samurai-ecosystem/composition-budget.test.tsx`)
 
-- [ ] Give each heavy `describe` `{ timeout: 60_000 }`, with a one-line comment: "full sim/scene build; 5 s default fails under agent load (health-9)".
-- [ ] In `samurai-ecosystem/composition-budget.test.tsx`, build the scene once and measure the 20/40/60 cases from it. Its 40 and 60 cases sit near 5 s of CPU even on an idle machine (verify-render-perf).
-- [ ] Verify: `npx vitest run` → the only failures are 0 (there are no audit probes on this branch yet).
-- [ ] Commit `test: heavy sim and scene suites declare their own timeout`.
+- [x] Give each heavy `describe` `{ timeout: 60_000 }`, with a one-line comment: "full sim/scene build; 5 s default fails under agent load (health-9)".
+- [x] In `samurai-ecosystem/composition-budget.test.tsx`, build the scene once and measure the 20/40/60 cases from it. Its 40 and 60 cases sit near 5 s of CPU even on an idle machine (verify-render-perf).
+- [x] Verify: `npx vitest run` → the only failures are 0 (there are no audit probes on this branch yet).
+- [x] Commit `test: heavy sim and scene suites declare their own timeout`.
 
 ### Task 0.3: Tick the stale 1.3.0 ledgers (same evidence as eb679c3 on feature/prerelease-batch)
 
 **Files:** Modify `docs/plans/claudewatch-command-center-autostart-2026-10-11.md:28`, `docs/plans/claudewatch-prerelease-batch-2026-10-11.md:40`
 
-- [ ] Replace both lines with the ticked text of commit `eb679c3`. Run prettier, then commit `docs(plans): tick the 1.3.0 release phases, published on 2026-10-12`.
+- [x] Replace both lines with the ticked text of commit `eb679c3`. Run prettier, then commit `docs(plans): tick the 1.3.0 release phases, published on 2026-10-12`.
 
 ---
 
@@ -257,11 +257,11 @@ Owns `src/bridge/**`, `src/main/platform/darwin.ts`, `src/main/process-monitor.t
 - On upgrade the 19–20 phantoms leave their own unnamed building at once. `body-collision.test.ts` "twenty removed workers" covers that flow, and it is not the door cluster (verify-seating-bridge).
 - The darwin detector caches cwd by `pid:start`, reusing `process-table.ts` `rememberedFolder` and `identityOf`, and excludes `HOST_ARGUMENT` hosts.
 
-- [ ] Copy the probe in. Run RED: "takes no ChatGPT desktop helper process for a Codex agent" fails with 3 helpers.
-- [ ] Implement `isAgentCli` and use it in the codex and opencode matchers and in `isNativeClaudeLead`.
-- [ ] Add RED `process-monitor.test.ts` › "runs lsof once for an unchanged process across two polls", then the cwd cache plus `-x` plus the host-argument exclusion.
-- [ ] Verify: both probe cases pass, plus `npx vitest run src/bridge src/main`.
-- [ ] Commit `fix(bridge): desktop app helpers are never agents (health-2)`.
+- [x] Copy the probe in. Run RED: "takes no ChatGPT desktop helper process for a Codex agent" fails with 3 helpers.
+- [x] Implement `isAgentCli` and use it in the codex and opencode matchers and in `isNativeClaudeLead`.
+- [x] Add RED `process-monitor.test.ts` › "runs lsof once for an unchanged process across two polls", then the cwd cache plus `-x` plus the host-argument exclusion.
+- [x] Verify: both probe cases pass, plus `npx vitest run src/bridge src/main`.
+- [x] Commit `fix(bridge): desktop app helpers are never agents (health-2)`.
 
 ### Task 1.2: Leads in big folders are claimed, and an unclaimed lead is never "idle" (health-3, seating-6, health-6)
 
@@ -283,20 +283,20 @@ Owns `src/bridge/**`, `src/main/platform/darwin.ts`, `src/main/process-monitor.t
 - The per-folder stat memory is bounded: clear it at `MAX_HEADERS`, as `offsets.clear()` does. The single-owner check in `uniqueClaudeTranscript` is kept.
 - An unclaimed native lead reports `activity: 'unknown'` with no `coverage: 'own'`, so it runs as `legacy` and stays seated. Its card must then read "Activity unavailable"; Task 2.4 (MISSED-1) fixes that.
 
-- [ ] RED: the 600-transcript case, the flag case, and a new "an unclaimed lead carries no own idle evidence" in `transcript-cap.test.ts`.
-- [ ] Review Focus 5 test: "keeps a claimed lead across the cap" (500 → 520 names mid-run).
-- [ ] Implement. Verify `npx vitest run src/bridge`.
-- [ ] Commit `fix(bridge): claim leads in large project folders; an unclaimed lead is unknown, not idle`.
+- [x] RED: the 600-transcript case, the flag case, and a new "an unclaimed lead carries no own idle evidence" in `transcript-cap.test.ts`.
+- [x] Review Focus 5 test: "keeps a claimed lead across the cap" (500 → 520 names mid-run).
+- [x] Implement. Verify `npx vitest run src/bridge`.
+- [x] Commit `fix(bridge): claim leads in large project folders; an unclaimed lead is unknown, not idle`.
 
 ### Task 1.3: Retention is bounded, and one bad registry file never fails a root (health-5)
 
 **Files:** Modify `src/bridge/reducer.ts:56-66`, `src/bridge/registry.ts:183-186`. Test: `src/bridge/__tests__/source-retention.test.ts`, promoted from case 2, plus a registry case.
 
-- [ ] RED: "lets an ended session go once its source has been failing for ten minutes" and "one malformed registry file leaves the root ok".
-- [ ] Bound retention by **how long the source has been failing**: a `failingSinceMs` per source id, dropped after 10 min. Never use `updatedAtMs`, which would mass-evict quiet live sessions (verifier).
-- [ ] Drop only sessions that **ended**; live unknown sessions stay seated (owner AC).
-- [ ] In the registry, skip a malformed file but carry that pid's last session from `wasLive` while the file stays unparseable, so a truncated write never makes an agent depart and re-arrive.
-- [ ] Verify and commit `fix(bridge): failing sources stop holding ended sessions forever`.
+- [x] RED: "lets an ended session go once its source has been failing for ten minutes" and "one malformed registry file leaves the root ok".
+- [x] Bound retention by **how long the source has been failing**: a `failingSinceMs` per source id, dropped after 10 min. Never use `updatedAtMs`, which would mass-evict quiet live sessions (verifier).
+- [x] Drop only sessions that **ended**; live unknown sessions stay seated (owner AC).
+- [x] In the registry, skip a malformed file but carry that pid's last session from `wasLive` while the file stays unparseable, so a truncated write never makes an agent depart and re-arrive.
+- [x] Verify and commit `fix(bridge): failing sources stop holding ended sessions forever`.
 
 ### Task 1.4: The OpenCode SQL is compiled once per connection (perf-4)
 
@@ -308,7 +308,7 @@ Owns `src/bridge/**`, `src/main/platform/darwin.ts`, `src/main/process-monitor.t
 - `newestMessages(childIds: string[])` makes one query using `IN`.
 - The recall stamp uses `PRAGMA data_version`.
 
-- [ ] RED (`expected 6 to be ≤ 2`), then implement both halves. The statement cache alone removes about 2,650 prepares per tick (≈ −30 %); the batched child query removes most of the 2,673 `all`s. Verify `npx vitest run src/bridge`, and commit `perf(bridge): prepare OpenCode statements once and batch child reads`.
+- [x] RED (`expected 6 to be ≤ 2`), then implement both halves. The statement cache alone removes about 2,650 prepares per tick (≈ −30 %); the batched child query removes most of the 2,673 `all`s. Verify `npx vitest run src/bridge`, and commit `perf(bridge): prepare OpenCode statements once and batch child reads`.
 
 ### Task 1.5: Usage catch-up resumes instead of re-reading 1.95 GB (health-4, perf-9)
 
@@ -327,14 +327,14 @@ Owns `src/bridge/**`, `src/main/platform/darwin.ts`, `src/main/process-monitor.t
 - Each offset carries the usage **fold** and is resumed only when the inode matches and `size ≥ offset`; otherwise the file is re-read from 0 (trap "Dedupe transcript usage by file position").
 - `TICK_BUDGET_BYTES` stays as it is. Lowering it alone only spreads the same 1.94 GB over more ticks (verify-render-perf). Persistence is the fix, and perf-9 is merged into health-4.
 
-- [ ] RED: "a second tracker given persisted offsets reads 0 bytes for unchanged transcripts". Then implement, verify, and commit `perf(bridge): persist usage offsets; catch up within the poll pace`.
+- [x] RED: "a second tracker given persisted offsets reads 0 bytes for unchanged transcripts". Then implement, verify, and commit `perf(bridge): persist usage offsets; catch up within the poll pace`.
 
 ### Task 1.6: Peek revisions per agent; Codex subagent tokens reach the ledger (health-14, health-15)
 
 **Files:** Modify `src/main/office-interactions.ts:79,135,167` and `src/shared/accounts.ts:43-52`. Test: `office-interactions.test.ts` and `poller.test.ts`, one new case each.
 
-- [ ] RED: "peek of B does not fail a concurrent peek of A", and "onCodexTotals carries a child rollout's N tokens".
-- [ ] Use `Map<sessionKey, number>`: the guard keeps its latest-wins meaning per agent and stops misfiring on overlapping peeks across agents. Post `own + subagents` (A11). Verify, then commit `fix: per-agent peek revisions; Codex child tokens reach the ledger`.
+- [x] RED: "peek of B does not fail a concurrent peek of A", and "onCodexTotals carries a child rollout's N tokens".
+- [x] Use `Map<sessionKey, number>`: the guard keeps its latest-wins meaning per agent and stops misfiring on overlapping peeks across agents. Post `own + subagents` (A11). Verify, then commit `fix: per-agent peek revisions; Codex child tokens reach the ledger`.
 
 ---
 
@@ -367,7 +367,7 @@ Corrected by `/tmp/office-audit-tools/verify-seating-bridge/VERDICTS.md`. Its ex
 - **Per-tick invariants** in every churn test: every same-elevation body pair stays ≥ r₁+r₂−0.02 m, and no walker steps more than 0.14 m per tick. That rules out ghosting (E6) and teleporting (E7).
 - "no body is body-blocked without path progress for more than 15 s".
 
-- [ ] Write them and run them RED: the subagent and teammate churn at `{18,6}`, the cycle never clearing, the bound never tripping. Commit `test(sim): door churn gates with clearance and step invariants`.
+- [x] Write them and run them RED: the subagent and teammate churn at `{18,6}`, the cycle never clearing, the bound never tripping. Commit `test(sim): door churn gates with clearance and step invariants`.
 
 ### Task 2.1: Wait cycles are broken; ordinary queues are kept (seating-1, corrected)
 
@@ -379,8 +379,8 @@ Corrected by `/tmp/office-audit-tools/verify-seating-bridge/VERDICTS.md`. Its ex
 - Each tick, `World` builds the wait graph and finds strongly connected components. **Only the lowest id in each cycle proceeds**; non-cyclic queues keep today's behaviour.
 - E1 showed a total id order breaks `worker-city-lifecycle` "40 late teammates/subagents". `passages.guide` can't break the tie, because `body-passages.ts:84-90` only takes leaders at alignment < 0.5.
 
-- [ ] RED: the 3-body cycle test. Implement, then verify `npx vitest run src/office/sim`, including "40 late" and "sixty converging arrivals".
-- [ ] Commit `fix(sim): break wait cycles at the door without reordering queues`.
+- [x] RED: the 3-body cycle test. Implement, then verify `npx vitest run src/office/sim`, including "40 late" and "sixty converging arrivals".
+- [x] Commit `fix(sim): break wait cycles at the door without reordering queues`.
 
 ### Task 2.2: A body-blocked bound that fades a stuck leaver in place; finished subagents fade at their desk (seating-2, seating-4, corrected)
 
@@ -393,9 +393,9 @@ Corrected by `/tmp/office-audit-tools/verify-seating-bridge/VERDICTS.md`. Its ex
 - A finished **subagent** fades at its desk (0.5 s opacity, then removed) and never walks out (A1).
 - Teammates and sessions still walk out with full clearance. Non-colliding walk-outs break 3 `body-collision.test.ts` departure tests (E6, vault trap) and are rejected.
 
-- [ ] RED: Task 2.0's bound and churn tests, plus "a finished subagent is gone within 1 s and never enters the lobby".
-- [ ] Implement, then verify `npx vitest run src/office/sim`, with `body-collision.test.ts` unchanged.
-- [ ] Commit `fix(sim): bound body-blocked walkers; finished subagents fade at their desks`.
+- [x] RED: Task 2.0's bound and churn tests, plus "a finished subagent is gone within 1 s and never enters the lobby".
+- [x] Implement, then verify `npx vitest run src/office/sim`, with `body-collision.test.ts` unchanged.
+- [x] Commit `fix(sim): bound body-blocked walkers; finished subagents fade at their desks`.
 
 ### Task 2.3: The arrival gate ignores blocked arrivers; queued crew is drawn (seating-3)
 
@@ -406,8 +406,8 @@ Corrected by `/tmp/office-audit-tools/verify-seating-bridge/VERDICTS.md`. Its ex
 - `hasEntryTraffic` skips an arriver that Task 2.2's bound marks as body-blocked. This is safer than admitting by door capacity, which adds bodies at the door (verifier).
 - `step()` returns queued arrivals with `place: 'arriving'` at the entrance waypoint.
 
-- [ ] RED tests: "a second session's arrival appears within 10 s with one arriver pinned", and Review Focus 1, "clears a mixed swap with two roamers returning".
-- [ ] Implement, then verify Task 2.0's suite plus "sixty converging arrivals". Commit `fix(sim): one pinned arriver no longer hides the crew`.
+- [x] RED tests: "a second session's arrival appears within 10 s with one arriver pinned", and Review Focus 1, "clears a mixed swap with two roamers returning".
+- [x] Implement, then verify Task 2.0's suite plus "sixty converging arrivals". Commit `fix(sim): one pinned arriver no longer hides the crew`.
 
 ### Task 2.4: Cards say "Leaving" for departures and "Activity unavailable" only for live agents without evidence (seating-5, MISSED-1)
 
@@ -422,7 +422,7 @@ Corrected by `/tmp/office-audit-tools/verify-seating-bridge/VERDICTS.md`. Its ex
   - `__tests__/activity-overview/departed-worker-labels.test.ts:27,62` (intended contract change, A2)
 - Test: `src/renderer/office/__tests__/departed-card.test.ts` (promoted; asserts `detail === LEAVING_LABEL`, `isAvailable: false`, `status !== 'working'`), and `unknown-card.test.ts` (from the verifier's `vsb-unknown-card`: a live agent with no own observation reads "Activity unavailable", not "Idle")
 
-- [ ] RED tests for both. Implement, verify `npx vitest run src/renderer/office src/office/sim`, and commit `fix(office): cards tell leaving from unknown`.
+- [x] RED tests for both. Implement, verify `npx vitest run src/renderer/office src/office/sim`, and commit `fix(office): cards tell leaving from unknown`.
 
 ---
 
@@ -445,16 +445,16 @@ Before starting, read the abandoned WIP in `.claude/.worktree/citizen-motion` an
 
 **Files:** none changed unless the check says retire. Test: none; this is a reachability check.
 
-- [ ] Prove reachability from every shipped entry: `OfficeApp.tsx:287` (always `allFloors`), the office-web page, and `vite.office-preview.config.ts` fixtures. Check with `grep -rn "townOn\|MOVER_FLOORS\|legacy" src --include=*.ts* | grep -v test`.
-- [ ] If no entry reaches it, delete the legacy campus path and its legacy-only test rows in one commit, `refactor(town): retire the unreachable legacy campus town` (dead-code mandate). If one does, it gets crosswalks from Task 3.3 and the same network. Record the result in § Results.
+- [x] Prove reachability from every shipped entry: `OfficeApp.tsx:287` (always `allFloors`), the office-web page, and `vite.office-preview.config.ts` fixtures. Check with `grep -rn "townOn\|MOVER_FLOORS\|legacy" src --include=*.ts* | grep -v test`.
+- [ ] (Moved to Task 8.3.) If no entry reaches it, delete the legacy campus path and its legacy-only test rows in one commit, `refactor(town): retire the unreachable legacy campus town` (dead-code mandate). If one does, it gets crosswalks from Task 3.3 and the same network. Record the result in § Results.
 
 ### Task 3.1: Reversed walks keep their width (P1, citizens-1) — lands first
 
 **Files:** Modify `src/renderer/office/town/road-net.ts:144-146`, `trip-paths.ts:41`, `vehicle-trips.ts:127` (freight return offset). Test: `src/renderer/office/town/__tests__/pedestrian-carriageway.test.ts` (promoted from `citizens-carriageway`; **city rows only**, because the legacy rows can never pass: legacy paints no zebras, per citizens-7).
 
-- [ ] RED: `expected undefined to be 8`, plus "freight return leg sits on its own lane offset".
-- [ ] `reversed` spreads the leg. `sidePath` reads the width from the plan edge.
-- [ ] Verify the geometry rows pass. Commit `fix(town): a reversed walk keeps its street width`.
+- [x] RED: `expected undefined to be 8`, plus "freight return leg sits on its own lane offset".
+- [x] `reversed` spreads the leg. `sidePath` reads the width from the plan edge.
+- [x] Verify the geometry rows pass. Commit `fix(town): a reversed walk keeps its street width`.
 
 The verifier refuted "width-only makes it worse": across 8 start offsets frozen events fall 107 → 68. Replay rows stay RED until Task 4.2.
 
@@ -471,9 +471,9 @@ The verifier refuted "width-only makes it worse": across 8 start offsets frozen 
   - `scene/use-world-editing.tsx:30` (preview `LayoutMap` carries streets)
 - Test: `src/office/sim/__tests__/streets-shared.test.ts`
 
-- [ ] RED: "LayoutMap.streets deep-equals the renderer plan's city-street roads, sorted by id", for the live layout **and** a preview layout with a dragged building.
-- [ ] Move the file, emit the streets, and thread the preview path. Verify `npx vitest run src/office/sim src/renderer/office` and `effective-player-travel.test.ts` unchanged.
-- [ ] Commit `refactor(shared): the sim, the renderer and the editor share one street list`.
+- [x] RED: "LayoutMap.streets deep-equals the renderer plan's city-street roads, sorted by id", for the live layout **and** a preview layout with a dragged building.
+- [x] Move the file, emit the streets, and thread the preview path. Verify `npx vitest run src/office/sim src/renderer/office` and `effective-player-travel.test.ts` unchanged.
+- [x] Commit `refactor(shared): the sim, the renderer and the editor share one street list`.
 
 ### Task 3.3: One crosswalk source for paint, stop lines and crossing edges (citizens-4)
 
@@ -481,8 +481,8 @@ The verifier refuted "width-only makes it worse": across 8 start offsets frozen 
 
 **Interfaces:** `crosswalks(roads: readonly TownRoad[]): Crosswalk[]`, where `Crosswalk = { id, roadId, centre: Point, axis: 'x' | 'z', halfLength, stopLines: [Point, Point] }`. It covers junction mouths **and** access-lane mouths, and drops a band that passes a segment end, exactly as `stroke` does today.
 
-- [ ] RED tests: "every painted zebra equals a crosswalk", and "no crosswalk band passes a segment end".
-- [ ] Implement, check that the town-ground snapshot tests are unchanged, and commit `refactor(town): one crosswalk source for paint and walking`.
+- [x] RED tests: "every painted zebra equals a crosswalk", and "no crosswalk band passes a segment end".
+- [x] Implement, check that the town-ground snapshot tests are unchanged, and commit `refactor(town): one crosswalk source for paint and walking`.
 
 ### Task 3.4: The sidewalk network (P3, corrected)
 
@@ -502,7 +502,7 @@ The verifier refuted "width-only makes it worse": across 8 start offsets frozen 
 - `ambientLoops(network): RoutePoint[][]` gives one closed one-way loop per block face, ported from ops-twin `loopAlong`.
 - `pedestrianGround(network, bounds): WalkGround` returns a 0.25 m A\* grid **and** a centre-sample `isOpen`. It is true on sidewalks, crosswalks, parks and plazas, and false on any carriageway. A disc test is never used, because it would close every 1 m sidewalk to a 0.55 m body.
 
-- [ ] RED tests:
+- [x] RED tests:
   - "no sampled point of any path or loop lies on a carriageway outside a crosswalk" (ClearSpent's 372→0 invariant)
   - "every door reaches every other door"
   - "no door hop segment intersects a carriageway quad"
@@ -510,15 +510,15 @@ The verifier refuted "width-only makes it worse": across 8 start offsets frozen 
   - "every sidewalk run is connected on pedestrianGround's grid"
   - "two directions never share a run"
   - "network build + 48 citizen paths < 50 ms" (budget)
-- [ ] Implement, verify `npx vitest run src/shared/office`, and commit `feat(shared): a sidewalk network ported from ClearSpent city-life routes`.
+- [x] Implement, verify `npx vitest run src/shared/office`, and commit `feat(shared): a sidewalk network ported from ClearSpent city-life routes`.
 
 ### Task 3.5: Vehicles at lane centres (P6, clearspent-4)
 
 **Files:** Modify `src/renderer/office/town/trip-paths.ts:46` (**city branch only**; `KEEP_RIGHT_M.vehicle` stays for `fallback-vehicles.test.ts:7,29`). Test: `pedestrian-carriageway.test.ts` (live-city row; `town-trips.test.ts:110` runs legacy).
 
-- [ ] RED: "mid-block city vehicle samples sit within 0.3 m of a lane centre, never within 0.3 m of the divider" (fails 2,555/2,781).
-- [ ] Magnitudes: avenue `0.25 / 0.75 · halfCarriageway`, collector `0.5·`. **Keep the keep-left sign**: ClearSpent's `DRIVE_OFFSET` is right-of-travel, so port the magnitude only.
-- [ ] Verify, then commit `fix(town): vehicles drive lane centres, not the divider`.
+- [x] RED: "mid-block city vehicle samples sit within 0.3 m of a lane centre, never within 0.3 m of the divider" (fails 2,555/2,781).
+- [x] Magnitudes: avenue `0.25 / 0.75 · halfCarriageway`, collector `0.5·`. **Keep the keep-left sign**: ClearSpent's `DRIVE_OFFSET` is right-of-travel, so port the magnitude only.
+- [x] Verify, then commit `fix(town): vehicles drive lane centres, not the divider`.
 
 ---
 
@@ -546,8 +546,8 @@ Owns:
   - `citizen-navigation.ts:58-80`
 - Test: `pedestrian-carriageway.test.ts`, the city route rows
 
-- [ ] RED: "keeps every citizen route off unmarked asphalt", with the `leave-home/*`, `arrive/*`, `*/mouth` and `*/junction` parts all at 0.
-- [ ] Implement, verify, and commit `fix(citizens): walk the sidewalk network and cross on the zebras`.
+- [x] RED: "keeps every citizen route off unmarked asphalt", with the `leave-home/*`, `arrive/*`, `*/mouth` and `*/junction` parts all at 0.
+- [x] Implement, verify, and commit `fix(citizens): walk the sidewalk network and cross on the zebras`.
 
 ### Task 4.2: A deadlock breaker whose timer survives replans (citizens-2, corrected)
 
@@ -560,8 +560,8 @@ Owns:
 - After `STUCK_YIELD_SEC = 1.5`, the lower-priority walker backs along its own route on `ground`. If it can't, the pair pass through each other.
 - Opposing meets happen on join and crossing segments, not on parallel same-direction lines (verifier correction).
 
-- [ ] RED: "never leaves a citizen standing on asphalt" (`stillOnRoadEvents 0`, `spawnedOnRoad 0`).
-- [ ] Implement, verify, and commit `fix(citizens): blocked walkers yield on the sidewalk instead of freezing`.
+- [x] RED: "never leaves a citizen standing on asphalt" (`stillOnRoadEvents 0`, `spawnedOnRoad 0`).
+- [x] Implement, verify, and commit `fix(citizens): blocked walkers yield on the sidewalk instead of freezing`.
 
 ### Task 4.3: Zebra right-of-way; vehicles stop holding mid-block (citizens-6, P6b)
 
@@ -573,8 +573,8 @@ Owns:
 - A walker waits at the kerb node while a vehicle is inside the stop band.
 - Nose-point holding is removed.
 
-- [ ] RED tests: "no vehicle–walker pair closer than 1.2 m", "heldByRoadWalkerSec 0" (was 1,045 s, 9.7% of vehicle time), and "a turning vehicle yields to a walker on the exit zebra".
-- [ ] Implement, verify, and commit `fix(town): vehicles give way at zebras`.
+- [x] RED tests: "no vehicle–walker pair closer than 1.2 m", "heldByRoadWalkerSec 0" (was 1,045 s, 9.7% of vehicle time), and "a turning vehicle yields to a walker on the exit zebra".
+- [x] Implement, verify, and commit `fix(town): vehicles give way at zebras`.
 
 ### Task 4.4: Ambient loops and a stable crowd across quality steps (citizens-8, Review Focus 3)
 
@@ -585,10 +585,10 @@ Owns:
 - Test: `crowd-quality-step.test.ts`
 - Not done: perf-8's single obstacle list per frame. It costs tens of µs per frame (verify-render-perf); don't spend the 2 h.
 
-- [ ] RED tests:
+- [x] RED tests:
   - "a share of the citizen budget walks ambientLoops"
   - "full → light mid-walk keeps no stale trip and spawns nobody on asphalt"
-- [ ] Implement, verify `npx vitest run src/renderer/office`, and commit `feat(citizens): ambient sidewalk loops and a stable crowd across quality steps`.
+- [x] Implement, verify `npx vitest run src/renderer/office`, and commit `feat(citizens): ambient sidewalk loops and a stable crowd across quality steps`.
 
 ---
 
@@ -618,22 +618,22 @@ Owns `src/office/sim/{world-leisure.ts, world-floor-routes.ts, roaming.ts (new)}
 - `planRoam(agent, network, rng): RoutePoint[]`.
 - Roamers obey the same one-way direction rule as citizens (A3), because roamers (sim) can't see citizens (renderer).
 
-- [ ] RED tests:
+- [x] RED tests:
   - "idle with own evidence is on a sidewalk loop within 20 s"
   - "unknown activity never leaves its desk"
   - "working evidence returns it to its own desk within 60 s"
   - "no roamer sample on a carriageway outside a crosswalk"
   - "roamers walk with their run's direction"
   - "roamers ≤ ROAMER_CAP[level]"
-- [ ] Implement, then verify `npx vitest run src/office/sim`, including `venue-bookings.test.ts`, the body-collision and worker-departure-recovery suites unchanged.
-- [ ] Commit `feat(sim): idle agents roam the city on the sidewalk network`.
+- [x] Implement, then verify `npx vitest run src/office/sim`, including `venue-bookings.test.ts`, the body-collision and worker-departure-recovery suites unchanged.
+- [x] Commit `feat(sim): idle agents roam the city on the sidewalk network`.
 
 ### Task 5.2: Ground arrivals move onto the network, guarded (verifier P5b)
 
 **Files:** Modify `world-floor-routes.ts:147-149,207-212`. Test: the seating churn replay as a regression, plus Task 2.0's `door-churn.test.ts`.
 
-- [ ] Switch `toFloor` ground legs to `sidewalkPath` only after Phase 2's door replay is green. Re-run `MODE=swap10 CHURN_S=120 … replay-crew.ts 210 7` → `stillInside 0`. If it regresses, leave arrivals on `street()` and record why in § Results.
-- [ ] Commit `fix(sim): agents reach their building along the sidewalks`.
+- [x] Switch `toFloor` ground legs to `sidewalkPath` only after Phase 2's door replay is green. Re-run `MODE=swap10 CHURN_S=120 … replay-crew.ts 210 7` → `stillInside 0`. If it regresses, leave arrivals on `street()` and record why in § Results.
+- [x] Commit `fix(sim): agents reach their building along the sidewalks`.
 
 ---
 
@@ -666,12 +666,12 @@ Two corrections from verify-render-perf:
 - **Never translate parts along the normal (ClearSpent P7).** The Office shows the far walls' inner faces, and a translated part would hide the interior frame lines.
 - **The top band stays continuous.** A step below the storey top leaves a hairline seam at desk zoom. Resolve the `max-y` ties by lowering the secondary parts instead: beam, column and mullion tops at `storey − step`.
 
-- [ ] RED tests:
+- [x] RED tests:
   - the 4 recipes, which today give 276/405/305/505 tied pairs;
   - crowns, with 8 ties on every building in every theme and 9.9 m² on cyberpunk split-lantern;
   - the service-ribs entrance, with 3 ties.
   - GREEN control: "no vertical gap between consecutive storeys' bands".
-- [ ] Implement. Verify the tests and that `building-window-budget.test.ts` stays green. Commit `fix(scene): facade, crown and entrance layers never share a plane`.
+- [x] Implement. Verify the tests and that `building-window-budget.test.ts` stays green. Commit `fix(scene): facade, crown and entrance layers never share a plane`.
 
 ### Task 6.2: Cutaways decide by view direction, with hysteresis (flicker-2, Review Focus 2)
 
@@ -683,12 +683,12 @@ Two corrections from verify-render-perf:
 - Using the view direction rather than the camera position removes both the pan trigger and the `Horizon` pushBack trigger (`Horizon.tsx:26-31`).
 - `CitySceneryCutaway` keeps its lower/upper split; never hide whole sectors (trap "retain street-level neighborhood mass").
 
-- [ ] RED tests:
+- [x] RED tests:
   - "a 0.4° wobble keeps the same sides";
   - "holds sides across a ±0.4° wobble at every quarter turn";
   - "a Horizon pushBack alone flips no side";
   - "upper city lots don't blink at the boundary".
-- [ ] Implement, verify, and commit `fix(scene): facades and city lots stop blinking at the cutaway boundary`.
+- [x] Implement, verify, and commit `fix(scene): facades and city lots stop blinking at the cutaway boundary`.
 
 ### Task 6.3: Collision-only culling at desk zoom, with a visible cap (clearspent-3, P9 corrected)
 
@@ -700,8 +700,8 @@ Two corrections from verify-render-perf:
 - The cap is `12`, or `6` at `light`, shown with a "+N" count so it never becomes a silent limit.
 - The selected card always wins.
 
-- [ ] RED tests: "two robots 0.5 m apart at zoom 90 show one card and one dot"; GREEN control: "two working agents at adjacent desks whose cards don't overlap at zoom 55 both keep their cards".
-- [ ] Implement, verify, and commit `fix(cards): cull overlapping name cards at desk zoom`.
+- [x] RED tests: "two robots 0.5 m apart at zoom 90 show one card and one dot"; GREEN control: "two working agents at adjacent desks whose cards don't overlap at zoom 55 both keep their cards".
+- [x] Implement, verify, and commit `fix(cards): cull overlapping name cards at desk zoom`.
 
 ### Task 6.4: A lost GL context gets a grace period before the List view (P8 corrected; perf-10 refuted)
 
@@ -713,15 +713,15 @@ Two corrections from verify-render-perf:
 - A `webglcontextrestored` cancels the timer and calls `invalidate()`; three already re-initialises GL (measured: draws 30 → 0 → 180).
 - Only when no restore arrives does `onError` show the List view.
 
-- [ ] RED tests: "lost then restored within the grace period stays in 3D", and "lost with no restore past the grace period shows the List view with the agent count unchanged".
-- [ ] Implement, verify, and commit `fix(office): fall back to the List view only when the GL context stays lost`.
+- [x] RED tests: "lost then restored within the grace period stays in 3D", and "lost with no restore past the grace period shows the List view with the agent count unchanged".
+- [x] Implement, verify, and commit `fix(office): fall back to the List view only when the GL context stays lost`.
 
 ### Task 6.5: Render stats on the canvas (P10)
 
 **Files:** Modify `scene/RenderLoop.tsx:114-121`. Test: `scene/__tests__/metrics-dataset.test.tsx`
 
-- [ ] RED: "canvas.dataset.drawCalls and sampledAtMs are numbers after one frame". Write them at 1 Hz, only changed keys (ported from ops-twin `telemetry-dataset.ts`); `sampledAtMs` marks stale stats from a hidden window.
-- [ ] Verify, then commit `feat(scene): render stats readable from the canvas`.
+- [x] RED: "canvas.dataset.drawCalls and sampledAtMs are numbers after one frame". Write them at 1 Hz, only changed keys (ported from ops-twin `telemetry-dataset.ts`); `sampledAtMs` marks stale stats from a hidden window.
+- [x] Verify, then commit `feat(scene): render stats readable from the canvas`.
 
 ---
 
@@ -752,8 +752,8 @@ Owns:
 - Robots, eased room walls (`BandedWalls.tsx:31-40`) and theme ambients stay in a small **dynamic** batch. Marking the whole floor `isStatic` would freeze robots, walls and cutaways (verify-render-perf).
 - `updateMeshBatches` writes only sources whose `matrixWorld` **or visibility** changed, and uploads with `instanceMatrix.addUpdateRange`.
 
-- [ ] RED tests: `expected 3 to be 1`, plus "a side hidden by the cutaway is hidden in the batch on the next frame" and "a robot moved this frame is drawn at its new place".
-- [ ] Implement, verify `npx vitest run src/renderer/office/scene`, and commit `perf(scene): static batches per facade side; upload only moved instances`.
+- [x] RED tests: `expected 3 to be 1`, plus "a side hidden by the cutaway is hidden in the batch on the next frame" and "a robot moved this frame is drawn at its new place". As built: per-side static batches measured about 143 more draws and were dropped; instance uploads are dirty-checked instead (`bb0335f`), and the shell batch is measured in 7c.
+- [x] Implement, verify `npx vitest run src/renderer/office/scene`, and commit `perf(scene): static batches per facade side; upload only moved instances`. As built: `perf(scene): upload only moved instances; venues are placed once` (`bb0335f`).
 
 ### Task 7.2: Motion leaves React; React frames are coalesced (perf-2 corrected, perf-7, Review Focus 4)
 
@@ -776,8 +776,8 @@ Owns:
 - React frames are emitted only when `structuralKey(agents)` changes, and are coalesced to the governor's rate while blurred.
 - `buildOfficeActivity` gets its own `useNow` tick (trap "Evaluate newly received evidence with the render clock").
 
-- [ ] RED tests: "keeps every position-independent list when only agent positions change"; "emits no frame while only poses change"; "activity still turns stale with no new frame".
-- [ ] Implement, verify, and commit `perf(office): agent motion runs through a pose store, not React`.
+- [x] RED tests: "keeps every position-independent list when only agent positions change"; "emits no frame while only poses change"; "activity still turns stale with no new frame".
+- [x] Implement, verify, and commit `perf(office): agent motion runs through a pose store, not React`.
 
 ### Task 7.3: Batch keys are cached; selection re-tints without a rebuild (perf-3 corrected)
 
@@ -789,23 +789,23 @@ Owns:
 - Add a **re-tint path** first: `retintBatches(batches, tints)` uses `setColorAt` and `instanceColor.needsUpdate`. Only then can `selectedAgentKey` and `speakingAgentKey` leave the revision; tint is written only at build today (`mesh-batches.ts:115`).
 - `rosterKey` stays in the robot batch's revision, because a robot that changes room is re-parented.
 
-- [ ] RED tests: `expected 6 to be ≤ 1` after the probe fix, and "selecting an agent re-tints without a rebuild".
-- [ ] Implement, verify, and commit `perf(scene): rebuild batches without serialising meshes`.
+- [x] RED tests: `expected 6 to be ≤ 1` after the probe fix, and "selecting an agent re-tints without a rebuild". As built: selection draws a ring, so it rebuilds nothing (`floor-batch-revision.test.ts`); no re-tint path was needed.
+- [x] Implement, verify, and commit `perf(scene): rebuild batches without serialising meshes`.
 
 ### Task 7.4: Pin and memoise world validation; prewarm shaders (perf-5, perf-6 corrected)
 
 **Files:** Modify `office-live/live-feed.ts:107-115,197-219`, `office/sim/effective-world.ts:21-29`, `OfficeScene.tsx:236-247`. Test: `live-feed.test.ts`, `office-scene-settings.test.tsx`
 
-- [ ] First, pin the field that churns: diff two consecutive `base` JSONs on a token-only message. The key is content-based, so `structuredClone` is not the cause. Then key the layout cache on the geometry plus the `sessions` fields `resolveEffectiveWorld` reads (that latent gap is fixed in the same change).
-- [ ] Shaders: `onCreated` calls `gl.compileAsync(scene, camera)` after mount and on a view switch. **Keep `checkShaderErrors` on**; turning it off makes a shader failure silently black.
-- [ ] RED tests: "a token-only message does not re-run validateWorldDocument", and "a view switch links no new program after prewarm". Implement, verify, and commit `perf(office): memoise world validation and prewarm shaders`.
+- [x] First, pin the field that churns: diff two consecutive `base` JSONs on a token-only message. The key is content-based, so `structuredClone` is not the cause. Then key the layout cache on the geometry plus the `sessions` fields `resolveEffectiveWorld` reads (that latent gap is fixed in the same change).
+- [x] Shaders: `onCreated` calls `gl.compileAsync(scene, camera)` after mount and on a view switch. **Keep `checkShaderErrors` on**; turning it off makes a shader failure silently black.
+- [x] RED tests: "a token-only message does not re-run validateWorldDocument", and "a view switch links no new program after prewarm". Implement, verify, and commit `perf(office): memoise world validation and prewarm shaders`.
 
 ### Task 7.5: One world document per host (health-13, A10)
 
 **Files:** Modify `src/office-host/office-service.ts`, `src/office-web/routes.ts`, `src/renderer/office-live/{world-document-store.ts, browser-storage.ts}`, `src/renderer/office/main.tsx:32`. Test: `live-feed.test.ts` (new case).
 
-- [ ] RED: "two feeds with different storages but one host see the same saved document".
-- [ ] The host persists the document and serves it in the hello; page storage becomes a cache. Verify, then commit `fix(office): one saved city per host`.
+- [x] RED: "two feeds with different storages but one host see the same saved document".
+- [x] The host persists the document and serves it in the hello; page storage becomes a cache. Verify, then commit `fix(office): one saved city per host`.
 
 ---
 
