@@ -81,6 +81,8 @@ interface Collected {
 const liveLastTick = new WeakMap<BridgeIo, Map<string, Map<string, number>>>()
 const recordOf = ({ pid, procStart, sessionId }: RegistryEntry): string =>
   `${pid}:${procStart}:${sessionId}`
+// Each registry file's last readable entry: a truncated write keeps its agent seated (health-5).
+const readLastTick = new WeakMap<BridgeIo, Map<string, Map<string, RegistryEntry>>>()
 
 export async function collectClaude(
   roots: string[],
@@ -169,11 +171,15 @@ export async function collectClaude(
   const settled = (error: unknown): 'failed' | null => (isMissing(error) ? null : 'failed')
   let lastTick = liveLastTick.get(io)
   if (!lastTick) liveLastTick.set(io, (lastTick = new Map()))
+  let lastRead = readLastTick.get(io)
+  if (!lastRead) readLastTick.set(io, (lastRead = new Map()))
   const entries: RegistryEntry[] = []
   for (const root of uniqueRoots) {
     const health: SourceHealth = { id: `claude:${root}`, ok: true, detail: 'empty' }
     const wasLive = lastTick.get(root) ?? new Map<string, number>()
     const isLiveNow = new Map<string, number>()
+    const wasRead = lastRead.get(root) ?? new Map<string, RegistryEntry>()
+    const isReadNow = new Map<string, RegistryEntry>()
     let isUnvouched = false
     try {
       const files = await io.list(join(root, 'sessions'))
@@ -182,11 +188,12 @@ export async function collectClaude(
       const reads: Promise<Collected | 'failed' | null>[] = []
       for (const file of files.filter((name) => /^\d+\.json$/.test(name))) {
         try {
-          const entry = parseRegistry(await io.readText(join(root, 'sessions', file)), platform)
-          if (!entry) {
-            reads.push(Promise.resolve('failed'))
-            continue
-          }
+          const entry =
+            parseRegistry(await io.readText(join(root, 'sessions', file)), platform) ??
+            wasRead.get(file)
+          // One unreadable file is skipped, never the whole root.
+          if (!entry) continue
+          isReadNow.set(file, entry)
           entries.push(entry)
           // An unreadable table proves nothing either way: each pid is then asked about.
           const rows = await table().catch(() => [])
@@ -243,6 +250,7 @@ export async function collectClaude(
       }
     }
     lastTick.set(root, isLiveNow)
+    lastRead.set(root, isReadNow)
     sources.push(health)
   }
   forgetGoneExcept(io, entries)
