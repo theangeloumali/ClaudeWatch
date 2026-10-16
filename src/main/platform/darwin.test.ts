@@ -70,3 +70,15 @@ it('takes no browser native host for an instance', async () => {
 
   expect(instances.map(({ pid }) => pid)).toEqual([4242])
 })
+
+it('still lists a teammate as an instance', async () => {
+  answer(() =>
+    [
+      psRow(4242, '/Users/a/.local/bin/claude'),
+      psRow(4343, '/Users/a/.local/bin/claude --agent-id lena@team --parent-session-id lead')
+    ].join('\n')
+  )
+  const instances = await new ProcessMonitor({ platform: 'darwin' }).poll()
+
+  expect(instances.map(({ pid }) => pid)).toEqual([4242, 4343])
+})

@@ -1,6 +1,7 @@
-import { HOST_ARGUMENT } from '../../bridge/claude-process-claims'
 import { forgetExited, rememberFolder } from '../../bridge/process-table'
 import { execFilePromise } from './exec'
+
+const NATIVE_HOST_ARGUMENT = /^--chrome-native-host(?:=|$)/
 
 export interface RawProcessInfo {
   pid: number
@@ -23,8 +24,8 @@ function isClaudeCLI(command: string): boolean {
   if (command.includes('Electron.app')) return false
   if (command.includes('Electron Helper')) return false
   if (command.startsWith('grep ')) return false
-  // A native-messaging host or a teammate belongs to another session (health-12).
-  if (command.split(/\s+/).some((argument) => HOST_ARGUMENT.test(argument))) return false
+  // A browser native-messaging host is not an instance; teammates still are (health-12).
+  if (command.split(/\s+/).some((argument) => NATIVE_HOST_ARGUMENT.test(argument))) return false
   // Match: bare "claude" command, or full path ending in /claude
   return /(?:^|\/)claude(\s|$)/.test(command)
 }
