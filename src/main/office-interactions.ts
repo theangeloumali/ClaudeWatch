@@ -76,7 +76,9 @@ export class OfficeInteractions {
   private readonly reviews = new Map<string, { fingerprint: string; incarnationId: string }>()
   // Jumps run one at a time, so two quick clicks end on the second agent.
   private lastFocus: Promise<unknown> = Promise.resolve()
-  private peekRevision = 0
+  // The latest peek of each agent wins; another agent's peek never cancels it (health-14).
+  private peekSerial = 0
+  private readonly latestPeek = new Map<string, number>()
 
   constructor(private readonly deps: OfficeInteractionsDeps) {}
 
@@ -132,7 +134,16 @@ export class OfficeInteractions {
   }
 
   async peek(sessionKey: string): Promise<PeekResult> {
-    const requestRevision = ++this.peekRevision
+    const requestRevision = ++this.peekSerial
+    this.latestPeek.set(sessionKey, requestRevision)
+    try {
+      return await this.peekAs(sessionKey, requestRevision)
+    } finally {
+      if (this.latestPeek.get(sessionKey) === requestRevision) this.latestPeek.delete(sessionKey)
+    }
+  }
+
+  private async peekAs(sessionKey: string, requestRevision: number): Promise<PeekResult> {
     const resolvedOwner = this.terminalOwner(sessionKey)
     const sessionId = this.resolve(sessionKey)?.session.sessionId
     if (!resolvedOwner || sessionId === undefined) return { ...fail('unknown-session'), lines: [] }
@@ -164,7 +175,7 @@ export class OfficeInteractions {
         currentTerminal.agent !== terminal.agent
       )
         return fail('terminal-not-found')
-      if (requestRevision !== this.peekRevision) return fail('prompt-changed')
+      if (requestRevision !== this.latestPeek.get(sessionKey)) return fail('prompt-changed')
       if (owner.pid === null || !owner.orcaPaneKey || !terminal.incarnationId)
         return fail('terminal-not-found')
       capture.lines = inertTerminalLines(lines)

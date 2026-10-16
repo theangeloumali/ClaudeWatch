@@ -131,29 +131,41 @@ describe('manual peek provenance', () => {
     expect(test.orca.screen).not.toHaveBeenCalled()
   })
 
-  it('discards an older capture when a later manual target was selected', async () => {
-    const test = harness()
-    let finishRead: (lines: string[]) => void = () => {
-      throw new Error('read not started')
-    }
-    let announceRead: () => void = () => {
-      throw new Error('read not started')
-    }
-    const started = new Promise<void>((resolve) => {
-      announceRead = resolve
-    })
-    test.orca.screen.mockImplementationOnce(() => {
-      announceRead()
-      return new Promise<string[]>((resolve) => {
-        finishRead = resolve
+  // health-14: the latest peek of a target wins; another target's peek never cancels it, and
+  // the panel refuses a capture labelled for a target it no longer shows (PeekPanel matchesTarget).
+  it.each([
+    ['the same target', 'claude:a', { success: false, reason: 'prompt-changed', lines: [] }],
+    [
+      'another target',
+      'claude:wrong-target',
+      { success: true, targetAgentKey: 'claude:a', terminal: { ownerAgentKey: 'claude:a' } }
+    ]
+  ])(
+    'settles an older capture by its own target after a later peek of %s',
+    async (_, later, expected) => {
+      const test = harness()
+      let finishRead: (lines: string[]) => void = () => {
+        throw new Error('read not started')
+      }
+      let announceRead: () => void = () => {
+        throw new Error('read not started')
+      }
+      const started = new Promise<void>((resolve) => {
+        announceRead = resolve
       })
-    })
-    const oldCapture = test.service.peek('claude:a')
-    await started
-    expect((await test.service.peek('claude:wrong-target')).success).toBe(false)
-    finishRead(['old target text'])
-    expect(await oldCapture).toEqual({ success: false, reason: 'prompt-changed', lines: [] })
-  })
+      test.orca.screen.mockImplementationOnce(() => {
+        announceRead()
+        return new Promise<string[]>((resolve) => {
+          finishRead = resolve
+        })
+      })
+      const oldCapture = test.service.peek('claude:a')
+      await started
+      await test.service.peek(later)
+      finishRead(['old target text'])
+      expect(await oldCapture).toMatchObject(expected)
+    }
+  )
 
   it('strips ANSI, OSC, and controls and bounds terminal output bytes', async () => {
     const test = harness()

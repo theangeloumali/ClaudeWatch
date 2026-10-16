@@ -11,6 +11,7 @@ import {
   type UsageFold,
   type UsageIncrement
 } from './usage-fold'
+import type { UsageOffset } from './usage-offsets'
 
 // What one line added to one transcript; the poller adds the session's project.
 export type TranscriptDelta = Omit<UsageDelta, 'projectKey' | 'projectLabel'>
@@ -27,12 +28,15 @@ interface TrackedFile {
   offset: number
   fold: UsageFold
   hasReachedEnd: boolean
+  ino?: number
 }
 
 // A full tick of this many bytes takes about 0.6 s: 880 MB of live transcripts take four.
 const TICK_BUDGET_BYTES = 256 * 1024 * 1024
 // The longest transcript line measured is 1.3 MB; a read this size always holds a whole one.
 const CHUNK_BYTES = 8 * 1024 * 1024
+// A session a new bridge has not listed within this many scans had ended: its saved offset goes.
+const RESUME_SCANS = 30
 
 export class UsageTracker {
   private readonly budgetBytes: number
@@ -46,6 +50,9 @@ export class UsageTracker {
   // after the last scan that saw it is on disk, and no later scan would list it.
   private leaving = new Map<string, string[]>()
   private counted = new Set<string>()
+  // Offsets an earlier bridge saved, each taken up once if its file is still the same one.
+  private saved = new Map<string, UsageOffset>()
+  private scansSinceResume = 0
   private behind = true
   private failed = false
 
@@ -55,6 +62,21 @@ export class UsageTracker {
   ) {
     this.budgetBytes = limits.budgetBytes ?? TICK_BUDGET_BYTES
     this.chunkBytes = limits.chunkBytes ?? CHUNK_BYTES
+  }
+
+  resume(saved: ReadonlyMap<string, UsageOffset>): void {
+    this.saved = new Map(saved)
+    this.scansSinceResume = 0
+  }
+
+  // Where each transcript's count stands, for the next bridge to resume from; one saved but not
+  // yet listed again is kept, so a session discovered late does not read its history again.
+  offsets(): Map<string, UsageOffset> {
+    const tracked = [...this.files].flatMap(
+      ([path, { offset, fold, ino }]): [string, UsageOffset][] =>
+        ino === undefined ? [] : [[path, { offset, fold, ino }]]
+    )
+    return new Map([...this.saved, ...tracked])
   }
 
   // Reads what was appended since the last scan, up to the byte budget. State for a transcript
@@ -74,6 +96,7 @@ export class UsageTracker {
           this.leaving.set(key, [files.main, ...this.spawnedPaths(key, files)])
       }
     }
+    if (++this.scansSinceResume > RESUME_SCANS) this.saved.clear()
     for (const key of sessions.keys()) this.leaving.delete(key)
     this.sessions = sessions
     for (const key of this.teammatePaths.keys())
@@ -109,13 +132,23 @@ export class UsageTracker {
     const unfinished = new Set<string>()
     for (const [path, knownSize] of wanted) {
       try {
-        const size = knownSize ?? (await this.io.stat(path)).size
+        // A listed agent's size is known; it is asked about once, for the inode a resume needs.
+        const info =
+          knownSize === null || !this.files.has(path)
+            ? await this.io.stat(path)
+            : { size: knownSize, ino: this.files.get(path)?.ino }
+        const size = knownSize ?? info.size
         const sessionKey = owners.get(path)
         const report =
           onAdded && sessionKey !== undefined
             ? (increment: UsageIncrement): void => onAdded({ sessionKey, file: path, ...increment })
             : undefined
-        const { spent, isAtEnd } = await this.advance(path, size, remaining, report)
+        const { spent, isAtEnd } = await this.advance(
+          path,
+          { size, ino: info.ino },
+          remaining,
+          report
+        )
         remaining -= spent
         if (!isAtEnd) unfinished.add(path)
       } catch (error) {
@@ -142,13 +175,19 @@ export class UsageTracker {
 
   private async advance(
     path: string,
-    size: number,
+    { size, ino }: { size: number; ino?: number },
     budget: number,
     report?: (increment: UsageIncrement) => void
   ): Promise<{ spent: number; isAtEnd: boolean }> {
-    let file = this.files.get(path)
-    // A file shorter than what was read was rewritten: count it again from the start.
-    if (!file || size < file.offset) file = { offset: 0, fold: emptyFold(), hasReachedEnd: false }
+    let file = this.files.get(path) ?? this.takeSaved(path)
+    // A file shorter than what was read, or another file under the name, is counted from the start.
+    if (
+      !file ||
+      size < file.offset ||
+      (ino !== undefined && file.ino !== undefined && ino !== file.ino)
+    )
+      file = { offset: 0, fold: emptyFold(), hasReachedEnd: false }
+    file.ino ??= ino
     this.files.set(path, file)
     let spent = 0
     while (file.offset < size) {
@@ -179,6 +218,13 @@ export class UsageTracker {
     }
     file.hasReachedEnd = true
     return { spent, isAtEnd: true }
+  }
+
+  private takeSaved(path: string): TrackedFile | undefined {
+    const saved = this.saved.get(path)
+    if (!saved) return undefined
+    this.saved.delete(path)
+    return { offset: saved.offset, fold: saved.fold, ino: saved.ino, hasReachedEnd: false }
   }
 
   private spawnedPaths(sessionKey: string, files: SessionFiles): string[] {

@@ -1,4 +1,5 @@
 import { OBSERVATION_STALE_AFTER_MS } from '../shared/office/observation'
+import { type CodexTotal, codexTotalOf } from '../shared/accounts'
 import type { SessionRef, SessionUsage, TokenCounts } from '../shared/office/types'
 import type { Rollout } from './codex-rollouts'
 import { isInsideAppBundle } from './process-table'
@@ -23,13 +24,19 @@ export function currentCodexActivity(
     : state.activity
 }
 
+// What a child thread has spent, and when it began, as its parent's ledger needs them.
+export interface CodexChildTotal {
+  counts: TokenCounts
+  threadStartedAtMs: number | null
+}
+
 const MAX_CHILD_ROLLOUTS = 128
 const MAX_ANCESTORS = 8
 
 export async function attachCodexSubagents(options: {
   sessions: SessionRef[]
   rollouts: Rollout[]
-  totals: Map<string, Map<string, TokenCounts>>
+  totals: Map<string, Map<string, CodexChildTotal>>
   observe: (rollout: Rollout) => Promise<CodexChildObservation>
   now: number
   platform?: NodeJS.Platform
@@ -91,7 +98,11 @@ export async function attachCodexSubagents(options: {
     if (!parent) continue
     let counted = totals.get(parent.sessionId)
     if (!counted) totals.set(parent.sessionId, (counted = new Map()))
-    if (observation.usage) counted.set(rollout.id, observation.usage.own)
+    if (observation.usage)
+      counted.set(rollout.id, {
+        counts: observation.usage.own,
+        threadStartedAtMs: rollout.startedAtMs
+      })
     if (!isLive) continue
     parent.subagents.push({
       id: rollout.id,
@@ -116,13 +127,13 @@ export async function attachCodexSubagents(options: {
 
 export function applyCodexSubagentTotals(
   sessions: SessionRef[],
-  totals: Map<string, Map<string, TokenCounts>>
+  totals: Map<string, Map<string, CodexChildTotal>>
 ): void {
   for (const session of sessions) {
     const counted = totals.get(session.sessionId)
     if (!counted || !session.usage) continue
     const subagents: TokenCounts = { input: 0, output: 0, cacheWrite: 0, cacheRead: 0 }
-    for (const counts of counted.values()) {
+    for (const { counts } of counted.values()) {
       subagents.input += counts.input
       subagents.output += counts.output
       subagents.cacheWrite += counts.cacheWrite
@@ -132,4 +143,22 @@ export function applyCodexSubagentTotals(
   }
   const liveParents = new Set(sessions.map((session) => session.sessionId))
   for (const parentId of totals.keys()) if (!liveParents.has(parentId)) totals.delete(parentId)
+}
+
+// Each child thread's own running total, filed under its parent's account and project. The ledger
+// counts a total's growth, so a child out of view after a restart never lowers its parent's (health-15).
+export function codexChildTotals(
+  sessions: SessionRef[],
+  totals: ReadonlyMap<string, ReadonlyMap<string, CodexChildTotal>>
+): CodexTotal[] {
+  return sessions.flatMap((parent) => {
+    const filed = codexTotalOf(parent)
+    if (!filed) return []
+    return [...(totals.get(parent.sessionId) ?? [])].map(([childId, child]) => ({
+      ...filed,
+      sessionKey: `codex:${childId}`,
+      threadStartedAtMs: child.threadStartedAtMs,
+      counts: child.counts
+    }))
+  })
 }

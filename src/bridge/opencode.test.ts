@@ -434,6 +434,7 @@ it('keeps Windows V2 model facts without assigning database sessions to a CLI pr
     model_provider_id: 'openai',
     model_id: 'gpt-6.1-sol-fast'
   }
+  const idsOf = ([batch]: (string | number)[]): string[] => JSON.parse(String(batch))
   io.readOpencode = async (_path, read) =>
     read((statement, ...bindings) => {
       switch (statement) {
@@ -445,10 +446,20 @@ it('keeps Windows V2 model facts without assigning database sessions to a CLI pr
           return bindings[0] === root.id
             ? [{ ...root, id: 'ses_child', parent_id: root.id, model_id: 'gpt-6.1-sol' }]
             : []
-        case 'v2NewestMessage':
-          return [{ id: 'msg_live', role: 'assistant', time_created: NOW - 1000 }]
-        case 'v2MessageParts':
-          return [{ type: 'tool', tool: 'read', status: 'running' }]
+        case 'v2NewestMessages':
+          return idsOf(bindings).map((session_id) => ({
+            session_id,
+            id: 'msg_live',
+            role: 'assistant',
+            time_created: NOW - 1000
+          }))
+        case 'v2NewestParts':
+          return idsOf(bindings).map((session_id) => ({
+            session_id,
+            type: 'tool',
+            tool: 'read',
+            status: 'running'
+          }))
         default:
           return []
       }
