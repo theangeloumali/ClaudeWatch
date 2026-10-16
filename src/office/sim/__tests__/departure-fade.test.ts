@@ -111,6 +111,14 @@ describe('departures: fade at the desk, walk out, or fade when stuck', () => {
     expect(goneAtMs).toBeLessThanOrEqual(20_000)
   })
 
+  it('forgets the crew record of an arrival whose work ended before it got in', () => {
+    const { world, crew } = seatedWorld([])
+    crew(Array.from({ length: 6 }, (_, index) => member(`late-${index}`)))
+    crew([])
+    follow(world, LEAD, 10)
+    expect(world['members'].size).toBe(1)
+  })
+
   it('never fades or moves an arriver by fiat; it sits once the door clears', () => {
     const { world, door, crew } = seatedWorld([])
     world.setBodyObstacles([{ id: 'player', x: door.x, z: door.z, elevation: 0, radius: 0.55 }])

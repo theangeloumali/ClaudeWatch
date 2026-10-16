@@ -187,7 +187,11 @@ export class World {
       this.floorJson = floorJson
     }
     const active = new Set(desired.map((p) => p.session.key))
-    for (const key of this.arrivals.keys()) if (!active.has(key)) this.arrivals.delete(key)
+    for (const key of this.arrivals.keys())
+      if (!active.has(key)) {
+        this.arrivals.delete(key)
+        this.members.delete(key)
+      }
     for (const [key, agent] of this.agents) {
       if (active.has(key) || agent.state === 'leaving') continue
       this.venueBookings.release(key)
