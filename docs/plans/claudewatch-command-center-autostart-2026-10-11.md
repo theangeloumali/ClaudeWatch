@@ -25,7 +25,7 @@ Tier T2 (score 8 capped by a single implementation slice; risk 3 because of inst
 - [x] Phase 2 — Office window remembers its place, size and display (TDD)
 - [x] Phase 3 — Gates, review, runtime smoke, push to PR #2
 - [x] Phase 4 — Merge PR #2 to `main` (7fc04cd), install on this Mac, turn both toggles on, verify at next start (installed build is signed with the team's Apple Development certificate; the Office opened by itself on real sessions, login item registered, one running copy)
-- [ ] Phase 5 — Signed release 1.3.0 published to GitHub Releases — BLOCKED (owner: Angelo): no Developer ID Application certificate or notarisation credentials on this Mac; see Blocker
+- [x] Phase 5 — Signed release 1.3.0: published to GitHub Releases as v1.3.0 on 2026-10-12T10:17:12Z (arm64 + x64 DMG/ZIP + latest-mac.yml), signed with the team's Developer ID Application certificate; notarisation still waits on Apple's agreement review (owner: Angelo), and 1.4.0 followed on 2026-10-13
 
 ## How it fits
 

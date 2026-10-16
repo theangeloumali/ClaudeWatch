@@ -60,7 +60,7 @@ Finding ids below (`seating-1`, `P3` …) refer to those reports.
 
 ## Phase ledger
 
-- [ ] Phase 0 — Baseline and guards: signing-file ignore rules, heavy-test timeouts, stale ledger ticks
+- [x] Phase 0 — Baseline and guards: signing-file ignore rules, heavy-test timeouts, stale ledger ticks
 - [ ] Phase 1 — Bridge truth: phantom ChatGPT agents, the 512-transcript cap, false idle, resume flags, retention, OpenCode SQL, usage backfill, process monitor, peek, Codex ledger
 - [ ] Phase 2 — Door, departures and honest cards: ungameable churn gates, cycle-only tie-break, body-blocked bound, gate skips blocked arrivers, subagents fade at desks, "Leaving" and honest unknown cards
 - [ ] Phase 3 — Legacy town decision, one street source, one crosswalk source, the sidewalk network, lane-centre vehicles (P1, P2, P3, P6)
@@ -200,6 +200,8 @@ These five conditions are what most likely bite Angelo, and none of the findings
 
 ## Phase 0 — Baseline and guards (lead, inline; ITEM CW-HEALTH)
 
+**Verify:** `npx vitest run` exit 0; `npx tsc --noEmit -p tsconfig.node.json && npx tsc --noEmit -p tsconfig.web.json` exit 0.
+
 ### Task 0.1: Signing material can never be staged (health-1)
 
 **Files:** Modify `.gitignore`; main checkout `.git/info/exclude` (local, uncommitted); Test `src/main/build-config.test.ts`
@@ -224,11 +226,14 @@ These five conditions are what most likely bite Angelo, and none of the findings
 
 - [ ] Replace both lines with the ticked text of commit `eb679c3`. Run prettier, then commit `docs(plans): tick the 1.3.0 release phases, published on 2026-10-12`.
 
-**Phase 0 Verify:** `npx vitest run` exit 0; `npx tsc --noEmit -p tsconfig.node.json && npx tsc --noEmit -p tsconfig.web.json` exit 0.
-
 ---
 
 ## Phase 1 — Bridge truth (@ravi, worktree; ITEM CW-HEALTH)
+
+**Verify:**
+
+- `npx vitest run src/bridge src/main src/shared` exits 0.
+- A live snapshot shows 0 sessions with `cwd '/'` from `.app` helpers: run `node out/office-web/server.mjs --port 47841` with the snapshot script `/tmp/office-audit-tools/health/codex-sessions.ts`.
 
 Owns `src/bridge/**`, `src/main/platform/darwin.ts`, `src/main/process-monitor.ts`, `src/main/office-interactions.ts`, `src/shared/accounts.ts` and `src/shared/platform-process.ts`.
 
@@ -331,14 +336,14 @@ Owns `src/bridge/**`, `src/main/platform/darwin.ts`, `src/main/process-monitor.t
 - [ ] RED: "peek of B does not fail a concurrent peek of A", and "onCodexTotals carries a child rollout's N tokens".
 - [ ] Use `Map<sessionKey, number>`: the guard keeps its latest-wins meaning per agent and stops misfiring on overlapping peeks across agents. Post `own + subagents` (A11). Verify, then commit `fix: per-agent peek revisions; Codex child tokens reach the ledger`.
 
-**Phase 1 Verify:**
-
-- `npx vitest run src/bridge src/main src/shared` exits 0.
-- A live snapshot shows 0 sessions with `cwd '/'` from `.app` helpers: run `node out/office-web/server.mjs --port 47841` with the snapshot script `/tmp/office-audit-tools/health/codex-sessions.ts`.
-
 ---
 
 ## Phase 2 — Door, departures and honest cards (@lena-sim, worktree; ITEM CW-SEAT)
+
+**Verify:**
+
+- `npx vitest run src/office/sim src/renderer/office` exits 0.
+- The replay `MODE=swap10 CHURN_S=120 npx vite-node --config vitest.config.ts /tmp/office-audit-tools/seating/replay-crew.ts 210 7` gives `stillInside 0`, `unseated 0`, `queued 0`.
 
 Owns:
 
@@ -419,14 +424,11 @@ Corrected by `/tmp/office-audit-tools/verify-seating-bridge/VERDICTS.md`. Its ex
 
 - [ ] RED tests for both. Implement, verify `npx vitest run src/renderer/office src/office/sim`, and commit `fix(office): cards tell leaving from unknown`.
 
-**Phase 2 Verify:**
-
-- `npx vitest run src/office/sim src/renderer/office` exits 0.
-- The replay `MODE=swap10 CHURN_S=120 npx vite-node --config vitest.config.ts /tmp/office-audit-tools/seating/replay-crew.ts 210 7` gives `stillInside 0`, `unseated 0`, `queued 0`.
-
 ---
 
 ## Phase 3 — One street source, one crosswalk source, the sidewalk network (@lena-town, worktree; ITEM CW-WALK)
+
+**Verify:** `npx vitest run src/shared/office src/office/sim src/renderer/office/town` exits 0, except the promoted replay rows, which are expected RED until Phase 4.
 
 Owns:
 
@@ -518,11 +520,14 @@ The verifier refuted "width-only makes it worse": across 8 start offsets frozen 
 - [ ] Magnitudes: avenue `0.25 / 0.75 · halfCarriageway`, collector `0.5·`. **Keep the keep-left sign**: ClearSpent's `DRIVE_OFFSET` is right-of-travel, so port the magnitude only.
 - [ ] Verify, then commit `fix(town): vehicles drive lane centres, not the divider`.
 
-**Phase 3 Verify:** `npx vitest run src/shared/office src/office/sim src/renderer/office/town` exits 0, except the promoted replay rows, which are expected RED until Phase 4.
-
 ---
 
 ## Phase 4 — Citizens on the network (@lena-town, after Phase 3; ITEM CW-WALK)
+
+**Verify:**
+
+- `npx vitest run src/renderer/office/town/__tests__/pedestrian-carriageway.test.ts` → all city rows green: asphalt samples 0, frozen-on-road 0, road-walker holds 0.
+- The 8-offset replay `npx vite-node /tmp/office-audit-tools/verify-citizens-streets/robust.ts` → 0 frozen-on-road events at every offset (was 107).
 
 Owns:
 
@@ -585,14 +590,14 @@ Owns:
   - "full → light mid-walk keeps no stale trip and spawns nobody on asphalt"
 - [ ] Implement, verify `npx vitest run src/renderer/office`, and commit `feat(citizens): ambient sidewalk loops and a stable crowd across quality steps`.
 
-**Phase 4 Verify:**
-
-- `npx vitest run src/renderer/office/town/__tests__/pedestrian-carriageway.test.ts` → all city rows green: asphalt samples 0, frozen-on-road 0, road-walker holds 0.
-- The 8-offset replay `npx vite-node /tmp/office-audit-tools/verify-citizens-streets/robust.ts` → 0 frozen-on-road events at every offset (was 107).
-
 ---
 
 ## Phase 5 — Roaming agents (@lena-sim, after Phases 2 and 3; ITEM CW-ROAM)
+
+**Verify:**
+
+- `npx vitest run src/office/sim src/renderer/office` exits 0.
+- A live 10-minute capture (`/tmp/office-audit-tools/seating/long-capture.mjs` on port 47851) shows idle agents on sidewalks, 0 working or unknown agents off their desks, and 0 roamer samples on a carriageway.
 
 Owns `src/office/sim/{world-leisure.ts, world-floor-routes.ts, roaming.ts (new)}`. It **reuses** the leisure system rather than adding a `behaviour.ts` state (verifier P5a).
 
@@ -630,14 +635,14 @@ Owns `src/office/sim/{world-leisure.ts, world-floor-routes.ts, roaming.ts (new)}
 - [ ] Switch `toFloor` ground legs to `sidewalkPath` only after Phase 2's door replay is green. Re-run `MODE=swap10 CHURN_S=120 … replay-crew.ts 210 7` → `stillInside 0`. If it regresses, leave arrivals on `street()` and record why in § Results.
 - [ ] Commit `fix(sim): agents reach their building along the sidewalks`.
 
-**Phase 5 Verify:**
-
-- `npx vitest run src/office/sim src/renderer/office` exits 0.
-- A live 10-minute capture (`/tmp/office-audit-tools/seating/long-capture.mjs` on port 47851) shows idle agents on sidewalks, 0 working or unknown agents off their desks, and 0 roamer samples on a carriageway.
-
 ---
 
 ## Phase 6 — Render fixes (@lena-render, worktree; ITEM CW-FLICK)
+
+**Verify:**
+
+- `npx vitest run src/renderer/office` exits 0.
+- `/tmp/office-audit-tools/flicker/idpass.mjs` on port 47861 reports ≈ 0 changed px under the plane sweep, against 1,408 before.
 
 Owns:
 
@@ -718,14 +723,14 @@ Two corrections from verify-render-perf:
 - [ ] RED: "canvas.dataset.drawCalls and sampledAtMs are numbers after one frame". Write them at 1 Hz, only changed keys (ported from ops-twin `telemetry-dataset.ts`); `sampledAtMs` marks stale stats from a hidden window.
 - [ ] Verify, then commit `feat(scene): render stats readable from the canvas`.
 
-**Phase 6 Verify:**
-
-- `npx vitest run src/renderer/office` exits 0.
-- `/tmp/office-audit-tools/flicker/idpass.mjs` on port 47861 reports ≈ 0 changed px under the plane sweep, against 1,408 before.
-
 ---
 
 ## Phase 7 — Performance (@lena-perf, after Phases 2, 4, 5, 6; ITEM CW-PERF)
+
+**Verify:**
+
+- `npx vitest run` exits 0.
+- `cd /tmp/office-audit-tools/perf && node page-probe.mjs 47871 run-after --measure-s 30` shows Office upload p50 < 100 kB per frame (was 1,104,320 B) and React commits ≤ 1/s with idle roamers (was 10.6/s).
 
 Owns:
 
@@ -802,14 +807,11 @@ Owns:
 - [ ] RED: "two feeds with different storages but one host see the same saved document".
 - [ ] The host persists the document and serves it in the hello; page storage becomes a cache. Verify, then commit `fix(office): one saved city per host`.
 
-**Phase 7 Verify:**
-
-- `npx vitest run` exits 0.
-- `cd /tmp/office-audit-tools/perf && node page-probe.mjs 47871 run-after --measure-s 30` shows Office upload p50 < 100 kB per frame (was 1,104,320 B) and React commits ≤ 1/s with idle roamers (was 10.6/s).
-
 ---
 
 ## Phase 8 — Release and repo hygiene (lead, inline; ITEM CW-HEALTH)
+
+**Verify:** `npx vitest run src/main` exits 0; the main checkout shows 0 mode changes; the archive folder holds one patch per removed dirty worktree.
 
 ### Task 8.1: One version line and an honest updater (health-7, health-8, A7)
 
@@ -828,11 +830,11 @@ Done in the main checkout. Nothing here is committed on this branch.
   - then run `git worktree remove --force <wt>`.
 - [ ] Run `git worktree remove` on the 34 clean merged agent worktrees. Verify that `git worktree list` shows only main, office-audit, office-health and any live worktree.
 
-**Phase 8 Verify:** `npx vitest run src/main` exits 0; the main checkout shows 0 mode changes; the archive folder holds one patch per removed dirty worktree.
-
 ---
 
 ## Phase 9 — Integration, live re-measure, local install (lead; ITEM CW-HEALTH)
+
+**Verify:** all gates exit 0; `codesign --verify --deep --strict /Applications/ClaudeWatch.app` exits 0; the four live measures are recorded.
 
 - [ ] Merge the phase branches into `fix/office-health-2026-10-16` with `--no-ff`.
 - [ ] Gate chain, each exiting 0:
@@ -853,9 +855,9 @@ Done in the main checkout. Nothing here is committed on this branch.
 - [ ] Measure the installed renderer CPU, unfocused, over 60 s: `bash /tmp/office-audit-tools/perf/sample-procs.sh` (was 56.9%).
 - [ ] **STOP.** Tell Angelo the build is installed, with the before/after table, and wait for his look.
 
-**Phase 9 Verify:** all gates exit 0; `codesign --verify --deep --strict /Applications/ClaudeWatch.app` exits 0; the four live measures are recorded.
-
 ## Phase 10 — After Angelo approves (lead + Wave 2)
+
+**Verify:** `bash ~/.claude/hooks/dead-code-check.sh` exits 0; the Wave 2 verdicts approve; the MP4 in `recordings/` is frame-verified; the PR shows the stacked base `release/1.3.5`.
 
 Steps:
 
