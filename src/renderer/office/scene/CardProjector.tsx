@@ -7,6 +7,7 @@ import type { NameCard, ProjectStack } from '../logic/name-cards'
 import { cardSafeArea } from '../logic/zone-framing'
 import { hudSafeInsets, type InspectorLayout } from '../logic/hud-layout'
 import type { AgentView } from '../../../shared/office/types'
+import { livePose, officePoses } from '../../office-live/pose-store'
 import type { FloorGeometry } from '../scene-model'
 import { agentElevation, floorElevation } from './all-floor-model'
 import { findZone } from '../logic/zone-model'
@@ -95,6 +96,10 @@ export function CardProjector({
     () => new Map(agents?.map((agent) => [agent.agentKey, agentElevation(agent)])),
     [agents]
   )
+  const frameAgents = useMemo(
+    () => new Map(agents?.map((agent) => [agent.agentKey, agent])),
+    [agents]
+  )
   const stackHeights = useMemo(
     () =>
       new Map(
@@ -137,6 +142,7 @@ export function CardProjector({
     heights: typeof heights | null
     stackHeights: typeof stackHeights | null
     cap: number
+    poses: number
   }>({
     view: [],
     cards: null,
@@ -147,7 +153,8 @@ export function CardProjector({
     measurements: -1,
     heights: null,
     stackHeights: null,
-    cap: 0
+    cap: 0,
+    poses: -1
   })
   const sizes = useMemo(
     () => new WeakMap<HTMLElement, { key: string; width: number; height: number }>(),
@@ -164,6 +171,18 @@ export function CardProjector({
     element.style.transform = at
       ? `translate(${at.x}px, ${at.y}px) translate(-50%, -100%)`
       : OFFSCREEN
+  }
+  // A card follows its agent's live pose, as far in front of it as its frame placed it (perf-2).
+  const anchorOf = (card: NameCard, lift: number) => {
+    const agent = frameAgents.get(card.agentKey)
+    if (!agent) return { x: card.x, y: (heights.get(card.agentKey) ?? 0) + lift, z: card.z }
+    const pose = livePose(officePoses, agent)
+    const reach = Math.hypot(card.x - agent.x, card.z - agent.z)
+    return {
+      x: pose.x + Math.sin(pose.heading) * reach,
+      y: pose.elevation + lift,
+      z: pose.z + Math.cos(pose.heading) * reach
+    }
   }
   const measure = (element: HTMLElement, key: string) => {
     const cached = sizes.get(element)
@@ -202,7 +221,8 @@ export function CardProjector({
       last.measurements === measurementRevision.current &&
       last.heights === heights &&
       last.stackHeights === stackHeights &&
-      last.cap === deskCardCap
+      last.cap === deskCardCap &&
+      last.poses === officePoses.version()
     if (isSameView) return
     last.cards = cards
     last.stacks = stacks
@@ -213,6 +233,7 @@ export function CardProjector({
     last.heights = heights
     last.stackHeights = stackHeights
     last.cap = deskCardCap
+    last.poses = officePoses.version()
     // camera-controls moves the camera after three last built its matrix, and the renderer only
     // rebuilds it after this callback: without this the cards trail the canvas while it turns.
     camera.updateMatrixWorld()
@@ -232,11 +253,10 @@ export function CardProjector({
     if (band === 'building') {
       showOverflow(0)
       for (const card of cards) {
-        const height =
-          (heights.get(card.agentKey) ?? 0) + (card.kind === 'card' ? CARD_HEIGHT : PILL_HEIGHT)
+        const at = anchorOf(card, card.kind === 'card' ? CARD_HEIGHT : PILL_HEIGHT)
         place(
           anchors.cards.get(card.agentKey),
-          card.agentKey === selectedAgentKey ? toScreen(camera, size, card.x, height, card.z) : null
+          card.agentKey === selectedAgentKey ? toScreen(camera, size, at.x, at.y, at.z) : null
         )
       }
       hideAll(anchors.dots)
@@ -270,13 +290,8 @@ export function CardProjector({
     for (const card of cards) {
       const element = anchors.cards.get(card.agentKey)
       const isSelected = card.agentKey === selectedAgentKey
-      const at = toScreen(
-        camera,
-        size,
-        card.x,
-        (heights.get(card.agentKey) ?? 0) + (card.kind === 'card' ? CARD_HEIGHT : PILL_HEIGHT),
-        card.z
-      )
+      const anchor = anchorOf(card, card.kind === 'card' ? CARD_HEIGHT : PILL_HEIGHT)
+      const at = toScreen(camera, size, anchor.x, anchor.y, anchor.z)
       if (!element || !at) {
         place(element, null)
         continue
@@ -311,9 +326,8 @@ export function CardProjector({
           anchors.cards.get(card.agentKey),
           isShown ? (positions.get(card.agentKey) ?? null) : null
         )
-      const dot = outcome.dots.has(card.agentKey)
-        ? toScreen(camera, size, card.x, (heights.get(card.agentKey) ?? 0) + DOT_HEIGHT, card.z)
-        : null
+      const dotAt = outcome.dots.has(card.agentKey) ? anchorOf(card, DOT_HEIGHT) : null
+      const dot = dotAt ? toScreen(camera, size, dotAt.x, dotAt.y, dotAt.z) : null
       place(anchors.dots.get(card.agentKey), dot)
     }
     if (isDesk) hideAll(anchors.stacks)

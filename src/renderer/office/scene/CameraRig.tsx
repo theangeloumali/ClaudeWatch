@@ -3,6 +3,7 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import { Vector3 } from 'three'
 import type { AgentView } from '../../../shared/office/types'
+import { withLivePose } from '../../office-live/pose-store'
 import {
   BAND_ZOOM,
   bandForZoom,
@@ -391,8 +392,8 @@ export function CameraRig(props: CameraRigProps) {
         (candidate) => candidate.agentKey === followRef.current?.agentKey
       )
       if (agent && workstationAgentRef.current)
-        rig.frameWorkstation(agent, workstationSpecRef.current ?? undefined)
-      else if (agent && bandRef.current === 'desk') rig.frameAgent(agent)
+        rig.frameWorkstation(withLivePose(agent), workstationSpecRef.current ?? undefined)
+      else if (agent && bandRef.current === 'desk') rig.frameAgent(withLivePose(agent))
     }
   }, [occupiedKey, sceneKey, envelopeKey, size.width, size.height, cityInsets, rig])
 

@@ -2,6 +2,7 @@ import { CameraControlsImpl } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import type { AgentView } from '../../../shared/office/types'
+import { officePoses } from '../../office-live/pose-store'
 import type { FrameMetrics } from '../frame-metrics'
 import {
   browserFrameEnv,
@@ -39,6 +40,7 @@ export function FrameGovernor({ pace, agents }: FrameGovernorProps) {
   const controls = useThree((state) => state.controls)
   const gl = useThree((state) => state.gl)
   const governorRef = useRef<Governor | null>(null)
+  const poseVersionRef = useRef(officePoses.version())
   const paceRef = useRef(pace)
   paceRef.current = pace
 
@@ -98,6 +100,11 @@ export function FrameGovernor({ pace, agents }: FrameGovernorProps) {
   useFrame((_, delta) => {
     const governor = governorRef.current
     if (!governor) return
+    // A walk reaches the scene through the pose store, not a frame (perf-2).
+    if (officePoses.version() !== poseVersionRef.current) {
+      poseVersionRef.current = officePoses.version()
+      governor.keepMoving()
+    }
     if (governor.isBoosted()) drawRef.current()
     // Out of focus the rate is the background's, which says nothing about the machine.
     if (!document.hasFocus()) return

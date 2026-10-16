@@ -1,6 +1,7 @@
 import type { CameraControlsImpl } from '@react-three/drei'
 import { useEffect, useRef, type RefObject } from 'react'
 import type { AgentView } from '../../../shared/office/types'
+import { withLivePose } from '../../office-live/pose-store'
 import {
   BAND_ZOOM,
   ISO_POLAR,
@@ -110,8 +111,10 @@ export function useCameraPresets(options: PresetOptions): void {
       }
       case 'fly':
       case 'workstation': {
-        const agent = agents.find((candidate) => candidate.agentKey === request.agentKey)
-        if (!agent) return
+        const found = agents.find((candidate) => candidate.agentKey === request.agentKey)
+        if (!found) return
+        // A roamer is framed where it walks now, not where its last frame left it (perf-2).
+        const agent = withLivePose(found)
         if (request.kind === 'workstation') return rig.frameWorkstation(agent)
         rig.preparePreset()
         return rig.frameAgent(agent)

@@ -3,6 +3,7 @@ import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Vector3, type Group } from 'three'
 import type { AgentView } from '../../../shared/office/types'
+import { withLivePose } from '../../office-live/pose-store'
 import { placeBody, PLAYER_BODY_RADIUS } from '../../../shared/office/body-footprints'
 import type { SceneBodies } from '../scene/BodySpace'
 import { ISO_POLAR, ISO_START_AZIMUTH } from '../logic/camera-bands'
@@ -188,7 +189,12 @@ export function PlayerLayer(props: PlayerLayerProps) {
   // Agents walk too: one that comes up to a standing player is offered as well.
   useEffect(() => {
     setNearAgent(
-      isWalking ? agentInReach({ ...player.position, elevation: player.elevation }, agents) : null
+      isWalking
+        ? agentInReach(
+            { ...player.position, elevation: player.elevation },
+            agents.map(withLivePose)
+          )
+        : null
     )
   }, [isWalking, agents, player])
 
@@ -226,7 +232,7 @@ export function PlayerLayer(props: PlayerLayerProps) {
         )
       const beside = agentInReach(
         { ...player.position, elevation: player.elevation },
-        latestRef.current.agents
+        latestRef.current.agents.map(withLivePose)
       )
       if (beside?.agentKey !== latestRef.current.nearAgent?.agentKey) setNearAgent(beside)
     } else if (strideRef.current !== 0) {

@@ -1,4 +1,5 @@
 import type { AgentView } from '../../../shared/office/types'
+import { officePoses, withLivePose } from '../../office-live/pose-store'
 import {
   WORKER_BODY_RADIUS,
   SUBAGENT_BODY_RADIUS,
@@ -7,21 +8,20 @@ import {
 
 // dry-new: the local sim and the two rendered mover layers need one set of occupied body positions.
 export class SceneBodies {
-  workers: readonly BodyFootprint[] = []
   private readonly visitors = new Map<string, BodyFootprint>()
+  private agents: readonly AgentView[] = []
+  private placed = { agents: this.agents, version: -1, workers: [] as readonly BodyFootprint[] }
 
   setWorkers(agents: readonly AgentView[]): void {
-    this.workers = agents.map((agent) => ({
-      id: agent.agentKey,
-      x: agent.x,
-      z: agent.z,
-      elevation: agent.elevation ?? 0,
-      connectorId:
-        'connectorId' in agent && typeof agent.connectorId === 'string'
-          ? agent.connectorId
-          : undefined,
-      radius: agent.isSubagent ? SUBAGENT_BODY_RADIUS : WORKER_BODY_RADIUS
-    }))
+    this.agents = agents
+  }
+
+  // Where workers stand now, so citizens and the player give way to a roamer's live pose (perf-2).
+  get workers(): readonly BodyFootprint[] {
+    const version = officePoses.version()
+    if (this.placed.agents !== this.agents || this.placed.version !== version)
+      this.placed = { agents: this.agents, version, workers: this.agents.map(footprintOf) }
+    return this.placed.workers
   }
 
   set(body: BodyFootprint): void {
@@ -35,5 +35,20 @@ export class SceneBodies {
   }
   all(): BodyFootprint[] {
     return [...this.workers, ...this.visitors.values()]
+  }
+}
+
+function footprintOf(frameAgent: AgentView): BodyFootprint {
+  const agent = withLivePose(frameAgent)
+  return {
+    id: agent.agentKey,
+    x: agent.x,
+    z: agent.z,
+    elevation: agent.elevation ?? 0,
+    connectorId:
+      'connectorId' in agent && typeof agent.connectorId === 'string'
+        ? agent.connectorId
+        : undefined,
+    radius: agent.isSubagent ? SUBAGENT_BODY_RADIUS : WORKER_BODY_RADIUS
   }
 }

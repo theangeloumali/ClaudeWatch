@@ -8,6 +8,7 @@ import {
   type PeekResult
 } from '../../shared/office/types'
 import { isFeedMessage } from '../../shared/office/feed-message'
+import { parseWorldSaveReply } from '../../shared/office/world-sync'
 import {
   hasValidObservationMetadata,
   hasValidPeekMetadata
@@ -223,6 +224,8 @@ export function createWebBridge(credential: string, onLost?: () => void): Office
       toResult(await post('/api/respond', { sessionKey, decision, fingerprint })),
     peek: async (sessionKey) => toPeekResult(await post('/api/peek', { sessionKey })),
     start: async (projectKey, provider) =>
-      toResult(await post('/api/start', { projectKey, provider }))
+      toResult(await post('/api/start', { projectKey, provider })),
+    // A view-only server answers 403 with no city; that reads as a refusal like any other.
+    saveWorld: async (document) => parseWorldSaveReply(await post('/api/world', { document }))
   }
 }

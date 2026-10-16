@@ -7,6 +7,7 @@ import type {
   PermissionDecision,
   ProviderId
 } from '../shared/office/types'
+import type { WorldSaveReply } from '../shared/office/world-sync'
 
 let isNativeVisible = true
 const visibilityListeners = new Set<() => void>()
@@ -53,7 +54,11 @@ const officeBridge = {
   peek: (sessionKey: string): Promise<PeekResult> => ipcRenderer.invoke('office:peek', sessionKey),
 
   start: (projectKey: string, provider: ProviderId): Promise<InteractionResult> =>
-    ipcRenderer.invoke('office:start', projectKey, provider)
+    ipcRenderer.invoke('office:start', projectKey, provider),
+
+  // The city every Office of this user shows; main keeps it (health-13).
+  saveWorld: (document: unknown): Promise<WorldSaveReply> =>
+    ipcRenderer.invoke('office:world-save', document)
 }
 
 export type OfficeBridgeApi = typeof officeBridge

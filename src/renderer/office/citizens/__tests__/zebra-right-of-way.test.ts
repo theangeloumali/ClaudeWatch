@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { WorldFootprint } from '../../../../shared/office/world-document-types'
 import { SceneBodies } from '../../scene/BodySpace'
+import { makeAgent } from '../../__tests__/fixtures'
 import { liveCity, type Scenario } from '../../town/__tests__/pedestrian.test-utils'
 import type { Trip } from '../../town/town-trips'
 import { lengthOf } from '../../town/trip-paths'
@@ -66,7 +67,7 @@ describe('zebra right-of-way (citizens-6, P6b)', () => {
     const scenario = liveCity()
     const { trip, zebra, entryAt } = turnOut(scenario)
     const space = new SceneBodies()
-    space.workers = [{ id: 'roamer', x: zebra.x, z: zebra.z, radius: 0.65 }]
+    space.setWorkers([makeAgent({ agentKey: 'roamer', x: zebra.x, z: zebra.z })])
     const { clock, step } = moversOn(scenario, [{ ...trip, startSec: 0 }], space)
     clock.moved[0] = (entryAt - 15) / trip.speed
     let nearest = Infinity
@@ -78,7 +79,7 @@ describe('zebra right-of-way (citizens-6, P6b)', () => {
     }
     // It came up to the stop line, not to a halt somewhere short of it.
     expect(nearest).toBeLessThan(4)
-    space.workers = []
+    space.setWorkers([])
     for (let frame = 0; frame < 10 / FRAME_SEC; frame++) step()
     expect(clock.moved[0] * trip.speed).toBeGreaterThan(entryAt + 5)
   })
