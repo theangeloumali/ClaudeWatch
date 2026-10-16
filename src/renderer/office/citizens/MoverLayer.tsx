@@ -100,6 +100,10 @@ export function MoverLayer(props: MoverLayerProps) {
     return next
   }, [tripsKey, bodies])
 
+  // Only the city's one-way sidewalks leave a jammed walker no room to step aside; the campus
+  // town's walkers keep waiting (citizens-2).
+  const waitsFor = plan.officeSites ? clock.waitsFor : undefined
+
   const place = (deltaSec: number): void => {
     const { moved, headings, onFoot } = clock
     const playerAt = player?.position ?? null
@@ -122,7 +126,8 @@ export function MoverLayer(props: MoverLayerProps) {
             deltaSec,
             space: bodies,
             isOpen: ground.isOpen,
-            ground
+            ground,
+            waitsFor
           })
           clock.positions[index] = next.pose
           moved[index] = next.walked

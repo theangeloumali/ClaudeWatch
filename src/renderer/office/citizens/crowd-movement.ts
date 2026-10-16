@@ -9,7 +9,8 @@ import { nearestOpen, type WalkGround } from '../player/walk-ground'
 import {
   advanceNavigation,
   CITIZEN_POSITION_EPSILON,
-  type CitizenNavigation
+  type CitizenNavigation,
+  type GiveWay
 } from './citizen-navigation'
 import { routePhase, routePose, type CitizenPose } from './route-pose'
 
@@ -20,8 +21,16 @@ export interface CitizenMotionPose extends CitizenPose {
 
 const MAX_STEP_SEC = 0.25
 const CLOCK_BOUNDARY_MARGIN_SEC = 1e-6
+// How long a jam stands before one walker gives way, and how far back it steps: room for two
+// citizen bodies to pass with the passing clearance (citizens-2).
+const STUCK_YIELD_SEC = 1.5
+const RETREAT_M = 1.25
 
-export const citizenBodyId = (index: number): string => `citizen:${index}`
+// What a citizen standing at a stop on its route waits for: no body.
+const AT_STOP = '(at a stop)'
+const CITIZEN_ID_PREFIX = 'citizen:'
+export const citizenBodyId = (index: number): string => `${CITIZEN_ID_PREFIX}${index}`
+const citizenIndexOf = (bodyId: string): number => Number(bodyId.slice(CITIZEN_ID_PREFIX.length))
 const bodyAt = (pose: CitizenPose, index: number): BodyFootprint => ({
   id: citizenBodyId(index),
   x: pose.x,
@@ -63,10 +72,40 @@ interface CitizenStep {
   space: SceneBodies
   isOpen: (point: { x: number; z: number }) => boolean
   ground?: WalkGround
+  // The crowd's wait-for graph: a stuck citizen's body id to the body in its way. Given, jams
+  // are broken; without it a blocked citizen waits for ever.
+  waitsFor?: Map<string, string>
+}
+
+// The citizens in a wait-for cycle through `bodyId`; none when its wait ends at someone free.
+function jamThrough(waitsFor: ReadonlyMap<string, string>, bodyId: string): string[] {
+  const members = [bodyId]
+  for (
+    let next = waitsFor.get(bodyId);
+    next !== undefined && !members.includes(next);
+    next = waitsFor.get(next)
+  )
+    members.push(next)
+  return waitsFor.get(members[members.length - 1]) === bodyId ? members : []
+}
+
+// How citizen `index` breaks the wait it is stuck in, if it is the one to: behind a citizen
+// standing at a stop on the walk it passes through; in a jam, the last citizen by index backs
+// off. A queue behind anyone else stays put.
+function giveWayOf(options: CitizenStep, walked: number): GiveWay | undefined {
+  const { waitsFor, trip, index } = options
+  const blockerId = waitsFor?.get(citizenBodyId(index))
+  if (!waitsFor || blockerId === undefined) return undefined
+  if (waitsFor.get(blockerId) === AT_STOP) return { kind: 'pass' }
+  const jam = jamThrough(waitsFor, citizenBodyId(index))
+  if (jam.length < 2 || jam.some((member) => citizenIndexOf(member) > index)) return undefined
+  const behind = Math.max(0, walked * trip.speed - RETREAT_M)
+  return { kind: 'back-off', to: routePose(trip.route, behind, trip.speed) }
 }
 
 export function advanceCitizen(options: CitizenStep) {
-  const { trip, index, space, isOpen, ground } = options
+  const { trip, index, space, isOpen, ground, waitsFor } = options
+  const bodyId = citizenBodyId(index)
   let { pose, walked } = options
   let remainingSec = Math.max(0, Math.min(options.deltaSec, MAX_STEP_SEC))
   let distance = 0
@@ -79,6 +118,7 @@ export function advanceCitizen(options: CitizenStep) {
       walked += waited
       remainingSec -= waited
       pose = { ...pose, isIndoors: phase.target.isIndoors, navigation: undefined }
+      waitsFor?.set(bodyId, AT_STOP)
       continue
     }
     if (pose.isIndoors) {
@@ -93,7 +133,11 @@ export function advanceCitizen(options: CitizenStep) {
             untilSec: phase.untilSec,
             target: ground ? (nearestOpen(ground, phase.target) ?? phase.target) : phase.target,
             points: [],
-            blockedSec: 0
+            blockedSec: 0,
+            stuckSec: 0,
+            // A give-way outlives the route corner it began on.
+            passingId: pose.navigation?.passingId,
+            backedFromId: pose.navigation?.backedFromId
           }
     if (ground && !ground.isOpen(navigation.target)) {
       const target = nearestOpen(ground, phase.target)
@@ -107,8 +151,12 @@ export function advanceCitizen(options: CitizenStep) {
       isOpen,
       ground,
       budget: trip.speed * remainingSec,
-      deltaSec: remainingSec
+      deltaSec: remainingSec,
+      giveWay: navigation.stuckSec >= STUCK_YIELD_SEC ? giveWayOf(options, walked) : undefined
     })
+    const blockerId = step.distance > 0 ? undefined : step.navigation.blockerId
+    if (blockerId) waitsFor?.set(bodyId, blockerId)
+    else waitsFor?.delete(bodyId)
     const after = Math.hypot(step.point.x - navigation.target.x, step.point.z - navigation.target.z)
     pose = { ...pose, ...step.point, navigation: step.navigation }
     distance += step.distance
@@ -142,7 +190,9 @@ export function advanceCitizen(options: CitizenStep) {
       ...pose,
       heading: Math.atan2(pose.x - options.pose.x, pose.z - options.pose.z)
     }
-  if (pose.isIndoors) space.remove(citizenBodyId(index))
-  else space.set(bodyAt(pose, index))
+  if (pose.isIndoors) {
+    space.remove(bodyId)
+    waitsFor?.delete(bodyId)
+  } else space.set(bodyAt(pose, index))
   return { pose, walked, distance }
 }
