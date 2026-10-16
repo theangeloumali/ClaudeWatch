@@ -11,6 +11,7 @@ import { mergeActiveWorldDocument } from '../../shared/office/world-document-lay
 import { buildEffectiveFloors } from './effective-world-floors'
 import { cityScenerySites } from '../../shared/office/city-scenery'
 import { cityVenueSite } from '../../shared/office/city-access'
+import { districtStreets } from '../../shared/office/district-streets'
 
 // dry-new: buildLayout owns source allocation; this pure projection adds device-local physical storeys.
 export function resolveEffectiveWorld(
@@ -36,16 +37,17 @@ export function resolveEffectiveWorld(
         .map((room) => [room.sessionKey, floor.id] as const)
     )
   )
+  const groundSites = [
+    ...floors.filter((floor) => (floor.elevation ?? 0) === 0),
+    ...effective.venues.map(cityVenueSite)
+  ]
+  const streetBlocks = cityScenerySites(groundSites)
   return {
     version: 1,
     floors,
     effectiveVenues: effective.venues,
-    streetBlocks: [
-      ...cityScenerySites([
-        ...floors.filter((floor) => (floor.elevation ?? 0) === 0),
-        ...effective.venues.map(cityVenueSite)
-      ])
-    ],
+    streetBlocks,
+    streets: districtStreets({ sites: groundSites, obstacles: [...groundSites, ...streetBlocks] }),
     reservations: Object.fromEntries(
       Object.entries(baseline.reservations).map(([key, held]) => [
         key,

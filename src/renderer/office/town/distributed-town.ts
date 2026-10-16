@@ -9,9 +9,9 @@ import {
 import type { Town } from './use-town-plan'
 import type { TownLot } from './town-lots'
 import { roadGraph } from './town-graph'
-import { districtStreets, type DistrictSite } from './district-streets'
+import { districtStreets, type DistrictSite } from '../../../shared/office/district-streets'
 import type { TownDistrict } from './town-zones'
-import { SIDEWALK_M } from './town-grid'
+import { SIDEWALK_M } from '../../../shared/office/town-roads'
 
 const FRONTAGE_USES: readonly TownDistrict[] = [
   'residential',

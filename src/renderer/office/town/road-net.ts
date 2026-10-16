@@ -141,6 +141,7 @@ export function roadPath(net: RoadNet, from: Point, to: Point): Leg[] | null {
   return legs.filter((leg) => apart(leg.from, leg.to) > 0)
 }
 
+// Each leg keeps its own width, or the walk back falls onto the class default (citizens-1).
 export function reversed(legs: readonly Leg[]): Leg[] {
-  return legs.map((leg) => ({ from: leg.to, to: leg.from, class: leg.class })).reverse()
+  return legs.map((leg) => ({ ...leg, from: leg.to, to: leg.from })).reverse()
 }

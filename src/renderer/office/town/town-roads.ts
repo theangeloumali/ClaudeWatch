@@ -1,4 +1,5 @@
 import type { Point } from '../../../office/sim/path'
+import type { RoadClass, TownRoad } from '../../../shared/office/town-roads'
 import { boundsOfZone } from '../logic/zone-framing'
 import type { WallSide } from '../logic/room-layout'
 import { grow, rectOf, type Rect, type Span } from '../themes/lot-math'
@@ -11,20 +12,9 @@ import {
   latticeLines
 } from './town-grid'
 
-export type RoadClass = keyof typeof ROAD_WIDTH_M
+export type { RoadClass, TownRoad }
 // The coordinate a road line holds: an `x` road runs north to south, a `z` road west to east.
 export type RoadAxis = 'x' | 'z'
-
-export interface TownRoad {
-  // `road:x:${line}` or `road:z:${line}` (with the side of the claim it lies on when the claim
-  // cuts the line in two), `boulevard:${side}`, or `avenue`.
-  id: string
-  class: RoadClass
-  // Axis-aligned centre line.
-  from: Point
-  to: Point
-  width: number
-}
 
 const AXES: readonly RoadAxis[] = ['x', 'z']
 // What the two stretches of a line cut by the claim are called.

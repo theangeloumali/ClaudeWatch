@@ -27,6 +27,9 @@ export const KEEP_RIGHT_M: Record<Traveller, Record<RoadClass, number>> = {
 }
 // The middle of the boulevard's inner sidewalk, from its centre line: the promenade.
 const INNER_SIDEWALK_M = ROAD_WIDTH_M.boulevard / 2 - SIDEWALK_M.boulevard / 2
+// A city lane's centre as a share of the half-carriageway. An avenue runs two lanes each way,
+// split by the dashes at half, and traffic keeps to the outer one (clearspent-4).
+const cityLaneShare = (road: RoadClass): number => (road === 'avenue' ? 0.75 : 0.5)
 
 // Where a traveller is beside a leg's centre line: to the right of the way it is going, and for
 // a citizen on the boulevard, over on the sidewalk next to the campus.
@@ -43,7 +46,7 @@ function besideOf(
     ? KEEP_RIGHT_M[traveller][leg.class]
     : traveller === 'citizen'
       ? halfWidth - SIDEWALK_M[leg.class] / 2
-      : (halfWidth - SIDEWALK_M[leg.class]) / 2
+      : (halfWidth - SIDEWALK_M[leg.class]) * cityLaneShare(leg.class)
   const direction = isCity ? -1 : 1
   const beside = { x: -ahead.z * keep * direction, z: ahead.x * keep * direction }
   if (traveller !== 'citizen' || leg.class !== 'boulevard') return beside

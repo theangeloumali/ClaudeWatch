@@ -102,7 +102,8 @@ function cityVehicleLoop(options: {
     if (!route?.length) return null
     legs.push(...route)
   }
-  const points = sidePath(legs, plan, 'vehicle')
+  // Once more into the first leg, so the closing corner is joined like every other one.
+  const points = sidePath([...legs, legs[0]], plan, 'vehicle').slice(1, -1)
   return points.length > 2 ? ring(points) : null
 }
 

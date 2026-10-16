@@ -6,8 +6,8 @@ export const LOT_PITCH_M = 12
 // A block is 2 x 2 lots; collectors run on these lines.
 export const BLOCK_PITCH_M = 24
 
-export const ROAD_WIDTH_M = { avenue: 12, boulevard: 10, collector: 6, lane: 2 } as const
-export const SIDEWALK_M = { avenue: 1.5, boulevard: 1.5, collector: 1, lane: 0 } as const
+// Road widths now live with the shared street types; the lattice files still read them here.
+export { ROAD_WIDTH_M, SIDEWALK_M } from '../../../shared/office/town-roads'
 export const AVENUE_MEDIAN_M = 3
 // The boulevard (10) plus at least 3 m of green between it and the plate.
 export const MIN_BELT_M = 13
