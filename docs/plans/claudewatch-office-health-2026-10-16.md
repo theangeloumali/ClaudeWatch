@@ -62,7 +62,7 @@ Finding ids below (`seating-1`, `P3` …) refer to those reports.
 
 - [x] Phase 0 — Baseline and guards: signing-file ignore rules, heavy-test timeouts, stale ledger ticks
 - [x] Phase 1 — Bridge truth: phantom ChatGPT agents, the 512-transcript cap, false idle, resume flags, retention, OpenCode SQL, usage backfill, process monitor, peek, Codex ledger
-- [ ] Phase 2 — Door, departures and honest cards: ungameable churn gates, cycle-only tie-break, body-blocked bound, gate skips blocked arrivers, subagents fade at desks, "Leaving" and honest unknown cards
+- [x] Phase 2 — Door, departures and honest cards: ungameable churn gates, cycle-only tie-break, body-blocked bound, gate skips blocked arrivers, subagents fade at desks, "Leaving" and honest unknown cards
 - [x] Phase 3 — Legacy town decision, one street source, one crosswalk source, the sidewalk network, lane-centre vehicles (P1, P2, P3, P6)
 - [ ] Phase 4 — Citizens on the network: pedestrian ground, deadlock breaker that survives replans, zebra right-of-way, ambient loops
 - [ ] Phase 5 — Roaming agents via the leisure system: idle or done roam the sidewalks, unknown stays seated, working returns; guarded move of arrivals onto the network
@@ -940,6 +940,21 @@ Phases 1, 2, 3 and 6 run in parallel, as do Phases 4 and 5. Wall-clock with the 
   - `20be759`: the menubar keeps listing teammates. The builder had excluded every host argument; only `--chrome-native-host` is now excluded.
   - `e3307a9`: the app and standalone bridges pass their offsets file.
   - `314c5f2`, `4aa87a3`: timeouts and the fork-args contract.
+
+### Phase 2 (merged `b8701c1`)
+
+- 6 commits RED→GREEN. On the integration branch, sim + renderer + shared: 3,265 tests pass, and the only failures are the 2 citizen rows expected RED until Phase 4.
+- Door churn replay on real data (`lead/replay-crew.ts`, swap10, 120 s churn): **stillInside 0, unseated 0, queued 0, 0 wait cycles**, longest exit 0.4 s, slowest seating 26.6 s. Before: stillInside 14, unseated 6, queued 5.
+- Deviations:
+  - The 3-body cycle can't form under the yield rule (builder's proof), so the gate uses a mutual pair plus a held arriver.
+  - Task 2.3 is gate-only (A: queued arrivals stay out of `step()`).
+  - The robot fade is a shrink, because batched meshes take no per-robot opacity.
+  - A subagent fades only while its lead keeps working.
+  - A **teammate** crew swap clears the door in about 52 s (a subagent crew is under 30 s). Recorded as a limitation; Phase 5's roamer cap is measured against it.
+- Lead follow-ups:
+  - `f9fb09f`: `place: 'leaving'` replaces the builder's `isLeaving`, per the contract, with `camera-bands.ts` widened.
+  - The `body-passages` and `lounge-trips` assertions follow the new contracts.
+  - `a29f224`: one `hasObservedFeed` helper replaces a duplicated check.
 
 ### Phase 8 (in progress)
 
