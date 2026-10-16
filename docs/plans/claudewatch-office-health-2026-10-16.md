@@ -61,7 +61,7 @@ Finding ids below (`seating-1`, `P3` …) refer to those reports.
 ## Phase ledger
 
 - [x] Phase 0 — Baseline and guards: signing-file ignore rules, heavy-test timeouts, stale ledger ticks
-- [ ] Phase 1 — Bridge truth: phantom ChatGPT agents, the 512-transcript cap, false idle, resume flags, retention, OpenCode SQL, usage backfill, process monitor, peek, Codex ledger
+- [x] Phase 1 — Bridge truth: phantom ChatGPT agents, the 512-transcript cap, false idle, resume flags, retention, OpenCode SQL, usage backfill, process monitor, peek, Codex ledger
 - [ ] Phase 2 — Door, departures and honest cards: ungameable churn gates, cycle-only tie-break, body-blocked bound, gate skips blocked arrivers, subagents fade at desks, "Leaving" and honest unknown cards
 - [x] Phase 3 — Legacy town decision, one street source, one crosswalk source, the sidewalk network, lane-centre vehicles (P1, P2, P3, P6)
 - [ ] Phase 4 — Citizens on the network: pedestrian ground, deadlock breaker that survives replans, zebra right-of-way, ambient loops
@@ -924,6 +924,22 @@ Phases 1, 2, 3 and 6 run in parallel, as do Phases 4 and 5. Wall-clock with the 
   - `pedestrianGround(network, bounds, solids?)`.
   - All city vehicles use the avenue's outer lane.
   - Fixed a city vehicle ring that cut its first junction diagonally (`4354ac3`).
+
+### Phase 1 (merged `0df5993`)
+
+- 7 commits RED→GREEN. On the integration branch, `vitest src/bridge src/main src/shared src/office-web src/office-host` exits 0 and both `tsc` are clean.
+- Live check (builder's server, port 47841): 0 sessions from `.app` helpers, 0 with cwd `/`, 0 Codex placeholders. 21 ChatGPT helpers and "Codex Computer Use.app" were running at the time.
+- OpenCode on the live 82 GB db: 2,674 → 7 prepares and 2,673 → 1,006 reads per tick, 118–122 → 82–85 ms per tick.
+- Usage: a restarted poller read 268 KB in 2 ticks, against 1.78 GB in 8.
+- Deviations:
+  - No `PRAGMA data_version` stamp: it is per connection, and each read opens its own connection.
+  - Codex children post their own totals under `codex:<child>` (A11 kept in spirit: every child token now reaches the ledger without dropping on restart).
+  - Peek provenance is per-agent latest-wins.
+  - Saved offsets keep `{offset, ino, fold}`.
+- Lead follow-ups:
+  - `20be759`: the menubar keeps listing teammates. The builder had excluded every host argument; only `--chrome-native-host` is now excluded.
+  - `e3307a9`: the app and standalone bridges pass their offsets file.
+  - `314c5f2`, `4aa87a3`: timeouts and the fork-args contract.
 
 ### Phase 8 (in progress)
 
