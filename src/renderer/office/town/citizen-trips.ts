@@ -1,7 +1,9 @@
 import type { Point } from '../../../office/sim/path'
+import { attachDoor, sidewalkPath, type SidewalkNetwork } from '../../../shared/office/sidewalks'
+import { citySidewalks } from '../citizens/city-sidewalks'
 import type { CitizenRoute, RoutePoint } from '../citizens/route-pose'
 import { between, draw, hashOf, type Rect } from '../themes/lot-math'
-import { reversed, roadNet, roadPath, type RoadNet } from './road-net'
+import { reversed, roadNet, roadPath } from './road-net'
 import { gatePlaza } from './town-graph'
 import { plazaStands } from './town-plaza'
 import { BLOCK_PITCH_M, ROAD_WIDTH_M } from './town-grid'
@@ -37,9 +39,15 @@ function plazaOf(claim: Rect): Rect {
   return { ...gatePlaza(claim), width: ROAD_WIDTH_M.boulevard, depth: ROAD_WIDTH_M.avenue }
 }
 
+interface OutAndBack {
+  out: RoutePoint[]
+  back: RoutePoint[]
+}
+
 interface Ground {
   plan: TownPlan
-  net: RoadNet
+  // From a door to a goal and back to the door.
+  walk(door: Point, goal: Point): OutAndBack | null
   homes: TownLot[]
   lotsOf: Record<Exclude<Destination, 'plaza'>, TownLot[]>
   // Where a citizen is in plain sight: the promenades, the parks and the plaza.
@@ -49,12 +57,38 @@ interface Ground {
   plazaStands: Point[]
 }
 
+// On the city's one-way sidewalks, crossing only on its zebras (citizens-3, -4).
+function sidewalkWalk(network: SidewalkNetwork, door: Point, goal: Point): OutAndBack | null {
+  const [home, away] = [attachDoor(network, door), attachDoor(network, goal)]
+  const out = sidewalkPath(network, home, away)
+  const back = sidewalkPath(network, away, home)
+  if (!out || !back || out.length < 2) return null
+  // closedLoop adds the door again, and `out` already ends on the goal.
+  return { out: [...out], back: back.slice(1, -1) }
+}
+
+// Beside the campus town's road centre lines.
+function streetWalker(plan: TownPlan): Ground['walk'] {
+  const net = roadNet(plan, 'citizen')
+  return (door, goal) => {
+    const legs = roadPath(net, door, goal)
+    if (!legs || legs.length === 0) return null
+    return {
+      out: [door, ...sidePath(legs, plan, 'citizen'), goal],
+      back: sidePath(reversed(legs), plan, 'citizen')
+    }
+  }
+}
+
 function groundOf(plan: TownPlan): Ground {
   const sorted = [...plan.lots].sort((a, b) => a.id.localeCompare(b.id))
   const inZone = (zone: TownLot['zone']): TownLot[] => sorted.filter((lot) => lot.zone === zone)
+  const sidewalks = citySidewalks(plan)
   return {
     plan,
-    net: roadNet(plan, 'citizen'),
+    walk: sidewalks
+      ? (door, goal) => sidewalkWalk(sidewalks.network, door, goal)
+      : streetWalker(plan),
     homes: inZone('residential'),
     lotsOf: {
       market: inZone('market'),
@@ -118,10 +152,9 @@ interface Walk {
 }
 
 function walkBetween(ground: Ground, home: TownLot, goal: Point): Walk | null {
-  const legs = roadPath(ground.net, home.door, goal)
-  if (!legs || legs.length === 0) return null
-  const out = [home.door, ...sidePath(legs, ground.plan, 'citizen'), goal]
-  const back = sidePath(reversed(legs), ground.plan, 'citizen')
+  const walk = ground.walk(home.door, goal)
+  if (!walk) return null
+  const { out, back } = walk
   return { home, out, back, openShare: openShare([...out, ...back, home.door], ground.open) }
 }
 

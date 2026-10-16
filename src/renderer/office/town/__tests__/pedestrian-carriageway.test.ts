@@ -1,14 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { CITIZEN_BODY_RADIUS } from '../../../../shared/office/body-footprints'
 import { SIDEWALK_M } from '../../../../shared/office/town-roads'
+import { citizenGround } from '../../citizens/city-sidewalks'
 import { advanceCitizen, citizenBodyId } from '../../citizens/crowd-movement'
 import { moverClock } from '../../citizens/mover-clock'
 import { routePose, walkedSec, type RoutePoint } from '../../citizens/route-pose'
-import { walkGround } from '../../player/walk-ground'
 import { SceneBodies } from '../../scene/BodySpace'
-import { reversed, roadNet, roadPath, type Leg } from '../road-net'
+import { reversed } from '../road-net'
 import type { MoverKind } from '../town-trips'
-import { sidePath } from '../trip-paths'
 import {
   isAsphalt,
   liveCity,
@@ -47,33 +46,6 @@ function routeIntrusions(scenario: Scenario) {
       }
   const onRoad = Object.values(byPart).reduce((sum, count) => sum + count, 0)
   return { onRoad, byPart }
-}
-
-// What `reversed` should return: the same legs, the other way, each with its own width.
-const reversedKeepingWidth = (legs: readonly Leg[]): Leg[] =>
-  legs.map((leg) => ({ ...leg, from: leg.to, to: leg.from })).reverse()
-
-function backPathCompare(scenario: Scenario) {
-  const { plan, trips } = scenario
-  const spotOf = roadSurface(plan)
-  const net = roadNet(plan, 'citizen')
-  const doorOf = new Map(plan.lots.map((lot) => [lot.id, lot.door]))
-  const asphaltSamples = (points: readonly RoutePoint[]): number =>
-    points
-      .slice(1)
-      .flatMap((to, index) => samplesOf(points[index], to))
-      .filter((point) => isAsphalt(spotOf(point))).length
-  let shipped = 0
-  let widthKept = 0
-  for (const trip of trips.filter((each) => each.kind === 'citizen')) {
-    const door = trip.homeId ? doorOf.get(trip.homeId) : undefined
-    const goal = partsOf(trip).find(({ part }) => part === 'leave-goal')?.from
-    const legs = door && goal ? roadPath(net, door, goal) : null
-    if (!legs) continue
-    shipped += asphaltSamples(sidePath(reversed(legs), plan, 'citizen'))
-    widthKept += asphaltSamples(sidePath(reversedKeepingWidth(legs), plan, 'citizen'))
-  }
-  return { shipped, widthKept }
 }
 
 // For every freight run, the lane offsets its outbound and return halves keep on each street.
@@ -153,7 +125,7 @@ function replay(scenario: Scenario, seconds: number, deltaSec: number) {
   const spotOf = roadSurface(plan)
   const onAsphalt = (point: RoutePoint): boolean => isAsphalt(spotOf(point))
   const space = new SceneBodies()
-  const ground = walkGround(floor, plan.lots, plan.extent)
+  const ground = citizenGround(floor, plan)
   const clock = moverClock({ trips, space, isOpen: ground.isOpen })
   clock.positions.forEach((pose, index) => {
     if (trips[index].kind === 'citizen' && !pose.isIndoors)
@@ -245,11 +217,6 @@ describe('pedestrian carriageway: road geometry', () => {
     expect(leg.width).toBe(8)
   })
 
-  it('walks the live city back on the sidewalk, as it walked out', () => {
-    const compare = backPathCompare(liveCity())
-    expect(compare.shipped).toBe(compare.widthKept)
-  })
-
   it('sits a freight return leg on its own lane offset', () => {
     const result = freightLaneOffsets(liveCity())
     expect(result.compared).toBeGreaterThan(0)
@@ -289,6 +256,19 @@ describe.each([
 
 // Citizen rows: RED until Phase 4 moves citizens onto the sidewalk network.
 describe('pedestrian carriageway on the live city', () => {
+  it('shuts the citizens’ ground on unmarked asphalt and opens it on a zebra', () => {
+    const { plan, floor } = liveCity()
+    const ground = citizenGround(floor, plan)
+    const spotOf = roadSurface(plan)
+    const centreLines = plan.roads
+      .filter((road) => road.class !== 'lane')
+      .flatMap((road) => samplesOf(road.from, road.to))
+    const zebras = centreLines.filter((point) => spotOf(point) === 'zebra')
+    const wrong = centreLines.filter((point) => ground.isOpen(point) === isAsphalt(spotOf(point)))
+    expect(zebras.length).toBeGreaterThan(0)
+    expect(wrong.length, JSON.stringify(wrong.slice(0, 6))).toBe(0)
+  })
+
   it('keeps every citizen route off unmarked asphalt', () => {
     const result = routeIntrusions(liveCity())
     expect(result.onRoad, JSON.stringify(result.byPart)).toBe(0)

@@ -42,11 +42,10 @@ function besideOf(
   const isCity = 'claim' in context && Boolean(context.officeSites)
   const ahead = { x: Math.sign(leg.to.x - leg.from.x), z: Math.sign(leg.to.z - leg.from.z) }
   const halfWidth = (leg.width ?? ROAD_WIDTH_M[leg.class]) / 2
+  // City citizens walk the sidewalk network instead (citizen-trips.ts).
   const keep = !isCity
     ? KEEP_RIGHT_M[traveller][leg.class]
-    : traveller === 'citizen'
-      ? halfWidth - SIDEWALK_M[leg.class] / 2
-      : (halfWidth - SIDEWALK_M[leg.class]) * cityLaneShare(leg.class)
+    : (halfWidth - SIDEWALK_M[leg.class]) * cityLaneShare(leg.class)
   const direction = isCity ? -1 : 1
   const beside = { x: -ahead.z * keep * direction, z: ahead.x * keep * direction }
   if (traveller !== 'citizen' || leg.class !== 'boulevard') return beside

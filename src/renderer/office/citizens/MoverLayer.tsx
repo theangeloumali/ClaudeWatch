@@ -3,7 +3,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { Object3D, type InstancedMesh } from 'three'
 import type { ThemeZoneGroup } from '../logic/office-themes'
 import { levelInUse } from '../logic/quality'
-import { groundHeight, walkGround } from '../player/walk-ground'
+import { groundHeight } from '../player/walk-ground'
 import type { Player } from '../player/walking'
 import { useQualityChoice } from '../quality-store'
 import type { FloorGeometry } from '../scene-model'
@@ -19,6 +19,7 @@ import { advanceCitizen, citizenBodyId } from './crowd-movement'
 import { moverClock, moverRouteKey, type MoverClock } from './mover-clock'
 import { CITIZEN_POSITION_EPSILON } from './citizen-navigation'
 import { CITIZEN_BODY_RADIUS } from '../../../shared/office/body-footprints'
+import { citizenGround } from './city-sidewalks'
 
 interface MoverLayerProps {
   floor: FloorGeometry
@@ -56,7 +57,7 @@ export function MoverLayer(props: MoverLayerProps) {
   const { floor, plan, owners, floorTheme, zoneGroups, player, isReducedMotion } = props
   const { hasVehicles } = props
   const bodies = useMemo(() => props.bodies ?? new SceneBodies(), [props.bodies])
-  const ground = useMemo(() => walkGround(floor, plan.lots, plan.extent), [floor, plan])
+  const ground = useMemo(() => citizenGround(floor, plan), [floor, plan])
   const { pin, chosen } = useQualityChoice()
   const detail = levelInUse(pin, chosen)
   // Keyed by what they say, not by identity: a floor change that moves no lot keeps every trip,
