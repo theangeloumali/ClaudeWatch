@@ -13,6 +13,33 @@ import { cityScenerySites } from '../../shared/office/city-scenery'
 import { cityVenueSite } from '../../shared/office/city-access'
 import { districtStreets } from '../../shared/office/district-streets'
 
+// The session fields resolveEffectiveWorld reads; of `subagents`, only the count. Tokens,
+// activity and observation never change the world, so a message carrying only those reuses it.
+export const EFFECTIVE_WORLD_SESSION_FIELDS = [
+  'key',
+  'companyKey',
+  'companyLabel',
+  'projectKey',
+  'projectLabel',
+  'name',
+  'worktree',
+  'subagents'
+] as const satisfies readonly (keyof SessionRef)[]
+
+// Same key, same resolved world (perf-5): keyed on its inputs, not on `base` alone.
+export function effectiveWorldKey(
+  baseLayout: LayoutMap,
+  document: WorldDocument,
+  sessions: readonly SessionRef[]
+): string {
+  const inputs = sessions.map((session) =>
+    EFFECTIVE_WORLD_SESSION_FIELDS.map((field) =>
+      field === 'subagents' ? session.subagents.length : session[field]
+    )
+  )
+  return JSON.stringify([baseLayout, document.revision, inputs])
+}
+
 // dry-new: buildLayout owns source allocation; this pure projection adds device-local physical storeys.
 export function resolveEffectiveWorld(
   baseLayout: LayoutMap,

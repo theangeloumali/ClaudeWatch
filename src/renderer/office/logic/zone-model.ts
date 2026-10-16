@@ -1,7 +1,7 @@
 import type { AgentView, SessionRef } from '../../../shared/office/types'
 import type { FloorGeometry, OfficeFrame, ZoneGeometry } from '../scene-model'
 import { needsHuman } from '../../../shared/office/attention'
-import { observeAgent } from '../../../shared/office/observation'
+import { isAgentObservation, observeAgent } from '../../../shared/office/observation'
 import { sessionForAgent } from './floor-model'
 import { doorSignPlacement, roomWallSegments, type WallSegment } from './room-layout'
 import {
@@ -97,7 +97,19 @@ function groupByProject(frame: OfficeFrame): Map<string, Grouped> {
   return groups
 }
 
-export function buildOfficeActivity(frame: OfficeFrame | null) {
+// When the next observation turns fresh (stamped ahead) or stale, the moments observation.ts
+// `statusOf` flips on; null when no observation is waiting to flip.
+export function nextActivityChangeAtMs(frame: OfficeFrame, nowMs: number): number | null {
+  const changes = frame.sessions
+    .flatMap((session) => [session.observation, ...session.subagents.map((m) => m.observation)])
+    .filter(isAgentObservation)
+    .flatMap(({ observedAtMs, staleAfterMs }) => [observedAtMs, observedAtMs + staleAfterMs])
+    .filter((atMs) => atMs > nowMs)
+  return changes.length ? Math.min(...changes) : null
+}
+
+// `nowMs` is the render clock: freshness flips with it even while no new frame arrives.
+export function buildOfficeActivity(frame: OfficeFrame | null, nowMs: number) {
   const isAvailable = frame ? isActivityAvailable(frame) : false
   const projects = new Map<string, ActivitySummary>()
   const companies = new Map<string, ActivitySummary>()
@@ -105,6 +117,7 @@ export function buildOfficeActivity(frame: OfficeFrame | null) {
     for (const group of groupByProject(frame).values()) {
       const summary = evidencedActivity({
         frame,
+        nowMs,
         agents: group.agents,
         isAvailable: isActivityAvailable(frame, [
           ...group.agents.map((agent) => agent.provider),
@@ -121,7 +134,7 @@ export function buildOfficeActivity(frame: OfficeFrame | null) {
   }
   return {
     office: frame
-      ? evidencedActivity({ frame, agents: frame.agents, isAvailable })
+      ? evidencedActivity({ frame, nowMs, agents: frame.agents, isAvailable })
       : summariseActivity([], false),
     projects,
     companies
@@ -130,17 +143,17 @@ export function buildOfficeActivity(frame: OfficeFrame | null) {
 
 function evidencedActivity({
   frame,
+  nowMs,
   agents,
   isAvailable
 }: {
   frame: OfficeFrame
+  nowMs: number
   agents: readonly AgentView[]
   isAvailable: boolean
 }): ActivitySummary {
   if (!hasObservedFeed(frame)) return summariseActivity(agents, isAvailable)
-  const reports = agents.map((agent) =>
-    observeAgent({ ...frame, agentKey: agent.agentKey, nowMs: Date.now() })
-  )
+  const reports = agents.map((agent) => observeAgent({ ...frame, agentKey: agent.agentKey, nowMs }))
   return summariseActivity(
     reports.flatMap((report) =>
       report.activity !== undefined && report.attention !== undefined

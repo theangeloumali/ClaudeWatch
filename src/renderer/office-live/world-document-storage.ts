@@ -9,6 +9,8 @@ const WORLD_DOCUMENT_LOCK_NAME = 'claudewatch.office.world.v2.writer'
 export interface WorldStorageEvent {
   key: string | null
   newValue: string | null
+  // From the host that owns the city: it replaces this page's even at an older revision.
+  isAuthoritative?: boolean
 }
 export interface WorldDocumentStorage {
   getItem(key: string): string | null

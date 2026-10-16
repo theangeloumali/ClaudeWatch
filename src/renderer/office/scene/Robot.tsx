@@ -3,6 +3,7 @@ import { useLayoutEffect, useMemo, useRef, type ReactElement } from 'react'
 import type { Group } from 'three'
 import { AGENT_SCALE, SUBAGENT_SCALE } from '../../../shared/office/figure-scale'
 import { DEPARTURE_FADE_MS, type AgentView } from '../../../shared/office/types'
+import { livePose, officePoses } from '../../office-live/pose-store'
 import type { WorldVenue } from '../../../shared/office/world-document'
 import type { FloorGeometry } from '../scene-model'
 import { approach, approachAngle, moodFor, robotPose } from '../logic/character-pose'
@@ -12,7 +13,7 @@ import { applyModelPose, useRobotRig } from '../themes/rig'
 import type { OfficeTheme } from '../themes/types'
 import { SHARED_BATCH } from './mesh-batches'
 import { blobShadowTexture } from './textures'
-import { agentElevation, physicalFloorId } from './all-floor-model'
+import { physicalFloorId } from './all-floor-model'
 import { OverviewWorker } from './OverviewWorker'
 import { applyHumanPose } from '../themes/corporate-city/human-pose'
 import { workerSeats, workerSeatPresence, type WorkerSeats } from './worker-seat-presence'
@@ -92,11 +93,11 @@ export function Robot({
   useLayoutEffect(() => {
     const root = rootRef.current
     if (!root) return
-    const initial = agentRef.current
-    const retained = motions?.get(initial.agentKey)
+    const initial = livePose(officePoses, agentRef.current)
+    const retained = motions?.get(agentRef.current.agentKey)
     root.position.set(
       retained?.x ?? initial.x,
-      retained?.y ?? agentElevation(initial),
+      retained?.y ?? initial.elevation,
       retained?.z ?? initial.z
     )
     root.rotation.y = retained?.heading ?? initial.heading
@@ -104,28 +105,30 @@ export function Robot({
     // Seeds the first position only; later frames ease toward the target.
   }, [rootRef, motions])
 
-  // Per-frame motion mutates refs only; React re-renders only when the feed sends a new frame.
+  // Per-frame motion mutates refs only. A walk reaches it through the pose store, so React
+  // re-renders only when an agent's structure changes (perf-2).
   useFrame(({ clock }, delta) => {
     const root = rootRef.current
     const body = rig.body.current
     if (!root || !body) return
     const target = agentRef.current
+    const goal = livePose(officePoses, target)
     const isMoving =
       Math.hypot(
-        root.position.x - target.x,
-        root.position.y - agentElevation(target),
-        root.position.z - target.z
+        root.position.x - goal.x,
+        root.position.y - goal.elevation,
+        root.position.z - goal.z
       ) > MOVING_EPSILON
     const previousX = root.position.x
     const previousZ = root.position.z
-    root.position.x = approach(previousX, target.x, delta, MOVE_RATE)
-    root.position.y = approach(root.position.y, agentElevation(target), delta, MOVE_RATE)
-    root.position.z = approach(previousZ, target.z, delta, MOVE_RATE)
+    root.position.x = approach(previousX, goal.x, delta, MOVE_RATE)
+    root.position.y = approach(root.position.y, goal.elevation, delta, MOVE_RATE)
+    root.position.z = approach(previousZ, goal.z, delta, MOVE_RATE)
     travelDistanceRef.current += Math.hypot(
       root.position.x - previousX,
       root.position.z - previousZ
     )
-    root.rotation.y = approachAngle(root.rotation.y, target.heading, delta, TURN_RATE)
+    root.rotation.y = approachAngle(root.rotation.y, goal.heading, delta, TURN_RATE)
     const presence = presenceRef.current
     if (presence)
       presence.scale.setScalar(presenceAfter(presence.scale.x, target, delta, isReducedMotion))

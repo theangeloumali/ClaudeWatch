@@ -32,6 +32,10 @@ vi.mock('../shared/orca-bundle', async (original) => ({
 }))
 
 import { orcaBundle } from '../shared/orca-bundle'
+import { buildLayout } from '../office/sim/layout'
+import { session } from '../office/sim/fixtures'
+import { createHostWorld } from '../office-host/host-world'
+import { createWorldDocument } from '../shared/office/world-document'
 import { setupOffice } from './office-setup'
 
 // The Office below is macOS's, whatever this machine is.
@@ -118,7 +122,29 @@ describe('setupOffice', () => {
     openTerminal.mockResolvedValue({ success: true })
     terminalResolver.resolve.mockResolvedValue({ terminalType: 'iterm2' })
     tracker.getInstances.mockReturnValue([{ pid: 4242, projectPath: '/repo/app' }])
-    office = setupOffice(terminalResolver, store, tracker, accounts)
+    worldFolder = mkdtempSync(join(tmpdir(), 'office-world-'))
+    office = setupOffice(
+      terminalResolver,
+      store,
+      tracker,
+      accounts,
+      join(worldFolder, 'world-document.json')
+    )
+  })
+  let worldFolder: string
+  afterEach(() => rmSync(worldFolder, { recursive: true, force: true }))
+
+  it('office:world-save keeps the Office page’s city where every Office reads it', async () => {
+    const sessions = [session('claude:a')]
+    const city = { ...createWorldDocument(buildLayout(sessions, undefined), sessions), revision: 1 }
+    expect(() => handlers['office:world-save'](pageEvent('index.html'), city)).toThrow(
+      'Untrusted IPC sender'
+    )
+    expect(await handlers['office:world-save'](officeEvent, city)).toEqual({
+      success: true,
+      document: city
+    })
+    expect(createHostWorld(join(worldFolder, 'world-document.json')).current()).toEqual(city)
   })
 
   describe('the bridge', () => {

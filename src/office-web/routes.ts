@@ -2,28 +2,34 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { jsonObject } from '../bridge/io'
 import type { OfficeService } from '../office-host/office-service'
 import type { InteractionResult } from '../shared/office/types'
+import { WORLD_DOCUMENT_LIMITS } from '../shared/office/world-document-limits'
+import type { WorldSaveReply } from '../shared/office/world-sync'
 
 const MAX_BODY_BYTES = 16 * 1024
-// A watcher this far behind has stopped reading. It is dropped, and reconnects to a fresh hello.
-const MAX_FEED_BACKLOG_BYTES = 1024 * 1024
+// A saved city may be as large as the world document limit, plus its `{"document":…}` wrapper.
+const MAX_WORLD_BODY_BYTES = WORLD_DOCUMENT_LIMITS.bytes + 1024
+// A watcher this far behind has stopped reading. It is dropped, and reconnects to a fresh hello,
+// which can itself carry a city up to the world document limit.
+const MAX_FEED_BACKLOG_BYTES = 1024 * 1024 + WORLD_DOCUMENT_LIMITS.bytes
 // A reload closes the feed and opens it again at once. The bridge outlives that gap, so it does
 // not start over and count every transcript again.
 const BRIDGE_LINGER_MS = 5_000
 
 type ApiService = Pick<
   OfficeService,
-  'subscribe' | 'focus' | 'send' | 'respond' | 'peek' | 'startAgent'
+  'subscribe' | 'focus' | 'send' | 'respond' | 'peek' | 'startAgent' | 'saveWorld'
 >
 type Body = Record<string, unknown>
-type Route = (service: ApiService, body: Body) => Promise<InteractionResult>
+type Route = (service: ApiService, body: Body) => Promise<InteractionResult | WorldSaveReply>
 
 // A view-only page may jump to an agent: the service it is given switches panes and brings
 // apps forward, and types nothing (it is built with `isInteractive: false`).
 const VIEW_ROUTES: Readonly<Record<string, Route>> = {
   '/api/focus': (service, { agentKey }) => service.focus(agentKey)
 }
-// Everything that types into, reads from or starts a terminal.
+// Everything that types into, reads from or starts a terminal, and saving the shared city.
 const INTERACTIVE_ROUTES: Readonly<Record<string, Route>> = {
+  '/api/world': (service, { document }) => service.saveWorld(document),
   '/api/send': (service, { sessionKey, text }) => service.send(sessionKey, text),
   '/api/respond': (service, { sessionKey, decision, fingerprint }) =>
     service.respond(sessionKey, decision, fingerprint),
@@ -54,7 +60,10 @@ function sendJson(response: ServerResponse, status: number, body: object): void 
 }
 
 // The body as a JSON object, or the status to refuse it with.
-async function readBody(request: IncomingMessage): Promise<Body | 400 | 413 | 415> {
+async function readBody(
+  request: IncomingMessage,
+  maxBytes: number
+): Promise<Body | 400 | 413 | 415> {
   if (!request.headers['content-type']?.startsWith('application/json')) return 415
   const chunks: Buffer[] = []
   let bytes = 0
@@ -63,9 +72,9 @@ async function readBody(request: IncomingMessage): Promise<Body | 400 | 413 | 41
   for await (const chunk of request) {
     if (!(chunk instanceof Buffer)) return 400
     bytes += chunk.length
-    if (bytes <= MAX_BODY_BYTES) chunks.push(chunk)
+    if (bytes <= maxBytes) chunks.push(chunk)
   }
-  if (bytes > MAX_BODY_BYTES) return 413
+  if (bytes > maxBytes) return 413
   return jsonObject(Buffer.concat(chunks).toString('utf8')) ?? 400
 }
 
@@ -119,7 +128,10 @@ export function createApi(
         : sendJson(response, 404, FAILED)
     }
     if (request.method !== 'POST') return sendJson(response, 405, FAILED)
-    const body = await readBody(request)
+    const body = await readBody(
+      request,
+      path === '/api/world' ? MAX_WORLD_BODY_BYTES : MAX_BODY_BYTES
+    )
     if (typeof body === 'number') return sendJson(response, body, FAILED)
     try {
       sendJson(response, 200, await route(service, body))

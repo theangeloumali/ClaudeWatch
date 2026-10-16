@@ -177,7 +177,8 @@ export function createWorldDocumentStore(options: WorldDocumentStoreOptions): Wo
       notify()
       return
     }
-    if (latest.document.revision <= state.revision) return
+    const isSame = JSON.stringify(latest.document) === JSON.stringify(state.document)
+    if (isSame || (latest.document.revision <= state.revision && !event.isAuthoritative)) return
     history.length = 0
     state = {
       ...state,

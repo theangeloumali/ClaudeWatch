@@ -40,7 +40,8 @@ describe('createOfficeServer', () => {
     send: vi.fn(),
     respond: vi.fn(),
     peek: vi.fn(),
-    startAgent: vi.fn()
+    startAgent: vi.fn(),
+    saveWorld: vi.fn()
   }
 
   // Sent over a real socket with the headers exactly as given, Host included.
@@ -329,6 +330,24 @@ describe('createOfficeServer', () => {
     ).toBe(401)
     expect((await send('GET', '/api/feed')).status).toBe(401)
     expect(service.focus).not.toHaveBeenCalled()
+    expect(service.subscribe).not.toHaveBeenCalled()
+  })
+
+  it('lets no other origin and no tokenless caller read or save the shared city (health-13)', async () => {
+    await start({ interactive: true })
+    const { authorization: _omitted, ...withoutToken } = pageHeaders()
+    const save = (headers: Record<string, string>): Promise<Reply> =>
+      send('POST', '/api/world', headers, '{"document":{"version":2,"revision":1}}')
+    const crossOrigin = { ...pageHeaders(), origin: 'http://127.0.0.1:5173' }
+    const crossSite = { ...pageHeaders(), 'sec-fetch-site': 'cross-site' }
+
+    expect((await save(withoutToken)).status).toBe(401)
+    expect((await save(crossOrigin)).status).toBe(403)
+    expect((await save(crossSite)).status).toBe(403)
+    // The city rides in the feed's hello, so the feed is shut to the same callers.
+    expect((await send('GET', '/api/feed')).status).toBe(401)
+    expect((await send('GET', '/api/feed', { ...crossOrigin })).status).toBe(403)
+    expect(service.saveWorld).not.toHaveBeenCalled()
     expect(service.subscribe).not.toHaveBeenCalled()
   })
 

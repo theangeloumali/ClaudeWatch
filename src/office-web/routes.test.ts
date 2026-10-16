@@ -21,7 +21,8 @@ describe('createApi', () => {
     send: vi.fn(),
     respond: vi.fn(),
     peek: vi.fn(),
-    startAgent: vi.fn()
+    startAgent: vi.fn(),
+    saveWorld: vi.fn()
   }
   const emit = (message: FeedMessage): void => {
     for (const listener of listeners) listener(message)
@@ -166,7 +167,7 @@ describe('createApi', () => {
       expect(service.focus).toHaveBeenCalledExactlyOnceWith('claude:s1#lena')
     })
 
-    it.each(['/api/send', '/api/respond', '/api/peek', '/api/start'])(
+    it.each(['/api/send', '/api/respond', '/api/peek', '/api/start', '/api/world'])(
       'refuses %s and reaches no agent',
       async (path) => {
         const response = await post(path, {
@@ -175,12 +176,14 @@ describe('createApi', () => {
           decision: 'approve',
           fingerprint: 'f1',
           projectKey: 'p_app',
-          provider: 'claude'
+          provider: 'claude',
+          document: { version: 2, revision: 1 }
         })
 
         expect(response.status).toBe(403)
         expect(await response.json()).toEqual({ success: false, reason: 'not-permitted' })
-        for (const action of [service.send, service.respond, service.peek, service.startAgent]) {
+        const actions = [service.send, service.respond, service.peek, service.startAgent]
+        for (const action of [...actions, service.saveWorld]) {
           expect(action).not.toHaveBeenCalled()
         }
       }
@@ -226,6 +229,23 @@ describe('createApi', () => {
       expect(response.status).toBe(status)
       expect(await response.json()).toEqual({ success: false })
       expect(service.send).not.toHaveBeenCalled()
+    })
+
+    it('hands the city a page saves to the office service, up to the world document limit', async () => {
+      const document = { version: 2, revision: 1, rooms: ['x'.repeat(200 * 1024)] }
+      service.saveWorld.mockResolvedValue({ success: false, reason: 'conflict', document: null })
+      const response = await post('/api/world', { document })
+
+      expect(response.status).toBe(200)
+      expect(await response.json()).toEqual({ success: false, reason: 'conflict', document: null })
+      expect(service.saveWorld).toHaveBeenCalledExactlyOnceWith(document)
+    })
+
+    it('refuses a city over the world document limit before the service sees it', async () => {
+      const response = await post('/api/world', { document: 'x'.repeat(1100 * 1024) })
+
+      expect(response.status).toBe(413)
+      expect(service.saveWorld).not.toHaveBeenCalled()
     })
 
     it('answers 405 to a GET on an action, and 404 to a route it does not have', async () => {
