@@ -15,6 +15,10 @@ interface SourceMesh {
   material: Material
   layerMask: number
   count: number
+  // What the batch last drew for this source; a frame that matches it writes nothing (perf-1).
+  drawnMatrix: Matrix4
+  drawnInstances: number
+  isDrawnShown: boolean
 }
 export interface MeshBatch {
   mesh: InstancedMesh
@@ -95,7 +99,10 @@ export function createMeshBatches(root: Group): MeshBatch[] {
       mesh: object,
       material: object.material,
       layerMask: object.layers.mask,
-      count: object instanceof InstancedMesh ? object.count : 1
+      count: object instanceof InstancedMesh ? object.count : 1,
+      drawnMatrix: new Matrix4(),
+      drawnInstances: -1,
+      isDrawnShown: false
     })
     groups.set(key, sources)
   })
@@ -121,11 +128,18 @@ export function createMeshBatches(root: Group): MeshBatch[] {
     root.add(mesh)
     batches.push({ mesh, sources, tinted })
   }
-  updateMeshBatches(root, batches)
+  prepareRoot(root)
+  for (const batch of batches) {
+    let index = 0
+    for (const source of batch.sources) index = drawSource(batch.mesh, source, index)
+    batch.mesh.instanceMatrix.needsUpdate = true
+  }
   return batches
 }
 
+const MATRIX_FLOATS = 16
 const inverseRoot = new Matrix4()
+const placed = new Matrix4()
 const matrix = new Matrix4()
 const instance = new Matrix4()
 const hidden = new Matrix4().makeScale(0, 0, 0)
@@ -137,23 +151,58 @@ function isVisible(object: Object3D): boolean {
   return true
 }
 
-export function updateMeshBatches(root: Group, batches: readonly MeshBatch[]): void {
+function prepareRoot(root: Group): void {
   root.updateWorldMatrix(true, true)
   inverseRoot.copy(root.matrixWorld).invert()
+}
+
+function instanceVersionOf(mesh: Mesh): number {
+  return mesh instanceof InstancedMesh ? mesh.instanceMatrix.version : 0
+}
+
+// Writes the source's parts from `index` and records what was drawn; returns the next index.
+function drawSource(batch: InstancedMesh, source: SourceMesh, index: number): number {
+  const isShown = isVisible(source.mesh)
+  placed.multiplyMatrices(inverseRoot, source.mesh.matrixWorld)
+  for (let part = 0; part < source.count; part++) {
+    if (source.mesh instanceof InstancedMesh) {
+      source.mesh.getMatrixAt(part, instance)
+      matrix.multiplyMatrices(placed, instance)
+    } else matrix.copy(placed)
+    batch.setMatrixAt(index + part, isShown ? matrix : hidden)
+  }
+  source.drawnMatrix.copy(source.mesh.matrixWorld)
+  source.drawnInstances = instanceVersionOf(source.mesh)
+  source.isDrawnShown = isShown
+  return index + source.count
+}
+
+// A hidden source stays hidden however it moves; a shown one is redrawn when it or its own
+// instances moved. A root that moved moves every source with it.
+function isStale(source: SourceMesh): boolean {
+  const isShown = isVisible(source.mesh)
+  if (isShown !== source.isDrawnShown) return true
+  return (
+    isShown &&
+    (!source.drawnMatrix.equals(source.mesh.matrixWorld) ||
+      source.drawnInstances !== instanceVersionOf(source.mesh))
+  )
+}
+
+export function updateMeshBatches(root: Group, batches: readonly MeshBatch[]): void {
+  prepareRoot(root)
   for (const batch of batches) {
+    const { instanceMatrix } = batch.mesh
     let index = 0
     for (const source of batch.sources) {
-      const visible = isVisible(source.mesh)
-      for (let part = 0; part < source.count; part++) {
-        matrix.multiplyMatrices(inverseRoot, source.mesh.matrixWorld)
-        if (source.mesh instanceof InstancedMesh) {
-          source.mesh.getMatrixAt(part, instance)
-          matrix.multiply(instance)
-        }
-        batch.mesh.setMatrixAt(index++, visible ? matrix : hidden)
+      if (!isStale(source)) {
+        index += source.count
+        continue
       }
+      instanceMatrix.addUpdateRange(index * MATRIX_FLOATS, source.count * MATRIX_FLOATS)
+      instanceMatrix.needsUpdate = true
+      index = drawSource(batch.mesh, source, index)
     }
-    batch.mesh.instanceMatrix.needsUpdate = true
   }
 }
 
