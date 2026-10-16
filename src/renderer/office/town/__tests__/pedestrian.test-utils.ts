@@ -52,6 +52,24 @@ export function liveCity(): Scenario {
   return { plan: town.plan, trips, floor }
 }
 
+// The audit's two-office district (clearspent-4), whose transit runs the 18 m avenues.
+export function twoOfficeCity(): Scenario {
+  const floor = makeFloor({ floorId: 'two-offices', x: 0, z: 0, width: 150, depth: 150 })
+  const town = distributedTown(townOf(floor, null, 'full'), [
+    { x: 0, z: -48, width: 30, depth: 25 },
+    { x: 48, z: 0, width: 30, depth: 25 }
+  ])
+  const trips = townTrips({
+    plan: town.plan,
+    owners: town.owners,
+    floorThemeId: 'corporate-city',
+    themeIdByZone: new Map(),
+    detail: 'full',
+    hasVehicles: true
+  })
+  return { plan: town.plan, trips, floor }
+}
+
 export const within = (rect: Rect, point: RoutePoint): boolean =>
   Math.abs(point.x - rect.x) < rect.width / 2 - 1e-6 &&
   Math.abs(point.z - rect.z) < rect.depth / 2 - 1e-6

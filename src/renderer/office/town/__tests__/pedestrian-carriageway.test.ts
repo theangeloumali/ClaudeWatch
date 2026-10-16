@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { CITIZEN_BODY_RADIUS } from '../../../../shared/office/body-footprints'
+import { SIDEWALK_M } from '../../../../shared/office/town-roads'
 import { advanceCitizen, citizenBodyId } from '../../citizens/crowd-movement'
 import { moverClock } from '../../citizens/mover-clock'
 import { routePose, walkedSec, type RoutePoint } from '../../citizens/route-pose'
@@ -15,6 +16,8 @@ import {
   roadSurface,
   samplesOf,
   streetOffset,
+  twoOfficeCity,
+  within,
   type Scenario
 } from './pedestrian.test-utils'
 
@@ -95,6 +98,53 @@ function freightLaneOffsets(scenario: Scenario) {
     }
   }
   return { compared, mismatches }
+}
+
+// Mid-block vehicle samples, against each street's lane centres and the lines that divide them:
+// an avenue runs two lanes each way, a collector one. Junction boxes and street ends, where
+// vehicles turn, are left out.
+function vehicleLanes(scenario: Scenario) {
+  const strips = scenario.plan.roads.map((road) => {
+    const isAlongX = road.from.z === road.to.z
+    const length = Math.abs(road.to.x - road.from.x) + Math.abs(road.to.z - road.from.z)
+    const centre = { x: (road.from.x + road.to.x) / 2, z: (road.from.z + road.to.z) / 2 }
+    const box = (reach: number) => ({
+      ...centre,
+      width: isAlongX ? reach : road.width,
+      depth: isAlongX ? road.width : reach
+    })
+    return { road, isAlongX, inner: box(length - road.width), grown: box(length + road.width) }
+  })
+  let samples = 0
+  const offLane: string[] = []
+  const onDivider: string[] = []
+  for (const trip of scenario.trips.filter((each) => each.kind !== 'citizen'))
+    trip.route.points.slice(1).forEach((to, index) => {
+      const from = trip.route.points[index]
+      const isAlongX = Math.abs(from.z - to.z) < 1e-6
+      // A loop's closing step cuts its corner inside the junction box: not mid-block.
+      if (!isAlongX && Math.abs(from.x - to.x) > 1e-6) return
+      for (const point of samplesOf(from, to)) {
+        const under = strips.filter((strip) => within(strip.grown, point))
+        if (under.length !== 1 || !within(under[0].inner, point)) continue
+        if (under[0].isAlongX !== isAlongX) continue
+        const { road } = under[0]
+        const half = road.width / 2 - SIDEWALK_M[road.class]
+        const offset = Math.abs(isAlongX ? point.z - road.from.z : point.x - road.from.x)
+        const [lanes, dividers] =
+          road.class === 'avenue'
+            ? [
+                [0.25, 0.75],
+                [0, 0.5]
+              ]
+            : [[0.5], [0]]
+        samples++
+        const where = `${road.id}@${offset.toFixed(2)}`
+        if (!lanes.some((share) => Math.abs(offset - share * half) <= 0.3)) offLane.push(where)
+        if (dividers.some((share) => Math.abs(offset - share * half) < 0.3)) onDivider.push(where)
+      }
+    })
+  return { samples, offLane, onDivider }
 }
 
 // MoverLayer.place, replayed headless: citizens step among bodies, vehicles hold for anyone on foot.
@@ -204,6 +254,23 @@ describe('pedestrian carriageway: road geometry', () => {
     const result = freightLaneOffsets(liveCity())
     expect(result.compared).toBeGreaterThan(0)
     expect(result.mismatches).toEqual([])
+  })
+})
+
+describe.each([
+  ['the live city', liveCity],
+  ['the two-office district', twoOfficeCity]
+])('vehicles on %s', (_name, build) => {
+  it('drives mid-block on a lane centre, never on a lane divider', () => {
+    const result = vehicleLanes(build())
+    expect(result.samples).toBeGreaterThan(0)
+    expect(
+      { offLane: result.offLane.length, onDivider: result.onDivider.length },
+      [...new Set(result.offLane)].slice(0, 12).join(' ')
+    ).toEqual({
+      offLane: 0,
+      onDivider: 0
+    })
   })
 })
 
