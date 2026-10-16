@@ -1,0 +1,26 @@
+flowchart TD
+  OH["office-health<br/>Phases 0-9, 7c, 8.3"] --> P0["Phase 0<br/>base + baseline"]
+  P0 --> P1["Phase 1 foundation (lead)<br/>budget, clock, signals,<br/>events, privacy, sign cache"]
+  P1 --> P2["Phase 2 landmarks<br/>@lena"]
+  P1 --> P3["Phase 3 traffic + rail<br/>@lena + @ravi"]
+  P1 --> P4["Phase 4 growth + events<br/>@lena + @ravi"]
+  P2 --> M["merge 3 then 2 then 4"]
+  P3 --> M
+  P4 --> M
+  M --> P5["Phase 5 HUD"]
+  M --> P6["Phase 6 company lens"]
+  P5 --> P7["Phase 7 gates, probe,<br/>install, STOP"]
+  P6 --> P7
+  P7 -->|Angelo approves| P8["Phase 8 close + PR"]
+%% ---
+flowchart LR
+  B["bridge<br/>attention, limited,<br/>callId, usage"] --> LF["live-feed"]
+  L["accounts ledger<br/>projectsToday"] --> LF
+  LF --> EV["cityEvents<br/>evidence edges"]
+  LF --> FR["OfficeFrame"]
+  FR --> MK["maskFrame<br/>hide names"]
+  MK --> CS["citySignals<br/>states + leaders"]
+  EV --> TR["transients<br/>fireworks, hoist,<br/>work trips"]
+  CS --> ST["states<br/>signs, beacons, smoke,<br/>flags, crowns, spires, lens"]
+  TR --> SC["scene layers<br/>budgeted, 0 commits"]
+  ST --> SC
