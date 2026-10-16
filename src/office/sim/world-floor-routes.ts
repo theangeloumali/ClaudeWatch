@@ -107,7 +107,6 @@ export class FloorRoutes {
     }).map((point) => ({ ...point, elevation: 0, physicalFloorId: null }))
   }
 
-  // Leisure only: ground arrivals keep street(), whose direct doorway legs they need (P5b).
   // A map without streets walks today's street route.
   sidewalkPath(from: Point, to: Point): FloorWaypoint[] {
     if (!this.walks.city) return this.street(from, to)
@@ -256,9 +255,13 @@ export class FloorRoutes {
     const approach = entranceApproach(floor, entrance)
     const start = route.at(-1) ?? view
     const isAtEntrance = Math.hypot(start.x - entrance.x, start.z - entrance.z) < 0.1
+    // From another building it walks the sidewalks (P5b). A body already outside, beside its
+    // door, steps straight in: a one-way sidewalk could send it round the block.
     const street = isAtEntrance
       ? [{ ...entrance, elevation: 0, physicalFloorId: null }]
-      : this.street(start, approach)
+      : current
+        ? this.sidewalkPath(start, approach)
+        : this.street(start, approach)
     if (!street.length) return []
     route.push(...street)
     if (floorElevation(floor) === 0) {
