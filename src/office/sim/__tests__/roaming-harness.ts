@@ -44,7 +44,7 @@ export const idle =
     Array.from({ length: count }, (_, index) => observed(`claude:idle-${index}`, project, nowMs))
 
 // The live feed's venue targets: footprint-relative entrances and seats made absolute.
-export function venueTargets(layout: LayoutMap): WorldVenue[] {
+function venueTargets(layout: LayoutMap): WorldVenue[] {
   return (layout.effectiveVenues ?? []).map((venue) => ({
     id: venue.id,
     kind: venue.kind,

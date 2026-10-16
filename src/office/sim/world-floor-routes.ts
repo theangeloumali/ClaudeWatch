@@ -113,6 +113,15 @@ export class FloorRoutes {
     return this.onSidewalk(walkBetween(this.walks.city, from, to) ?? [])
   }
 
+  // The street route, or the sidewalks where it would cross a carriageway (CW-ROAM). No street
+  // route stays none: a body pinned at its door must not be sent round the block.
+  private footPath(from: Point, to: Point): FloorWaypoint[] {
+    const direct = this.street(from, to)
+    return direct.length && this.walks.city && !this.walks.city.staysOffRoad(direct)
+      ? this.sidewalkPath(from, to)
+      : direct
+  }
+
   // Once round a loop near `from`, or nothing on a map without sidewalks.
   roam(from: Point, turn: number): FloorWaypoint[] {
     return this.walks.city ? this.onSidewalk(planRoam(from, this.walks.city, turn)) : []
@@ -255,13 +264,14 @@ export class FloorRoutes {
     const approach = entranceApproach(floor, entrance)
     const start = route.at(-1) ?? view
     const isAtEntrance = Math.hypot(start.x - entrance.x, start.z - entrance.z) < 0.1
-    // From another building it walks the sidewalks (P5b). A body already outside, beside its
-    // door, steps straight in: a one-way sidewalk could send it round the block.
+    // From another building it walks the sidewalks (P5b); a body already outside, only where
+    // its street route would cross a carriageway (CW-ROAM): beside its door a one-way sidewalk
+    // could send it round the block.
     const street = isAtEntrance
       ? [{ ...entrance, elevation: 0, physicalFloorId: null }]
       : current
         ? this.sidewalkPath(start, approach)
-        : this.street(start, approach)
+        : this.footPath(start, approach)
     if (!street.length) return []
     route.push(...street)
     if (floorElevation(floor) === 0) {
