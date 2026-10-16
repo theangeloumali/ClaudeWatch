@@ -22,6 +22,7 @@ claudedocs/reports/*.html
 recordings/
 *.tsbuildinfo
 .claude/worktrees/
+.claude/archive/
 # Signing material stays in the keychain, never in the repo
 *.p12
 *.cer
