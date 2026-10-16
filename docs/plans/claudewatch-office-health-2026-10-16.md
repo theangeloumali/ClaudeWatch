@@ -64,7 +64,7 @@ Finding ids below (`seating-1`, `P3` …) refer to those reports.
 - [x] Phase 1 — Bridge truth: phantom ChatGPT agents, the 512-transcript cap, false idle, resume flags, retention, OpenCode SQL, usage backfill, process monitor, peek, Codex ledger
 - [x] Phase 2 — Door, departures and honest cards: ungameable churn gates, cycle-only tie-break, body-blocked bound, gate skips blocked arrivers, subagents fade at desks, "Leaving" and honest unknown cards
 - [x] Phase 3 — Legacy town decision, one street source, one crosswalk source, the sidewalk network, lane-centre vehicles (P1, P2, P3, P6)
-- [ ] Phase 4 — Citizens on the network: pedestrian ground, deadlock breaker that survives replans, zebra right-of-way, ambient loops
+- [x] Phase 4 — Citizens on the network: pedestrian ground, deadlock breaker that survives replans, zebra right-of-way, ambient loops
 - [ ] Phase 5 — Roaming agents via the leisure system: idle or done roam the sidewalks, unknown stays seated, working returns; guarded move of arrivals onto the network
 - [x] Phase 6 — Render fixes: facade layer steps, cutaway hysteresis, desk-band card culling, context loss, canvas metrics
 - [ ] Phase 7 — Performance: static and dynamic batches, motion out of React, cached batch keys, memoised validation, shader prewarm, host-served world document
@@ -827,7 +827,7 @@ Owns:
 Reachability is proven: `main.tsx:32` (live feed) and `main.tsx:38` (fixture feed) both pass `worldEditing: true`, so `distributedTown` always runs.
 
 - [ ] Run `npx knip --no-progress` after removing the legacy path; it must report nothing new.
-- [ ] Delete the legacy-only rows of town, citizen and theme tests; city rows stay.
+- [ ] Delete the legacy-only rows of town, citizen and theme tests; city rows stay. Give `samurai-ecosystem/citizen-collision.test.tsx` a city version that allows the give-way pair to overlap (Phase 4 FOUND).
 - [ ] Verify: `npx vitest run` exits 0. Commit `refactor(town): retire the unreachable legacy campus town`.
 
 ### Task 8.2: Main-checkout noise and stale worktrees (health-10, health-11, A8)
@@ -955,6 +955,19 @@ Phases 1, 2, 3 and 6 run in parallel, as do Phases 4 and 5. Wall-clock with the 
   - `f9fb09f`: `place: 'leaving'` replaces the builder's `isLeaving`, per the contract, with `camera-bands.ts` widened.
   - The `body-passages` and `lounge-trips` assertions follow the new contracts.
   - `a29f224`: one `hasObservedFeed` helper replaces a duplicated check.
+
+### Phase 4 (merged `842de87`)
+
+- 4 commits RED→GREEN. On the integration branch, sim + renderer + shared: **3,278 tests pass, 0 fail**, and both `tsc` are clean.
+- `pedestrian-carriageway` city rows: route asphalt samples 0 (was 39,740), spawnedOnRoad 0, frozen-on-road 0, road-walker holds 0 s, vehicle–walker overlaps 0.
+- 8-offset replay: **0 frozen-on-road events at every offset** (was 107). Vehicles held by road walkers 0 s (was 16,805 s).
+- Live City capture (builder's server, full detail, 48 citizens, 12 vehicles): **0 of 1,882 citizen samples on a carriageway outside a zebra** (was 59.6%), 139 on zebras, 0 vehicle–walker pairs under 1.2 m, 0 console errors.
+- Deviations:
+  - `advanceNavigation` takes `giveWay`: a crowd wait graph breaks cycles.
+  - A citizen behind someone standing at a route stop walks through them, because a 1 m sidewalk leaves no room to pass.
+  - The jam breaker is city-only until Task 8.3.
+  - Motion moved into `mover-step.ts`, so the replays run the shipped step.
+- Lead follow-up `d00037d`: vehicles still stop for the **player** mid-block. Removing nose-holding had let cars drive through the owner's character.
 
 ### Phase 8 (in progress)
 
