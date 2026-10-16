@@ -1,10 +1,13 @@
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { World } from '../world'
 import { buildLayout } from '../layout'
 import { session, subagent } from '../fixtures'
 import { resolveEffectiveWorld } from '../effective-world'
 import { createWorldDocument } from '../../../shared/office/world-document'
 import type { WorldVenue } from '../world-venues'
+
+// Full sim or scene builds: the 5 s default times out under multi-agent load (health-9).
+vi.setConfig({ testTimeout: 60_000 })
 
 it('lets an eligible idle worker leave its actual office door, reach the arcade, and return to work', () => {
   const actor = {

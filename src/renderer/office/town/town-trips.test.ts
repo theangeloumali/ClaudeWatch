@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { boundsOfZone } from '../logic/zone-framing'
 import { QUALITY_LEVELS } from '../logic/quality'
 import { grow, hashOf } from '../themes/lot-math'
@@ -8,6 +8,9 @@ import { ROAD_WIDTH_M } from './town-grid'
 import { lotOwners, townBlocks } from './town-plan'
 import { MOVER_COUNTS, destinationOf, townTrips, type Trip } from './town-trips'
 import { roadStrip, widened } from './town.test-utils'
+
+// Full sim or scene builds: the 5 s default times out under multi-agent load (health-9).
+vi.setConfig({ testTimeout: 60_000 })
 
 const citizensOf = (trips: readonly Trip[]): Trip[] =>
   trips.filter((trip) => trip.kind === 'citizen')
