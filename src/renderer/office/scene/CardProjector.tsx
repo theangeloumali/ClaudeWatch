@@ -10,6 +10,8 @@ import type { AgentView } from '../../../shared/office/types'
 import type { FloorGeometry } from '../scene-model'
 import { agentElevation, floorElevation } from './all-floor-model'
 import { findZone } from '../logic/zone-model'
+import { levelInUse, type QualityLevel } from '../logic/quality'
+import { useQualityChoice } from '../quality-store'
 
 // Over an agent's head (scene/Robot.tsx draws agents 1.65 m tall).
 export const CARD_HEIGHT = 2.45
@@ -19,6 +21,10 @@ const STACK_HEIGHT = 2.6
 const STACK_COLUMN_WIDTH = 360
 const STACK_GAP = 8
 const COMPACT_OFFICE_WIDTH = 1024
+// Cards are DOM written every moving frame; a light machine moves half as many (clearspent-3).
+const DESK_CARD_CAP: Record<QualityLevel, number> = { full: 12, balanced: 12, light: 6 }
+const OVERFLOW_CLASS =
+  'absolute left-0 top-0 rounded-lg bg-neutral-900/90 px-2.5 py-1 text-[11px] font-semibold text-white shadow-md'
 export const OFFSCREEN = 'translate(-9999px, -9999px)'
 
 export interface CardAnchors {
@@ -54,8 +60,21 @@ function hideAll(elements: Map<string, HTMLElement>): void {
   for (const element of elements.values()) element.style.transform = OFFSCREEN
 }
 
-// Runs inside the Canvas each projected frame: moves the DOM cards, and outside the desk band
-// culls overlapping cards in screen space (card-culling.ts). Only style is written, never React state.
+// The "+N more" count for capped desk cards, kept in the card layer next to the cards themselves.
+function overflowBadge(current: HTMLElement | null, anchors: CardAnchors): HTMLElement | null {
+  if (current?.isConnected) return current
+  const layer = anchors.cards.values().next().value?.parentElement
+  if (!layer) return null
+  const badge = document.createElement('span')
+  badge.dataset.cardOverflow = ''
+  badge.className = OVERFLOW_CLASS
+  badge.style.transform = OFFSCREEN
+  layer.append(badge)
+  return badge
+}
+
+// Runs inside the Canvas each projected frame: moves the DOM cards and culls overlapping cards in
+// screen space (card-culling.ts). Only style and the overflow count are written, never React state.
 export function CardProjector({
   cards,
   stacks,
@@ -68,6 +87,10 @@ export function CardProjector({
 }: CardProjectorProps) {
   const point = useMemo(() => new Vector3(), [])
   const measurementRevision = useRef(0)
+  const { pin, chosen } = useQualityChoice()
+  const deskCardCap = DESK_CARD_CAP[levelInUse(pin, chosen)]
+  const overflow = useRef<HTMLElement | null>(null)
+  useEffect(() => () => overflow.current?.remove(), [])
   const heights = useMemo(
     () => new Map(agents?.map((agent) => [agent.agentKey, agentElevation(agent)])),
     [agents]
@@ -113,6 +136,7 @@ export function CardProjector({
     measurements: number
     heights: typeof heights | null
     stackHeights: typeof stackHeights | null
+    cap: number
   }>({
     view: [],
     cards: null,
@@ -122,7 +146,8 @@ export function CardProjector({
     layout: undefined,
     measurements: -1,
     heights: null,
-    stackHeights: null
+    stackHeights: null,
+    cap: 0
   })
   const sizes = useMemo(
     () => new WeakMap<HTMLElement, { key: string; width: number; height: number }>(),
@@ -176,7 +201,8 @@ export function CardProjector({
       last.layout === inspectorLayout &&
       last.measurements === measurementRevision.current &&
       last.heights === heights &&
-      last.stackHeights === stackHeights
+      last.stackHeights === stackHeights &&
+      last.cap === deskCardCap
     if (isSameView) return
     last.cards = cards
     last.stacks = stacks
@@ -186,11 +212,25 @@ export function CardProjector({
     last.measurements = measurementRevision.current
     last.heights = heights
     last.stackHeights = stackHeights
+    last.cap = deskCardCap
     // camera-controls moves the camera after three last built its matrix, and the renderer only
     // rebuilds it after this callback: without this the cards trail the canvas while it turns.
     camera.updateMatrixWorld()
 
+    const insets = hudSafeInsets(selectedAgentKey !== null, inspectorLayout)
+    const showOverflow = (count: number) => {
+      if (count > 0) overflow.current = overflowBadge(overflow.current, anchors)
+      const badge = overflow.current
+      if (!badge) return
+      const text = `+${count} more`
+      if (count > 0 && badge.textContent !== text) badge.textContent = text
+      badge.style.transform =
+        count > 0
+          ? `translate(${cardSafeArea(size, insets).left + STACK_GAP}px, ${insets.top + STACK_GAP}px)`
+          : OFFSCREEN
+    }
     if (band === 'building') {
+      showOverflow(0)
       for (const card of cards) {
         const height =
           (heights.get(card.agentKey) ?? 0) + (card.kind === 'card' ? CARD_HEIGHT : PILL_HEIGHT)
@@ -200,7 +240,6 @@ export function CardProjector({
         )
       }
       hideAll(anchors.dots)
-      const insets = hudSafeInsets(selectedAgentKey !== null, inspectorLayout)
       const safe = { ...cardSafeArea(size, insets), top: insets.top }
       const columnWidth = Math.min(STACK_COLUMN_WIDTH, Math.max(1, safe.right - safe.left))
       let columnLeft = safe.left
@@ -223,17 +262,6 @@ export function CardProjector({
         place(element, fits ? { x: columnLeft + columnWidth / 2, y: rowTop + height } : null)
         rowTop += height + STACK_GAP
       }
-      return
-    }
-
-    if (band === 'desk') {
-      for (const card of cards) {
-        const height =
-          (heights.get(card.agentKey) ?? 0) + (card.kind === 'card' ? CARD_HEIGHT : PILL_HEIGHT)
-        place(anchors.cards.get(card.agentKey), toScreen(camera, size, card.x, height, card.z))
-      }
-      hideAll(anchors.dots)
-      hideAll(anchors.stacks)
       return
     }
 
@@ -268,10 +296,14 @@ export function CardProjector({
       })
     }
 
+    // Desk zoom culls by collision only: stacking there would fold away the neighbours in view.
+    const isDesk = band === 'desk'
     const outcome = cullCards(
       candidates,
-      cardSafeArea(size, hudSafeInsets(selectedAgentKey !== null, inspectorLayout))
+      cardSafeArea(size, insets),
+      isDesk ? { stackProjects: false, cap: deskCardCap } : undefined
     )
+    showOverflow(outcome.capped)
     for (const card of cards) {
       const isShown = outcome.cards.has(card.agentKey)
       if (positions.has(card.agentKey))
@@ -284,7 +316,8 @@ export function CardProjector({
         : null
       place(anchors.dots.get(card.agentKey), dot)
     }
-    for (const stack of stacks) {
+    if (isDesk) hideAll(anchors.stacks)
+    for (const stack of isDesk ? [] : stacks) {
       const isStacked =
         size.width >= COMPACT_OFFICE_WIDTH && outcome.stackedProjects.has(stack.projectKey)
       place(

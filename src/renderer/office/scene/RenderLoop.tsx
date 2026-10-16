@@ -9,11 +9,12 @@ import {
   type FrameGovernor as Governor,
   type FramePace
 } from '../logic/frame-governor'
-import { levelForMachine } from '../logic/quality'
-import { chooseQuality, machineHints, watchQuality } from '../quality-store'
+import { levelForMachine, levelInUse } from '../logic/quality'
+import { chooseQuality, machineHints, useQualityChoice, watchQuality } from '../quality-store'
 
 const SMOOTHING = 0.1
 const INPUT_EVENTS = ['pointerdown', 'wheel', 'keydown'] as const
+const DATASET_INTERVAL_MS = 1000
 
 function rendererOf(context: WebGLRenderingContext | WebGL2RenderingContext): string | undefined {
   const info = context.getExtension('WEBGL_debug_renderer_info')
@@ -109,9 +110,28 @@ export function FrameGovernor({ pace, agents }: FrameGovernorProps) {
   return null
 }
 
+// Writes only the dataset keys whose value changed (ported from ops-twin telemetry-dataset.ts).
+function writeDataset(
+  element: HTMLElement,
+  values: Readonly<Record<string, string>>,
+  written: Map<string, string>
+): void {
+  for (const [key, value] of Object.entries(values)) {
+    if (written.get(key) === value) continue
+    written.set(key, value)
+    element.dataset[key] = value
+  }
+}
+
 // gl.info resets at the start of each render, so reading it in useFrame gives the previous frame's totals.
 // frameMs is the interval between frames (what the governor controls), not GPU time.
+// P10: the stats also land on the canvas once a second; sampledAtMs shows when a hidden window
+// stopped drawing and its stats went stale.
 export function MetricsProbe({ metrics }: { metrics: FrameMetrics }) {
+  const { pin, chosen } = useQualityChoice()
+  const quality = levelInUse(pin, chosen)
+  const written = useMemo(() => new Map<string, string>(), [])
+  const lastSampleMs = useRef(Number.NEGATIVE_INFINITY)
   useFrame(({ gl }, delta) => {
     if (delta > 0) {
       metrics.frameMs += (delta * 1000 - metrics.frameMs) * SMOOTHING
@@ -119,6 +139,20 @@ export function MetricsProbe({ metrics }: { metrics: FrameMetrics }) {
     }
     metrics.drawCalls = gl.info.render.calls
     metrics.triangles = gl.info.render.triangles
+    const nowMs = performance.now()
+    if (nowMs - lastSampleMs.current < DATASET_INTERVAL_MS) return
+    lastSampleMs.current = nowMs
+    writeDataset(
+      gl.domElement,
+      {
+        drawCalls: String(metrics.drawCalls),
+        triangles: String(metrics.triangles),
+        fps: String(Math.round(metrics.fps)),
+        quality,
+        sampledAtMs: String(Date.now())
+      },
+      written
+    )
   })
   return null
 }

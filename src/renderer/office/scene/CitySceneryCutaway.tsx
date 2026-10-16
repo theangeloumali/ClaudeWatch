@@ -2,6 +2,8 @@ import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import { Euler, Matrix4, Vector3, type Group } from 'three'
 import type { FloorGeometry } from '../scene-model'
+import { createSideCutaway } from '../logic/facade-cutaway'
+import { SIDE_NORMAL, type WallSide } from '../logic/room-layout'
 import type { PlacedLot } from '../themes/lot-kit'
 import { LotFill } from '../themes/LotFill'
 import { gapBetween } from '../themes/lot-math'
@@ -38,7 +40,7 @@ export function CitySceneryCutaway({
   const sectors = useMemo(
     () =>
       [
-        ...Map.groupBy(placed, ({ lot }) => {
+        ...Map.groupBy(placed, ({ lot }): WallSide | 'far' => {
           if (gapBetween(lot, floor) > LOCAL_CUTAWAY_REACH_METRES) return 'far'
           const dx = lot.x - floor.x
           const dz = lot.z - floor.z
@@ -55,16 +57,13 @@ export function CitySceneryCutaway({
       }),
     [placed, floor, height]
   )
-  const roots = useRef(new Map<string, Group>())
-  const cameraPosition = useMemo(() => new Vector3(), [])
+  const roots = useRef(new Map<WallSide, Group>())
+  const forward = useMemo(() => new Vector3(), [])
+  const cutaway = useMemo(() => createSideCutaway<WallSide>(), [])
   useFrame(({ camera }) => {
-    camera.getWorldPosition(cameraPosition)
+    camera.getWorldDirection(forward)
     for (const [side, root] of roots.current) {
-      const isFront =
-        (side === 'east' && cameraPosition.x > floor.x) ||
-        (side === 'west' && cameraPosition.x < floor.x) ||
-        (side === 'south' && cameraPosition.z > floor.z) ||
-        (side === 'north' && cameraPosition.z < floor.z)
+      const isFront = cutaway.isOpen(side, forward, SIDE_NORMAL[side])
       root.visible = !isInspecting || !isFront
     }
   })
@@ -75,7 +74,7 @@ export function CitySceneryCutaway({
           <BatchedScene revision={`${batchRevision}:${side}:lower`} isStatic>
             <LotFill placed={lower} />
           </BatchedScene>
-          {upper.length > 0 && (
+          {side !== 'far' && upper.length > 0 && (
             <group
               ref={(root) => {
                 if (root) roots.current.set(side, root)

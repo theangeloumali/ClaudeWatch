@@ -4,9 +4,10 @@ import { Vector3, type Group } from 'three'
 import type { FloorGeometry } from '../scene-model'
 import type { ThemePalette } from '../themes/types'
 import type { BuildingExteriorProfile } from '../themes/physical-building-parts'
-import type { WallsMode } from '../logic/room-layout'
+import { SIDE_NORMAL, type WallSide, type WallsMode } from '../logic/room-layout'
+import { createSideCutaway } from '../logic/facade-cutaway'
 import { SHARED_BATCH } from './mesh-batches'
-import { windowParts, type WindowPart } from './building-window-parts'
+import { windowParts } from './building-window-parts'
 
 const NO_RAYCAST = () => undefined
 const GLASS_OPACITY = 0.14
@@ -39,19 +40,13 @@ export function BuildingWindows({
     }),
     [palette.paper, presentation, glassColor]
   )
-  const sides = useRef(new Map<WindowPart['side'], Group>())
-  const cameraPosition = useMemo(() => new Vector3(), [])
+  const sides = useRef(new Map<WallSide, Group>())
+  const forward = useMemo(() => new Vector3(), [])
+  const cutaway = useMemo(() => createSideCutaway<WallSide>(), [])
   useFrame(({ camera }) => {
-    camera.getWorldPosition(cameraPosition)
+    camera.getWorldDirection(forward)
     for (const [side, group] of sides.current) {
-      const isNear =
-        side === 'north'
-          ? cameraPosition.z < floor.z
-          : side === 'south'
-            ? cameraPosition.z >= floor.z
-            : side === 'west'
-              ? cameraPosition.x < floor.x
-              : cameraPosition.x >= floor.x
+      const isNear = cutaway.isOpen(side, forward, SIDE_NORMAL[side])
       group.visible = wallsMode === 'up' || (wallsMode === 'cutaway' && !isNear)
     }
   })
