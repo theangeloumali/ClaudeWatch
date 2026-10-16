@@ -299,7 +299,7 @@ Research: `landmarks.md` §1, §3, §4, §5. Night windows (§2) are out, by own
 - [ ] RED tests:
   - "every corporate filler design dresses all four faces at each quarter turn";
   - "no town or venue design in any theme has a coplanar face pair".
-- [ ] Implement with `FACADE_LAYER_STEP_M` layering. Verify, and commit `fix(town): filler buildings finished on every side`.
+- [ ] Implement with `FACADE_LAYER_STEP_M` layering. Mullion tops stop one layer step short of the glass tops; CS ties them to one plane. Verify, and commit `fix(town): filler buildings finished on every side`.
 
 ### Task 2.2: Lit icon signs
 
@@ -325,7 +325,8 @@ Signs re-pose only when the camera's orientation changes (hook into `CameraContr
   - "no fresh evidence shows the grey sign";
   - "signs cost 2 draws however many buildings carry one";
   - "a still camera uploads 0 sign bytes";
-  - "signs face the camera at all four quarter turns".
+  - "signs face the camera at all four quarter turns";
+  - "every icon meets 3:1 contrast on its disc" (icons are ink-tinted: white fails on 4 of the 5 state colours).
 - [ ] Implement, verify, and commit `feat(scene): lit icon signs on project towers and venues`.
 
 ### Task 2.3: Venue landmarks
