@@ -6,12 +6,15 @@ import { streetPath } from './street-path'
 import { entranceApproach } from '../../shared/office/entrance-approach'
 import { bodiesShareElevation } from '../../shared/office/body-sweep'
 import type { BodyFootprint } from '../../shared/office/body-footprints'
+import { cityWalks, planRoam, walkBetween, type CityWalks, type RoutePoint } from './roaming'
 
 // dry-new: PathCache is planar; transfers retain surface and connector metadata per waypoint.
 export interface FloorWaypoint extends Point {
   elevation?: number
   physicalFloorId?: string | null
   connectorId?: string
+  // A leg of the sidewalk network: walked without stepping onto a carriageway (P5).
+  sidewalk?: true
 }
 
 export function floorElevation(floor: FloorLayout): number {
@@ -57,6 +60,7 @@ export class FloorRoutes {
   private streetBlocks: NonNullable<LayoutMap['streetBlocks']> = []
   private readonly floors = new Map<string, FloorLayout>()
   private readonly caches = new Map<string, { json: string; paths: PathCache }>()
+  private walks: { json: string; city: CityWalks | null } = { json: '[]', city: null }
 
   update(map: LayoutMap, occupiedFloorIds: readonly string[] = []): void {
     const live = new Set([...map.floors.map((floor) => floor.id), ...occupiedFloorIds])
@@ -75,6 +79,9 @@ export class FloorRoutes {
         this.caches.delete(id)
       }
     this.streetBlocks = map.streetBlocks ?? []
+    const streetsJson = JSON.stringify(map.streets ?? [])
+    if (streetsJson !== this.walks.json)
+      this.walks = { json: streetsJson, city: map.streets?.length ? cityWalks(map.streets) : null }
     for (const floor of map.floors) {
       const json = JSON.stringify(floor)
       this.floors.set(floor.id, floor)
@@ -98,6 +105,47 @@ export class FloorRoutes {
       to,
       blocks: [...this.groundFloors.flatMap((floor) => floor.zones), ...this.streetBlocks]
     }).map((point) => ({ ...point, elevation: 0, physicalFloorId: null }))
+  }
+
+  // A map without streets walks today's street route.
+  sidewalkPath(from: Point, to: Point): FloorWaypoint[] {
+    if (!this.walks.city) return this.street(from, to)
+    return this.onSidewalk(walkBetween(this.walks.city, from, to) ?? [])
+  }
+
+  // Once round a loop near `from`, or nothing on a map without sidewalks.
+  roam(from: Point, turn: number): FloorWaypoint[] {
+    return this.walks.city ? this.onSidewalk(planRoam(from, this.walks.city, turn)) : []
+  }
+
+  hasSidewalks(): boolean {
+    return this.walks.city !== null
+  }
+
+  isSidewalkOpen(point: Point): boolean {
+    return this.walks.city?.isWalkable(point) ?? true
+  }
+
+  private onSidewalk(route: readonly RoutePoint[]): FloorWaypoint[] {
+    return route.map((point) => ({
+      x: point.x,
+      z: point.z,
+      elevation: 0,
+      physicalFloorId: null,
+      sidewalk: true
+    }))
+  }
+
+  // Where a building's walkers step out onto the street: toGround ends here.
+  doorstep(floor: FloorLayout): Point {
+    const ground = this.groundOf(floor)
+    return entranceApproach(ground, floorEntrance(ground))
+  }
+
+  private groundOf(floor: FloorLayout): FloorLayout {
+    return (
+      this.groundFloors.find((candidate) => connectorId(candidate) === connectorId(floor)) ?? floor
+    )
   }
 
   isStreetOpen(point: Point): boolean {
@@ -207,17 +255,20 @@ export class FloorRoutes {
     const approach = entranceApproach(floor, entrance)
     const start = route.at(-1) ?? view
     const isAtEntrance = Math.hypot(start.x - entrance.x, start.z - entrance.z) < 0.1
+    // From another building it walks the sidewalks (P5b). A body already outside, beside its
+    // door, steps straight in: a one-way sidewalk could send it round the block.
     const street = isAtEntrance
       ? [{ ...entrance, elevation: 0, physicalFloorId: null }]
-      : this.street(start, approach)
+      : current
+        ? this.sidewalkPath(start, approach)
+        : this.street(start, approach)
     if (!street.length) return []
     route.push(...street)
     if (floorElevation(floor) === 0) {
       const arrival = this.onFloor(floor, entrance, to, door)
       return arrival.length ? [...route, ...arrival] : []
     }
-    const ground =
-      this.groundFloors.find((candidate) => connectorId(candidate) === connectorId(floor)) ?? floor
+    const ground = this.groundOf(floor)
     const entry = this.onFloor(ground, entrance, connector)
     const arrival = this.onFloor(floor, connector, to, door)
     if (!entry.length || !arrival.length) return []
@@ -262,8 +313,7 @@ export class FloorRoutes {
         physicalFloorId: null,
         connectorId: connectorId(floor)
       })
-    const ground =
-      this.groundFloors.find((candidate) => connectorId(candidate) === connectorId(floor)) ?? floor
+    const ground = this.groundOf(floor)
     const entrance = floorEntrance(ground)
     const exit = this.onFloor(ground, connector, entrance)
     if (!exit.length) return []

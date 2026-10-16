@@ -52,9 +52,11 @@ it('lets an eligible idle worker leave its actual office door, reach the arcade,
     }
   })
   const home = world.step(0)[0]
+  // One-way sidewalks (A3) make the arcade a 147 s walk from this office.
+  const walkTicks = 3000
   let hasReachedStreet = false
   let hasReachedArcade = false
-  for (let tick = 0; tick < 1500; tick++) {
+  for (let tick = 0; tick < walkTicks; tick++) {
     const current = world.step(100)[0]
     hasReachedStreet ||= current.physicalFloorId === null
     hasReachedArcade ||=
@@ -76,7 +78,7 @@ it('lets an eligible idle worker leave its actual office door, reach the arcade,
     removed: [],
     upserts: [{ ...actor, activity: 'thinking' }]
   })
-  for (let tick = 0; tick < 1500; tick++) world.step(100)
+  for (let tick = 0; tick < walkTicks; tick++) world.step(100)
   expect(world.step(0)[0]).toMatchObject({
     physicalFloorId: home.floorId,
     activity: 'thinking',
