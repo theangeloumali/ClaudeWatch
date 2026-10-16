@@ -1,6 +1,6 @@
 import { World } from '../../office/sim/world'
 import { buildLayout, type LayoutMap } from '../../office/sim/layout'
-import { resolveEffectiveWorld } from '../../office/sim/effective-world'
+import { effectiveWorldKey, resolveEffectiveWorld } from '../../office/sim/effective-world'
 import { createWorldDocument } from '../../shared/office/world-document'
 import { createWorldDocumentStore, type WorldDocumentStore } from './world-document-store'
 import { listThemes } from '../office/themes/registry'
@@ -106,7 +106,7 @@ export function createLiveFeed(
     let resolvedLayout: LayoutMap | undefined
     const resolveLayout = (base: LayoutMap, sessions: readonly SessionRef[]): LayoutMap => {
       const document = documentStore?.get().document ?? createWorldDocument(base, sessions)
-      const nextKey = JSON.stringify([base, document.revision])
+      const nextKey = effectiveWorldKey(base, document, sessions)
       if (nextKey !== resolvedKey || !resolvedLayout) {
         resolvedLayout = resolveEffectiveWorld(base, document, sessions)
         resolvedKey = nextKey
