@@ -63,7 +63,7 @@ Finding ids below (`seating-1`, `P3` …) refer to those reports.
 - [x] Phase 0 — Baseline and guards: signing-file ignore rules, heavy-test timeouts, stale ledger ticks
 - [ ] Phase 1 — Bridge truth: phantom ChatGPT agents, the 512-transcript cap, false idle, resume flags, retention, OpenCode SQL, usage backfill, process monitor, peek, Codex ledger
 - [ ] Phase 2 — Door, departures and honest cards: ungameable churn gates, cycle-only tie-break, body-blocked bound, gate skips blocked arrivers, subagents fade at desks, "Leaving" and honest unknown cards
-- [ ] Phase 3 — Legacy town decision, one street source, one crosswalk source, the sidewalk network, lane-centre vehicles (P1, P2, P3, P6)
+- [x] Phase 3 — Legacy town decision, one street source, one crosswalk source, the sidewalk network, lane-centre vehicles (P1, P2, P3, P6)
 - [ ] Phase 4 — Citizens on the network: pedestrian ground, deadlock breaker that survives replans, zebra right-of-way, ambient loops
 - [ ] Phase 5 — Roaming agents via the leisure system: idle or done roam the sidewalks, unknown stays seated, working returns; guarded move of arrivals onto the network
 - [x] Phase 6 — Render fixes: facade layer steps, cutaway hysteresis, desk-band card culling, context loss, canvas metrics
@@ -820,6 +820,16 @@ Owns:
 - [ ] RED tests: "ERR_UPDATER_CHANNEL_FILE_NOT_FOUND on win32 surfaces `unavailable-for-platform`", and "package.json version ≥ highest published v\* tag" (fixture list).
 - [ ] Implement, verify, and commit `fix(release): 1.4.1 keeps one version line; Windows reports a missing feed`.
 
+### Task 8.3: Retire the unreachable legacy campus town (A6; Phase 3 FOUND)
+
+**Files:** the legacy campus path through `TownView.tsx`, `WorldView.tsx`, `OfficeScene.tsx`, `MoverLayer.tsx`, `themes/*`, `player/*`, and about 35 legacy-only tests. Runs **after Phase 7**, when those files are free.
+
+Reachability is proven: `main.tsx:32` (live feed) and `main.tsx:38` (fixture feed) both pass `worldEditing: true`, so `distributedTown` always runs.
+
+- [ ] Run `npx knip --no-progress` after removing the legacy path; it must report nothing new.
+- [ ] Delete the legacy-only rows of town, citizen and theme tests; city rows stay.
+- [ ] Verify: `npx vitest run` exits 0. Commit `refactor(town): retire the unreachable legacy campus town`.
+
 ### Task 8.2: Main-checkout noise and stale worktrees (health-10, health-11, A8)
 
 Done in the main checkout. Nothing here is committed on this branch.
@@ -902,6 +912,18 @@ Phases 1, 2, 3 and 6 run in parallel, as do Phases 4 and 5. Wall-clock with the 
   - The service-ribs entrance ribs are 2 steps deeper.
   - The "+N more" card badge sits in the aria-hidden card layer.
   - `invalidate()` loads through a dynamic `@react-three/fiber` import.
+
+### Phase 3 (merged `16aeae6`)
+
+- 6 commits RED→GREEN. Integration-branch verify: both `tsc` clean. The only failures are the 2 citizen replay rows expected to stay RED until Phase 4.
+- Three more heavy suites (transfer-refresh, live-budget, physical-scene-budget) timed out at load 79–115. Run alone they are as fast as the release baseline (572 ms vs 725 ms), so they got load-safe timeouts (commit after `16aeae6`).
+- The legacy campus town is unreachable (both feeds set `worldEditing: true`). Its retirement is scheduled as **Task 8.3**, after Phase 7; Phase 3 had recorded it as file-ownership-blocked, which is not an external blocker.
+- Deviations:
+  - `streets-shared.test.ts` lives in `renderer/office/town/__tests__`, because of a node tsconfig limit.
+  - `sidewalk-lines.ts` and `min-heap.ts` were split out for size.
+  - `pedestrianGround(network, bounds, solids?)`.
+  - All city vehicles use the avenue's outer lane.
+  - Fixed a city vehicle ring that cut its first junction diagonally (`4354ac3`).
 
 ### Phase 8 (in progress)
 
