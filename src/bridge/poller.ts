@@ -143,14 +143,17 @@ export class BridgePoller {
   }
   // Tells of each Codex total the tick it is read, and of the one a session that left ended
   // on: the snapshot holds a session's numbers for the display, and drops one that has left.
-  private reportCodex({ sessions, departed }: CodexBatch): void {
+  private reportCodex({ sessions, departed, children }: CodexBatch): void {
     if (!this.onCodexTotals) return
-    const live = sessions.flatMap((session) => codexTotalOf(session) ?? [])
+    const live = [...sessions.flatMap((session) => codexTotalOf(session) ?? []), ...children]
     const changed = [...live, ...departed].filter(
       (total) => this.postedCodex.get(total.sessionKey) !== JSON.stringify(total)
     )
     for (const total of changed) this.postedCodex.set(total.sessionKey, JSON.stringify(total))
-    const liveKeys = new Set(sessions.map((session) => session.key))
+    const liveKeys = new Set([
+      ...sessions.map((session) => session.key),
+      ...children.map((total) => total.sessionKey)
+    ])
     for (const key of this.postedCodex.keys()) if (!liveKeys.has(key)) this.postedCodex.delete(key)
     if (changed.length) this.onCodexTotals(changed)
   }

@@ -5,8 +5,7 @@ import type {
   CurrentTool,
   SessionRef,
   SessionUsage,
-  SourceHealth,
-  TokenCounts
+  SourceHealth
 } from '../shared/office/types'
 import { type CodexTotal, codexTotalOf } from '../shared/accounts'
 import { programName } from '../shared/platform-process'
@@ -24,6 +23,8 @@ import { type CodexKind, findRollouts, recentDayFolders, type Rollout } from './
 import {
   applyCodexSubagentTotals,
   attachCodexSubagents,
+  codexChildTotals,
+  type CodexChildTotal,
   currentCodexActivity
 } from './codex-subagents'
 import { parseCodexUsage } from './codex-usage'
@@ -130,7 +131,7 @@ interface Remembered {
   // The usage last read from each live rollout, by session id. A long tool output pushes the
   // newest `token_count` out of the 64 KB tail, and its total still stands until the next one.
   usage: Map<string, SessionUsage>
-  childTotals: Map<string, Map<string, TokenCounts>>
+  childTotals: Map<string, Map<string, CodexChildTotal>>
   // Where each live process runs, by pid and start time: asking costs an `lsof` run.
   folders: Map<string, string>
   // The placeholder key a process without a rollout was first shown under, by pid and start time.
@@ -219,6 +220,8 @@ export interface CodexBatch {
   // The total each rollout ended on, for the sessions that left since the last look: one may
   // have finished a turn after the last look that found its process.
   departed: CodexTotal[]
+  // Each live session's child threads, each with a running total of its own.
+  children: CodexTotal[]
   sources: SourceHealth[]
 }
 
@@ -232,6 +235,7 @@ export async function collectCodex(
 ): Promise<CodexBatch> {
   const sessions: SessionRef[] = []
   const departed: CodexTotal[] = []
+  let children: CodexTotal[] = []
   const health: SourceHealth = { id: 'codex', ok: true, detail: 'empty' }
   let memory = remembered.get(io)
   if (!memory) {
@@ -464,6 +468,7 @@ export async function collectCodex(
     }
     // Totals are finalized only after every retained parent has been shown.
     applyCodexSubagentTotals(sessions, memory.childTotals)
+    children = codexChildTotals(sessions, memory.childTotals)
     for (const id of known.keys()) if (!live.has(id)) known.delete(id)
     forgetExited(processes, folders, placeholders)
     for (const [path, { session }] of tails) {
@@ -497,5 +502,5 @@ export async function collectCodex(
     health.checkedAtMs = now
     health.staleAfterMs = OBSERVATION_STALE_AFTER_MS
   }
-  return { sessions, departed, sources: [health] }
+  return { sessions, departed, children, sources: [health] }
 }

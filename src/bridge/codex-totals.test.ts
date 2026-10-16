@@ -69,3 +69,67 @@ it('posts each Codex total on the tick that reads it, while the feed holds the s
   expect(await tick()).toEqual([undefined, [180]])
   expect(await tick()).toEqual([undefined, []])
 })
+
+// health-15: a child thread spends its parent's account, so its own total reaches the ledger. The
+// ledger counts a total's growth, so each thread posts its own: a child no longer in view after a
+// restart never lowers the parent's.
+const child = `${JSON.stringify({
+  type: 'session_meta',
+  payload: {
+    id: 'b',
+    cwd: '/repo',
+    timestamp: '2026-10-11T09:40:00.000Z',
+    source: { subagent: { thread_spawn: { parent_thread_id: 'a' } } }
+  }
+})}\n`
+const NOW = Date.parse('2026-10-11T10:00:00.000Z')
+
+function family(childWrittenAtMs: number) {
+  const io = fixtureIo({
+    [rollout]: meta + total(100),
+    '/codex/sessions/rollout-b.jsonl': child + total(40),
+    '/repo/.git': null
+  })
+  io.exec = async (program) =>
+    program.endsWith('ps') ? '42 Sat Oct 10 15:29:12 2026 /bin/codex' : 'p42\nn/repo\n'
+  const stat = io.stat
+  io.stat = async (path) => ({
+    ...(await stat(path)),
+    mtimeMs: path.endsWith('rollout-b.jsonl') ? childWrittenAtMs : NOW - 1000
+  })
+  const posted: CodexTotal[] = []
+  const poller = new BridgePoller({
+    io,
+    claudeRoots: [],
+    codexRoot: '/codex',
+    platform: 'darwin',
+    now: () => NOW,
+    onCodexTotals: (totals) => posted.push(...totals)
+  })
+  return { poller, posted }
+}
+const outputs = (posted: CodexTotal[]) =>
+  posted.map(({ sessionKey, counts, threadStartedAtMs }) => [
+    sessionKey,
+    counts.output,
+    threadStartedAtMs
+  ])
+
+it('posts a child rollout’s tokens under its own thread, filed with its parent', async () => {
+  const { poller, posted } = family(NOW - 1000)
+  const [parent] = (await poller.tick()).sessions
+
+  expect(parent?.usage?.subagents.output).toBe(40)
+  expect(outputs(posted)).toEqual([
+    ['codex:a', 100, Date.parse('2026-10-11T09:30:00.000Z')],
+    ['codex:b', 40, Date.parse('2026-10-11T09:40:00.000Z')]
+  ])
+  expect(posted[1]).toMatchObject({ projectKey: posted[0]?.projectKey, accountKey: null })
+})
+
+it('posts the parent’s own total alone when its child is no longer in view', async () => {
+  const { poller, posted } = family(NOW - 60 * 60_000)
+  await poller.tick()
+
+  expect(outputs(posted)).toEqual([['codex:a', 100, Date.parse('2026-10-11T09:30:00.000Z')]])
+})
