@@ -983,11 +983,33 @@ Phases 1, 2, 3 and 6 run in parallel, as do Phases 4 and 5. Wall-clock with the 
   - An unstamped agent in an observed feed now stays home (owner rule).
   - The arrival gate ignores walkers still on sidewalk legs.
   - Task 5.2 applies to walks from another building only; applied to every street leg it left 4 teammates unseated.
-- Re-check after Phase 4 (lead, running): the live capture on the integration build checks the zebra crawl the builder saw before Phase 4's citizens landed.
+- Re-check after Phase 4 (lead): the live capture on the integration build found an agent outside walking a straight street leg diagonally over a carriageway after its desk moved (`world-floor-routes.ts:264`). Fixed on `fix/office-health-p5b-asphalt` (`5e90e69`): that leg now follows the sidewalks. Live re-capture: 0 asphalt samples. Merged `ba7adb5`.
+
+### Phase 7 (merged `6952044` 7a, `f83d3b0` 7b; lead follow-ups `36fc7cf`, `bb83977`, `c3f94fb`)
+
+- 7a, batches:
+  - Instance uploads are dirty-checked: 388 → 20 kB per frame.
+  - Venues are placed once; batch keys are cached in a WeakMap; each view prewarms its shaders with `compileAsync`. Draws 35 → 33.
+  - Deviations:
+    - No per-side static facade batches; they cost about 143 more draws.
+    - No re-tint path; selection shows a ring.
+- 7b, feed:
+  - Agent motion runs through the module pose store `officePoses`. React commits per 30 s: react-dom 319 → 47, R3F 302 → 17; heap is back at baseline.
+  - World validation is memoised.
+  - One saved city per host: `office-host/host-world.ts`, `/api/world`, `office:world-save` via `handleTrusted`.
+    - Tokenless requests get 401; cross-origin and view-only saves get 403.
+    - Each compare-and-swap re-reads the file and writes it atomically (tmp + rename).
+    - A page's cached city becomes the host's first (`shared-world-feed.test.ts`).
+- Lead, `36fc7cf`: the 7b builder's outside-files patch. Name cards, the mini-map, camera follow, the player and citizen give-way read live poses; preload, web-bridge and the standalone CLI save the shared city.
+- Lead, `bb83977`: the Office root's clock ticks every 5 s out of focus and stops while hidden. Panel clocks keep the second while the window is watched from aside (`office-clock.test.tsx`, 5 tests).
+- Lead, `c3f94fb`: dropped the unread `speakingAgentKey` scene option; unexported `HOST_ARGUMENT` and `hasOwnRecords`.
+- Integration suite at `c3f94fb`: **5,269 passed, 0 failed**. Both `tsc` and eslint are clean.
+- Running: `fix/office-health-p7c-roster`. A roamer changing room no longer rebuilds the floor batch, and the building shells become one static batch if that measures better.
 
 ### Phase 8 (in progress)
 
 - `f855f25`: version 1.4.1; Windows reports a missing update feed instead of "up to date".
 - Main checkout: mode-only changes 90 → 0.
 - 35 merged agent worktrees removed (2.2 GB). The one with untracked `labs/` was archived first to `.claude/archive/worktree-wip-2026-10-16/`.
-- Still to do: the six dirty feature worktrees, which wait until Phase 4 is done because Phase 3 reads two of them.
+- 6 merged phase worktrees removed. 5 stale feature worktrees: WIP exported as patches to `.claude/archive/worktree-wip-2026-10-16/`, then removed. `live-city-overview-fix` is kept: a live process has it as its working folder.
+- Running: Task 8.3 on `fix/office-health-p8-legacy-town`.
