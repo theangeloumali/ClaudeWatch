@@ -31,7 +31,9 @@ import { MovementRecovery, remainingRouteMetres } from './movement-recovery'
 import { placements, type Placement } from './placements'
 import { FloorRoutes, floorElevation, floorEntrance } from './world-floor-routes'
 import { VenueBookings, type WorldVenue } from './world-venues'
-import { reconcileLeisure } from './world-leisure'
+import { homeRoute, reconcileLeisure } from './world-leisure'
+import { RoamOutings } from './roaming'
+import type { Point } from './path'
 import {
   recoverWorkerRoute,
   resumeUnseatedWorker,
@@ -59,6 +61,7 @@ function agentBody(view: AgentView): BodyFootprint {
 export class World {
   private readonly routes = new FloorRoutes()
   private readonly venueBookings = new VenueBookings()
+  private readonly roaming = new RoamOutings()
   private readonly connectorOccupants = new Map<string, string>()
   private baseline: LayoutMap = { version: 1, floors: [], reservations: {} }
   private sources: readonly SourceHealth[] = []
@@ -266,7 +269,11 @@ export class World {
           session.key,
           isFinished
             ? updated
-            : returnToDesk(updated, slot.heading, this.routes.toFloor(updated.view, floor, slot))
+            : returnToDesk(
+                updated,
+                slot.heading,
+                homeRoute(updated, floor, slot, this.routes, this.venueTargets())
+              )
         )
         continue
       }
@@ -385,9 +392,11 @@ export class World {
       const portal = this.options.resolveLayout ? floorEntrance(floor) : floor.elevator
       // Admit the next body after its predecessor clears the door, not a whole converging roster.
       // A predecessor stuck there no longer holds the door for the crew behind it (seating-3).
+      // A walker still on the sidewalks, out or on its way home, is not at the door yet.
       const hasEntryTraffic = [...this.agents.values()].some(
         (walker) =>
           walker.state === 'arriving' &&
+          !walker.path[0]?.sidewalk &&
           walker.view.floorId === floor.id &&
           !this.recovery.isBodyBlocked(walker.view.agentKey) &&
           (walker.view.physicalFloorId === null ||
@@ -462,13 +471,18 @@ export class World {
       connected: this.ready,
       nowMs: this.nowMs,
       hasTrips: this.hasLoungeTrips,
-      venues: this.options.getVenueTargets?.() ?? [],
+      venues: this.venueTargets(),
       bookings: this.venueBookings,
       map: this.map,
       routes: this.routes,
       lounges: this.lounges,
+      roaming: this.roaming,
       clearPassage: (key) => this.passages.clear(key)
     })
+  }
+
+  private venueTargets(): readonly WorldVenue[] {
+    return this.options.getVenueTargets?.() ?? []
   }
 
   // Takes effect at the next step: agents in the lounge walk back, or waiting ones set out.
@@ -520,12 +534,16 @@ export class World {
         return to
       }
       const navigation = workerNavigation({ routes: this.routes, from, to, departure })
+      // A sidewalk leg never steps onto a carriageway, even to pass someone (P5).
+      const isOpen = to.sidewalk
+        ? (point: Point) => navigation.isOpen(point) && this.routes.isSidewalkOpen(point)
+        : navigation.isOpen
       const body = agentBody(from)
-      const hasClosedStart = !navigation.isOpen(from)
-      const leader = waitsForMovingBody({ body, to, obstacles, walkers, isOpen: navigation.isOpen })
+      const hasClosedStart = !isOpen(from)
+      const leader = waitsForMovingBody({ body, to, obstacles, walkers, isOpen })
       if (leader && !this.waitEdges.has(from.agentKey)) {
         this.waitEdges.set(from.agentKey, leader)
-        const step = bodyStep({ body, to, obstacles, isOpen: navigation.isOpen })
+        const step = bodyStep({ body, to, obstacles, isOpen })
         if (Math.hypot(step.x - from.x, step.z - from.z) > 1e-6) this.steppable.add(from.agentKey)
       }
       if (leader && !this.cycleLeaders.has(from.agentKey)) {
@@ -547,13 +565,13 @@ export class World {
           obstacles,
           walkers,
           tick: this.movementTick,
-          isOpen: navigation.isOpen,
+          isOpen,
           routeTo: (target) => navigation.around(body, target, obstacles)
         }),
         obstacles,
         // A layout may build a wall under a walker or shrink away; let that walker escape it.
         isOpen: (point) =>
-          navigation.isOpen(point) ||
+          isOpen(point) ||
           (hasClosedStart && Math.hypot(point.x - from.x, point.z - from.z) <= 0.140001)
       })
       hasYielded ||= Math.hypot(moved.x - to.x, moved.z - to.z) > 1e-8
@@ -591,7 +609,8 @@ export class World {
         this.connectorOccupants.delete(connector)
     const target = next.path.at(-1)
     // Brief direct steps can still circle a wall corner; recover from lack of waypoint progress.
-    if (target && recovery.canRepath) {
+    // A sidewalk leg keeps its route: the street detour would cross a carriageway.
+    if (target && recovery.canRepath && !next.path[0]?.sidewalk) {
       const route = recoverWorkerRoute({
         agent: next,
         routes: this.routes,
