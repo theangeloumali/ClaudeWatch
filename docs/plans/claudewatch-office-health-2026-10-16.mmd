@@ -1,0 +1,40 @@
+flowchart TD
+  P0["Phase 0 · baseline and guards"]
+  P1["Phase 1 · bridge truth (@ravi)"]
+  P2["Phase 2 · door and departures (@lena-sim)"]
+  P3["Phase 3 · streets + sidewalk network (@lena-town)"]
+  P6["Phase 6 · render fixes (@lena-render)"]
+  P4["Phase 4 · citizens on the network"]
+  P5["Phase 5 · roaming agents"]
+  P7["Phase 7 · performance (@lena-perf)"]
+  P89["Phases 8–9 · hygiene, integration, install → STOP for Angelo"]
+  P10["Phase 10 · close after approval"]
+  P0 --> P1 & P2 & P3 & P6
+  P3 --> P4
+  P2 --> P5
+  P3 --> P5
+  P1 --> P7
+  P4 --> P7
+  P5 --> P7
+  P6 --> P7
+  P7 --> P89 --> P10
+%% ---
+flowchart LR
+  H["19 ChatGPT helpers read as Codex agents"] --> F["phantom building, seated, Idle cards"]
+  C["lead in a >512-transcript folder"] --> I["reported idle → walks out"]
+  T["crew turnover: guests out, crew in"] --> Y["two walkers yield forever"]
+  Y --> S["stall clock reset by every repath"]
+  S --> G["arrival gate hides the crew; desks look empty"]
+  I --> Y
+  Y --> L["leaving guests carded 'Activity unavailable'"]
+  R["idle 'roaming' = 16 s venue stops via the same door"] --> Y
+%% ---
+flowchart TD
+  CB["shared: city-block-layout + city-access"] --> DS["shared: district-streets.ts"]
+  DS --> CW["shared: crosswalks.ts (paint + stop lines + crossing edges)"]
+  DS --> SW["shared: sidewalks.ts (split, trim, one-way, heap-Dijkstra)"]
+  CW --> SW
+  DS --> LM["effective-world → LayoutMap.streets (sim, renderer, preview)"]
+  SW --> CIT["citizens: pedestrianGround, breaker, zebra right-of-way"]
+  SW --> ROAM["roamers: world-leisure roam loop, FloorRoutes.sidewalkPath"]
+  ROAM --> CIT
