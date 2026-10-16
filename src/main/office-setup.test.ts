@@ -139,9 +139,12 @@ describe('setupOffice', () => {
 
     it('runs from start to stop with no Office window, serving its latest snapshot', () => {
       office.start()
-      expect(fork).toHaveBeenCalledExactlyOnceWith(join(__dirname, 'bridge.js'), [], {
-        serviceName: 'ClaudeWatch Office Bridge'
-      })
+      // Saved offsets spare the 1.9 GB usage catch-up on every bridge start (health-4).
+      expect(fork).toHaveBeenCalledExactlyOnceWith(
+        join(__dirname, 'bridge.js'),
+        ['--usage-offsets', join('/unused-user-data', 'usage-offsets.json')],
+        { serviceName: 'ClaudeWatch Office Bridge' }
+      )
       bridgeSays({ type: 'hello', v: 1, snapshot })
       expect(office.snapshot()).toEqual(snapshot)
 

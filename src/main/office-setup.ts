@@ -73,7 +73,11 @@ export function setupOffice(
   const bridge = new BridgeHost({
     spawn: () => {
       // The bridge derives a Codex session's account key only while accounts are watched.
-      const args = accounts.isWatchingAccounts ? ['--accounts'] : []
+      const args = [
+        ...(accounts.isWatchingAccounts ? ['--accounts'] : []),
+        '--usage-offsets',
+        join(app.getPath('userData'), 'usage-offsets.json')
+      ]
       const child = utilityProcess.fork(join(__dirname, 'bridge.js'), args, {
         serviceName: 'ClaudeWatch Office Bridge'
       })

@@ -29,7 +29,10 @@ async function main(): Promise<void> {
   }
   // The page files sit beside this file, listed in MANIFEST.json.
   const files = await loadStaticFiles(dirname(fileURLToPath(import.meta.url)))
-  const host = new BridgeHost({ spawn: () => new PollerProcess(new BridgePoller()) })
+  const usageOffsetsPath = join(LAUNCH_FOLDER, 'usage-offsets.json')
+  const host = new BridgeHost({
+    spawn: () => new PollerProcess(new BridgePoller({ usageOffsetsPath }))
+  })
   const service = createOfficeService({
     // This page has no ledger: no session carries an account, whatever the bridge reports.
     host: withoutAccounts(host),
