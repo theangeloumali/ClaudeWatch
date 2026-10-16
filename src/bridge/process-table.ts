@@ -29,6 +29,7 @@ export function parseProcessTable(output: string): ProcessRow[] {
       pid: Number(match[1]),
       lstart: match[2],
       startedAtMs: Date.parse(`${match[2]} UTC`),
+      // `ps` gives no argv boundaries: a spaced path splits, so argv[0] may be a truncated path.
       argv: match[3].trim().split(/\s+/)
     })
   }
@@ -152,19 +153,26 @@ export const placeholderId = ({ pid, startedAtMs }: SessionOwner): string =>
   `pid-${pid}-${startedAtMs}`
 
 // Remembered by pid and start time, since asking costs an `lsof` run.
-export async function rememberedFolder(
-  io: BridgeIo,
+export async function rememberFolder(
   folders: Map<string, string>,
   running: RunningProcess,
-  platform: NodeJS.Platform = process.platform
+  read: (pid: number) => Promise<string | undefined>
 ): Promise<string | undefined> {
   const identity = identityOf(running)
   const known = folders.get(identity)
   if (known) return known
-  const cwd = await readWorkingFolder(io, running.pid, platform)
+  const cwd = await read(running.pid)
   if (cwd) folders.set(identity, cwd)
   return cwd
 }
+
+export const rememberedFolder = (
+  io: BridgeIo,
+  folders: Map<string, string>,
+  running: RunningProcess,
+  platform: NodeJS.Platform = process.platform
+): Promise<string | undefined> =>
+  rememberFolder(folders, running, (pid) => readWorkingFolder(io, pid, platform))
 
 // Processes sharing a folder claim conversations newest first: an older one would otherwise
 // take the newest conversation, written by the one that started after it.

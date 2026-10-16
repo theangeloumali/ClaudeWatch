@@ -10,6 +10,7 @@ import type {
 } from '../shared/office/types'
 import { type CodexTotal, codexTotalOf } from '../shared/accounts'
 import { programName } from '../shared/platform-process'
+import { isAgentCli } from './agent-cli'
 import {
   claimFolders,
   folderKey,
@@ -48,11 +49,12 @@ const sessionCommandOf = (argv: string[]): number =>
   argv.findIndex((arg) => /^(exec|e|resume|fork)$/.test(arg))
 
 export function codexProcesses(
-  rows: ProcessRow[]
+  rows: ProcessRow[],
+  platform: NodeJS.Platform = process.platform
 ): { pid: number; startedAtMs: number; kind: CodexKind }[] {
   return rows
     .filter(({ argv }) => {
-      if (programName(argv[0]) !== 'codex') return false
+      if (programName(argv[0]) !== 'codex' || !isAgentCli(argv[0], platform)) return false
       const sessionCommand = sessionCommandOf(argv)
       // An exec prompt may mention a helper; only command arguments precede it.
       const commandArgs = argv.slice(1, sessionCommand < 0 ? undefined : sessionCommand)
@@ -251,7 +253,7 @@ export async function collectCodex(
   const liveTails = new Set<string>()
   try {
     const rows = await readProcesses()
-    const processes = codexProcesses(rows)
+    const processes = codexProcesses(rows, platform)
     const isHosting = rows.some(isAppServer)
     const rollouts =
       processes.length || isHosting

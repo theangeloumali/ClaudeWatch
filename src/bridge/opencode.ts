@@ -377,7 +377,7 @@ export async function collectOpencode(
   const health: SourceHealth = { id: 'opencode', ok: true, detail: 'empty' }
   try {
     const rows = await readProcesses()
-    const processes = opencodeProcesses(rows)
+    const processes = opencodeProcesses(rows, platform)
     const isHosting = rows.some(isOpencodeService)
     let memory = remembered.get(io)
     if (!memory) {

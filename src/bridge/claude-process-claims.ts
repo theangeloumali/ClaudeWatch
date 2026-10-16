@@ -1,4 +1,5 @@
 import { programName } from '../shared/platform-process'
+import { isAgentCli } from './agent-cli'
 import { type BridgeIo, isMissing } from './io'
 import { folderKey, isAppFolder, isFolderPath } from './process-folders'
 import { identityOf, rememberedFolder, type ProcessRow } from './process-table'
@@ -9,7 +10,7 @@ import {
 } from './claude-transcripts'
 
 const SESSION_FLAG = /^(?:--resume|--session-id|-r)(?:=(.*))?$/
-const HOST_ARGUMENT = /^--(?:chrome-native-host|agent-id|parent-session-id)(?:=|$)/
+export const HOST_ARGUMENT = /^--(?:chrome-native-host|agent-id|parent-session-id)(?:=|$)/
 const UTILITY_COMMAND =
   /^(?:--help|--version|-h|-v|help|update|install|uninstall|doctor|auth|mcp|setup-token)$/
 
@@ -23,7 +24,7 @@ export function isNativeClaudeLead(
     Number.isFinite(startedAtMs) &&
     programName(argv[0] ?? '') === 'claude' &&
     !/\.(?:cmd|bat)$/i.test(argv[0] ?? '') &&
-    !isAppFolder(argv[0] ?? '', platform) &&
+    isAgentCli(argv[0] ?? '', platform) &&
     !argv.slice(1).some((argument) => HOST_ARGUMENT.test(argument)) &&
     !UTILITY_COMMAND.test(argv[1] ?? '')
   )

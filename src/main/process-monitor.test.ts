@@ -16,18 +16,19 @@ const mockExecFile = vi.mocked(execFile)
 type ExecCallback = (error: Error | null, stdout?: string, stderr?: string) => void
 
 // ─── Darwin ps output samples ───
-const PS_HEADER = '  PID STAT %CPU %MEM     ELAPSED TT       COMMAND'
+const PS_HEADER = '  PID STAT %CPU %MEM     ELAPSED TT       STARTED                      COMMAND'
 
 const PS_LINE_ACTIVE =
-  '12345 R+    45.2  1.3       02:30 ttys001  /usr/local/bin/claude --resume abc123 --dangerously-skip-permissions'
+  '12345 R+    45.2  1.3       02:30 ttys001  Thu Oct 15 14:23:38 2026     /usr/local/bin/claude --resume abc123 --dangerously-skip-permissions'
 
 const PS_LINE_IDLE =
-  '67890 S     0.1  0.8       10:15 ttys002  /Users/angelo/.claude/local/claude --continue'
+  '67890 S     0.1  0.8       10:15 ttys002  Thu Oct 15 14:23:38 2026     /Users/angelo/.claude/local/claude --continue'
 
 const PS_LINE_GUI =
-  '11111 S     2.0  3.0       01:00 ??       /Applications/Claude.app/Contents/MacOS/Claude'
+  '11111 S     2.0  3.0       01:00 ??       Thu Oct 15 14:23:38 2026     /Applications/Claude.app/Contents/MacOS/Claude'
 
-const PS_LINE_GREP = '99999 S     0.0  0.0       00:01 ttys003  grep claude'
+const PS_LINE_GREP =
+  '99999 S     0.0  0.0       00:01 ttys003  Thu Oct 15 14:23:38 2026     grep claude'
 
 const LSOF_OUTPUT_12345 = 'p12345\nn/Users/angelo/Desktop/Work/ZKidz/MacClaudeTracker\n'
 const LSOF_OUTPUT_67890 = 'p67890\nn/Users/angelo/projects/my-app\n'
@@ -209,7 +210,8 @@ describe('ProcessMonitor', () => {
     })
 
     it('should parse elapsed time correctly', async () => {
-      const psLineLong = '55555 R+    10.0  2.0    1:05:30 ttys004  /usr/local/bin/claude'
+      const psLineLong =
+        '55555 R+    10.0  2.0    1:05:30 ttys004  Thu Oct 15 14:23:38 2026     /usr/local/bin/claude'
       let callCount = 0
       mockExecFile.mockImplementation(((
         _bin: string,
@@ -262,7 +264,8 @@ describe('ProcessMonitor', () => {
 
   describe('status determination', () => {
     it('should classify R stat with high CPU as active', async () => {
-      const psLine = '10000 R+    50.0  1.0       01:00 ttys001  /usr/local/bin/claude'
+      const psLine =
+        '10000 R+    50.0  1.0       01:00 ttys001  Thu Oct 15 14:23:38 2026     /usr/local/bin/claude'
       let callCount = 0
       mockExecFile.mockImplementation(((
         _bin: string,
@@ -284,7 +287,8 @@ describe('ProcessMonitor', () => {
     })
 
     it('should classify S stat with low CPU as idle', async () => {
-      const psLine = '10001 S     0.5  1.0       01:00 ttys001  /usr/local/bin/claude'
+      const psLine =
+        '10001 S     0.5  1.0       01:00 ttys001  Thu Oct 15 14:23:38 2026     /usr/local/bin/claude'
       let callCount = 0
       mockExecFile.mockImplementation(((
         _bin: string,
@@ -306,7 +310,8 @@ describe('ProcessMonitor', () => {
     })
 
     it('should use configurable cpuIdleThreshold', async () => {
-      const psLine = '10002 S     3.0  1.0       01:00 ttys001  /usr/local/bin/claude'
+      const psLine =
+        '10002 S     3.0  1.0       01:00 ttys001  Thu Oct 15 14:23:38 2026     /usr/local/bin/claude'
       let callCount = 0
       mockExecFile.mockImplementation(((
         _bin: string,
@@ -330,7 +335,8 @@ describe('ProcessMonitor', () => {
 
   describe('default threshold', () => {
     it('should treat 2.0% CPU as idle with default threshold (3.0%)', async () => {
-      const psLine = '10010 S     2.0  1.0       01:00 ttys001  /usr/local/bin/claude'
+      const psLine =
+        '10010 S     2.0  1.0       01:00 ttys001  Thu Oct 15 14:23:38 2026     /usr/local/bin/claude'
       let callCount = 0
       mockExecFile.mockImplementation(((
         _bin: string,
@@ -355,7 +361,7 @@ describe('ProcessMonitor', () => {
   describe('flag parsing', () => {
     it('should parse --resume with session ID', async () => {
       const psLine =
-        '20000 R+    10.0  1.0       01:00 ttys001  /usr/local/bin/claude --resume session-xyz'
+        '20000 R+    10.0  1.0       01:00 ttys001  Thu Oct 15 14:23:38 2026     /usr/local/bin/claude --resume session-xyz'
       let callCount = 0
       mockExecFile.mockImplementation(((
         _bin: string,
@@ -378,7 +384,8 @@ describe('ProcessMonitor', () => {
     })
 
     it('should parse --continue flag without session ID', async () => {
-      const psLine = '20001 S     0.1  1.0       01:00 ttys001  /usr/local/bin/claude --continue'
+      const psLine =
+        '20001 S     0.1  1.0       01:00 ttys001  Thu Oct 15 14:23:38 2026     /usr/local/bin/claude --continue'
       let callCount = 0
       mockExecFile.mockImplementation(((
         _bin: string,
@@ -401,7 +408,8 @@ describe('ProcessMonitor', () => {
     })
 
     it('should handle no flags', async () => {
-      const psLine = '20002 S     0.1  1.0       01:00 ttys001  /usr/local/bin/claude'
+      const psLine =
+        '20002 S     0.1  1.0       01:00 ttys001  Thu Oct 15 14:23:38 2026     /usr/local/bin/claude'
       let callCount = 0
       mockExecFile.mockImplementation(((
         _bin: string,
