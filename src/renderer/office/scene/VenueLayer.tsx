@@ -25,8 +25,9 @@ export function VenueLayer({
     [venues, palette, theme?.id, areRoofsVisible]
   )
   const Lounge = (theme ?? getTheme('corporate-city')).kit.zone.Lounge
+  // Nothing in a venue moves or toggles between revisions, its lounge included (perf-1).
   return (
-    <BatchedScene revision={revision}>
+    <BatchedScene revision={revision} isStatic>
       {venues.map((venue) => (
         <group
           key={venue.id}

@@ -1,4 +1,4 @@
-import { Canvas } from '@react-three/fiber'
+import { Canvas, type RootState } from '@react-three/fiber'
 import { memo, useCallback, useMemo, useRef, useState } from 'react'
 import type { AgentView, SessionRef, SourceHealth } from '../../../shared/office/types'
 import { cityVenueSite } from '../../../shared/office/city-access'
@@ -43,6 +43,7 @@ import { WorkstationScreens } from './WorkstationScreens'
 import { OfficeNameLayer, OfficeNameProjector, type OfficeNameAnchors } from './OfficeNames'
 import { SceneBodies } from './BodySpace'
 import { BodyObstacleSync } from './BodyObstacleSync'
+import { ShaderPrewarm } from './ShaderPrewarm'
 import type { BodyFootprint } from '../../../shared/office/body-footprints'
 
 interface OfficeSceneProps {
@@ -133,6 +134,7 @@ function OfficeScene(props: OfficeSceneProps) {
   const [bodies] = useState(() => new SceneBodies())
   bodies.setWorkers(agents)
   const [officeAnchors] = useState<OfficeNameAnchors>(() => new Map())
+  const [canvasRoot, setCanvasRoot] = useState<RootState | null>(null)
   const { surfaces, groups, zoneGroups, townFloor, officeLabels, displays, revision } =
     useSceneFloorData(props)
   const visibleCards = useMemo(() => {
@@ -248,6 +250,7 @@ function OfficeScene(props: OfficeSceneProps) {
         gl={{ powerPreference: 'low-power', alpha: false, antialias: true }}
         camera={{ zoom: BAND_ZOOM.floor, near: 1, far: 200, position: INITIAL_CAMERA_POSITION }}
         onPointerMissed={() => props.onSelectAgent(null)}
+        onCreated={setCanvasRoot}
       >
         <color
           attach="background"
@@ -444,6 +447,7 @@ function OfficeScene(props: OfficeSceneProps) {
         {!props.isLayoutPreview && (
           <BodyObstacleSync bodies={bodies} onChange={props.onBodyObstacles} />
         )}
+        <ShaderPrewarm root={canvasRoot} viewMode={props.viewMode} />
       </Canvas>
       {!props.isLayoutPreview && (
         <NameCardLayer
