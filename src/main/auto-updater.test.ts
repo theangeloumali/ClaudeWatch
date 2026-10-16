@@ -194,22 +194,21 @@ describe('AutoUpdaterManager', () => {
       code: 'ERR_UPDATER_CHANNEL_FILE_NOT_FOUND'
     }
 
-    it('tells Windows there is no update and only logs the cause', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    // A Mac-only latest release hides every newer Windows build, so "up to date" would lie (health-7).
+    it('tells Windows its update feed is missing instead of claiming it is up to date', () => {
       const win = makeMockWindow()
       new AutoUpdaterManager([() => win as unknown as Electron.BrowserWindow], 'win32')
 
       mockAutoUpdater._emit('error', missingChannelFile)
 
       expect(win.webContents.send).toHaveBeenCalledWith('updater:status', {
-        status: 'not-available'
+        status: 'error',
+        data: expect.stringContaining('no Windows update feed')
       })
       expect(win.webContents.send).not.toHaveBeenCalledWith(
         'updater:status',
-        expect.objectContaining({ status: 'error' })
+        expect.objectContaining({ status: 'not-available' })
       )
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining(missingChannelFile.message))
-      warn.mockRestore()
     })
 
     it('still reports other Windows update errors', () => {

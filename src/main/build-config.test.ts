@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import reactPlugin from '@vitejs/plugin-react'
 import { describe, it, expect } from 'vitest'
@@ -145,5 +146,23 @@ describe('repository ignores', () => {
     ]) {
       expect(ignored).toContain(pattern)
     }
+  })
+})
+
+describe('release version', () => {
+  const parts = (version: string): number[] => version.replace(/^v/, '').split('.').map(Number)
+  const isAtLeast = (version: string, floor: string): boolean => {
+    const [a, b] = [parts(version), parts(floor)]
+    const index = a.findIndex((part, i) => part !== b[i])
+    return index === -1 || a[index] > b[index]
+  }
+
+  // Shipping below a published tag makes the next bump collide with it (health-8).
+  it('is never below the newest published release tag', async () => {
+    const tags = execFileSync('git', ['tag', '-l', 'v*'], { encoding: 'utf-8' })
+      .split('\n')
+      .filter((tag) => /^v\d+\.\d+\.\d+$/.test(tag))
+    const manifest = JSON.parse(await readFile(resolve(process.cwd(), 'package.json'), 'utf-8'))
+    for (const tag of tags) expect(isAtLeast(manifest.version, tag), tag).toBe(true)
   })
 })
