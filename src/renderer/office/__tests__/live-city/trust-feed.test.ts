@@ -99,7 +99,8 @@ describe('live work evidence boundaries', () => {
     harness.hello()
     vi.advanceTimersByTime(100)
     harness.emit({ type: 'resync' })
-    vi.advanceTimersByTime(100)
+    // jsdom's page is out of focus, so the frame waits for the blurred frame gap.
+    vi.advanceTimersByTime(200)
     expect(harness.frames.at(-1)).toMatchObject({ connected: false })
     expect(harness.frames.at(-1)?.sessions.map((record) => record.key)).toEqual([session.key])
     harness.unsubscribe()

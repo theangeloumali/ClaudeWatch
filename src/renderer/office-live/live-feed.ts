@@ -20,6 +20,7 @@ import { officeSettings, type OfficeSettingsStore } from '../office/logic/office
 import { browserVisibilityEnv, type VisibilityEnv } from '../office/logic/frame-governor'
 import type { FloorGeometry, OfficeFeed, OfficeFrame } from '../office/scene-model'
 import { toFloorGeometry } from './layout-geometry'
+import { officePoses, poseOf, structuralKey, type PoseStore } from './pose-store'
 
 export interface FeedSource {
   ready(): Promise<void>
@@ -42,6 +43,13 @@ interface LayoutStorage {
 
 const LAYOUT_KEY = 'claudewatch.office.layout'
 const TICK_MS = 100
+// The governor's blurred idle rate (5 fps): a background window needs React frames no faster.
+const BLURRED_FRAME_GAP_MS = 200
+
+export interface LiveFeed extends OfficeFeed {
+  // Every agent's pose at the latest sim step; frames are sent only when structure changes.
+  poses: PoseStore
+}
 
 const isObjectArray = (value: unknown): value is Record<string, unknown>[] =>
   Array.isArray(value) && value.every(isJsonObject)
@@ -90,12 +98,14 @@ export function createLiveFeed(
     // The owner's switches; the sim reads only the lounge trips.
     settings?: Pick<OfficeSettingsStore, 'get' | 'subscribe'>
     visibility?: VisibilityEnv
+    poses?: PoseStore
   }
-): OfficeFeed {
+): LiveFeed {
   const now = options.now ?? Date.now
   const settings = options.settings ?? officeSettings
   const visibility = options.visibility ?? browserVisibilityEnv()
   const listeners = new Set<(frame: OfficeFrame) => void>()
+  const poses = options.poses ?? officePoses
   let stop: (() => void) | null = null
   let currentWorld: World | null = null
   let documentStore: WorldDocumentStore | null = null
@@ -153,6 +163,7 @@ export function createLiveFeed(
     })
     let savedLayout = ''
     let lastAgents = ''
+    let lastFrameAtMs = Number.NEGATIVE_INFINITY
     let isDirty = true
     let offDocument: (() => void) | undefined
     let documentRevision = -1
@@ -239,11 +250,15 @@ export function createLiveFeed(
       }
       const agents = world.step(tick - lastTick)
       lastTick = tick
-      // Idle offices produce identical frames; skip them so the scene is not re-rendered for nothing.
-      const agentsKey = JSON.stringify(agents)
+      for (const agent of agents) poses.write(agent.agentKey, poseOf(agent))
+      // A walk moves poses only: the scene reads those each drawn frame, without React (perf-2).
+      const agentsKey = structuralKey(agents)
       if (!isDirty && agentsKey === lastAgents) return
+      if (!visibility.read().isFocused && tick - lastFrameAtMs < BLURRED_FRAME_GAP_MS) return
       isDirty = false
       lastAgents = agentsKey
+      lastFrameAtMs = tick
+      poses.retain(new Set(agents.map((agent) => agent.agentKey)))
       const frame: OfficeFrame = {
         floors,
         agents,
@@ -273,6 +288,7 @@ export function createLiveFeed(
   }
 
   return {
+    poses,
     getWorldDocumentStore: () => documentStore,
     setBodyObstacles: (bodies) => currentWorld?.setBodyObstacles(bodies),
     subscribe(listener) {
