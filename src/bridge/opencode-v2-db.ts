@@ -62,6 +62,15 @@ function sessionStatements(modelColumn: 'model' | 'NULL') {
   }
 }
 
+// A JSON list of session ids, each joined to the newest message `ORDER BY seq DESC` finds.
+const NEWEST_OF_EACH = `json_each(?) AS newest
+    JOIN session_message AS message ON message.rowid = (
+      SELECT rowid FROM session_message INDEXED BY session_message_session_seq_idx
+      WHERE session_id = newest.value ORDER BY seq DESC LIMIT 1
+    )`
+// The most sessions one batched read is asked about: a family's children, as opencode.ts bounds them.
+export const MAX_V2_BATCH = 64
+
 const sessionsWithModel = sessionStatements('model')
 const sessionsWithoutModel = sessionStatements('NULL')
 
@@ -75,27 +84,31 @@ export const OPENCODE_V2_STATEMENTS = {
   v2SessionWithoutModel: sessionsWithoutModel.v2Session,
   v2RecentRootsWithoutModel: sessionsWithoutModel.v2RecentRoots,
   v2ChildSessionsWithoutModel: sessionsWithoutModel.v2ChildSessions,
-  v2NewestMessage: `
-    SELECT id, type AS role, time_created, time_updated,
-           json_extract(data, '$.finish') AS finish,
-           json_extract(data, '$.time.completed') AS completed,
-           json_extract(data, '$.error.name') AS error,
-           json_extract(data, '$.outcome') AS outcome
-    FROM session_message INDEXED BY session_message_session_seq_idx
-    WHERE session_id = ? ORDER BY seq DESC LIMIT 1`,
-  v2MessageParts: `
-    WITH newest AS (
-      SELECT data FROM session_message INDEXED BY session_message_session_seq_idx
-      WHERE session_id = ? ORDER BY seq DESC LIMIT 1
-    )
-    SELECT json_extract(part.value, '$.type') AS type,
-           COALESCE(json_extract(part.value, '$.tool'), json_extract(part.value, '$.name')) AS tool,
-           COALESCE(json_extract(part.value, '$.state.status'), json_extract(part.value, '$.status')) AS status
-    FROM newest, json_each(newest.data, '$.content') AS part
-    WHERE part.type = 'object' AND json_extract(part.value, '$.type') = 'tool'
-      AND COALESCE(json_extract(part.value, '$.state.status'), json_extract(part.value, '$.status'))
-          IN ('running', 'pending')
-    LIMIT 16`
+  // Each listed session's newest message, by one indexed lookup apiece (perf-4).
+  v2NewestMessages: `
+    SELECT newest.value AS session_id, message.id, message.type AS role, message.time_created,
+           message.time_updated,
+           json_extract(message.data, '$.finish') AS finish,
+           json_extract(message.data, '$.time.completed') AS completed,
+           json_extract(message.data, '$.error.name') AS error,
+           json_extract(message.data, '$.outcome') AS outcome
+    FROM ${NEWEST_OF_EACH}
+    LIMIT ${MAX_V2_BATCH}`,
+  // The tools still running in each listed session's newest message, 16 at most apiece.
+  v2NewestParts: `
+    SELECT session_id, type, tool, status FROM (
+      SELECT newest.value AS session_id,
+             json_extract(part.value, '$.type') AS type,
+             COALESCE(json_extract(part.value, '$.tool'), json_extract(part.value, '$.name')) AS tool,
+             COALESCE(json_extract(part.value, '$.state.status'), json_extract(part.value, '$.status')) AS status,
+             row_number() OVER (PARTITION BY newest.value ORDER BY part.key) AS position
+      FROM ${NEWEST_OF_EACH}, json_each(message.data, '$.content') AS part
+      WHERE part.type = 'object' AND json_extract(part.value, '$.type') = 'tool'
+        AND COALESCE(json_extract(part.value, '$.state.status'), json_extract(part.value, '$.status'))
+            IN ('running', 'pending')
+    ) WHERE position <= 16
+    ORDER BY session_id, position
+    LIMIT ${MAX_V2_BATCH * 16}`
 } as const
 
 // Older V2 schemas use the same indexed queries, with NULL instead of a missing column.

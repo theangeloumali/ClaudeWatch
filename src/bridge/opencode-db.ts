@@ -1,4 +1,4 @@
-import type { DatabaseSync } from 'node:sqlite'
+import type { DatabaseSync, StatementSync } from 'node:sqlite'
 import { OPENCODE_V2_STATEMENTS } from './opencode-v2-db'
 
 // Everything the bridge may ask OpenCode's database. Each statement names its columns, its bound
@@ -153,15 +153,18 @@ export function readOpencodeDb<Result>(
     } catch (error) {
       throw failureOf(error, 'unreadable')
     }
+    // Each statement compiles once per connection, however often it is asked (perf-4).
+    const compiled = new Map<OpencodeStatement, StatementSync>()
     // The same questions, asked of the tables the database's own OpenCode writes.
     return read((statement, ...values) => {
       const asked = isOpencode2 ? (OPENCODE_2_OF.get(statement) ?? statement) : statement
-      let prepared
+      let prepared = compiled.get(asked)
       try {
-        prepared = db.prepare(OPENCODE_READ_STATEMENTS[asked])
+        prepared ??= db.prepare(OPENCODE_READ_STATEMENTS[asked])
       } catch (error) {
         throw failureOf(error, 'changed')
       }
+      compiled.set(asked, prepared)
       try {
         return prepared.all(...values)
       } catch (error) {
