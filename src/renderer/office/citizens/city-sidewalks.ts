@@ -1,10 +1,12 @@
 import { crosswalks, type Crosswalk } from '../../../shared/office/crosswalks'
 import {
+  ambientLoops,
   attachDoor,
   pedestrianGround,
   sidewalkNetwork,
   type SidewalkNetwork
 } from '../../../shared/office/sidewalks'
+import type { WorldPoint } from '../../../shared/office/world-document-types'
 import { walkGround, type WalkGround } from '../player/walk-ground'
 import type { FloorGeometry } from '../scene-model'
 import type { TownPlan } from '../town/town-plan'
@@ -12,6 +14,8 @@ import type { TownPlan } from '../town/town-plan'
 export interface CitySidewalks {
   network: SidewalkNetwork
   crossings: readonly Crosswalk[]
+  // One closed, one-way walk round each block.
+  loops: readonly (readonly WorldPoint[])[]
 }
 
 const built = new WeakMap<TownPlan, CitySidewalks>()
@@ -26,7 +30,7 @@ export function citySidewalks(plan: TownPlan): CitySidewalks | null {
   const network = sidewalkNetwork(plan.roads, crossings)
   for (const lot of [...plan.lots].sort((a, b) => a.id.localeCompare(b.id)))
     attachDoor(network, lot.door)
-  const sidewalks = { network, crossings }
+  const sidewalks = { network, crossings, loops: ambientLoops(network) }
   built.set(plan, sidewalks)
   return sidewalks
 }
