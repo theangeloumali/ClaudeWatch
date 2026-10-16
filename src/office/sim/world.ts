@@ -1,4 +1,10 @@
-import type { AgentView, FeedMessage, SessionRef, SourceHealth } from '../../shared/office/types'
+import {
+  DEPARTURE_FADE_MS,
+  type AgentView,
+  type FeedMessage,
+  type SessionRef,
+  type SourceHealth
+} from '../../shared/office/types'
 import { clamp } from '../../shared/range'
 import { BodyPassages } from '../../shared/office/body-passages'
 import {
@@ -21,8 +27,8 @@ import {
 import { buildLayout, type LayoutMap, type LoungeLayout } from './layout'
 import { loungesByRoom } from './lounge'
 import type { PathCache } from './navigation'
-import { MovementRecovery } from './movement-recovery'
-import { placements } from './placements'
+import { MovementRecovery, remainingRouteMetres } from './movement-recovery'
+import { placements, type Placement } from './placements'
 import { FloorRoutes, floorElevation, floorEntrance } from './world-floor-routes'
 import { VenueBookings, type WorldVenue } from './world-venues'
 import { reconcileLeisure } from './world-leisure'
@@ -34,6 +40,8 @@ import {
   workerNavigation
 } from './worker-navigation'
 export type { WorldVenue } from './world-venues'
+
+const TICK_MS = 100
 
 function agentBody(view: AgentView): BodyFootprint {
   return {
@@ -60,6 +68,9 @@ export class World {
   private bodyObstacles: readonly BodyFootprint[] = []
   private departurePaths = new Map<string, PathCache>()
   private readonly recovery = new MovementRecovery()
+  private readonly members = new Map<string, Placement['member']>()
+  // Departing agents fading out in place, with how long each has faded.
+  private readonly fading = new Map<string, number>()
   private readonly passages = new BodyPassages()
   private movementTick = 0
   private map: LayoutMap = { version: 1, floors: [], reservations: {} }
@@ -174,6 +185,15 @@ export class World {
     for (const key of this.arrivals.keys()) if (!active.has(key)) this.arrivals.delete(key)
     for (const [key, agent] of this.agents) {
       if (active.has(key) || agent.state === 'leaving') continue
+      this.venueBookings.release(key)
+      this.passages.clear(key)
+      // A subagent runs inside its parent: it finishes at its desk while the parent works, and
+      // leaves with the parent when the session ends (seating-4).
+      const member = this.members.get(key)
+      if (member?.kind === 'subagent' && active.has(member.leadKey)) {
+        this.fadeOut(key, leaveAgent(agent, []))
+        continue
+      }
       const floor =
         this.routes.floor(agent.view.physicalFloorId) ??
         oldMap.floors.find((f) => f.id === agent.view.floorId)
@@ -192,9 +212,7 @@ export class World {
         ? this.routes.toGround(agent.view, floor, agent.view.place === 'lounge' ? undefined : door)
         : exit
       this.agents.set(key, leaveAgent(agent, departure))
-      this.venueBookings.release(key)
       this.departurePaths.set(key, oldPaths)
-      this.passages.clear(key)
     }
     const oldRooms = new Map(
       oldMap.floors.flatMap((floor) =>
@@ -203,6 +221,7 @@ export class World {
     )
     for (const placement of desired) {
       const { session, room, slot, floorId, isSubagent } = placement
+      this.members.set(session.key, placement.member)
       const isFinished =
         placement.isFinished ||
         (session.observation?.coverage === 'own' &&
@@ -302,6 +321,7 @@ export class World {
       const agent = createAgent(session, destination, route.length ? route : entrance)
       this.passages.clear(session.key)
       this.recovery.clear(session.key)
+      this.fading.delete(session.key)
       agent.view.isSubagent = isSubagent
       if (existing)
         Object.assign(agent.view, {
@@ -534,19 +554,23 @@ export class World {
       next.view.physicalFloorId === null && (next.view.elevation ?? 0) !== 0
         ? activeConnector
         : undefined
-    for (const [connector, occupant] of this.connectorOccupants)
-      if (
-        occupant === agent.view.agentKey &&
-        !next.path.some((point) => point.connectorId === connector)
-      )
-        this.connectorOccupants.delete(connector)
     const key = agent.view.agentKey
     const recovery = this.recovery.record({
       id: key,
       position: next.view,
       waypoint: next.path[0],
-      hasYielded
+      hasYielded,
+      remaining: remainingRouteMetres(next.view, next.path)
     })
+    // A leaver that cannot get through fades where it stands; an arriver keeps waiting, never
+    // moved by fiat (seating-2, verifier E7).
+    if (recovery.isBodyBlocked && next.state === 'leaving') {
+      next.path = []
+      this.startFade(key)
+    }
+    for (const [connector, occupant] of this.connectorOccupants)
+      if (occupant === key && !next.path.some((point) => point.connectorId === connector))
+        this.connectorOccupants.delete(connector)
     const target = next.path.at(-1)
     // Brief direct steps can still circle a wall corner; recover from lack of waypoint progress.
     if (target && recovery.canRepath) {
@@ -566,6 +590,26 @@ export class World {
     return next
   }
 
+  private startFade(key: string): void {
+    this.fading.set(key, 0)
+    this.passages.clear(key)
+    this.recovery.clear(key)
+  }
+
+  private fadeOut(key: string, agent: AgentRecord): void {
+    this.agents.set(key, agent)
+    this.startFade(key)
+  }
+
+  private remove(key: string): void {
+    this.agents.delete(key)
+    this.departurePaths.delete(key)
+    this.recovery.clear(key)
+    this.passages.clear(key)
+    this.fading.delete(key)
+    this.members.delete(key)
+  }
+
   step(dtMs: number): AgentView[] {
     this.syncClock()
     this.activateArrivals()
@@ -575,13 +619,15 @@ export class World {
       const ordered = [...this.agents].sort(([first], [second]) => first.localeCompare(second))
       const offset = this.movementTick++ % Math.max(1, ordered.length)
       for (const [key, agent] of [...ordered.slice(offset), ...ordered.slice(0, offset)]) {
+        const fadedMs = this.fading.get(key)
+        if (fadedMs !== undefined) {
+          if (fadedMs + TICK_MS >= DEPARTURE_FADE_MS) this.remove(key)
+          else this.fading.set(key, fadedMs + TICK_MS)
+          continue
+        }
         const next = this.moveAgent(agent)
-        if (next.removed) {
-          this.agents.delete(key)
-          this.departurePaths.delete(key)
-          this.recovery.clear(key)
-          this.passages.clear(key)
-        } else this.agents.set(key, next)
+        if (next.removed) this.remove(key)
+        else this.agents.set(key, next)
       }
       for (const [key, agent] of this.arrivals)
         this.arrivals.set(
@@ -594,7 +640,12 @@ export class World {
     }
     return [...this.agents.values()]
       .sort((a, b) => a.view.agentKey.localeCompare(b.view.agentKey))
-      .map((a) => ({ ...a.view }))
+      .map((a) => {
+        const fadedMs = this.fading.get(a.view.agentKey)
+        return fadedMs === undefined
+          ? { ...a.view }
+          : { ...a.view, fade: fadedMs / DEPARTURE_FADE_MS }
+      })
   }
 
   revision(): number {

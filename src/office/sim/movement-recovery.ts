@@ -4,6 +4,11 @@ const PROGRESS_METRES = 0.05
 const REPATH_YIELD_TICKS = 10
 // A passing detour lasts eight seconds; allow it to finish before treating a waypoint as stuck.
 const STALLED_TICKS = 120
+// How long a walker may yield without gaining ground on its route before it counts as stuck.
+export const BODY_BLOCKED_LIMIT_SEC = 15
+const BODY_BLOCKED_TICKS = BODY_BLOCKED_LIMIT_SEC * 10
+// Gridlocked bodies jitter by centimetres; only real headway restarts the count.
+const BLOCKED_PROGRESS_METRES = 0.5
 
 interface Progress {
   waypoint: Point
@@ -12,29 +17,51 @@ interface Progress {
   yieldedTicks: number
 }
 
+// dry-new: no shared polyline length; recovery measures headway along the whole route.
+export function remainingRouteMetres(position: Point, route: readonly Point[]): number {
+  let metres = 0
+  let from = position
+  for (const point of route) {
+    metres += Math.hypot(point.x - from.x, point.z - from.z)
+    from = point
+  }
+  return metres
+}
+
 // dry-new: body clearance is stateless; recovery also needs sustained progress toward a waypoint.
 export class MovementRecovery {
   private readonly progress = new Map<string, Progress>()
+  // Kept apart from `progress`: a repath or a new waypoint must not restart it (seating-2).
+  private readonly blocked = new Map<string, { remaining: number; ticks: number }>()
 
   clear(id: string): void {
     this.progress.delete(id)
+    this.blocked.delete(id)
   }
 
   record({
     id,
     position,
     waypoint,
-    hasYielded
+    hasYielded,
+    remaining
   }: {
     id: string
     position: Point
     waypoint?: Point
     hasYielded: boolean
-  }): { canRepath: boolean; isStalled: boolean } {
+    // Route metres still to walk, measured from `position`.
+    remaining: number
+  }): { canRepath: boolean; isStalled: boolean; isBodyBlocked: boolean } {
     if (!waypoint) {
       this.clear(id)
-      return { canRepath: false, isStalled: false }
+      return { canRepath: false, isStalled: false, isBodyBlocked: false }
     }
+    const blocked = this.blocked.get(id)
+    if (!blocked) this.blocked.set(id, { remaining, ticks: hasYielded ? 1 : 0 })
+    else if (remaining < blocked.remaining - BLOCKED_PROGRESS_METRES)
+      this.blocked.set(id, { remaining, ticks: 0 })
+    else if (hasYielded) blocked.ticks += 1
     const previous = this.progress.get(id)
     const yieldedTicks = hasYielded ? (previous?.yieldedTicks ?? 0) + 1 : 0
     const distance = Math.hypot(waypoint.x - position.x, waypoint.z - position.z)
@@ -54,7 +81,8 @@ export class MovementRecovery {
       canRepath:
         isStalled ||
         (yieldedTicks >= REPATH_YIELD_TICKS && yieldedTicks % REPATH_YIELD_TICKS === 0),
-      isStalled
+      isStalled,
+      isBodyBlocked: (this.blocked.get(id)?.ticks ?? 0) >= BODY_BLOCKED_TICKS
     }
   }
 
