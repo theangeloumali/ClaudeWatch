@@ -114,7 +114,7 @@ export function parseCodexActivity(tail: string): {
       openCalls.set(callKey, {
         name,
         category: toolCategory(name),
-        ...(typeof callId === 'string' && { callId })
+        ...(isLabel(callId) && { callId })
       })
     } else if (OUTPUTS.has(type)) {
       // Outputs close their own call, not another tool still running in parallel.

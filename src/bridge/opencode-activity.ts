@@ -113,7 +113,7 @@ export function opencodeState(
       currentTool: {
         name: part.tool,
         category,
-        ...(typeof part.id === 'string' && { callId: part.id })
+        ...(isLabel(part.id) && { callId: part.id })
       }
     }
   }
