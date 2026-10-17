@@ -39,17 +39,18 @@ const perLevel = (full: number, balanced: number, light: number): Record<Quality
 })
 
 // What each port layer may add over the Phase 0 baseline. Lighter levels keep what shows state:
-// signs, the viaduct, and crowns, whose batch carries the spires.
+// signs, the viaduct and the spires.
 export const CITY_LAYER_BUDGET: Record<CityLayer, LayerAllocation> = {
   signs: { draws: perLevel(2, 2, 2), uploadBytes: 0 },
   'venue-landmarks': { draws: perLevel(1, 0, 0), uploadBytes: 0 },
   railway: { draws: perLevel(4, 2, 1), uploadBytes: 0 },
   // Drawn under railway; their poses are the city's one upload while still.
   trains: { draws: perLevel(0, 0, 0), uploadBytes: 2048 },
-  'work-trips': { draws: perLevel(1, 0, 0), uploadBytes: 0 },
-  spires: { draws: perLevel(0, 0, 0), uploadBytes: 0 },
+  // A ring lives only while a trip is under way, as the rig only while a stage rises.
+  'work-trips': { draws: perLevel(1, 0, 0), uploadBytes: 0, isTransient: true },
+  spires: { draws: perLevel(1, 1, 1), uploadBytes: 0 },
   rig: { draws: perLevel(2, 2, 0), uploadBytes: 0, isTransient: true },
-  crowns: { draws: perLevel(1, 1, 1), uploadBytes: 0 },
+  crowns: { draws: perLevel(1, 0, 0), uploadBytes: 0 },
   beacons: { draws: perLevel(1, 1, 0), uploadBytes: 0 },
   particles: { draws: perLevel(1, 1, 0), uploadBytes: 0 },
   flags: { draws: perLevel(1, 1, 0), uploadBytes: 0 },

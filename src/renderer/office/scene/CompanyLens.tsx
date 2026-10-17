@@ -74,9 +74,9 @@ export function createLensDriver(): LensDriver {
     print: ''
   }
   const mixed = new Color()
-  // Signals bump on every count; the hues follow only the set of companies.
+  // The hues follow only the set of companies, never a token tick.
   const huesFor = ({ isOn, palette, signals }: LensFrame): Hues => {
-    const version = signals.version()
+    const version = signals.sceneVersion()
     if (hues?.isOn === isOn && hues.palette === palette && hues.version === version) return hues
     const picked = isOn ? companyHues(signals.current().companies.keys(), palette) : null
     const byCompany = picked && new Map([...picked].map(([key, hex]) => [key, new Color(hex)]))

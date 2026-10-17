@@ -8,7 +8,7 @@ const MAX_MILESTONE_STEPS = 3 * 12
 
 export const SPIRE_MAX_STAGES = 6
 export const SPIRE_MODULE_M = 0.8
-// 4.8 m keeps a three-storey office with its crown under the 24 m height rule.
+// The horizon's clip box keeps room for the tallest spire over any roof (markClipBox).
 export const SPIRE_MAX_M = SPIRE_MAX_STAGES * SPIRE_MODULE_M
 // The spire base clears the crown top, so the two faces never fight (flicker-1).
 export const SPIRE_BASE_GAP_M = FACADE_LAYER_STEP_M

@@ -34,7 +34,7 @@ describe('createSpireStageFeed', () => {
     let current = signalsWith({ a: 2, b: 0 })
     const setStage = vi.fn()
     const sync = createSpireStageFeed(
-      { current: () => current, version: () => version },
+      { current: () => current, sceneVersion: () => version },
       { setStage },
       { now: () => 5_000 }
     )
@@ -53,12 +53,28 @@ describe('createSpireStageFeed', () => {
   it('does nothing on a frame where no signal changed', () => {
     const setStage = vi.fn()
     const sync = createSpireStageFeed(
-      { current: () => signalsWith({ a: 1 }), version: () => 7 },
+      { current: () => signalsWith({ a: 1 }), sceneVersion: () => 7 },
       { setStage },
       { now: () => 0 }
     )
     sync()
     sync()
+    sync()
+    expect(setStage).toHaveBeenCalledTimes(1)
+  })
+
+  // Today's tokens move the HUD's version on every tick; only a drawn change moves the scene's.
+  it('a token tick alone does not re-feed the stages', () => {
+    let version = 1
+    const store = {
+      current: () => signalsWith({ a: 1 }),
+      version: () => version,
+      sceneVersion: () => 4
+    }
+    const setStage = vi.fn()
+    const sync = createSpireStageFeed(store, { setStage }, { now: () => 0 })
+    sync()
+    version = 2
     sync()
     expect(setStage).toHaveBeenCalledTimes(1)
   })

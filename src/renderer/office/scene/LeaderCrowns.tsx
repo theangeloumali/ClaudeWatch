@@ -6,11 +6,12 @@ import { buildingPlaces } from '../logic/building-place'
 import { cityClock } from '../logic/city-clock'
 import { buildingIdOf } from '../logic/city-signals'
 import { citySignalStore } from '../logic/city-signal-store'
+import { useQualityLevel } from '../quality-store'
 import type { ThemePalette } from '../themes/types'
 import { createLeaderCrownsLayer } from './leader-crowns-layer'
 
 // Gold crowns over the day's top three spenders: one instanced draw outside every batch.
-export function LeaderCrowns({
+function CrownMesh({
   agents,
   sessions,
   palette
@@ -45,4 +46,12 @@ export function LeaderCrowns({
     })
   )
   return <primitive object={layer.mesh} />
+}
+
+type LeaderCrownsProps = Parameters<typeof CrownMesh>[0]
+
+// Full detail only: the spire batch takes the lighter levels' last draw, and the leaders card
+// still names the leaders there.
+export function LeaderCrowns(props: LeaderCrownsProps) {
+  return useQualityLevel() === 'full' ? <CrownMesh {...props} /> : null
 }

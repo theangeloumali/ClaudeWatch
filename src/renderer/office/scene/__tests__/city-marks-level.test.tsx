@@ -6,6 +6,7 @@ import { listThemes } from '../../themes/registry'
 import { CityBeacons } from '../CityBeacons'
 import { CityParticles } from '../CityParticles'
 import { DoneFlags } from '../DoneFlags'
+import { LeaderCrowns } from '../LeaderCrowns'
 
 const harness = vi.hoisted(() => ({ level: 'full', frames: 0 }))
 vi.mock('@react-three/fiber', () => ({ useFrame: () => void (harness.frames += 1) }))
@@ -45,5 +46,17 @@ describe('city marks by detail level', () => {
       expect(container.querySelectorAll('primitive')).toHaveLength(1)
       unmount()
     }
+  })
+
+  // The spire batch takes the lighter levels' last draw; the leaders card still names leaders.
+  it('crowns show at full only, so spires keep their draw at the lighter levels', () => {
+    const crowns = () => <LeaderCrowns agents={[]} sessions={[]} palette={palette} />
+    for (const level of ['balanced', 'light'] as const) {
+      const { container, unmount } = mount(level, crowns)
+      expect(container.innerHTML).toBe('')
+      unmount()
+    }
+    expect(harness.frames).toBe(0)
+    expect(mount('full', crowns).container.querySelectorAll('primitive')).toHaveLength(1)
   })
 })

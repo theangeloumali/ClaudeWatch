@@ -4,16 +4,16 @@ import { buildingPlaces, type BuildingPlaces } from '../logic/building-place'
 import { cityClock, type CityClock } from '../logic/city-clock'
 import { citySignalStore, type CitySignalStore } from '../logic/city-signal-store'
 
-// Stages go to the place store only when a signal changed, stamped with the frame's time so a
+// Stages go to the place store only when a drawn signal changed (not a token tick), stamped with the frame's time so a
 // crossing seen live eases from where the spire stood.
 export function createSpireStageFeed(
-  signals: Pick<CitySignalStore, 'current' | 'version'>,
+  signals: Pick<CitySignalStore, 'current' | 'sceneVersion'>,
   places: Pick<BuildingPlaces, 'setStage'>,
   clock: Pick<CityClock, 'now'>
 ): () => void {
   let fedVersion: number | null = null
   return () => {
-    const version = signals.version()
+    const version = signals.sceneVersion()
     if (version === fedVersion) return
     fedVersion = version
     const nowMs = clock.now()

@@ -136,7 +136,8 @@ describe('growth layer budgets', () => {
       expect(measureLayer(signs.group).draws).toBeLessThanOrEqual(
         CITY_LAYER_BUDGET.signs.draws[level]
       )
-      expect(measureLayer(crowns.group).draws).toBeLessThanOrEqual(
+      // LeaderCrowns mounts at full only (city-marks-level spec); lighter levels draw none.
+      expect(level === 'full' ? measureLayer(crowns.group).draws : 0).toBeLessThanOrEqual(
         CITY_LAYER_BUDGET.crowns.draws[level]
       )
       expect(measureLayer(rig.group).draws).toBeLessThanOrEqual(CITY_LAYER_BUDGET.rig.draws[level])
