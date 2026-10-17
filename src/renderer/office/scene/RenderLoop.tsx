@@ -136,15 +136,64 @@ function writeDataset(
   }
 }
 
+const byteLengthOf = (data: unknown): number => {
+  if (typeof data === 'number') return data
+  return ArrayBuffer.isView(data) || data instanceof ArrayBuffer ? data.byteLength : 0
+}
+
+// A DataView or a plain buffer has no element size: its length is in bytes.
+const elementBytesOf = (data: unknown): number =>
+  ArrayBuffer.isView(data) &&
+  'BYTES_PER_ELEMENT' in data &&
+  typeof data.BYTES_PER_ELEMENT === 'number'
+    ? data.BYTES_PER_ELEMENT
+    : 1
+
+// Sized as the page probe sizes them, so the canvas reads in the same units as its baseline.
+// Returns what hands the context its own calls back.
+function countBufferUploads(
+  context: WebGLRenderingContext | WebGL2RenderingContext,
+  onUpload: (bytes: number) => void
+): () => void {
+  const { bufferData, bufferSubData } = context
+  context.bufferData = (...args: unknown[]): void => {
+    onUpload(byteLengthOf(args[1]))
+    Reflect.apply(bufferData, context, args)
+  }
+  // A dirty range is sent with its element count; a whole buffer without one.
+  context.bufferSubData = (...args: unknown[]): void => {
+    const length = args[4]
+    onUpload(
+      typeof length === 'number' && length > 0
+        ? length * elementBytesOf(args[2])
+        : byteLengthOf(args[2])
+    )
+    Reflect.apply(bufferSubData, context, args)
+  }
+  return () => {
+    context.bufferData = bufferData
+    context.bufferSubData = bufferSubData
+  }
+}
+
 // gl.info resets at the start of each render, so reading it in useFrame gives the previous frame's totals.
 // frameMs is the interval between frames (what the governor controls), not GPU time.
 // P10: the stats also land on the canvas once a second; sampledAtMs shows when a hidden window
 // stopped drawing and its stats went stale.
 export function MetricsProbe({ metrics }: { metrics: FrameMetrics }) {
+  const renderer = useThree((state) => state.gl)
   const { pin, chosen } = useQualityChoice()
   const quality = levelInUse(pin, chosen)
   const written = useMemo(() => new Map<string, string>(), [])
   const lastSampleMs = useRef(Number.NEGATIVE_INFINITY)
+  const uploadedBytes = useRef(0)
+  useEffect(
+    () =>
+      countBufferUploads(renderer.getContext(), (bytes) => {
+        uploadedBytes.current += bytes
+      }),
+    [renderer]
+  )
   useFrame(({ gl }, delta) => {
     if (delta > 0) {
       metrics.frameMs += (delta * 1000 - metrics.frameMs) * SMOOTHING
@@ -152,6 +201,9 @@ export function MetricsProbe({ metrics }: { metrics: FrameMetrics }) {
     }
     metrics.drawCalls = gl.info.render.calls
     metrics.triangles = gl.info.render.triangles
+    // Like gl.info's counts, what the previous frame's render sent.
+    const uploadBytes = uploadedBytes.current
+    uploadedBytes.current = 0
     const nowMs = performance.now()
     if (nowMs - lastSampleMs.current < DATASET_INTERVAL_MS) return
     lastSampleMs.current = nowMs
@@ -160,6 +212,7 @@ export function MetricsProbe({ metrics }: { metrics: FrameMetrics }) {
       {
         drawCalls: String(metrics.drawCalls),
         triangles: String(metrics.triangles),
+        uploadBytes: String(uploadBytes),
         fps: String(Math.round(metrics.fps)),
         quality,
         sampledAtMs: String(Date.now())
