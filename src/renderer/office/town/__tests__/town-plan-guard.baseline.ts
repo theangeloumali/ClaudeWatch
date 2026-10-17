@@ -1,4 +1,5 @@
 // Saved from 74490a8 by running GUARDED_CITIES through useTownPlan; regenerate only on purpose.
+// Since then only isLandmark moved: one landmark per landmark district, its largest lot.
 export const BASELINE: Record<string, unknown> = {
   'two-office': {
     roads: [
@@ -226,7 +227,7 @@ export const BASELINE: Record<string, unknown> = {
         maxHeight: 28,
         zoneId: null,
         isFarRing: false,
-        isLandmark: true
+        isLandmark: false
       },
       {
         x: -15.25,
@@ -326,7 +327,7 @@ export const BASELINE: Record<string, unknown> = {
         maxHeight: 9,
         zoneId: null,
         isFarRing: false,
-        isLandmark: false
+        isLandmark: true
       },
       {
         id: 'city-lot:-1:-2:0:frontage:1:depth:0',
@@ -506,7 +507,7 @@ export const BASELINE: Record<string, unknown> = {
         maxHeight: 10,
         zoneId: null,
         isFarRing: false,
-        isLandmark: false
+        isLandmark: true
       },
       {
         id: 'city-lot:0:-2:0:frontage:1:depth:2',
@@ -546,7 +547,7 @@ export const BASELINE: Record<string, unknown> = {
         maxHeight: 28,
         zoneId: null,
         isFarRing: false,
-        isLandmark: true
+        isLandmark: false
       },
       {
         x: 43.25,
@@ -706,7 +707,7 @@ export const BASELINE: Record<string, unknown> = {
         maxHeight: 28,
         zoneId: null,
         isFarRing: false,
-        isLandmark: true
+        isLandmark: false
       },
       {
         id: 'city-lot:0:-2:0:frontage:0:depth:2',
@@ -866,7 +867,7 @@ export const BASELINE: Record<string, unknown> = {
         maxHeight: 28,
         zoneId: null,
         isFarRing: false,
-        isLandmark: true
+        isLandmark: false
       }
     ],
     blocks: [
@@ -1084,7 +1085,7 @@ export const BASELINE: Record<string, unknown> = {
         maxHeight: 8,
         zoneId: null,
         isFarRing: false,
-        isLandmark: false
+        isLandmark: true
       },
       {
         id: 'city-lot:-1:-1:0:frontage:4:depth:1',
@@ -1104,7 +1105,7 @@ export const BASELINE: Record<string, unknown> = {
         maxHeight: 12,
         zoneId: null,
         isFarRing: false,
-        isLandmark: false
+        isLandmark: true
       },
       {
         id: 'city-lot:-1:0:0:frontage:4:depth:1',
@@ -1304,7 +1305,7 @@ export const BASELINE: Record<string, unknown> = {
         maxHeight: 8,
         zoneId: null,
         isFarRing: false,
-        isLandmark: true
+        isLandmark: false
       },
       {
         x: 70.25,
@@ -1464,7 +1465,7 @@ export const BASELINE: Record<string, unknown> = {
         maxHeight: 8,
         zoneId: null,
         isFarRing: false,
-        isLandmark: true
+        isLandmark: false
       },
       {
         x: 53.75,
@@ -1624,7 +1625,7 @@ export const BASELINE: Record<string, unknown> = {
         maxHeight: 8,
         zoneId: null,
         isFarRing: false,
-        isLandmark: true
+        isLandmark: false
       },
       {
         x: 37.25,

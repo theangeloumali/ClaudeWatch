@@ -3,7 +3,7 @@ import { citizenGeometry } from '../citizens/figure-parts'
 import type { FloorGeometry } from '../scene-model'
 import { distributedTown } from '../town/distributed-town'
 import { dressLot, type DressableLot, type TownDress } from '../town/town-dress'
-import { TOWN_DISTRICTS, type TownDistrict } from '../town/town-zones'
+import { LANDMARK_DISTRICTS, TOWN_DISTRICTS, type TownDistrict } from '../town/town-zones'
 import { townOf } from '../town/use-town-plan'
 import { LIVE_FLOORS } from './floors.test-utils'
 import { expectInsideLot } from './lot-box.test-utils'
@@ -22,7 +22,7 @@ import {
 
 export { heightOf } from './town-bounds.test-utils'
 
-export const LANDMARK_ZONES: readonly TownDistrict[] = ['civic', 'workshop', 'entertainment']
+export const LANDMARK_ZONES = LANDMARK_DISTRICTS
 const BUILDING_HEIGHTS_M = [4, 8, 12, 24]
 const LANDMARK_HEIGHTS_M = [12, 24]
 const SEEDS_PER_HEIGHT = 4
