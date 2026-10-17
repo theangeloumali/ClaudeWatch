@@ -30,13 +30,14 @@ const SCENERY_CAP = 64
 const PROTECTED_CLEARANCE_METRES = 3
 
 describe('recovered city parcels', () => {
-  it('retains 47 lots around walkable offices, including 6.9 m rear and 4.69 m side strips', () => {
+  // Every building's floor keeps room for its game corner, so the offices take more frontage.
+  it('retains 44 lots around walkable offices, including 6.9 m rear and 5.46 m side strips', () => {
     const lots = cityScenerySites(protectedSites)
-    expect(lots).toHaveLength(47)
+    expect(lots).toHaveLength(44)
     expect(lots.some((lot) => Math.abs(lot.depth - 6.9) < 0.001)).toBe(true)
-    expect(lots.some((lot) => Math.abs(lot.width - 4.692307692307693) < 0.001)).toBe(true)
+    expect(lots.some((lot) => Math.abs(lot.width - 5.457692307692309) < 0.001)).toBe(true)
     expect(Math.min(...lots.flatMap((lot) => [lot.width, lot.depth]))).toBeCloseTo(
-      4.692307692307693
+      5.457692307692309
     )
   })
 
@@ -61,7 +62,7 @@ describe('recovered city parcels', () => {
         .sort()
     )
     expect(counts.size).toBe(9)
-    expect(Math.min(...[...counts.values()].map((blockLots) => blockLots.length))).toBe(5)
+    expect(Math.min(...[...counts.values()].map((blockLots) => blockLots.length))).toBe(2)
     expect(Math.max(...[...counts.values()].map((blockLots) => blockLots.length))).toBe(6)
   })
 

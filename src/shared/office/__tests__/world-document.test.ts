@@ -92,9 +92,11 @@ describe('world document boundary', () => {
     const latestSessions = [session('one'), session('two')]
     const latestLayout = buildLayout(latestSessions, layout)
     document.rooms[0].size.width = document.buildings[0].footprint.width
-    expect(
-      validateWorldDocument(document, { layout: latestLayout, sessions: latestSessions })
-    ).toEqual(expect.arrayContaining([expect.objectContaining({ reason: 'overlap' })]))
+    const targets = validateWorldDocument(document, {
+      layout: latestLayout,
+      sessions: latestSessions
+    }).map((error) => error.target)
+    expect([...new Set(targets)].sort()).toEqual(['session:one', 'session:two'])
   })
 
   it('bounds byte size and legacy seed integers without touching rejected input', () => {
