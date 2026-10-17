@@ -1,3 +1,4 @@
+import { isAtRest } from '../../../shared/office/attention'
 import type { AgentView } from '../../../shared/office/types'
 import type { DeskSlot, FloorGeometry } from '../scene-model'
 import type { ThemeZoneGroup } from '../logic/office-themes'
@@ -57,7 +58,6 @@ export function workerSeatPresence({
       SEAT_ARRIVAL_METRES
   if (seats.workstation && isAt({ ...seats.workstation, y: seats.workstationY }))
     return 'workstation'
-  if (agent.activity === 'idle' && agent.place === 'lounge' && seats.lounge.some(isAt))
-    return 'lounge'
+  if (isAtRest(agent) && agent.place === 'lounge' && seats.lounge.some(isAt)) return 'lounge'
   return 'none'
 }

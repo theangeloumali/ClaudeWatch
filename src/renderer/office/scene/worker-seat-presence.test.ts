@@ -35,4 +35,12 @@ describe('a gamer on its game corner seat', () => {
     expect(presenceAt(gamer, true)).toBe('none')
     expect(presenceAt({ ...gamer, activity: 'editing' })).toBe('none')
   })
+
+  // The sim seats any agent at rest, so a turn that ended mid-activity still plays.
+  it.each([
+    ['editing', 'done'],
+    ['thinking', 'done']
+  ] as const)('sits a gamer whose %s turn is %s', (activity, attention) => {
+    expect(presenceAt({ ...gamer, activity, attention })).toBe('lounge')
+  })
 })
