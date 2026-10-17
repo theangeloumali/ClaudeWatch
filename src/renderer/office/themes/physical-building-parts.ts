@@ -122,6 +122,18 @@ export function buildingExteriorProfile({
   }
 }
 
+// The roof slab every crown starts with; spire masts and signs stand on its top.
+const CROWN_DECK_M = 0.16
+
+// Where a crown's spire and sign stand: the deck's top at the roof centre.
+export function crownAnchor(floor: FloorGeometry): { x: number; y: number; z: number } {
+  return {
+    x: floor.x,
+    y: floorElevation(floor) + PHYSICAL_STOREY_HEIGHT + CROWN_DECK_M,
+    z: floor.z
+  }
+}
+
 // dry-new: decorative town towers cannot cap a real office without adding fictional floors.
 export function buildingCrown({
   floor,
@@ -141,8 +153,8 @@ export function buildingCrown({
   ]
   const parts = [
     box(
-      at(0, 0.08, 0),
-      [floor.width + 0.4, 0.16, floor.depth + 0.4],
+      at(0, CROWN_DECK_M / 2, 0),
+      [floor.width + 0.4, CROWN_DECK_M, floor.depth + 0.4],
       theme.id === 'cyberpunk-city' ? palette.ink : palette.paper
     )
   ]

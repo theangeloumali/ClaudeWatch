@@ -9,11 +9,14 @@ import { box, Parts } from '../themes/parts'
 import {
   buildingCrown,
   buildingEntrance,
-  buildingExteriorProfile
+  buildingExteriorProfile,
+  crownAnchor
 } from '../themes/physical-building-parts'
+import { buildingPlaces, crownTopOf } from '../logic/building-place'
 import { floorElevation, PHYSICAL_STOREY_HEIGHT } from './all-floor-model'
 import { BuildingWindows } from './BuildingWindows'
 import { OperationalStructure } from './OperationalStructure'
+import { TokenSpire } from './TokenSpire'
 import { editSceneTarget, isStillClick, trackPress, type SceneEditTarget } from './ZonePickers'
 
 // dry-new: theme landmarks invent storeys; this shell encloses only supplied physical floors.
@@ -68,6 +71,21 @@ export function PhysicalBuildingShell({
         ),
     [ordered, focused, theme.palette.stone]
   )
+  const buildingId = ground?.buildingId ?? ground?.floorId ?? ''
+  const isCrownShown = areRoofsVisible && !focused
+  const roof = useMemo(
+    () => (isCrownShown ? crownTopOf(ordered, theme) : null),
+    [isCrownShown, ordered, theme]
+  )
+  const deck = useMemo(() => (top ? crownAnchor(top) : null), [top])
+  // A ref with a cleanup, not an effect: marks lose the roof the moment the shell goes.
+  const feedRoof = useMemo(
+    () => () => {
+      buildingPlaces.setRoof(buildingId, roof)
+      return () => buildingPlaces.setRoof(buildingId, null)
+    },
+    [buildingId, roof]
+  )
   const entranceFacade = useRef<Group>(null)
   const forward = useMemo(() => new Vector3(), [])
   const cutaway = useMemo(() => createSideCutaway<'entrance'>(), [])
@@ -87,7 +105,8 @@ export function PhysicalBuildingShell({
   if (!ground || !top) return null
   return (
     <group
-      name={`physical-building:${ground.buildingId ?? ground.floorId}`}
+      ref={feedRoof}
+      name={`physical-building:${buildingId}`}
       onPointerDown={trackPress}
       onContextMenu={(event) =>
         editSceneTarget(event, {
@@ -100,6 +119,9 @@ export function PhysicalBuildingShell({
       {areRoofsVisible && (
         <group name={`physical-roof:${ground.buildingId ?? ground.floorId}`}>
           {!focused && <Parts parts={crown} />}
+          {roof && deck && (
+            <TokenSpire buildingId={buildingId} deck={deck} roof={roof} theme={theme} />
+          )}
           {!focused && (
             <group
               position={[entrance.x, floorElevation(ground), entrance.z]}
