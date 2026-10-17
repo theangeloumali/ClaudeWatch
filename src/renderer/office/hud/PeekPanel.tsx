@@ -131,11 +131,18 @@ function PeekCapture({
               ? `Terminal: ${hideNames ? 'Hidden' : result.terminal.ownerAgentKey} · pane ${result.terminal.paneKey} · PID ${result.terminal.pid} · incarnation ${result.terminal.incarnationId}`
               : 'Terminal provenance unavailable'}
           </p>
-          <ScreenExcerpt
-            lines={result.lines
-              .slice(0, MAX_CAPTURE_LINES)
-              .map((line) => line.slice(0, MAX_LINE_CHARS))}
-          />
+          {/* A terminal can print anything, a project path or a client's name included. */}
+          {hideNames ? (
+            <p className="text-xs text-text-secondary">
+              Screen text is hidden while names are hidden.
+            </p>
+          ) : (
+            <ScreenExcerpt
+              lines={result.lines
+                .slice(0, MAX_CAPTURE_LINES)
+                .map((line) => line.slice(0, MAX_LINE_CHARS))}
+            />
+          )}
         </>
       )}
       <p aria-live="polite" className="text-xs text-text-secondary">

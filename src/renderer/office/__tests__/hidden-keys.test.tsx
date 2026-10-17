@@ -72,4 +72,20 @@ describe('with names hidden, no agent key reaches the screen', () => {
     expect(screen.getByText(/Capture target/)).toHaveTextContent('Hidden')
     expect(shownText(container).match(KEYS)).toBeNull()
   })
+
+  // A terminal can print anything, a project path or a client's name included.
+  it('a peek shows no screen text while names are hidden', async () => {
+    const peek = vi.fn(
+      async (): Promise<PeekResult> => ({
+        success: true,
+        lines: ['~/Work/acme-payroll $ git status'],
+        capturedAtMs: Date.now(),
+        targetAgentKey: TEAMMATE_KEY
+      })
+    )
+    const { container } = render(<PeekPanel agentKey={TEAMMATE_KEY} peek={peek} />)
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Peek at screen' })))
+    expect(shownText(container).match(KEYS)).toBeNull()
+    expect(screen.getByText(/hidden while names are hidden/i)).toBeInTheDocument()
+  })
 })
