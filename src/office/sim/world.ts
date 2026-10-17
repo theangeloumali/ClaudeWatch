@@ -50,7 +50,7 @@ export class World {
   // Agents fading where they stand, with how long each has faded. A leaver goes; any other
   // reappears at its desk: a newcomer, a desk moved off its floor, or a recall (FOUND 7).
   private readonly fading = new Map<string, number>()
-  // Newcomers still fading in: unseen, so no body until their desk takes them.
+  // Unseen, so no body until their desk takes them: newcomers fading in, recalls fully faded.
   private readonly arrivals = new Set<string>()
   private readonly passages = new BodyPassages()
   // Who waited on whom last tick, and who could have stepped; one of each cycle steps now.
@@ -390,8 +390,11 @@ export class World {
     this.startFade(key)
   }
 
-  // A desk another body stands on keeps it faded until the next tick.
+  // Fully faded, it is no body until its desk takes it, so two swapped desks never wait on each
+  // other; one another body stands on keeps it faded until the next tick.
   private seatRecalled(key: string, agent: AgentRecord, crowd: TickCrowd): void {
+    crowd.remove(key)
+    this.arrivals.add(key)
     const seated = seatAtDesk(agent, this.map.floors, crowd.bodies)
     if (!seated) return
     this.agents.set(key, crowd.updated(seated))
