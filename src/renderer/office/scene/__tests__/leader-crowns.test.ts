@@ -166,7 +166,7 @@ describe('leader crowns', () => {
     expect(centre.z).toBeCloseTo(-12)
   })
 
-  it('a crown spans 14–32 px on screen at every zoom band and never covers its robot’s name card', () => {
+  it("a crown spans 14–32 px on screen at every zoom band and never covers its robot's name card", () => {
     const leader = makeAgent({ agentKey: 'claude:a', x: 3, z: -2, elevation: 5.5 })
     for (const zoom of ZOOMS)
       for (let turn = 0; turn < 4; turn += 1) {

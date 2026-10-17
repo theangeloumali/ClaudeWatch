@@ -150,7 +150,7 @@ describe('construction rig', () => {
     expect(batch.mesh.instanceMatrix.version).toBe(batchVersion)
   })
 
-  it('a gain under 0.5% of the project’s day raises no rig', () => {
+  it("a gain under 0.5% of the project's day raises no rig", () => {
     const log = createCityEventLog()
     log.observe('hello', [at(T0, 4e6)], T0, day(4e6))
     // The precondition: this patch does cross a spire stage.
