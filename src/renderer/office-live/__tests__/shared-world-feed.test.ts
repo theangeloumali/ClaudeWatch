@@ -16,7 +16,8 @@ function memoryStorage() {
   return {
     bytes,
     getItem: (key: string) => bytes.get(key) ?? null,
-    setItem: (key: string, value: string) => void bytes.set(key, value)
+    setItem: (key: string, value: string) => void bytes.set(key, value),
+    removeItem: (key: string) => void bytes.delete(key)
   }
 }
 
@@ -132,7 +133,20 @@ describe('one saved city per host (health-13)', () => {
     storage.setItem(WORLD_DOCUMENT_STORAGE_KEY, JSON.stringify(city))
     open({ storage })
     await vi.waitFor(() => expect(world.current()).toEqual(city))
+    expect(storage.bytes.has(WORLD_DOCUMENT_STORAGE_KEY)).toBe(false)
     expect(open().store().get().document).toEqual(city)
+  })
+
+  it('a host-backed page writes nothing to localStorage and clears the old key', async () => {
+    const app = open()
+    const { document, revision } = app.store().get()
+    await app.store().save(renamed(document, 'Arranged'), revision)
+    expect(app.storage.bytes.size).toBe(0)
+    const storage = memoryStorage()
+    storage.setItem(WORLD_DOCUMENT_STORAGE_KEY, JSON.stringify(renamed(document, 'Stale')))
+    const viewer = open({ storage })
+    expect(viewer.store().get().document).toEqual(world.current())
+    expect(storage.bytes.has(WORLD_DOCUMENT_STORAGE_KEY)).toBe(false)
   })
 
   it('the editor sees a failed host save, and the host’s city comes back', async () => {
