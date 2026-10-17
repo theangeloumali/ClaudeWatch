@@ -17,6 +17,7 @@ import { officeChrome } from './window-chrome'
 import { runInteractivePowerShell } from '../shared/powershell-host'
 import { type AccountLedger, type OfficeAccounts, withAccounts, withoutAccounts } from './accounts'
 import { createBrowserOffice } from './office-browser'
+import { handoverOf } from '../shared/accounts'
 import { loadStaticFiles } from '../office-web/static-files'
 
 type OfficeWindowStore = Pick<SettingsStore, 'getOfficeWindowBounds' | 'setOfficeWindowBounds'>
@@ -68,7 +69,11 @@ export function setupOffice(
   accounts: OfficeAccounts &
     Pick<
       AccountLedger,
-      'ingestBridgeMessage' | 'observeSessions' | 'isWatchingAccounts' | 'onWatchingChange'
+      | 'ingestBridgeMessage'
+      | 'observeSessions'
+      | 'isWatchingAccounts'
+      | 'onWatchingChange'
+      | 'onUsageDurable'
     >,
   worldPath = SHARED_WORLD_PATH
 ): Office {
@@ -83,8 +88,20 @@ export function setupOffice(
       const child = utilityProcess.fork(join(__dirname, 'bridge.js'), args, {
         serviceName: 'ClaudeWatch Office Bridge'
       })
+      // The bridge saves transcript offsets only up to a hand-over the ledger has on disk.
+      let handed = 0
+      let answered = 0
+      const stopAnswering = accounts.onUsageDurable(() => {
+        if (handed <= answered) return
+        answered = handed
+        child.postMessage({ type: 'usage-durable', handover: handed })
+      })
       // Token counts travel beside the feed, as their own message, and only the ledger reads them.
-      child.on('message', (message: unknown) => accounts.ingestBridgeMessage(message))
+      child.on('message', (message: unknown) => {
+        handed = handoverOf(message, 'usage') ?? handed
+        accounts.ingestBridgeMessage(message)
+      })
+      child.on('exit', stopAnswering)
       return child
     }
   })

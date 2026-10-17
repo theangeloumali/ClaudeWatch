@@ -79,17 +79,20 @@ it('reports added tokens with the project of their session, on the tick they arr
   await poller.tick()
   expect(onUsage).not.toHaveBeenCalled()
   await poller.tick()
-  expect(onUsage).toHaveBeenCalledExactlyOnceWith([
-    {
-      sessionKey: 'claude:a',
-      projectKey: expect.stringMatching(/^p_/),
-      projectLabel: 'repo',
-      file: transcript,
-      atMs: minuteMs(10),
-      position: 0,
-      counts: output(9)
-    }
-  ])
+  expect(onUsage).toHaveBeenCalledExactlyOnceWith(
+    [
+      {
+        sessionKey: 'claude:a',
+        projectKey: expect.stringMatching(/^p_/),
+        projectLabel: 'repo',
+        file: transcript,
+        atMs: minuteMs(10),
+        position: 0,
+        counts: output(9)
+      }
+    ],
+    1
+  )
   await poller.tick()
   expect(onUsage).toHaveBeenCalledOnce()
   expect(JSON.stringify(onUsage.mock.calls)).not.toContain('CANARY')

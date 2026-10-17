@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   tick: vi.fn(),
   start: vi.fn(),
   setIntervalMs: vi.fn(),
+  usageDurable: vi.fn(),
   options: vi.fn(),
   ticksUntilCounted: 0
 }))
@@ -18,6 +19,7 @@ vi.mock('./poller', () => ({
     tick = mocks.tick
     start = mocks.start
     setIntervalMs = mocks.setIntervalMs
+    usageDurable = mocks.usageDurable
     get isCountingUsage(): boolean {
       return mocks.tick.mock.calls.length < mocks.ticksUntilCounted
     }
@@ -109,8 +111,18 @@ it('posts added tokens to the parent as their own message, apart from the feed',
       counts: { input: 1, output: 2, cacheWrite: 0, cacheRead: 0 }
     }
   ]
-  mocks.options.mock.calls[0][0].onUsage(deltas)
-  expect(postMessage).toHaveBeenCalledExactlyOnceWith({ type: 'usage', v: 1, deltas })
+  mocks.options.mock.calls[0][0].onUsage(deltas, 3)
+  expect(postMessage).toHaveBeenCalledExactlyOnceWith({ type: 'usage', v: 1, handover: 3, deltas })
+})
+it('tells the poller which hand-over its parent has on disk, and ignores a malformed answer', async () => {
+  mocks.start.mockResolvedValue(() => {})
+  const on = vi.fn()
+  await main([], { postMessage: vi.fn(), on })
+  const [, hear] = on.mock.calls[0]
+  hear({ data: { type: 'usage-durable', handover: 4 } })
+  hear({ data: { type: 'usage-durable', handover: -1 } })
+  hear({ data: { type: 'usage-durable', handover: '5' } })
+  expect(mocks.usageDurable.mock.calls).toEqual([[4]])
 })
 it('posts Codex totals to the parent as their own message too, and listens for neither in once mode', async () => {
   mocks.start.mockResolvedValue(() => {})
