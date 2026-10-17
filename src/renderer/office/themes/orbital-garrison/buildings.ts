@@ -1,3 +1,4 @@
+import { FACADE_LAYER_STEP_M } from '../../scene/building-window-parts'
 import type { Vector } from '../primitives'
 import { box, lit, SIDES, type PartSpec } from '../parts'
 import { frameParts } from './frame-parts'
@@ -33,12 +34,21 @@ function hangar(limit: number, share: number): PartSpec[] {
   return [
     ...PAD,
     box([0, height * 0.45, -0.3], [5.4, height * 0.9, 4.6], GARRISON.gunmetal),
-    box([0, height - 0.08, -0.3], [5.7, 0.16, 4.9], GARRISON.white),
+    // flicker-1: the roof ribs and wall ribs each end a layer step past what they meet.
+    box(
+      [0, height - 0.08 - FACADE_LAYER_STEP_M / 2, -0.3],
+      [5.7, 0.16 - FACADE_LAYER_STEP_M, 4.9],
+      GARRISON.white
+    ),
     box([0, height * 0.36, 2.02], [3.6, height * 0.72, 0.06], GARRISON.hull),
     box([0, height * 0.75, 2.04], [3.8, 0.14, 0.08], GARRISON.orange),
     lit(box([0, height * 0.84, 2.03], [1.2, 0.08, 0.06], GARRISON.ice)),
     ...SIDES.map((side) =>
-      box([side * 2.74, height * 0.45, -0.3], [0.1, height * 0.9, 4.7], GARRISON.steel)
+      box(
+        [side * 2.74, (height * 0.9 + FACADE_LAYER_STEP_M) / 2, -0.3],
+        [0.1, height * 0.9 + FACADE_LAYER_STEP_M, 4.7],
+        GARRISON.steel
+      )
     ),
     ...[-1.5, 0, 1.2].map((z) => box([0, height - 0.01, z], [5.5, 0.02, 0.12], GARRISON.steel))
   ]

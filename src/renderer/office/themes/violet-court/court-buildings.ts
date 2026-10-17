@@ -1,3 +1,4 @@
+import { FACADE_LAYER_STEP_M } from '../../scene/building-window-parts'
 import { box, CORNERS, lit, SIDES, type PartSpec, cone, cylinder, sphere } from '../parts'
 import type { BuildingDesign, Plot } from '../lot-kit'
 import { COURT } from './palette'
@@ -50,7 +51,11 @@ function parkedFrame(tall: number): PartSpec[] {
       box([side * 0.14 * tall, at(0.22), 0], [0.14 * tall, 0.44 * tall, 0.18 * tall], COURT.ink),
       box([side * 0.3 * tall, at(0.74), 0], [0.2 * tall, 0.14 * tall, 0.3 * tall], COURT.gold)
     ]),
-    box([0, at(0.6), 0], [0.42 * tall, 0.34 * tall, 0.26 * tall], COURT.violet),
+    box(
+      [0, at(0.6), 0],
+      [0.42 * tall + 2 * FACADE_LAYER_STEP_M, 0.34 * tall, 0.26 * tall],
+      COURT.violet
+    ),
     box([0, at(0.86), 0.02], [0.14 * tall, 0.14 * tall, 0.16 * tall], COURT.ink),
     cone([0, at(0.96), 0], [0.08 * tall, 0.1 * tall, 0.08 * tall], COURT.gold)
   ]
@@ -86,7 +91,8 @@ function academy({ width, depth, height }: Plot): PartSpec[] {
     box([0, 0.36 + hall, 0], [width * 0.84, 0.12, depth * 0.76], COURT.gold),
     box([0, eaves + tier / 2, 0], [width * 0.7, tier, depth * 0.6], COURT.ink),
     box([0, eaves + tier * 1.5, 0], [width * 0.46, tier, depth * 0.4], COURT.violet),
-    box([0, 0.8, depth * 0.35 + 0.02], [0.9, 1, 0.06], COURT.violet),
+    // Its depth scales with the lot, so it always stands proud of the window band.
+    box([0, 0.8, depth * 0.355 + 0.02], [0.9, 1, depth * 0.01 + 0.04], COURT.violet),
     ...SIDES.flatMap((side) => {
       const x = side * (width / 2 - 0.55)
       const z = depth / 2 - 0.55

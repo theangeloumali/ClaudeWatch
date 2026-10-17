@@ -74,7 +74,8 @@ describe('Corporate City town assets', () => {
           expectOnItsPlot(design, plot)
           const parts = design.build(plot)
           expect(parts, design.name).toEqual(design.build(plot))
-          expect(parts.length, design.name).toBeLessThanOrEqual(48)
+          // Four-sided curtains: the worst, three banded wings, is 82 parts.
+          expect(parts.length, design.name).toBeLessThanOrEqual(84)
           expect(
             parts.some((part) => part.color === plot.accent),
             design.name
