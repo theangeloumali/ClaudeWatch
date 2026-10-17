@@ -61,19 +61,19 @@ const FEATURES: readonly Feature[] = [
 const TOWN_SIZE_CHOICES: Record<TownSize, { label: string; description: string }> = {
   village: {
     label: 'Village',
-    description: 'The campus, its garden and one ring of streets. Lightest.'
+    description: 'The same streets with a third of the lots built; the rest are gardens. Lightest.'
   },
   town: {
     label: 'Town',
-    description: 'A wider ring of streets and more of the old town: about half again the buildings.'
+    description: 'Two thirds of the lots built, and more people out on the streets.'
   },
   city: {
     label: 'City',
-    description: 'The whole town out to its tall far ring. The most to draw and to walk.'
+    description: 'Every lot built, and the busiest streets. The most to draw.'
   }
 }
 
-// How far the town reaches round the offices; native radios, so arrows move between them.
+// How built-up the city is round the offices; native radios, so arrows move between them.
 function TownSizeChoice({ townSize }: { townSize: TownSize }) {
   const name = useId()
   return (

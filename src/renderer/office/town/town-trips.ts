@@ -1,5 +1,4 @@
 import type { CitizenRoute } from '../citizens/route-pose'
-import type { ThemeZoneGroup } from '../logic/office-themes'
 import type { QualityLevel } from '../logic/quality'
 import { draw } from '../themes/lot-math'
 import { citizenTrips } from './citizen-trips'
@@ -32,15 +31,6 @@ export interface TownInput {
   floorThemeId: string
   detail: QualityLevel
   hasVehicles?: boolean
-}
-
-// A company zone's id to the theme it wears.
-export function themeIdsByZone(groups: readonly ThemeZoneGroup[]): Map<string, string> {
-  return new Map(
-    groups.flatMap(({ themeId, companies }) =>
-      companies.map((company) => [company.id, themeId] as const)
-    )
-  )
 }
 
 // How many movers each detail level sends out, and how many instanced draws they may cost.

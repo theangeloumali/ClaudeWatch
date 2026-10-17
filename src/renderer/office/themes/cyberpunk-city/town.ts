@@ -119,13 +119,5 @@ export const CYBERPUNK_TOWN: TownDress = {
   roads: { carriageway: material.asphalt, sidewalk: material.steel, promenade: material.concrete },
   citizens: CYBERPUNK_CITIZENS,
   vehicles: CYBERPUNK_VEHICLES,
-  garden: {
-    tree: 'street canopy planter',
-    lamp: 'industrial street lamp',
-    seat: 'street rest bench',
-    feature: 'pocket canopy garden',
-    corner: 'pocket canopy garden',
-    plazaPair: 'signal pedestal',
-    innerTree: 'pocket canopy garden'
-  }
+  garden: 'pocket canopy garden'
 }
