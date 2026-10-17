@@ -3,12 +3,11 @@ import { roadNet } from '../town/road-net'
 import type { VehicleRole } from '../town/town-dress'
 import type { TownPlan } from '../town/town-plan'
 import type { Trip } from '../town/town-trips'
-import { zebraPasses } from '../town/vehicle-trips'
 import { officeDoor, workRoute, workStops, type WorkStop } from '../town/work-trips'
 import { citySidewalks } from './city-sidewalks'
 import type { MoverClock } from './mover-clock'
 import { loopMetres, routePose, type RoutePoint } from './route-pose'
-import { zebraTraffic, type ZebraTraffic } from './zebra-traffic'
+import { tripPasses, zebraTraffic, type ZebraTraffic } from './zebra-traffic'
 
 // A trip still under way when the town is laid out again: carried to the next fleet.
 export interface WorkCarry {
@@ -83,7 +82,7 @@ export function createWorkFleet({ plan, trips, clock, carried }: WorkFleetOption
     const trip = { ...trips[slot], route, startSec: 0 }
     flights.set(slot, { role, ambientMoved: clock.moved[slot], stops, lapSec: lapOf(trip) })
     live[slot] = trip
-    passes[slot] = zebraPasses(route, sidewalks.crossings, sidewalks.network.zebras)
+    passes[slot] = tripPasses(trip, sidewalks)
     clock.moved[slot] = 0
     return true
   }
