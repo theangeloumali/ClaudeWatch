@@ -692,8 +692,8 @@ Research: `cross-cutting.md` X1, `hud.md` §1.
 **Verify:** `dead-code-check.sh` exits 0; the Wave 2 verdicts approve; the MP4 in `recordings/` is frame-verified; `gh pr view <n> --json state -q .state` prints MERGED.
 
 - [x] Run `/simplify`.
-- [ ] Review: Maya + Kai at risk 2, because names and the saved document are touched.
-- [ ] `bash ~/.claude/hooks/codex-review.sh`.
+- [x] Review: Maya + Kai at risk 2, because names and the saved document are touched. Kai approved after fixes (no veto); Maya requested changes (1 Critical, 3 Important), and every Critical, Important and verified Minor finding is fixed (run ledger, Wave 2).
+- [x] `bash ~/.claude/hooks/codex-review.sh`. Four passes: 7, 4, 3 and 3 findings, each reproduced RED and fixed test-first; the loop stops after pass 4 (three-strike ruling in the run ledger).
 - [x] `bash ~/.claude/hooks/dead-code-check.sh`.
 - [ ] The feature checklist.
 - [ ] An MP4 demo covering:

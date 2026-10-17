@@ -89,7 +89,7 @@ This reverses his 2026-10-16 answer that idle agents "can roam the city".
 
 ## Phase ledger
 
-- [ ] Phase 1: Merge the three Codex pass-4 fixes (lift release, Windows CLI, day usage by conversation)
+- [x] Phase 1: Merge the three Codex pass-4 fixes (lift release, Windows CLI, day usage by conversation)
 - [ ] Phase 2: Sim — agents stay inside (arrive and leave in place, cross-floor moves fade, no outings, outing code deleted)
 - [ ] Phase 3: Sim — a game corner on every office floor; idle agents play there
 - [ ] Phase 4: Renderer — GameCorner furniture, gaming pose, grow-in, "Playing games", setting copy
