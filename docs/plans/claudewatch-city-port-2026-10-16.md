@@ -32,12 +32,13 @@
 
 ## Owner decisions (his answers, 2026-10-16)
 
-| Question      | His answer                 | What it removes or adds                                                                                                                  |
-| ------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Night         | **Always daylight**        | No sky clock, night windows or window glow. No `composeCompile` helper either: nothing in this plan patches a batched material's shader. |
-| Time model    | **Live only**              | No bridge event log, scrubber, busy-day strip or rewind.                                                                                 |
-| Companies     | **Company lens**           | Offices stay on their own parcels; the saved city is unchanged.                                                                          |
-| Rail and cars | **Rail ring + work trips** | Ambient traffic keeps circulating, and work trips borrow its slots. No hyperspeed line.                                                  |
+| Question         | His answer                                                                                                  | What it removes or adds                                                                                                                  |
+| ---------------- | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Night            | **Always daylight**                                                                                         | No sky clock, night windows or window glow. No `composeCompile` helper either: nothing in this plan patches a batched material's shader. |
+| Time model       | **Live only**                                                                                               | No bridge event log, scrubber, busy-day strip or rewind.                                                                                 |
+| Companies        | **Company lens**                                                                                            | Offices stay on their own parcels; the saved city is unchanged.                                                                          |
+| Rail and cars    | **Rail ring + work trips**                                                                                  | Ambient traffic keeps circulating, and work trips borrow its slots. No hyperspeed line.                                                  |
+| Run (2026-10-17) | "Don't want you to stop until you fucking build this and let's merge everything to `main` once you're done" | No STOP after the install, no approval wait before the close; push and merge to `main` are authorised.                                   |
 
 ## Phase ledger
 
@@ -48,8 +49,8 @@
 - [ ] Phase 4: Growth, leaders and events (token spires, construction rig, crowns, leaders card, beacons, smoke and the `limited` producer, milestone fireworks, done flags, news line)
 - [ ] Phase 5: HUD (hide panels, privacy toggle, mini-map footprint and pan, Follow, labels round the chrome)
 - [ ] Phase 6: Company lens (re-tint per company, company cards)
-- [ ] Phase 7: Integration, live re-measure, local install, STOP for Angelo's look
-- [ ] Phase 8: After approval: simplify, review pair, Codex, dead code, checklist, MP4 demo, vault, push and stacked PR
+- [ ] Phase 7: Integration, live re-measure, local install (no STOP, Angelo 2026-10-17)
+- [ ] Phase 8: Close: simplify, review pair, Codex, dead code, checklist, MP4 demo, vault, push and merge to `main`
 
 ## Diagrams
 
@@ -184,6 +185,23 @@ The port starts from office-health with Phase 7's roster follow-up and Task 8.3 
   The Phase 7 office-health numbers were react-dom 0.80/s blurred, upload 14–17 kB, draws 36.
 
 **Verify:** `git merge-base --is-ancestor fix/office-health-2026-10-16 HEAD` exits 0; `npx vitest run` exits 0; the Results table has a baseline row per quality level.
+
+## Run split (2026-10-17)
+
+The phases run as agent waves, each writer in its own worktree:
+
+- **Wave A**, in parallel:
+  - A1: Tasks 1.1, 1.2 and 1.6;
+  - A2: Tasks 1.3, 1.4 and 1.5, plus the pure `stageFor` / `spireHeight` (4.1) and `buildingPlace(id).topAt(nowMs)` (4.10) in `logic/token-spires.ts` and `logic/building-place.ts`;
+  - A3 (@ravi): Task 3.1 and the bridge half of 4.6;
+  - A4: Tasks 2.1, 2.3 and 2.4.
+- **Wave B**, after A1 and A2 merge:
+  - B1: Tasks 3.2–3.6;
+  - B2: Tasks 4.1 (meshes), 4.2, 4.3, 2.2 and 4.10 (the marks);
+  - B3: Tasks 4.4, 4.5, 4.6 (scene), 4.7, 4.8 and 4.9.
+- **Wave C**, after B:
+  - C1: Phase 5;
+  - C2: Phase 6.
 
 ## Phase 1 — Foundation (lead, inline, serial; ITEM CW-CS-BASE)
 
@@ -667,11 +685,11 @@ Research: `cross-cutting.md` X1, `hud.md` §1.
   - a physical `node_modules` copy, Developer ID signing, no notarisation;
   - back up the old bundle to `~/Applications/`, `ditto` into `/Applications`;
   - `codesign --verify --deep --strict`.
-- [ ] STOP: report before/after to Angelo, with screenshots at city, building and desk zoom.
+- [ ] Report before/after to Angelo, with screenshots at city, building and desk zoom. No STOP (Angelo, 2026-10-17); Phase 8 follows.
 
-## Phase 8 — After Angelo approves (lead + Wave 2)
+## Phase 8 — Close and merge (lead + Wave 2)
 
-**Verify:** `dead-code-check.sh` exits 0; the Wave 2 verdicts approve; the MP4 in `recordings/` is frame-verified; the PR shows its stacked base.
+**Verify:** `dead-code-check.sh` exits 0; the Wave 2 verdicts approve; the MP4 in `recordings/` is frame-verified; `gh pr view <n> --json state -q .state` prints MERGED.
 
 - [ ] Run `/simplify`.
 - [ ] Review: Maya + Kai at risk 2, because names and the saved document are touched.
@@ -689,7 +707,7 @@ Research: `cross-cutting.md` X1, `hud.md` §1.
   - Follow
   - the company lens
 - [ ] Vault learning.
-- [ ] On Angelo's word, push, and open one PR stacked on the office-health PR.
+- [ ] Push, open one PR against `main` once the office-health PR has merged, and merge it with `gh pr merge --merge` (stacked branches; a squash would orphan the base).
 
 ## Estimates (hours: with Claude / without)
 
@@ -715,6 +733,6 @@ Phases 2, 3 and 4 run in parallel, and so do 5 and 6. Wall-clock is about 45% of
 
 ## Deploy
 
-Local commits and a local install only. Push, and one PR stacked on the office-health PR, happen only on Angelo's word. Publishing stays behind the Apple notarisation blocker he owns (`~/.claude/state/blocker-acc6a39e-2363-4600-bc49-ff81b7c44b95.json`).
+Authorised by Angelo on 2026-10-17. After the close: push; merge PR #12 (`release/1.3.5`), then the office-health PR, then this PR into `main`, each with `gh pr merge --merge`. Publishing a notarised release stays behind the Apple notarisation blocker he owns (`~/.claude/state/blocker-acc6a39e-2363-4600-bc49-ff81b7c44b95.json`).
 
 ## Results
