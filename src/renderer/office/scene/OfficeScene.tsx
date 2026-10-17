@@ -42,6 +42,10 @@ import { OfficeNameLayer, OfficeNameProjector, type OfficeNameAnchors } from './
 import { SceneBodies } from './BodySpace'
 import { BodyObstacleSync } from './BodyObstacleSync'
 import { ShaderPrewarm } from './ShaderPrewarm'
+import { SpireStageFeed } from './SpireStageFeed'
+import { CitySigns } from './CitySigns'
+import { LeaderCrowns } from './LeaderCrowns'
+import { ConstructionRig } from './ConstructionRig'
 import type { BodyFootprint } from '../../../shared/office/body-footprints'
 import { CityBeacons } from './CityBeacons'
 import { markClipBox } from './city-marks'
@@ -264,6 +268,7 @@ function OfficeScene(props: OfficeSceneProps) {
             onSelect={props.onSelectVenue}
           />
         )}
+        <SpireStageFeed />
         <BatchedScene revision={revision}>
           <MultiFloorLayer
             floors={surfaces}
@@ -287,6 +292,13 @@ function OfficeScene(props: OfficeSceneProps) {
             onFocusFloor={props.onFocusFloor}
           />
         </BatchedScene>
+        {!props.isLayoutPreview && (
+          <CitySigns venues={settings.town ? displayedVenues : undefined} palette={theme.palette} />
+        )}
+        {!props.isLayoutPreview && (
+          <LeaderCrowns agents={agents} sessions={props.sessions} palette={theme.palette} />
+        )}
+        {!props.isLayoutPreview && <ConstructionRig floors={props.allFloors} theme={theme} />}
         {!props.isLayoutPreview && band !== 'building' && (
           <WorkstationScreens displays={visibleWorkstationDisplays(displays, selectedAgentKey)} />
         )}
