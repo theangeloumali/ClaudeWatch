@@ -3,7 +3,6 @@ import { Children, isValidElement, type ReactNode } from 'react'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { AgentView } from '../../../shared/office/types'
 import { makeAgent, makeFloor, makeRoom } from '../__tests__/fixtures'
-import type { FloorGeometry } from '../scene-model'
 import { themeForTeam } from '../themes/registry'
 import OfficeScene from './OfficeScene'
 
@@ -31,10 +30,9 @@ const floor = makeFloor({ floorId: 'f1', label: 'Main', rooms: [makeRoom({ id: '
 const floors = [floor]
 const theme = themeForTeam()
 
-function scene(agents: readonly AgentView[], visibleFloors?: readonly FloorGeometry[]) {
+function scene(agents: readonly AgentView[]) {
   return (
     <OfficeScene
-      visibleFloors={visibleFloors}
       theme={theme}
       floors={[{ floorId: 'f1', label: 'Main', attentionCount: 0 }]}
       sessions={[]}
@@ -73,26 +71,12 @@ it('keeps the revision and skips re-serialising the floor while agents only move
   expect(floorSerialisations(stringify)).toBe(0)
 })
 
-it('changes the revision when an agent joins, leaves or changes provider or role', () => {
+// perf-11: robots batch apart from the storeys, so the floor batch stands through roster churn.
+it('keeps the floor revision when an agent joins, leaves or roams', () => {
   const view = render(scene([walker(0)]))
   view.rerender(scene([walker(0), makeAgent({ agentKey: 'claude:b' })]))
+  view.rerender(scene([walker(0, { roomId: 'r2', physicalFloorId: null })]))
   view.rerender(scene([walker(0)]))
-  view.rerender(scene([walker(0, { provider: 'codex' })]))
-  view.rerender(scene([walker(0, { provider: 'codex', isSubagent: true })]))
-  const [alone, joined, left, switched, subagent] = revisions
-  expect(joined).not.toBe(alone)
-  expect(left).toBe(alone)
-  expect(switched).not.toBe(alone)
-  expect(subagent).not.toBe(switched)
-})
-
-// perf-11: storeys batch their robots apart, so the floor batch stands through roster churn.
-it('with storeys drawn, keeps the floor revision when an agent joins, leaves or roams', () => {
-  const storeys = [floor]
-  const view = render(scene([walker(0)], storeys))
-  view.rerender(scene([walker(0), makeAgent({ agentKey: 'claude:b' })], storeys))
-  view.rerender(scene([walker(0, { roomId: 'r2', physicalFloorId: null })], storeys))
-  view.rerender(scene([walker(0)], storeys))
   expect(revisions).toHaveLength(4)
   expect(new Set(revisions).size).toBe(1)
 })
