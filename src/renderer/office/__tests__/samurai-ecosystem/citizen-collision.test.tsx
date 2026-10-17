@@ -9,7 +9,6 @@ import { distributedTown } from '../../town/distributed-town'
 import { townOf } from '../../town/use-town-plan'
 import { everyElement } from '../../themes/scene.test-utils'
 import { getTheme } from '../../themes/registry'
-import { groupZonesByTheme } from '../../logic/office-themes'
 import { MOVER_FLOORS } from '../../town/movers.test-utils'
 
 const callbacks = vi.hoisted(() => ({
@@ -77,9 +76,7 @@ it('keeps city citizens apart over a minute of motion, but for a pair giving way
     createElement(MoverLayer, {
       floor,
       plan,
-      owners: new Map(),
       floorTheme: theme,
-      zoneGroups: groupZonesByTheme(floor, () => theme.id),
       player: null,
       isReducedMotion: false,
       hasVehicles: false

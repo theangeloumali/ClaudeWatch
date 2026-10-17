@@ -312,9 +312,7 @@ function OfficeScene(props: OfficeSceneProps) {
           <MoverLayer
             floor={townFloor}
             plan={town.plan}
-            owners={town.owners}
             floorTheme={theme}
-            zoneGroups={zoneGroups}
             player={player}
             isReducedMotion={isReducedMotion}
             hasVehicles={settings.vehicles}

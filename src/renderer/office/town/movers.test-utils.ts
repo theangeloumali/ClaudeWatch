@@ -3,7 +3,7 @@ import { buildFixtureFrame } from '../fixture/fixture-feed'
 import type { QualityLevel } from '../logic/quality'
 import type { FloorGeometry } from '../scene-model'
 import type { Rect } from '../themes/lot-math'
-import { DEFAULT_THEME_ID, listThemes } from '../themes/registry'
+import { DEFAULT_THEME_ID } from '../themes/registry'
 import { distributedTown } from './distributed-town'
 import type { TownSize } from './town-grid'
 import type { TownInput, Trip } from './town-trips'
@@ -15,24 +15,14 @@ export const MOVER_FLOORS: readonly (readonly [string, FloorGeometry])[] = [
   ['the three-company floor', LARGE_FLOOR]
 ]
 
-// The city a floor gets on a first start, standing on its own site, each company in a theme.
+// The city a floor gets on a first start, standing on its own site, in the default theme.
 export function townOn(
   floor: FloorGeometry,
   detail: QualityLevel = 'full',
   size: TownSize = 'city'
 ): TownInput {
-  const { plan, owners } = distributedTown(townOf(floor, null, size), [floor])
-  const themes = listThemes()
-  const companies = floor.zones.filter((zone) => zone.kind === 'company')
-  return {
-    plan,
-    owners,
-    floorThemeId: DEFAULT_THEME_ID,
-    themeIdByZone: new Map(
-      companies.map((zone, index) => [zone.id, themes[index % themes.length].id] as const)
-    ),
-    detail
-  }
+  const { plan } = distributedTown(townOf(floor, null, size), [floor])
+  return { plan, floorThemeId: DEFAULT_THEME_ID, detail }
 }
 
 const SAMPLE_M = 0.25

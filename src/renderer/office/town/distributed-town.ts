@@ -43,7 +43,6 @@ type CityParts = Pick<
 // The campus claim and size, under the city's own streets and lots.
 function cityOf(town: CampusTown, parts: CityParts): Town {
   return {
-    owners: new Map(),
     plan: {
       ...town,
       ...parts,

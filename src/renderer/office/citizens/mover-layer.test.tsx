@@ -1,9 +1,8 @@
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
-import { groupZonesByTheme } from '../logic/office-themes'
 import { QUALITY_LEVELS, type QualityLevel } from '../logic/quality'
 import type { FloorGeometry } from '../scene-model'
-import { getTheme, listThemes } from '../themes/registry'
+import { getTheme } from '../themes/registry'
 import { everyElement, mergedDraws } from '../themes/scene.test-utils'
 import type { OfficeTheme } from '../themes/types'
 import { fallbackVehicle } from '../town/fallback-vehicles'
@@ -26,24 +25,15 @@ vi.mock('../quality-store', () => ({
   useQualityChoice: () => ({ pin: level.inUse, chosen: level.inUse })
 }))
 
-const themes = listThemes()
 const edo = getTheme('neo-edo-steam')
 
-// Each company on its own theme, in the registry's order.
 function layerOn(floor: FloorGeometry, props: { hasVehicles?: boolean }) {
-  const { plan, owners } = townOn(floor, level.inUse)
-  const companyKeys = floor.zones.map((zone) => zone.companyKey)
-  const zoneGroups = groupZonesByTheme(
-    floor,
-    (zone) => themes[Math.max(0, companyKeys.indexOf(zone.companyKey)) % themes.length].id
-  )
+  const { plan } = townOn(floor, level.inUse)
   return (
     <MoverLayer
       floor={floor}
       plan={plan}
-      owners={owners}
       floorTheme={edo}
-      zoneGroups={zoneGroups}
       player={null}
       isReducedMotion={false}
       hasVehicles={props.hasVehicles ?? true}

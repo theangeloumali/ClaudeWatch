@@ -80,9 +80,7 @@ it.each(CASES)(
       createElement(MoverLayer, {
         floor,
         plan: town.plan,
-        owners: town.owners,
         floorTheme,
-        zoneGroups,
         player: null,
         isReducedMotion: true,
         hasVehicles: true

@@ -16,8 +16,6 @@ const STORAGE_VERSION = 1
 
 export interface Town {
   plan: TownPlan
-  // Lot id to the company that dresses it; a lot that is absent takes the floor's theme.
-  owners: ReadonlyMap<string, string>
 }
 
 // What the city is laid over: the claim, held from floor to floor, and the owner's town size.

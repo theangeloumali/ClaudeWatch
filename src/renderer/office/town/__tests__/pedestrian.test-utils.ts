@@ -40,9 +40,7 @@ export function liveCity(): Scenario {
   const town = distributedTown(townOf(floor, null, 'city'), [...floors, ...liveVenueSites()])
   const trips = townTrips({
     plan: town.plan,
-    owners: town.owners,
     floorThemeId: 'corporate-city',
-    themeIdByZone: new Map(),
     detail: 'full',
     hasVehicles: true
   })
@@ -58,9 +56,7 @@ export function twoOfficeCity(): Scenario {
   ])
   const trips = townTrips({
     plan: town.plan,
-    owners: town.owners,
     floorThemeId: 'corporate-city',
-    themeIdByZone: new Map(),
     detail: 'full',
     hasVehicles: true
   })

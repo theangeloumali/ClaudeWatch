@@ -34,11 +34,11 @@ interface TownProps {
 
 type ThemeFinder = (lot: { id: string; zoneId: string | null }) => string
 
-// The theme of whoever owns a lot or a plot of the belt: its company's, else the floor's.
-function themeFinder({ town, floorTheme, zoneGroups }: TownProps): ThemeFinder {
+// The theme of the company that owns a lot, else the floor's.
+function themeFinder({ floorTheme, zoneGroups }: TownProps): ThemeFinder {
   const themeIdByCompany = themeIdsByZone(zoneGroups)
   return (lot) => {
-    const companyId = town.owners.get(lot.id) ?? lot.zoneId
+    const companyId = lot.zoneId
     return (companyId === null ? undefined : themeIdByCompany.get(companyId)) ?? floorTheme.id
   }
 }

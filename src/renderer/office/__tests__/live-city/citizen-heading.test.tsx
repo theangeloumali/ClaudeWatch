@@ -4,7 +4,6 @@ import { BufferGeometry, InstancedMesh, Matrix4, MeshStandardMaterial } from 'th
 import { MoverLayer } from '../../citizens/MoverLayer'
 import { everyElement } from '../../themes/scene.test-utils'
 import { getTheme } from '../../themes/registry'
-import { groupZonesByTheme } from '../../logic/office-themes'
 import { MOVER_FLOORS, townOn } from '../../town/movers.test-utils'
 
 const callbacks = vi.hoisted(() => ({
@@ -34,9 +33,7 @@ it('preserves every visible citizen rotation during 200 zero-motion commit uploa
     createElement(MoverLayer, {
       floor,
       plan: town.plan,
-      owners: town.owners,
       floorTheme: theme,
-      zoneGroups: groupZonesByTheme(floor, () => theme.id),
       player: null,
       isReducedMotion: false,
       hasVehicles: false
