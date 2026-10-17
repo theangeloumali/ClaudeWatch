@@ -1,6 +1,7 @@
 import type { WorldDocument } from '../../shared/office/world-document'
 import type { WorldSaveRefusal, WorldSaveReply } from '../../shared/office/world-sync'
 import {
+  readStoredWorld,
   WORLD_DOCUMENT_STORAGE_KEY,
   type WorldDocumentStorage,
   type WorldStorageEvent
@@ -12,7 +13,7 @@ export interface HostWorldStorage extends WorldDocumentStorage {
 }
 
 // A page's own copy, from before its host kept the city; read once, then removed.
-type LegacyWorldStorage = Pick<WorldDocumentStorage, 'getItem'> & {
+type LegacyWorldStorage = Pick<WorldDocumentStorage, 'getItem' | 'setItem'> & {
   removeItem?(key: string): void
 }
 
@@ -26,8 +27,8 @@ export function hostWorldStorage(
   let held = readLegacy(legacy)
   // How the last save this page made ended at the host.
   let landing: Promise<WorldSaveRefusal | null> = Promise.resolve(null)
-  // What the host last said it holds; undefined until its first hello.
-  let hostHeld: string | null | undefined
+  // Bumped by every save and hello, so a reply that arrives after either changes nothing here.
+  let generation = 0
 
   // Once the host holds a city, the page's old copy has nothing left to hand over.
   const forgetLegacy = (): void => {
@@ -45,22 +46,24 @@ export function hostWorldStorage(
       listener({ key: WORLD_DOCUMENT_STORAGE_KEY, newValue: serialized, isAuthoritative: true })
   }
   // A refused save goes back to the host's city, or to what this page held before it.
-  const upload = (serialized: string, before: string | null): Promise<WorldSaveRefusal | null> =>
-    save(JSON.parse(serialized)).then(
+  const upload = (serialized: string, before: string | null): Promise<WorldSaveRefusal | null> => {
+    const sent = ++generation
+    const adoptIfNewest = (fallback: string | null): void => {
+      if (sent === generation) adopt(fallback)
+    }
+    return save(JSON.parse(serialized)).then(
       (reply) => {
-        const kept = reply.document ? JSON.stringify(reply.document) : null
-        if (reply.success) {
-          hostHeld = kept
-          forgetLegacy()
-        } else adopt(kept ?? before)
+        if (reply.success) forgetLegacy()
+        else adoptIfNewest(reply.document ? JSON.stringify(reply.document) : before)
         return reply.success ? null : reply.reason
       },
       // Unreachable host: it holds no such city, and the next hello brings what it does hold.
       () => {
-        adopt(before)
+        adoptIfNewest(before)
         return 'storage-write'
       }
     )
+  }
 
   return {
     getItem: (key) => (key === WORLD_DOCUMENT_STORAGE_KEY ? held : null),
@@ -76,9 +79,9 @@ export function hostWorldStorage(
       return () => listeners.delete(listener)
     },
     receive(document) {
-      hostHeld = document ? JSON.stringify(document) : null
-      if (hostHeld) {
-        adopt(hostHeld)
+      generation++
+      if (document) {
+        adopt(JSON.stringify(document))
         forgetLegacy()
       }
       // A city this page kept before its host held one becomes the host's first.
@@ -87,10 +90,8 @@ export function hostWorldStorage(
   }
 }
 
+// A corrupt or foreign copy is dropped here, so it never reaches the host.
 function readLegacy(legacy: LegacyWorldStorage | null): string | null {
-  try {
-    return legacy?.getItem(WORLD_DOCUMENT_STORAGE_KEY) ?? null
-  } catch {
-    return null
-  }
+  const stored = readStoredWorld(legacy)
+  return stored.success && stored.document ? JSON.stringify(stored.document) : null
 }
