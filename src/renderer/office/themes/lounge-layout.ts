@@ -8,7 +8,7 @@ export type Footprint = Rect
 const BODY_CLEAR_M = 0.55
 const WALK_STEPS = 24
 const WALK_SHARES = Array.from({ length: WALK_STEPS + 1 }, (_, step) => step / WALK_STEPS)
-const WALL_GAP_M = 0.15
+export const WALL_GAP_M = 0.15
 
 // No agent sits on the spot or walks through it.
 export function isWalkable(lounge: LoungeGeometry, spot: Footprint): boolean {
