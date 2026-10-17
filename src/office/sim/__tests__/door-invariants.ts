@@ -36,12 +36,19 @@ export class DoorInvariants {
   private blocked: Violation | null = null
   private previous = new Map<string, AgentView>()
   private anchors = new Map<string, { x: number; z: number; sinceMs: number }>()
+  // First seen faded, so fading in: like the sim, not a body until it is seated.
+  private arriving = new Set<string>()
 
   constructor(private readonly isResting: (view: AgentView) => boolean) {}
 
   check(views: readonly AgentView[], atMs: number): void {
-    this.checkClearance(views, atMs)
     const current = new Map(views.map((view) => [view.agentKey, view]))
+    for (const key of this.arriving)
+      if (current.get(key)?.fade === undefined) this.arriving.delete(key)
+    for (const view of views)
+      if (view.fade !== undefined && !this.previous.has(view.agentKey))
+        this.arriving.add(view.agentKey)
+    this.checkClearance(views, atMs)
     for (const view of views) {
       const before = this.previous.get(view.agentKey)
       // A recall fades out first, so its move to the desk is never seen (FOUND 7).
@@ -61,9 +68,10 @@ export class DoorInvariants {
 
   private checkClearance(views: readonly AgentView[], atMs: number): void {
     if (this.overlap) return
-    // A faded body is shrinking away or not grown in yet: a newcomer fades in on its desk
-    // while the one it replaces fades out there.
-    const bodies = views.filter((view) => view.fade === undefined).map(footprint)
+    // A leaver stays carved out: a relayout slides a seated desk onto one fading where it stood.
+    const bodies = views
+      .filter((view) => !this.arriving.has(view.agentKey) && view.place !== 'leaving')
+      .map(footprint)
     for (let first = 0; first < bodies.length; first++)
       for (let second = first + 1; second < bodies.length; second++) {
         const [a, b] = [bodies[first], bodies[second]]
