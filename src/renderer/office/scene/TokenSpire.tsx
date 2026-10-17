@@ -79,7 +79,7 @@ export function TokenSpire({
 }
 
 // Every office's spire in one batch of its own, so a stage reached rebuilds only it (+1 draw).
-// Its own lens re-tints it with the offices, as when spires stood in their batch.
+// A lens tints only its own batch, so this one carries one to give spires their company's hue.
 export function TokenSpires({
   spires,
   floors,
