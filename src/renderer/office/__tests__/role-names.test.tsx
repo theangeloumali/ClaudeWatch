@@ -232,10 +232,13 @@ describe('the privacy edge', () => {
     expect(JSON.stringify(moved.accounts)).not.toMatch(REAL_NAMES)
   })
 
-  it('the same agents are masked once', () => {
+  it("an agent's role follows the sessions it is masked with, never an earlier frame's", () => {
     const roles = createRoleBook()
     const frame = secretFrame()
-    expect(maskFrame({ ...frame }, roles).agents).toBe(maskFrame({ ...frame }, roles).agents)
+    const before = maskFrame({ ...frame, sessions: [] }, roles)
+    expect(before.agents[0]?.label).toBe('Agent')
+    const after = maskFrame(frame, roles)
+    expect(after.agents[0]?.label).toMatch(/^Session /)
   })
 
   it('the saved world document keeps real names while the screen shows roles', () => {
