@@ -1,3 +1,4 @@
+import { useLayoutEffect, useMemo } from 'react'
 import { CanvasTexture, SRGBColorSpace } from 'three'
 import { STEAM } from '../office-palette'
 
@@ -7,8 +8,15 @@ const MAX_SIGN_CHARS = 24
 // Each sign is about 213 kB on the GPU, and a count line makes a new text per value.
 const MAX_SIGNS = 64
 
+interface SignEntry {
+  texture: CanvasTexture
+  // Mounted signs drawing it: a held texture is never freed, or three would upload a copy no one frees.
+  holders: number
+}
+
 // Least recently asked for first: a Map keeps insertion order, and a hit re-inserts.
-const signCache = new Map<string, CanvasTexture>()
+const signCache = new Map<string, SignEntry>()
+let isTrimQueued = false
 let blobShadow: CanvasTexture | null = null
 
 type Canvas2D = [HTMLCanvasElement, CanvasRenderingContext2D]
@@ -41,12 +49,12 @@ function toTexture(canvas: HTMLCanvasElement): CanvasTexture {
 }
 
 // A brass plaque with a rivet in each corner.
-export function signTexture(text: string): CanvasTexture {
+function signTexture(text: string): CanvasTexture {
   const cached = signCache.get(text)
   if (cached) {
     signCache.delete(text)
     signCache.set(text, cached)
-    return cached
+    return cached.texture
   }
   const [canvas, context] = makeCanvas(512, 104)
   context.fillStyle = STEAM.brass
@@ -73,13 +81,39 @@ export function signTexture(text: string): CanvasTexture {
   const label = text.length > MAX_SIGN_CHARS ? `${text.slice(0, MAX_SIGN_CHARS - 1)}…` : text
   context.fillText(label, 256, 54, 440)
   const texture = toTexture(canvas)
-  signCache.set(text, texture)
-  // A sign still on screen is not lost: its material uploads it again on its next draw.
-  for (const [oldest, evicted] of signCache) {
-    if (signCache.size <= MAX_SIGNS) break
-    signCache.delete(oldest)
-    evicted.dispose()
+  signCache.set(text, { texture, holders: 0 })
+  return texture
+}
+
+// Frees the oldest unheld signs over the cap. A release queues it, so it runs once the commit is
+// done and every sign drawn in it is held.
+function trimSigns(): void {
+  isTrimQueued = false
+  for (const [text, entry] of signCache) {
+    if (signCache.size <= MAX_SIGNS) return
+    if (entry.holders > 0) continue
+    signCache.delete(text)
+    entry.texture.dispose()
   }
+}
+
+function releaseSign(entry: SignEntry): void {
+  entry.holders -= 1
+  if (isTrimQueued) return
+  isTrimQueued = true
+  queueMicrotask(trimSigns)
+}
+
+// The sign's texture, held while the calling sign is mounted.
+export function useSignTexture(text: string): CanvasTexture {
+  const texture = useMemo(() => signTexture(text), [text])
+  useLayoutEffect(() => {
+    // A trim before this commit may have freed it; held again, three uploads it on its next draw.
+    const entry = signCache.get(text) ?? { texture, holders: 0 }
+    signCache.set(text, entry)
+    entry.holders += 1
+    return () => releaseSign(entry)
+  }, [text, texture])
   return texture
 }
 

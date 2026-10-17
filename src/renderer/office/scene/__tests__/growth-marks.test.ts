@@ -137,14 +137,14 @@ describe('growth layer budgets', () => {
         CITY_LAYER_BUDGET.signs.draws[level]
       )
       // LeaderCrowns mounts at full only (city-marks-level spec); lighter levels draw none.
-      expect(level === 'full' ? measureLayer(crowns.group).draws : 0).toBeLessThanOrEqual(
+      expect(level === 'full' ? measureLayer(crowns.mesh).draws : 0).toBeLessThanOrEqual(
         CITY_LAYER_BUDGET.crowns.draws[level]
       )
-      expect(measureLayer(rig.group).draws).toBeLessThanOrEqual(CITY_LAYER_BUDGET.rig.draws[level])
+      expect(measureLayer(rig.mesh).draws).toBeLessThanOrEqual(CITY_LAYER_BUDGET.rig.draws[level])
       // A still frame: nothing the steady layers draw moved.
       signs.update({ hosts, camera: view, nowMs: 1_000, isPinned: false, isCameraMoved: true })
       expect(measureLayer(signs.group).uploadBytes).toBe(CITY_LAYER_BUDGET.signs.uploadBytes)
-      expect(measureLayer(crowns.group).uploadBytes).toBe(CITY_LAYER_BUDGET.crowns.uploadBytes)
+      expect(measureLayer(crowns.mesh).uploadBytes).toBe(CITY_LAYER_BUDGET.crowns.uploadBytes)
     }
   })
 })

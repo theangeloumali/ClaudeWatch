@@ -5,6 +5,18 @@ import { vi } from 'vitest'
 type FrameCallback = (state: object, deltaSec: number) => void
 
 const camera = { zoom: 34 }
+type Point3 = { x: number; y: number; z: number }
+
+function arriveAt(x: number, y: number, z: number, _isAnimated?: boolean): void {
+  controls.target = { x, y, z }
+}
+
+function readTarget(out: Point3, _isEnd?: boolean): Point3 {
+  out.x = controls.target.x
+  out.y = controls.target.y
+  out.z = controls.target.z
+  return out
+}
 const listeners = new Map<string, Set<() => void>>()
 export const frames = new Set<{ current: FrameCallback }>()
 
@@ -29,9 +41,7 @@ export const controls = {
   truckSpeed: 2,
   draggingSmoothTime: 0.125,
   // Like the library without a transition: the camera is there by the next frame.
-  moveTo: vi.fn((x: number, y: number, z: number) => {
-    controls.target = { x, y, z }
-  }),
+  moveTo: vi.fn(arriveAt),
   zoomTo: vi.fn((zoom: number) => {
     camera.zoom = zoom
   }),
@@ -40,12 +50,7 @@ export const controls = {
   dollyTo: vi.fn(),
   setLookAt: vi.fn(),
   truck: vi.fn(),
-  getTarget: vi.fn((out: { x: number; y: number; z: number }) => {
-    out.x = controls.target.x
-    out.y = controls.target.y
-    out.z = controls.target.z
-    return out
-  }),
+  getTarget: vi.fn(readTarget),
   addEventListener: (type: string, listener: () => void) => {
     if (!listeners.has(type)) listeners.set(type, new Set())
     listeners.get(type)?.add(listener)
@@ -68,6 +73,22 @@ export function resetRig(): void {
   controls.azimuthAngle = 0
   controls.polarAngle = Math.PI / 4
   vi.clearAllMocks()
+  controls.moveTo.mockImplementation(arriveAt)
+  controls.getTarget.mockImplementation(readTarget)
+}
+
+// As the library holds a fly-to: an animated move sets its end now and the target stays put.
+export function holdFlights(): () => Point3 {
+  let end = { ...controls.target }
+  controls.moveTo.mockImplementation((x, y, z, isAnimated) => {
+    end = { x, y, z }
+    if (!isAnimated) controls.target = end
+  })
+  controls.getTarget.mockImplementation((out, isEnd = true) => {
+    Object.assign(out, isEnd ? end : controls.target)
+    return out
+  })
+  return () => end
 }
 
 export function fiberMock() {

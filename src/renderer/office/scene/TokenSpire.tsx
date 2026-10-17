@@ -40,12 +40,14 @@ export function TokenSpire({
 }) {
   const modules = useMemo(() => spireModules(theme).slice(0, stage), [theme, stage])
   const meshes = useRef<(Mesh | null)[]>([])
-  const drawn = useRef<{ roof: BuildingRoof | null; share: number } | null>(null)
+  const drawn = useRef<{ roof: BuildingRoof | null; share: number; stage: number } | null>(null)
   useFrame(() => {
     const roof = buildingPlaces.roofOf(buildingId)
     const share = spireShare(buildingPlaces, buildingId, cityClock.now(), cityClock.isPinned())
-    if (drawn.current?.roof === roof && drawn.current.share === share) return
-    drawn.current = { roof, share }
+    // The stage counts too: the frame feed can move the share before React mounts the module.
+    const last = drawn.current
+    if (last?.roof === roof && last.share === share && last.stage === stage) return
+    drawn.current = { roof, share, stage }
     const baseY = (roof?.crown.y ?? 0) + SPIRE_BASE_GAP_M
     const frames = roof ? moduleFrames(share * SPIRE_MAX_M, baseY - roof.deck.y) : []
     meshes.current.forEach((mesh, index) => {
@@ -77,7 +79,7 @@ export function TokenSpire({
 }
 
 // Every office's spire in one batch of its own, so a stage reached rebuilds only it (+1 draw).
-// Its own lens re-tints it with the offices, as when spires stood in their batch.
+// A lens tints only its own batch, so this one carries one to give spires their company's hue.
 export function TokenSpires({
   spires,
   floors,

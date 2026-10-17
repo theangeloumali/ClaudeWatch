@@ -17,7 +17,7 @@ vi.mock('react', async (original) => ({
 }))
 vi.mock('@react-three/fiber', () => ({ useFrame: () => undefined, Canvas: () => null }))
 vi.mock('@react-three/drei', () => ({ Html: () => null, OrbitControls: () => null }))
-vi.mock('../scene/textures', () => ({ signTexture: () => new Texture() }))
+vi.mock('../scene/textures', () => ({ useSignTexture: () => new Texture() }))
 
 interface Props {
   children?: ReactNode

@@ -38,5 +38,5 @@ export function ConstructionRig({
       level: readQualityLevel()
     })
   )
-  return <primitive object={layer.group} />
+  return <primitive object={layer.mesh} />
 }

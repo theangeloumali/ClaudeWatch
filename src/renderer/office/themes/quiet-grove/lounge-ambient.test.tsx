@@ -12,7 +12,7 @@ vi.mock('react', async (original) => ({
 }))
 vi.mock('@react-three/fiber', () => import('../frame-capture.test-utils'))
 vi.mock('../../scene/textures', () => ({
-  signTexture: () => new Texture(),
+  useSignTexture: () => new Texture(),
   blobShadowTexture: () => new Texture()
 }))
 

@@ -12,8 +12,11 @@ import { SPIRE_BASE_GAP_M, SPIRE_MAX_M } from '../logic/token-spires'
 // What every city mark reads in one drawn frame: the live signals, events and roofs.
 export interface CityMarkFrame {
   signals: CitySignals
-  // Bumps only when a signal changed, so one sites scan serves every frame until then.
+  // Bumps only when a building's state changed, not on a token tick, so one sites scan serves
+  // every frame until then.
   signalsVersion: number
+  // Bumps when a roof comes or goes, which decides who can hold a mark.
+  placesVersion: number
   events: readonly CityEvent[]
   topOf: (buildingId: string) => PlaceTop | null
   nowMs: number
@@ -28,7 +31,8 @@ export function readCityMarks(band: ZoomBand, zoom: number): CityMarkFrame {
   const isPinned = cityClock.isPinned()
   return {
     signals: citySignalStore.current(),
-    signalsVersion: citySignalStore.version(),
+    signalsVersion: citySignalStore.sceneVersion(),
+    placesVersion: buildingPlaces.version(),
     events: cityEvents.active(),
     topOf: (buildingId) => buildingPlaces.topAt(buildingId, nowMs, isPinned),
     nowMs,
@@ -99,21 +103,34 @@ export interface MarkPose {
 
 type SiteTest = (signal: BuildingSignal) => boolean
 const NO_SITES: readonly string[] = []
-const siteScans = new WeakMap<SiteTest, { version: number; limit: number; sites: string[] }>()
+interface SiteScan {
+  signalsVersion: number
+  placesVersion: number
+  limit: number
+  sites: string[]
+}
+const siteScans = new WeakMap<SiteTest, SiteScan>()
 
-// The buildings whose signal holds, in a stable order, at most `limit`; none at the desk.
+// The roofed buildings whose signal holds, in a stable order, at most `limit`; none at the desk.
+// A building with no roof yet would spend a slot on a mark that cannot stand.
 export function markSites(
-  frame: Pick<CityMarkFrame, 'signals' | 'signalsVersion' | 'band'>,
+  frame: Pick<CityMarkFrame, 'signals' | 'signalsVersion' | 'placesVersion' | 'topOf' | 'band'>,
   holds: SiteTest,
   limit: number
 ): readonly string[] {
   if (frame.band === 'desk') return NO_SITES
+  const { signalsVersion, placesVersion } = frame
   const scan = siteScans.get(holds)
-  if (scan?.version === frame.signalsVersion && scan.limit === limit) return scan.sites
+  if (
+    scan?.signalsVersion === signalsVersion &&
+    scan.placesVersion === placesVersion &&
+    scan.limit === limit
+  )
+    return scan.sites
   const sites: string[] = []
   for (const [buildingId, signal] of frame.signals.buildings)
-    if (holds(signal)) sites.push(buildingId)
+    if (holds(signal) && frame.topOf(buildingId)) sites.push(buildingId)
   sites.sort().splice(limit)
-  siteScans.set(holds, { version: frame.signalsVersion, limit, sites })
+  siteScans.set(holds, { signalsVersion, placesVersion, limit, sites })
   return sites
 }

@@ -33,7 +33,7 @@ vi.mock('react', async (original) => ({
   }
 }))
 vi.mock('@react-three/fiber', () => ({ useFrame: (frame: Frame) => frames.push(frame) }))
-vi.mock('../../scene/textures', () => ({ signTexture: () => new Texture() }))
+vi.mock('../../scene/textures', () => ({ useSignTexture: () => new Texture() }))
 
 // The whole theme may add this many draws across its lounge and ambient parts.
 const DRAW_BUDGET = 9

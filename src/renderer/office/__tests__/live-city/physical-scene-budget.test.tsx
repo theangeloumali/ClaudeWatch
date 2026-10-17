@@ -42,7 +42,7 @@ vi.mock('../../quality-store', () => ({
 }))
 vi.mock('../../scene/monitor-texture', () => ({ monitorTexture: () => new Texture() }))
 vi.mock('../../scene/textures', () => ({
-  signTexture: () => new Texture(),
+  useSignTexture: () => new Texture(),
   blobShadowTexture: () => new Texture()
 }))
 

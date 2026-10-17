@@ -93,17 +93,17 @@ describe('construction rig', () => {
     const layer = createConstructionRigLayer(themeForTeam())
     const frameAt = (nowMs: number) => rigFrame({ events: log.active(nowMs), nowMs })
     layer.update(frameAt(T0 + 1 + 1_500))
-    expect(shownIn(layer.rig)).toBe(12)
+    expect(shownIn(layer.mesh)).toBe(12)
     // Crane and scaffold are one draw; the hoisted module rides the particle mesh.
-    expect(measureLayer(layer.group).draws).toBe(1)
+    expect(measureLayer(layer.mesh).draws).toBe(1)
     expect(CITY_LAYER_BUDGET.rig).toMatchObject({ isTransient: true, draws: { full: 2 } })
     layer.update(frameAt(T0 + 1 + 1_600))
-    expect(measureLayer(layer.group).uploadBytes).toBe(0)
+    expect(measureLayer(layer.mesh).uploadBytes).toBe(0)
     layer.update(frameAt(T0 + 1 + CITY_EVENT_LIFE_MS.hoist))
-    expect(shownIn(layer.rig)).toBe(0)
-    measureLayer(layer.group)
+    expect(shownIn(layer.mesh)).toBe(0)
+    measureLayer(layer.mesh)
     layer.update(frameAt(T0 + 1 + CITY_EVENT_LIFE_MS.hoist + 500))
-    expect(measureLayer(layer.group).uploadBytes).toBe(0)
+    expect(measureLayer(layer.mesh).uploadBytes).toBe(0)
   })
 
   it('a hello shows the finished spire with no rig', () => {
@@ -116,14 +116,14 @@ describe('construction rig', () => {
     )
     const layer = createConstructionRigLayer(themeForTeam())
     layer.update(rigFrame({ events: log.active(T0 + 100), nowMs: T0 + 100, places }))
-    expect(shownIn(layer.rig)).toBe(0)
+    expect(shownIn(layer.mesh)).toBe(0)
   })
 
   it('reduced motion skips the hoist', () => {
     const log = crossingLog()
     const layer = createConstructionRigLayer(themeForTeam())
     layer.update(rigFrame({ events: log.active(T0 + 500), nowMs: T0 + 500, isPinned: true }))
-    expect(shownIn(layer.rig)).toBe(0)
+    expect(shownIn(layer.mesh)).toBe(0)
   })
 
   it('stepping quality mid-hoist rebuilds no static batch', () => {
@@ -139,16 +139,16 @@ describe('construction rig', () => {
     const batchVersion = batch.mesh.instanceMatrix.version
     const scene = new Group()
     const layer = createConstructionRigLayer(themeForTeam())
-    scene.add(city, layer.group)
+    scene.add(city, layer.mesh)
     const log = crossingLog()
     const frameAt = (nowMs: number, level: RigFrame['level']) =>
       rigFrame({ events: log.active(nowMs), nowMs, level })
     layer.update(frameAt(T0 + 800, 'full'))
-    expect(measureLayer(layer.group).draws).toBe(1)
+    expect(measureLayer(layer.mesh).draws).toBe(1)
     layer.update(frameAt(T0 + 1_200, 'light'))
-    expect(measureLayer(layer.group).draws).toBe(CITY_LAYER_BUDGET.rig.draws.light)
+    expect(measureLayer(layer.mesh).draws).toBe(CITY_LAYER_BUDGET.rig.draws.light)
     layer.update(frameAt(T0 + 1_600, 'balanced'))
-    expect(measureLayer(layer.group).draws).toBe(1)
+    expect(measureLayer(layer.mesh).draws).toBe(1)
     expect(city.children.filter((child) => child instanceof InstancedMesh)).toEqual([batch.mesh])
     expect(batch.mesh.instanceMatrix.version).toBe(batchVersion)
   })
@@ -162,7 +162,7 @@ describe('construction rig', () => {
     log.observe('patch', [at(T0 + 2, 5_000_001)], T0 + 2, day(5_000_001))
     const layer = createConstructionRigLayer(themeForTeam())
     layer.update(rigFrame({ events: log.active(T0 + 500), nowMs: T0 + 500 }))
-    expect(shownIn(layer.rig)).toBe(0)
+    expect(shownIn(layer.mesh)).toBe(0)
   })
 
   it('the crane stands behind the building and hangs the hoist line over the roof, within 12 m of it', () => {
@@ -178,7 +178,7 @@ describe('construction rig', () => {
       layer.update(rigFrame({ events, nowMs: hoist.atMs + 100, places: placesWithRoof(roof) }))
       const box = (index: number) => {
         const matrix = new Matrix4()
-        layer.rig.getMatrixAt(index, matrix)
+        layer.mesh.getMatrixAt(index, matrix)
         const at = new Vector3()
         const size = new Vector3()
         matrix.decompose(at, new Quaternion(), size)

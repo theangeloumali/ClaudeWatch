@@ -1,6 +1,7 @@
-import { Children, isValidElement, type ReactElement, type ReactNode } from 'react'
-import { Box3, InstancedMesh, Matrix4, Quaternion, Vector3 } from 'three'
-import { afterEach, describe, expect, it } from 'vitest'
+import { act } from '@react-three/fiber'
+import { Children, createElement, isValidElement, type ReactElement, type ReactNode } from 'react'
+import { Box3, InstancedMesh, Matrix4, Object3D, Quaternion, Vector3 } from 'three'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { makeFloor } from '../../__tests__/fixtures'
 import { BAND_ZOOM, ISO_POLAR, ISO_START_AZIMUTH } from '../../logic/camera-bands'
 import { QUALITY_LEVELS } from '../../logic/quality'
@@ -13,6 +14,7 @@ import { townOf } from '../../town/use-town-plan'
 import { TRAIN_SPEEDS } from '../../town/railway-runs'
 import { trainSet } from '../RailwayTrains'
 import { RailwayLayer, RailwayStructures } from '../RailwayStructures'
+import { mountInFiber } from './fiber-root.test-utils'
 
 const floors = [0, 1, 2, 3].map((index) =>
   makeFloor({ floorId: `f${index}`, x: (index % 2) * 64 + 32, z: Math.floor(index / 2) * 56 + 28 })
@@ -24,7 +26,10 @@ const railway = found
 const { palette } = getTheme('corporate-city')
 const T0 = 1_760_000_000_000
 
-afterEach(() => pinQuality('auto'))
+afterEach(() => {
+  pinQuality('auto')
+  vi.unstubAllGlobals()
+})
 
 // The layer's own children, unexpanded: the hooks inside them only run under a renderer.
 function layerParts(): ReactElement<Record<string, unknown>>[] {
@@ -32,6 +37,12 @@ function layerParts(): ReactElement<Record<string, unknown>>[] {
   if (!isValidElement<{ children?: ReactNode }>(layer)) return []
   return Children.toArray(layer.props.children).filter(isValidElement<Record<string, unknown>>)
 }
+
+const carCount = (trains: Object3D | undefined): number =>
+  (trains?.children ?? []).reduce(
+    (cars, mesh) => cars + (mesh instanceof InstancedMesh ? mesh.count : 0),
+    0
+  )
 
 interface CarPose {
   position: Vector3
@@ -82,15 +93,21 @@ describe('RailwayTrains', () => {
     expect(layerParts().some((element) => element.type === RailwayStructures)).toBe(true)
   })
 
-  it('stepping to light mid-run rebuilds no static batch', () => {
-    const structureAt = (level: 'full' | 'light') => {
-      pinQuality(level)
-      return layerParts().find((element) => element.type === RailwayStructures)
+  it('stepping to light mid-run rebuilds no static batch', async () => {
+    pinQuality('full')
+    const { scene, unmount } = await mountInFiber(
+      createElement(RailwayLayer, { plan, palette, hasTrains: true })
+    )
+    const at = () => {
+      const [viaduct, trains] = scene.children
+      if (!(viaduct instanceof InstancedMesh)) throw new Error('no viaduct')
+      return { viaduct: viaduct.geometry.uuid, cars: carCount(trains) }
     }
-    const [full, light] = [structureAt('full'), structureAt('light')]
-    // The viaduct is memoised on these two alone, and neither changes with the level.
-    expect(light?.props).toEqual(full?.props)
-    expect(light?.props.railway).toBe(railway)
+    const full = at()
+    expect(full.cars).toBeGreaterThan(0)
+    await act(async () => pinQuality('light'))
+    expect(at()).toEqual({ viaduct: full.viaduct, cars: 0 })
+    await unmount()
   })
 
   it('trains run at 12–18 m/s, so they read at the idle pace', () => {

@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { doorSignPlacement } from '../../logic/room-layout'
-import { signTexture } from '../../scene/textures'
+import { useSignTexture } from '../../scene/textures'
 import { BandedWalls, type WallBand } from '../BandedWalls'
 import { firstClear, spotAt } from '../lounge-layout'
 import { box, lit, Parts, type PartSpec } from '../parts'
@@ -100,7 +100,7 @@ export function SamuraiRoomDressing({ room }: RoomProps) {
 
 export function SamuraiRoomSign({ room }: RoomProps) {
   const place = doorSignPlacement(room)
-  const texture = useMemo(() => signTexture(room.label), [room.label])
+  const texture = useSignTexture(room.label)
   return (
     <group position={[place.x, 1.62, place.z]} rotation={[0, place.rotationY, 0]}>
       <Parts

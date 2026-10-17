@@ -20,6 +20,7 @@ import { findZone } from '../logic/zone-model'
 import type { QualityLevel } from '../logic/quality'
 import { useQualityLevel } from '../quality-store'
 import { readCanvasObstacles } from './canvas-obstacles'
+import { storeSlot } from './snapshot-slot'
 
 // Over an agent's head (scene/Robot.tsx draws agents 1.65 m tall).
 export const CARD_HEIGHT = 2.45
@@ -55,13 +56,6 @@ interface CardProjectorProps {
   inspectorLayout?: InspectorLayout
   agents?: readonly AgentView[]
   visibleFloors: readonly FloorGeometry[]
-}
-
-// Writes a snapshot slot and returns 1 if it changed, so the idle check allocates nothing.
-function store(snapshot: number[], index: number, value: number): number {
-  const hasChanged = snapshot[index] !== value
-  snapshot[index] = value
-  return hasChanged ? 1 : 0
 }
 
 function hideAll(elements: Map<string, HTMLElement>): void {
@@ -226,16 +220,16 @@ export function CardProjector({
     const obstacles = readCanvasObstacles(anchors.cards.values().next().value?.parentElement)
     const view = last.view
     const hasMoved =
-      store(view, 0, position.x) |
-      store(view, 1, position.y) |
-      store(view, 2, position.z) |
-      store(view, 3, quaternion.x) |
-      store(view, 4, quaternion.y) |
-      store(view, 5, quaternion.z) |
-      store(view, 6, quaternion.w) |
-      store(view, 7, zoom) |
-      store(view, 8, size.width) |
-      store(view, 9, size.height)
+      storeSlot(view, 0, position.x) |
+      storeSlot(view, 1, position.y) |
+      storeSlot(view, 2, position.z) |
+      storeSlot(view, 3, quaternion.x) |
+      storeSlot(view, 4, quaternion.y) |
+      storeSlot(view, 5, quaternion.z) |
+      storeSlot(view, 6, quaternion.w) |
+      storeSlot(view, 7, zoom) |
+      storeSlot(view, 8, size.width) |
+      storeSlot(view, 9, size.height)
     const isSameView =
       hasMoved === 0 &&
       last.cards === cards &&

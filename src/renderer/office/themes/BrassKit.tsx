@@ -2,7 +2,7 @@ export { BrassRoomDressing } from './BrassRoomDressing'
 export { BrassWalls } from './BrassWalls'
 import { STEAM } from '../office-palette'
 import { Elevator } from './BrassElevator'
-import { signTexture } from '../scene/textures'
+import { useSignTexture } from '../scene/textures'
 import { doorSignPlacement, DESK_REACH } from '../logic/room-layout'
 import { Matte } from '../scene/InstancedParts'
 import { Batch, Box } from './primitives'
@@ -90,10 +90,11 @@ export function BrassDesk({ slot }: DeskProps) {
 
 export function BrassRoomSign({ room }: RoomProps) {
   const sign = doorSignPlacement(room)
+  const texture = useSignTexture(room.label)
   return (
     <mesh position={[sign.x, 1.62, sign.z]} rotation={[0, sign.rotationY, 0]}>
       <planeGeometry args={[1.7, 0.35]} />
-      <meshBasicMaterial map={signTexture(room.label)} toneMapped={false} />
+      <meshBasicMaterial map={texture} toneMapped={false} />
     </mesh>
   )
 }

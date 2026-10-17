@@ -58,5 +58,5 @@ export function createConstructionRigLayer(theme: OfficeTheme) {
     marks.finish(slot * BOXES_PER_RIG)
   }
 
-  return { group: marks.mesh, rig: marks.mesh, update, dispose: marks.dispose }
+  return { mesh: marks.mesh, update, dispose: marks.dispose }
 }

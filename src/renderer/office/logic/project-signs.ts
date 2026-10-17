@@ -4,6 +4,7 @@ import { SCENE_BACKGROUND, STATE_COLOR } from '../office-palette'
 import { contrastRatio } from '../themes/contrast'
 import type { BuildingId, BuildingSignal } from './city-signals'
 import { citySignalStore, type CitySignalStore } from './city-signal-store'
+import { isSameMap } from './same-map'
 
 const TOOL_ICONS = [
   'read',
@@ -89,10 +90,7 @@ export function createProjectSigns(
     const next = new Map(
       [...signals.current().buildings].map(([id, signal]) => [id, signFor(signal)])
     )
-    const isSame =
-      next.size === signs.size &&
-      [...next].every(([id, sign]) => signs.has(id) && isSameSign(sign, signs.get(id) ?? null))
-    if (isSame) return
+    if (isSameMap(next, signs, isSameSign)) return
     signs = next
     version += 1
   }

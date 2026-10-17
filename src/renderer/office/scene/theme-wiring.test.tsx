@@ -15,7 +15,7 @@ vi.mock('react', async (original) => ({
   useRef: () => ({ current: null })
 }))
 vi.mock('@react-three/fiber', () => ({ useFrame: () => undefined }))
-vi.mock('./textures', () => ({ blobShadowTexture: () => null, signTexture: () => null }))
+vi.mock('./textures', () => ({ blobShadowTexture: () => null, useSignTexture: () => null }))
 
 function elements(node: ReactNode): React.ReactElement<Record<string, unknown>>[] {
   if (Array.isArray(node)) return node.flatMap(elements)

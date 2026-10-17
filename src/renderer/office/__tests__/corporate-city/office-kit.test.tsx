@@ -30,7 +30,7 @@ vi.mock('react', async (original) => ({
   useRef: (current: object) => ({ current })
 }))
 vi.mock('@react-three/fiber', () => import('../../themes/frame-capture.test-utils'))
-vi.mock('../../scene/textures', () => ({ signTexture: () => new Texture() }))
+vi.mock('../../scene/textures', () => ({ useSignTexture: () => new Texture() }))
 
 const ROOM: RoomGeometry = {
   id: 'corporate-office',

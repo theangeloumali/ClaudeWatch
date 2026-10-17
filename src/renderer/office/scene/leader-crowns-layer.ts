@@ -24,6 +24,7 @@ import {
   type MarkSize
 } from './city-marks'
 import { createMarkMesh } from './mark-mesh'
+import { storeSlot } from './snapshot-slot'
 
 const CROWNS = 3
 // A readable size on screen at every zoom (N7); Horizon keeps room for it however far out.
@@ -76,38 +77,40 @@ const CORNERS = [-1, 1].flatMap((x) =>
 const isAtDesk = (agent: AgentView): boolean =>
   agent.venueId === undefined && agent.place === undefined
 
-// What a frame's crowns depend on; an unchanged print draws nothing new.
-function framePrint(frame: CrownFrame): unknown[] {
-  const { camera, places } = frame
-  return [
-    ...camera.quaternion.toArray(),
-    cameraZoom(camera),
-    frame.poses.version(),
-    places.version(),
-    frame.agents,
-    frame.buildings,
-    frame.isPinned,
-    ...frame.crowned.slice(0, CROWNS)
-  ]
-}
+// Camera turn and zoom, poses, places, agents, buildings, the pin, then one slot per crown.
+const PRINT_SLOTS = 10 + CROWNS
 
-const isSamePrint = (left: readonly unknown[], right: readonly unknown[]): boolean =>
-  left.length === right.length && left.every((value, index) => value === right[index])
+// Writes what a frame's crowns depend on into `print`, in place; an unchanged print draws nothing.
+function stampPrint(print: unknown[], frame: CrownFrame): boolean {
+  const { camera, places, crowned } = frame
+  const { x, y, z, w } = camera.quaternion
+  let changes =
+    storeSlot(print, 0, x) |
+    storeSlot(print, 1, y) |
+    storeSlot(print, 2, z) |
+    storeSlot(print, 3, w) |
+    storeSlot(print, 4, cameraZoom(camera)) |
+    storeSlot(print, 5, frame.poses.version()) |
+    storeSlot(print, 6, places.version()) |
+    storeSlot(print, 7, frame.agents) |
+    storeSlot(print, 8, frame.buildings) |
+    storeSlot(print, 9, frame.isPinned)
+  for (let index = 0; index < CROWNS; index += 1)
+    changes |= storeSlot(print, 10 + index, crowned[index])
+  return changes !== 0
+}
 
 export function createLeaderCrownsLayer(palette: ThemePalette) {
   const material = new MeshStandardMaterial({ vertexColors: true, roughness: 0.6, metalness: 0.15 })
   const marks = createMarkMesh(crownGeometry(palette), material, CROWNS)
   const [cameraUp, corner] = [new Vector3(), new Vector3()]
   const turn = new Quaternion()
-  let drawnPrint: unknown[] = []
+  const print = new Array<unknown>(PRINT_SLOTS)
 
   // Each crown sits clear of its card on screen and of its own roof. Every crown shares the
   // frame's size and turn, so its lowest corner on screen is worked out once.
   const update = (frame: CrownFrame): void => {
-    const print = framePrint(frame)
-    if (isSamePrint(print, drawnPrint) && !frame.places.isEasing(frame.nowMs, frame.isPinned))
-      return
-    drawnPrint = print
+    if (!stampPrint(print, frame) && !frame.places.isEasing(frame.nowMs, frame.isPinned)) return
     const zoom = cameraZoom(frame.camera)
     const size = markSizeM(CROWN_SIZE, zoom)
     const half = (size * CROWN_HEIGHT) / 2
@@ -141,5 +144,5 @@ export function createLeaderCrownsLayer(palette: ThemePalette) {
     marks.finish(CROWNS)
   }
 
-  return { group: marks.mesh, mesh: marks.mesh, update, dispose: marks.dispose }
+  return { mesh: marks.mesh, update, dispose: marks.dispose }
 }
