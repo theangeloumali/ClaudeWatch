@@ -19,7 +19,7 @@ import {
   updateAgent,
   type AgentRecord
 } from './behaviour'
-import { buildLayout, type FloorLayout, type LayoutMap, type LoungeLayout } from './layout'
+import { buildLayout, deskOf, type FloorLayout, type LayoutMap, type LoungeLayout } from './layout'
 import { loungesByRoom } from './lounge'
 import { MovementRecovery } from './movement-recovery'
 import { placements, type Placement } from './placements'
@@ -190,9 +190,8 @@ export class World {
           slotId: slot.id,
           label: session.name
         })
-        if (!isFinished) this.passages.clear(session.key)
         const staysAway = isFinished && existing.view.physicalFloorId === floorId
-        this.agents.set(session.key, staysAway ? updated : this.callHome(updated, floor, slot))
+        this.agents.set(session.key, staysAway ? updated : (this.callHome(updated) ?? updated))
         continue
       }
       const oldSlot = oldRooms
@@ -291,7 +290,7 @@ export class World {
       routes: this.routes,
       lounges: this.lounges,
       clearPassage: (key) => this.passages.clear(key),
-      callHome: (agent, floor, desk) => this.callHome(agent, floor, desk)
+      callHome: (agent) => this.callHome(agent)
     })
   }
 
@@ -305,7 +304,7 @@ export class World {
   }
 
   private moveAgent(agent: AgentRecord): AgentRecord {
-    agent = resumeUnseatedWorker(agent, this.routes)
+    agent = resumeUnseatedWorker(agent, this.routes, this.map.floors)
     if (agent.path.length === 0) return tickAgent(agent, TICK_MS)
     const obstacles = this.bodies()
     const walkers = [...this.agents.values()].flatMap((walker) => {
@@ -375,11 +374,15 @@ export class World {
   }
 
   // Work calls it home: it walks when its desk is on its floor, else fades to reappear there.
-  private callHome(agent: AgentRecord, floor: FloorLayout, desk: Placement['slot']): AgentRecord {
-    if (this.fading.has(agent.view.agentKey)) return agent
-    const route = this.routes.toFloor(agent.view, floor, desk)
-    if (!route.length) this.startFade(agent.view.agentKey)
-    return returnToDesk(agent, desk.heading, route)
+  private callHome(agent: AgentRecord): AgentRecord | undefined {
+    const key = agent.view.agentKey
+    const home = deskOf(this.map.floors, agent.view)
+    if (!home) return undefined
+    this.passages.clear(key)
+    if (this.fading.has(key)) return agent
+    const route = this.routes.toFloor(agent.view, home.floor, home.desk)
+    if (!route.length) this.startFade(key)
+    return returnToDesk(agent, home.desk.heading, route)
   }
 
   private startFade(key: string): void {

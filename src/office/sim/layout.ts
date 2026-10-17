@@ -1,8 +1,8 @@
-import type { SessionRef } from '../../shared/office/types'
+import type { AgentView, SessionRef } from '../../shared/office/types'
 import type { WorldVenue } from '../../shared/office/world-document-types'
 import { LANE, packCompanies } from './allocation'
 import { draftCompany, settleCompany } from './projects'
-import type { FloorLayout, ZoneLayout } from './rooms'
+import type { FloorLayout, Slot, ZoneLayout } from './rooms'
 export type { FloorLayout, LoungeLayout, RoomLayout, Slot, ZoneLayout } from './rooms'
 
 export interface LayoutMap {
@@ -66,4 +66,16 @@ export function buildLayout(sessions: SessionRef[], saved: LayoutMap | undefined
     ],
     reservations: Object.fromEntries(drafts.flatMap((draft) => Object.entries(draft.reservations)))
   }
+}
+
+// The floor and desk a view names, or undefined once the map no longer has them.
+export function deskOf(
+  floors: readonly FloorLayout[],
+  view: Pick<AgentView, 'floorId' | 'roomId' | 'slotId'>
+): { floor: FloorLayout; desk: Slot } | undefined {
+  const floor = floors.find((candidate) => candidate.id === view.floorId)
+  const desk = floor?.rooms
+    .find((room) => room.id === view.roomId)
+    ?.slots.find((slot) => slot.id === view.slotId)
+  return floor && desk ? { floor, desk } : undefined
 }

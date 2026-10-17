@@ -12,26 +12,16 @@ export function floorElevation(floor: FloorLayout): number {
 }
 
 export class FloorRoutes {
-  private readonly floors = new Map<string, FloorLayout>()
   private readonly caches = new Map<string, { json: string; paths: PathCache }>()
 
   update(map: LayoutMap): void {
     const live = new Set(map.floors.map((floor) => floor.id))
-    for (const id of this.floors.keys())
-      if (!live.has(id)) {
-        this.floors.delete(id)
-        this.caches.delete(id)
-      }
+    for (const id of this.caches.keys()) if (!live.has(id)) this.caches.delete(id)
     for (const floor of map.floors) {
       const json = JSON.stringify(floor)
-      this.floors.set(floor.id, floor)
       if (this.caches.get(floor.id)?.json !== json)
         this.caches.set(floor.id, { json, paths: new PathCache(floor) })
     }
-  }
-
-  floor(id: string | null | undefined): FloorLayout | undefined {
-    return id ? this.floors.get(id) : undefined
   }
 
   paths(id: string | null | undefined): PathCache | undefined {

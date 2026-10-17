@@ -9,7 +9,7 @@ import type { Point } from './path'
 import type { AgentRecord } from './behaviour'
 import type { FloorRoutes } from './world-floor-routes'
 import { floorElevation } from './world-floor-routes'
-import type { FloorLayout } from './layout'
+import { deskOf, type FloorLayout } from './layout'
 import { contains } from '../../shared/office/world-document-geometry'
 
 // Agents never leave their floor, so its grid is all the ground a walker has: off it is closed.
@@ -100,24 +100,24 @@ export function recoverWorkerRoute(options: {
   return paths?.contains(body) ? paths.around({ body, to: target, obstacles }) : []
 }
 
-export function resumeUnseatedWorker(agent: AgentRecord, routes: FloorRoutes): AgentRecord {
+export function resumeUnseatedWorker(
+  agent: AgentRecord,
+  routes: FloorRoutes,
+  floors: readonly FloorLayout[]
+): AgentRecord {
   if (agent.path.length || agent.view.place) return agent
-  const floor = routes.floor(agent.view.floorId)
-  const seat = floor?.rooms
-    .find((room) => room.id === agent.view.roomId)
-    ?.slots.find((slot) => slot.id === agent.view.slotId)
+  const home = deskOf(floors, agent.view)
   if (
-    !floor ||
-    !seat ||
-    (agent.view.physicalFloorId === floor.id &&
-      Math.hypot(agent.view.x - seat.x, agent.view.z - seat.z) < 1e-6)
+    !home ||
+    (agent.view.physicalFloorId === home.floor.id &&
+      Math.hypot(agent.view.x - home.desk.x, agent.view.z - home.desk.z) < 1e-6)
   )
     return agent
   return {
     ...agent,
     state: 'arriving',
-    path: routes.toFloor(agent.view, floor, seat),
-    slotHeading: seat.heading
+    path: routes.toFloor(agent.view, home.floor, home.desk),
+    slotHeading: home.desk.heading
   }
 }
 
