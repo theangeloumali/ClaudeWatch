@@ -66,6 +66,9 @@ export interface DayLedger {
 
 const CROWNS = 3
 
+// A company with no fresh agent and no known spend.
+export const EMPTY_COUNTS: CompanyCounts = { working: 0, waiting: 0, errors: 0, tokensToday: null }
+
 export const buildingIdOf = (companyKey: string, projectKey: string): BuildingId =>
   worldBuildingId(companyKey, projectKey)
 
@@ -83,30 +86,33 @@ function spentToday(day: DayLedger, session: SessionRef): number | null {
   return Math.max(0, tokens - (day.sessionBase.get(session.key) ?? 0))
 }
 
-// Grow-only within the local day, so a session ending never lowers a spire.
+// Grow-only within the local day, so a session ending never lowers a spire. The maps are copied
+// on the first change only: most frames change nothing.
 export function observeDay(
   day: DayLedger,
   sessions: readonly SessionRef[],
   nowMs: number
 ): DayLedger {
   const today = dayKey(nowMs)
-  const isNewDay = day.dayKey !== today
-  const highest = new Map(isNewDay ? [] : day.highest)
-  const sessionBase = new Map(isNewDay ? [] : day.sessionBase)
-  let hasChanged = isNewDay
+  type Draft = DayLedger & { highest: Map<string, number>; sessionBase: Map<string, number> }
+  let draft: Draft | null =
+    day.dayKey === today ? null : { dayKey: today, highest: new Map(), sessionBase: new Map() }
+  const edit = (): Draft =>
+    (draft ??= {
+      dayKey: today,
+      highest: new Map(day.highest),
+      sessionBase: new Map(day.sessionBase)
+    })
   for (const session of sessions) {
     const tokens = sessionTokens(session.usage)
-    if (tokens === null || sessionBase.has(session.key)) continue
-    sessionBase.set(session.key, dayKey(session.startedAtMs) === today ? 0 : tokens)
-    hasChanged = true
+    if (tokens === null || (draft ?? day).sessionBase.has(session.key)) continue
+    edit().sessionBase.set(session.key, dayKey(session.startedAtMs) === today ? 0 : tokens)
   }
-  const next = { dayKey: today, highest, sessionBase }
-  for (const [projectKey, tokens] of countedProjects(next, sessions)) {
-    if (tokens <= (highest.get(projectKey) ?? -1)) continue
-    highest.set(projectKey, tokens)
-    hasChanged = true
+  for (const [projectKey, tokens] of countedProjects(draft ?? day, sessions)) {
+    if (tokens <= ((draft ?? day).highest.get(projectKey) ?? -1)) continue
+    edit().highest.set(projectKey, tokens)
   }
-  return hasChanged ? next : day
+  return draft ?? day
 }
 
 // The page keeps one day, so a hoist and its spire count the same tokens (one ledger, two readers).
@@ -126,11 +132,12 @@ export function createDayLedgerStore(): DayLedgerStore {
 
 export function citySignals(frame: OfficeFrame, day: DayLedger, nowMs: number): CitySignals {
   const agents = freshAgents(frame, nowMs)
+  const byBuilding = Map.groupBy(agents, (agent) => agent.buildingId)
   const buildings = new Map<BuildingId, BuildingSignal>()
   const companies = new Map<string, CompanyCounts>()
   for (const [buildingId, place] of knownBuildings(frame)) {
     const signal = buildingSignal(
-      agents.filter((agent) => agent.buildingId === buildingId),
+      byBuilding.get(buildingId) ?? [],
       projectTokensToday({ projectsToday: frame.projectsToday, day, nowMs }, place.projectKey)
     )
     buildings.set(buildingId, signal)
@@ -161,9 +168,9 @@ function freshAgents(frame: OfficeFrame, nowMs: number): FreshAgent[] {
       ...session.subagents.map((member) => agentKey(session.key, member.id))
     ]
     return keys.flatMap((key) => {
-      if (!isAgentActivityAvailable(frame, { agentKey: key, provider: session.provider }, nowMs))
-        return []
       const evidence = observeAgent({ ...frame, agentKey: key, nowMs })
+      const agent = { agentKey: key, provider: session.provider }
+      if (!isAgentActivityAvailable(frame, agent, nowMs, evidence)) return []
       const { state } = stateOfAttention(evidence.attention ?? 'none', evidence.activity ?? 'idle')
       return [
         {
@@ -249,7 +256,7 @@ function busiestCategory(agents: readonly FreshAgent[]): ToolCategory | null {
 }
 
 function addCompany(counts: CompanyCounts | undefined, signal: BuildingSignal): CompanyCounts {
-  const base = counts ?? { working: 0, waiting: 0, errors: 0, tokensToday: null }
+  const base = counts ?? EMPTY_COUNTS
   if (signal.tokensToday === null) return base
   return { ...base, tokensToday: (base.tokensToday ?? 0) + signal.tokensToday }
 }
@@ -284,15 +291,22 @@ function leadersOf(agents: readonly FreshAgent[], day: DayLedger, nowMs: number)
 // Code-unit order, as `<` gives it: unlike localeCompare it is the same on every machine.
 export const compareKeys = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0)
 
-// Largest first, ties to the smaller key whatever the roster order; a zero never leads.
-function ranked<Key extends string>(
-  rows: readonly { key: Key; value: number }[]
-): { key: Key; value: number }[] {
-  return rows
-    .filter((row) => row.value > 0)
-    .sort((a, b) => b.value - a.value || compareKeys(a.key, b.key))
+interface Row<Key extends string> {
+  key: Key
+  value: number
 }
 
-const leaderOf = <Key extends string>(
-  rows: readonly { key: Key; value: number }[]
-): { key: Key; value: number } | null => ranked(rows)[0] ?? null
+// Largest first, ties to the smaller key whatever the roster order; a zero never leads.
+const byRank = <Key extends string>(a: Row<Key>, b: Row<Key>): number =>
+  b.value - a.value || compareKeys(a.key, b.key)
+
+function ranked<Key extends string>(rows: readonly Row<Key>[]): Row<Key>[] {
+  return rows.filter((row) => row.value > 0).sort(byRank)
+}
+
+// The one row `ranked` would put first, in a single scan.
+function leaderOf<Key extends string>(rows: readonly Row<Key>[]): Row<Key> | null {
+  let leader: Row<Key> | null = null
+  for (const row of rows) if (row.value > 0 && (!leader || byRank(row, leader) < 0)) leader = row
+  return leader
+}

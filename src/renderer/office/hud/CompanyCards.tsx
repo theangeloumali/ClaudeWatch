@@ -3,14 +3,13 @@ import { PLATE_TITLE_CLASS } from '../../components/deck/deck-styles'
 import { Plate } from '../../components/deck/Plate'
 import { formatTokens } from '../../deck/tokens'
 import { citySignalStore, type CitySignalStore } from '../logic/city-signal-store'
-import type { CompanyCounts } from '../logic/city-signals'
+import { type CompanyCounts, EMPTY_COUNTS } from '../logic/city-signals'
 import { companyHues, useCompanyLens } from '../logic/company-lens'
 import type { OfficeCompanyRow } from '../logic/zone-model'
 import type { ThemePalette } from '../themes/types'
 
 const CARD_CLASS =
   'flex min-h-11 w-full min-w-0 touch-manipulation flex-col justify-center gap-1 rounded-md px-1.5 py-1.5 text-left transition-colors hover:bg-surface-hover'
-const NO_COUNTS: CompanyCounts = { working: 0, waiting: 0, errors: 0, tokensToday: null }
 
 // A null value is unknown, and says so: never a 0.
 function Stat({ value, label }: { value: string | null; label: string }) {
@@ -98,7 +97,7 @@ export const CompanyCards = memo(function CompanyCards(props: CompanyCardsProps)
               <li key={company.companyKey} className="min-w-0">
                 <CompanyCard
                   company={company}
-                  counts={counts.get(company.companyKey) ?? NO_COUNTS}
+                  counts={counts.get(company.companyKey) ?? EMPTY_COUNTS}
                   hue={hues.get(company.companyKey)}
                   onFlyToZone={onFlyToZone}
                 />

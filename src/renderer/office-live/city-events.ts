@@ -91,23 +91,26 @@ export function createCityEventLog(ledger: DayLedgerStore = createDayLedgerStore
   const forget = (nowMs: number): void => {
     for (const [id, atMs] of fired) if (nowMs - atMs >= FIRED_MEMORY_MS) fired.delete(id)
   }
+  // Edges first: most patches have none, and freshness is the dearer test.
   const sessionEdges = (session: SessionRef, atMs: number): void => {
     const previous = seen.get(session.key)
-    if (!previous || !isFresh(session, atMs)) return
-    const base = { buildingId: buildingOf(session), sessionKey: session.key, atMs }
+    if (!previous) return
     const now = seenOf(session)
-    if (now.attention === 'done' && previous.attention !== 'done')
-      fire({ ...base, id: `${session.key}:done:${session.updatedAtMs}`, kind: 'done' })
-    if (now.callId !== undefined && now.callId !== previous.callId && session.currentTool)
+    const isDone = now.attention === 'done' && previous.attention !== 'done'
+    const tool = now.callId !== undefined && now.callId !== previous.callId && session.currentTool
+    const step = milestoneStep(now.tokens)
+    const isMilestone = previous.tokens !== null && step > milestoneStep(previous.tokens)
+    if (!(isDone || tool || isMilestone) || !isFresh(session, atMs)) return
+    const base = { buildingId: buildingOf(session), sessionKey: session.key, atMs }
+    if (isDone) fire({ ...base, id: `${session.key}:done:${session.updatedAtMs}`, kind: 'done' })
+    if (tool)
       fire({
         ...base,
         id: `${session.key}:dispatch:${now.callId}`,
         kind: 'dispatch',
-        category: session.currentTool.category
+        category: tool.category
       })
-    const step = milestoneStep(now.tokens)
-    if (previous.tokens !== null && step > milestoneStep(previous.tokens))
-      fire({ ...base, id: `${session.key}:milestone:${step}`, kind: 'milestone' })
+    if (isMilestone) fire({ ...base, id: `${session.key}:milestone:${step}`, kind: 'milestone' })
   }
   const hoists = (
     sessions: readonly SessionRef[],
