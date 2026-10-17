@@ -43,6 +43,9 @@ interface WorkFleetOptions {
   carried: readonly WorkCarry[]
 }
 
+// Read every drawn frame: an idle fleet hands back this one list.
+const NOT_IN_FLIGHT: readonly number[] = []
+
 const lapOf = (trip: Trip): number =>
   trip.route.length / trip.speed + (trip.route.stops ?? []).reduce((sum, stop) => sum + stop.sec, 0)
 
@@ -113,7 +116,7 @@ export function createWorkFleet({ plan, trips, clock, carried }: WorkFleetOption
       for (const [slot, flight] of flights)
         if (clock.moved[slot] >= flight.lapSec) giveBack(slot, flight)
     },
-    inFlight: () => [...flights.keys()],
+    inFlight: () => (flights.size === 0 ? NOT_IN_FLIGHT : [...flights.keys()]),
     release() {
       const carries = [...flights].map(([slot, flight]): WorkCarry => {
         const { route, speed } = live[slot]

@@ -105,6 +105,16 @@ describe('work trips', () => {
     expect(store.take([dispatch('edit', T0 + 2_000)])).toHaveLength(1)
   })
 
+  // Both are read every drawn frame; an idle city hands back one shared empty list.
+  it('an idle fleet and an idle store allocate nothing per frame', () => {
+    const fleet = createWorkFleet({ ...workCity(), carried: [] })
+    expect(fleet.inFlight()).toHaveLength(0)
+    expect(fleet.inFlight()).toBe(fleet.inFlight())
+    const store = createWorkTripStore()
+    expect(store.take([dispatch('read')])).toHaveLength(0)
+    expect(store.take([])).toBe(store.take([dispatch('read', T0 + 5_000)]))
+  })
+
   it('work trips never add a mover kind', () => {
     const city = workCity()
     const fleet = createWorkFleet({ ...city, carried: [] })
