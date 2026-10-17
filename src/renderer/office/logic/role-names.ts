@@ -188,9 +188,18 @@ function maskMember(
   }
 }
 
+// A member is labelled as its record is: its own role when named, else its type (never a name).
 function maskAgent(agent: AgentView, frame: OfficeFrame, roles: RoleBook): AgentView {
-  const session = parseAgentKey(agent.agentKey, frame.sessions)?.session
-  return { ...agent, label: session ? roles.session(session) : 'Agent' }
+  const resolved = parseAgentKey(agent.agentKey, frame.sessions)
+  return { ...agent, label: resolved ? agentRole(resolved, roles) : 'Agent' }
+}
+
+function agentRole(
+  { session, member }: { session: SessionRef; member?: SubagentRef },
+  roles: RoleBook
+): string {
+  if (!member) return roles.session(session)
+  return member.name === undefined ? member.type : roles.teammate(session.key, member.id)
 }
 
 function maskFloor(floor: FloorGeometry, roles: RoleBook): FloorGeometry {

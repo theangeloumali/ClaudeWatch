@@ -232,6 +232,28 @@ describe('the privacy edge', () => {
     expect(JSON.stringify(moved.accounts)).not.toMatch(REAL_NAMES)
   })
 
+  it('a teammate wears its own role, as its record does, and a typed subagent keeps its type', () => {
+    const lead = makeSession({
+      key: 'claude:a',
+      subagents: [
+        {
+          id: 'lena@acme',
+          type: 'general-purpose',
+          kind: 'teammate',
+          name: 'lena',
+          activity: 'idle'
+        },
+        { id: 'sub-1', type: 'Explore', kind: 'subagent', activity: 'idle' }
+      ]
+    })
+    const agents = ['lena@acme', 'sub-1'].map((id) =>
+      makeAgent({ agentKey: `claude:a#${id}`, isSubagent: true })
+    )
+    const masked = maskFrame(makeFrame({ sessions: [lead], agents }), createRoleBook())
+    expect(masked.agents.map((agent) => agent.label)).toEqual(['Teammate 1', 'Explore'])
+    expect(masked.sessions[0].subagents[0].name).toBe('Teammate 1')
+  })
+
   it("an agent's role follows the sessions it is masked with, never an earlier frame's", () => {
     const roles = createRoleBook()
     const frame = secretFrame()
