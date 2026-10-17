@@ -28,6 +28,8 @@ export function currentCodexActivity(
 export interface CodexChildTotal {
   counts: TokenCounts
   threadStartedAtMs: number | null
+  // Its rollout, read once more for a last turn when it or its parent leaves view.
+  path: string
 }
 
 const MAX_CHILD_ROLLOUTS = 128
@@ -101,7 +103,8 @@ export async function attachCodexSubagents(options: {
     if (observation.usage)
       counted.set(rollout.id, {
         counts: observation.usage.own,
-        threadStartedAtMs: rollout.startedAtMs
+        threadStartedAtMs: rollout.startedAtMs,
+        path: rollout.path
       })
     if (!isLive) continue
     parent.subagents.push({

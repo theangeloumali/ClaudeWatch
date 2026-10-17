@@ -133,3 +133,88 @@ it('posts the parent’s own total alone when its child is no longer in view', a
 
   expect(outputs(posted)).toEqual([['codex:a', 100, Date.parse('2026-10-11T09:30:00.000Z')]])
 })
+
+const childRollout = '/codex/sessions/rollout-b.jsonl'
+const TERMINAL = '42 Sat Oct 10 15:29:12 2026 /bin/codex'
+const APP_SERVER = '43 Sat Oct 10 15:29:12 2026 /Applications/Codex.app/codex app-server'
+
+// A parent and child whose files, write times and process table each tick can change.
+function changingFamily(processTable: string) {
+  const files: Record<string, string | null> = {
+    [rollout]: meta + total(100),
+    [childRollout]: child + total(40),
+    '/repo/.git': null
+  }
+  const io = fixtureIo(files)
+  const writtenAtMs: Record<string, number> = { [rollout]: NOW - 1000, [childRollout]: NOW - 1000 }
+  const state = { now: NOW, processTable, writtenAtMs }
+  io.exec = async (program) => (program.endsWith('ps') ? state.processTable : 'p42\nn/repo\n')
+  const stat = io.stat
+  io.stat = async (path) => ({ ...(await stat(path)), mtimeMs: state.writtenAtMs[path] ?? 1000 })
+  const posted: CodexTotal[] = []
+  const poller = new BridgePoller({
+    io,
+    claudeRoots: [],
+    codexRoot: '/codex',
+    platform: 'darwin',
+    now: () => state.now,
+    onCodexTotals: (totals) => posted.push(...totals)
+  })
+  const tick = async (atMs: number) => {
+    posted.length = 0
+    state.now = atMs
+    return (await poller.tick()).sessions
+  }
+  // A turn written at `atMs`: the rollout's newest running total.
+  const write = (path: string, output: number, atMs: number) => {
+    files[path] += total(output)
+    state.writtenAtMs[path] = atMs
+  }
+  return { state, posted, tick, write }
+}
+const PARENT_STARTED = Date.parse('2026-10-11T09:30:00.000Z')
+const CHILD_STARTED = Date.parse('2026-10-11T09:40:00.000Z')
+
+it('a child thread’s last turn written before its parent is pruned still reaches the posted totals', async () => {
+  const family = changingFamily(TERMINAL)
+  await family.tick(NOW)
+  expect(outputs(family.posted)).toEqual([
+    ['codex:a', 100, PARENT_STARTED],
+    ['codex:b', 40, CHILD_STARTED]
+  ])
+
+  // Both threads write a last turn, then the parent's process exits before the next tick.
+  family.write(childRollout, 70, NOW + 500)
+  family.write(rollout, 120, NOW + 600)
+  family.state.processTable = ''
+  expect(await family.tick(NOW + 2000)).toEqual([])
+  expect(outputs(family.posted)).toEqual([
+    ['codex:a', 120, PARENT_STARTED],
+    ['codex:b', 70, CHILD_STARTED]
+  ])
+})
+
+it('a child thread’s last turn still reaches its live parent when the next look finds it long quiet', async () => {
+  const family = changingFamily(TERMINAL)
+  await family.tick(NOW)
+
+  // Its last turn lands just after a look; the machine sleeps past the open-tool hold.
+  family.write(childRollout, 70, NOW + 500)
+  const [parent] = await family.tick(NOW + 20 * 60_000)
+  expect(parent?.usage?.subagents.output).toBe(70)
+  expect(outputs(family.posted)).toEqual([['codex:b', 70, CHILD_STARTED]])
+})
+
+it('a hosted child thread’s last turn reaches the posted totals when its quiet parent is no longer shown', async () => {
+  const family = changingFamily(APP_SERVER)
+  await family.tick(NOW)
+  expect(outputs(family.posted)).toEqual([
+    ['codex:a', 100, PARENT_STARTED],
+    ['codex:b', 40, CHILD_STARTED]
+  ])
+
+  // The parent goes quiet past its freshness while its idle child writes a last turn.
+  family.write(childRollout, 70, NOW + 4 * 60_000)
+  expect(await family.tick(NOW + 5 * 60_000)).toEqual([])
+  expect(outputs(family.posted)).toEqual([['codex:b', 70, CHILD_STARTED]])
+})
