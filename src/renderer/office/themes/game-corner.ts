@@ -48,12 +48,15 @@ function placed(parts: readonly PartSpec[], origin: { x: number; z: number }, fa
   )
 }
 
+// Where a seated agent's pelvis rests, before furniture scale.
+export const BEANBAG_SEAT_M = 0.24
+
 // A squashed bag with a raised back, low enough that a seated agent sits into it.
 export function beanbagParts(palette: ThemePalette, index: number): PartSpec[] {
   const colour = palette[BAG_COLOURS[index % BAG_COLOURS.length]]
   return [
     box([0, 0.08, 0], [0.64, 0.16, 0.64], colour),
-    box([0, 0.2, 0.02], [0.54, 0.08, 0.5], colour),
+    box([0, BEANBAG_SEAT_M - 0.04, 0.02], [0.54, 0.08, 0.5], colour),
     box([0, 0.21, -0.24], [0.6, 0.18, 0.16], colour)
   ]
 }

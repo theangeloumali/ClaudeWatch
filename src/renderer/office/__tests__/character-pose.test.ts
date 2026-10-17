@@ -12,9 +12,9 @@ describe('moodFor', () => {
     expect(moodFor({ activity: 'idle', attention: 'done' }, false)).toBe('idle')
   })
 
-  it('lounges only when the agent has arrived at its lounge seat', () => {
+  it('games only when the agent has arrived at its game corner seat', () => {
     const resting = { activity: 'idle', attention: 'done', place: 'lounge' } as const
-    expect(moodFor(resting, false)).toBe('lounging')
+    expect(moodFor(resting, false)).toBe('gaming')
     expect(moodFor(resting, true)).toBe('walking')
     expect(moodFor({ ...resting, attention: 'question' }, false)).toBe('needs-you')
   })
@@ -72,22 +72,37 @@ describe('robotPose', () => {
   })
 })
 
-describe('lounging pose', () => {
-  it('sits low and leans back, moving slowly and with no gear', () => {
-    const poses = Array.from({ length: 200 }, (_, index) => robotPose('lounging', index * 0.05, 0))
+describe('gaming pose', () => {
+  const poses = Array.from({ length: 200 }, (_, index) => robotPose('gaming', index * 0.05, 0))
+
+  it('holds a controller out in front with both arms, level with each other', () => {
+    for (const pose of poses) {
+      expect(pose.leftArm).toBeLessThan(-0.8)
+      expect(pose.leftArm).toBeGreaterThan(-1.3)
+      expect(pose.rightArm).toBeLessThan(-0.8)
+      expect(pose.rightArm).toBeGreaterThan(-1.3)
+      expect(Math.abs(pose.leftArm - pose.rightArm)).toBeLessThan(0.12)
+    }
+  })
+
+  it('sits low, leans in and tips its head up toward the raised screen, with no gear', () => {
     for (const pose of poses) {
       expect(pose.bob).toBeLessThan(-0.05)
-      expect(pose.lean).toBeLessThan(0)
+      expect(pose.lean).toBeGreaterThan(0)
+      expect(pose.headPitch).toBeLessThan(0)
       expect(pose.gearSpeed).toBe(0)
     }
+  })
+
+  it('bobs a little as it plays', () => {
     const bobs = poses.map((pose) => pose.bob)
-    expect(Math.max(...bobs) - Math.min(...bobs)).toBeGreaterThan(0)
+    expect(Math.max(...bobs) - Math.min(...bobs)).toBeGreaterThan(0.01)
     expect(Math.max(...bobs) - Math.min(...bobs)).toBeLessThan(0.05)
   })
 
   it('holds still under reduced motion', () => {
-    expect(robotPose('lounging', 0.4, 0, { isReducedMotion: true })).toEqual(
-      robotPose('lounging', 7.3, 0.5, { isReducedMotion: true })
+    expect(robotPose('gaming', 0.4, 0, { isReducedMotion: true })).toEqual(
+      robotPose('gaming', 7.3, 0.5, { isReducedMotion: true })
     )
   })
 

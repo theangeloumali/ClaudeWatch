@@ -8,7 +8,7 @@ export type RobotMood =
   | 'thinking'
   | 'needs-you'
   | 'walking'
-  | 'lounging'
+  | 'gaming'
 
 export interface RobotPose {
   bob: number
@@ -42,8 +42,8 @@ const STEAM_PERIOD_SEC = 3
 const STEAM_LIFE_SEC = 1.2
 const STEAM_PUFF_COUNT = 3
 const STEAM_STAGGER_SEC = 0.25
-// Seated: the body sinks onto the seat and leans back, hands resting forward.
-const SEATED = { bob: -0.12, lean: -0.16, headPitch: -0.1, arms: -0.4 }
+// On a beanbag: sunk low, leaning in, arms out on a controller and eyes up at the wall screen.
+export const GAMING_POSE = { bob: -0.12, lean: 0.1, headPitch: -0.2, arms: -1.05 }
 
 const REST: RobotPose = {
   bob: 0,
@@ -63,7 +63,7 @@ export function moodFor(
 ): RobotMood {
   if (needsHuman(agent.attention)) return 'needs-you'
   if (isMoving) return 'walking'
-  if (agent.place === 'lounge') return 'lounging'
+  if (agent.place === 'lounge') return 'gaming'
   switch (agent.activity) {
     case 'editing':
     case 'running':
@@ -91,12 +91,12 @@ const POSTURE: Record<RobotMood, Partial<RobotPose>> = {
   thinking: { headPitch: -0.15, leftArm: THINKING_ARMS, rightArm: THINKING_ARMS },
   'needs-you': { rightArm: RAISED_ARM },
   walking: {},
-  lounging: {
-    bob: SEATED.bob,
-    lean: SEATED.lean,
-    headPitch: SEATED.headPitch,
-    leftArm: SEATED.arms,
-    rightArm: SEATED.arms
+  gaming: {
+    bob: GAMING_POSE.bob,
+    lean: GAMING_POSE.lean,
+    headPitch: GAMING_POSE.headPitch,
+    leftArm: GAMING_POSE.arms,
+    rightArm: GAMING_POSE.arms
   }
 }
 
@@ -139,11 +139,14 @@ function motion(mood: RobotMood, t: number): Partial<RobotPose> {
         bob: 0.04 * Math.abs(Math.sin(t * TAU * 2)),
         sway: 0.06 * Math.sin(t * TAU)
       }
-    case 'lounging':
+    case 'gaming':
+      // Thumbs at the buttons, a bob to the game's beat and a lean into the turns.
       return {
-        bob: SEATED.bob + 0.012 * Math.sin(t * TAU * 0.2),
-        headPitch: SEATED.headPitch + 0.08 * Math.sin(t * TAU * 0.11),
-        sway: 0.025 * Math.sin(t * TAU * 0.07),
+        bob: GAMING_POSE.bob + 0.012 * Math.sin(t * TAU * 0.8),
+        leftArm: GAMING_POSE.arms + 0.05 * Math.sin(t * TAU * 4),
+        rightArm: GAMING_POSE.arms + 0.05 * Math.sin(t * TAU * 4 + Math.PI / 2),
+        headPitch: GAMING_POSE.headPitch + 0.03 * Math.sin(t * TAU * 0.5),
+        sway: 0.04 * Math.sin(t * TAU * 0.4),
         eyeOpen: t % BLINK_PERIOD_SEC < BLINK_SEC ? 0.1 : 1
       }
     default: {

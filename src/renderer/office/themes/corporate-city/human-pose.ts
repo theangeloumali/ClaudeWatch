@@ -1,7 +1,12 @@
-import type { RobotPose } from '../../logic/character-pose'
+import { GAMING_POSE, type RobotPose } from '../../logic/character-pose'
+import { BEANBAG_SEAT_M } from '../game-corner'
 import type { RobotRig, ThemePoseOptions } from '../types'
 import { HUMAN_PIVOT, HUMAN_PELVIS, HUMAN_LOWER_LEG_LENGTH } from './human-parts'
-import { AGENT_SCALE, SUBAGENT_SCALE } from '../../../../shared/office/figure-scale'
+import {
+  AGENT_SCALE,
+  FURNITURE_SCALE,
+  SUBAGENT_SCALE
+} from '../../../../shared/office/figure-scale'
 
 export const HUMAN_STRIDE_METRES = 1.05
 const SEATED_HIP_Y = 0.3
@@ -58,13 +63,14 @@ const SEATED_POSTURES = {
     rightArmRoll: -0.12,
     rightArmYaw: 0
   },
-  lounging: {
-    bodyPitch: -0.12,
-    headPitch: -0.08,
-    leftArm: -0.35,
-    rightArm: -0.35,
-    leftElbow: -0.95,
-    rightElbow: -0.95,
+  // Leaning in, forearms raised to a controller before the chest, eyes up at the wall screen.
+  gaming: {
+    bodyPitch: 0.08,
+    headPitch: -0.22,
+    leftArm: -0.8,
+    rightArm: -0.8,
+    leftElbow: -1.1,
+    rightElbow: -1.1,
     rightArmRoll: 0,
     rightArmYaw: 0
   }
@@ -81,18 +87,18 @@ export function humanPose(pose: RobotPose, options: ThemePoseOptions) {
   const posture = SEATED_POSTURES[options.mood]
   const motionShare = options.isReducedMotion ? 0 : 1
   const pelvisBottom = HUMAN_PELVIS.at[1] - HUMAN_PELVIS.size[1] / 2
-  // Company lounge chairs are shared; shorter adults sit at the same cushion height.
-  const seatLift =
-    options.isSubagent && options.isInLounge
-      ? (SEATED_HIP_Y + pelvisBottom) * (AGENT_SCALE / SUBAGENT_SCALE - 1)
-      : 0
+  const scale = options.isSubagent ? SUBAGENT_SCALE : AGENT_SCALE
+  // Game corner beanbags are shared and low: every adult sinks to the same cushion.
+  const hipY = options.isInLounge
+    ? (BEANBAG_SEAT_M * FURNITURE_SCALE) / scale - pelvisBottom
+    : SEATED_HIP_Y
   const seated = {
     ...posture,
     isSeated: true,
     isReading: options.mood === 'reading',
     needsAttention,
-    bodyY: SEATED_HIP_Y + seatLift,
-    lowerLegScale: 1 + seatLift / HUMAN_LOWER_LEG_LENGTH,
+    bodyY: hipY,
+    lowerLegScale: 1 + (hipY - SEATED_HIP_Y) / HUMAN_LOWER_LEG_LENGTH,
     bodyRoll: 0,
     leftHip: -QUARTER_TURN - posture.bodyPitch,
     rightHip: -QUARTER_TURN - posture.bodyPitch,
@@ -103,6 +109,12 @@ export function humanPose(pose: RobotPose, options: ThemePoseOptions) {
   if (options.mood === 'working') return { ...seated, ...typingJoints(pose, options) }
   if (options.mood === 'reading') seated.headPitch += (pose.headPitch - 0.4) * 0.3 * motionShare
   if (options.mood === 'thinking') seated.headPitch += (pose.headPitch + 0.15) * 0.3 * motionShare
+  if (options.mood === 'gaming') {
+    seated.bodyY += (pose.bob - GAMING_POSE.bob) * motionShare
+    seated.headPitch += (pose.headPitch - GAMING_POSE.headPitch) * motionShare
+    seated.leftArm += (pose.leftArm - GAMING_POSE.arms) * 0.5 * motionShare
+    seated.rightArm += (pose.rightArm - GAMING_POSE.arms) * 0.5 * motionShare
+  }
   return seated
 }
 

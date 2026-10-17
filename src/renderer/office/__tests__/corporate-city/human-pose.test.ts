@@ -48,7 +48,7 @@ describe('human seated and walking poses', () => {
     'reading',
     'thinking',
     'needs-you',
-    'lounging'
+    'gaming'
   ]
   for (const mood of SEATED_MOODS) {
     it(`holds articulated seated ${mood} under reduced motion`, () => {
@@ -73,18 +73,39 @@ describe('human seated and walking poses', () => {
     expect(elbowY).toBeLessThan(0.55)
   })
 
-  it('distinguishes reading, thinking, waiting and lounge without invented moods', () => {
+  it('distinguishes reading, thinking, waiting and gaming without invented moods', () => {
     const reading = poseFor('reading')
     const thinking = poseFor('thinking')
     const waiting = poseFor('needs-you')
-    const lounge = poseFor('lounging')
     expect(reading.isReading).toBe(true)
     expect(reading.headPitch).toBeGreaterThan(0)
     expect(thinking.rightElbow).not.toBe(reading.rightElbow)
     expect(waiting.needsAttention).toBe(true)
     expect(waiting.rightArm).toBeLessThan(-2)
-    expect(lounge.bodyPitch).toBeLessThan(0)
-    expect(lounge.isReading).toBe(false)
+    expect(poseFor('gaming').isReading).toBe(false)
+  })
+
+  it('games with both hands out on a controller, leaning in and looking up at the screen', () => {
+    const gaming = poseFor('gaming', { isReducedMotion: true })
+    expect(gaming.bodyPitch).toBeGreaterThan(0)
+    expect(gaming.headPitch + gaming.bodyPitch).toBeLessThan(0)
+    for (const side of ['left', 'right'] as const) {
+      const shoulder = gaming[`${side}Arm`]
+      const elbow = gaming[`${side}Elbow`]
+      expect(shoulder).toBeLessThan(-0.6)
+      // The forearm rises from the elbow, so the hands meet in front of the chest.
+      expect(shoulder + elbow + gaming.bodyPitch).toBeLessThan(-Math.PI / 2)
+    }
+    expect(gaming.leftArm).toBeCloseTo(gaming.rightArm)
+  })
+
+  it('bobs a little while gaming, and not at all under reduced motion', () => {
+    const heights = [0.1, 0.4, 0.7, 1.0].map((time) => poseFor('gaming', { time }).bodyY)
+    expect(Math.max(...heights) - Math.min(...heights)).toBeGreaterThan(0.002)
+    expect(Math.max(...heights) - Math.min(...heights)).toBeLessThan(0.03)
+    expect(poseFor('gaming', { time: 0.1, isReducedMotion: true }).bodyY).toBe(
+      poseFor('gaming', { time: 0.7, isReducedMotion: true }).bodyY
+    )
   })
 
   it('rests idle hands above the thighs and brings the thinking hand to the chin', () => {
