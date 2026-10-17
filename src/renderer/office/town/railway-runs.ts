@@ -16,7 +16,7 @@ const COMMUTER = { accel: 2.5, dwell: 4 }
 const COMMUTER_CARS: Record<QualityLevel, number> = { full: 4, balanced: 2, light: 0 }
 const FREIGHT_WAGONS = 6
 
-export interface TrainCar {
+interface TrainCar {
   kind: CarKind
   // The car's slot in its kind's mesh, and its middle's distance from the train's head.
   slot: number
