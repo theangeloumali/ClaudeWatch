@@ -11,7 +11,6 @@ import { TICK_MS } from './door-invariants'
 vi.setConfig({ testTimeout: 60_000 })
 
 const LEAD = 'claude:lead'
-const MAX_STEP_METRES = 0.14 + 1e-6
 
 const resolveLayout = (base: LayoutMap, current: readonly SessionRef[]): LayoutMap =>
   resolveEffectiveWorld(base, createWorldDocument(base, current), current)
@@ -67,7 +66,7 @@ function follow(world: World, key: string, ticks: number) {
   return { walked, largestStep, goneAtMs, firstFadeAtMs, last: previous }
 }
 
-describe('departures: fade at the desk, walk out, or fade when stuck', () => {
+describe('departures and arrivals: each fades where it stands', () => {
   it('fades a finished subagent at its desk within 1 s, never walking toward the lobby', () => {
     const { world, crew } = seatedWorld([member('helper')])
     crew([])
@@ -79,18 +78,18 @@ describe('departures: fade at the desk, walk out, or fade when stuck', () => {
     expect(firstFadeAtMs).not.toBeNull()
   })
 
-  it('still walks a finished teammate out, unfaded', () => {
+  it('fades a finished teammate at its desk the same way', () => {
     const { world, crew } = seatedWorld([member('mate', 'teammate')])
     crew([])
-    const { walked, largestStep, firstFadeAtMs } = follow(world, `${LEAD}#mate`, 40)
-    expect(walked).toBeGreaterThan(2)
-    expect({ largestStep: largestStep <= MAX_STEP_METRES, firstFadeAtMs }).toEqual({
-      largestStep: true,
-      firstFadeAtMs: null
+    const { walked, goneAtMs, firstFadeAtMs } = follow(world, `${LEAD}#mate`, 40)
+    expect({ walked, firstFadeAtMs, isGone: (goneAtMs ?? Infinity) <= 600 }).toEqual({
+      walked: 0,
+      firstFadeAtMs: 100,
+      isGone: true
     })
   })
 
-  it('marks every departing view as leaving, walking or fading (seating-5)', () => {
+  it('marks every departing view as leaving (seating-5)', () => {
     const { world, crew } = seatedWorld([member('helper'), member('mate', 'teammate')])
     crew([])
     const marks = new Set<string | undefined>()
@@ -99,16 +98,16 @@ describe('departures: fade at the desk, walk out, or fade when stuck', () => {
     expect([...marks]).toEqual(['leaving'])
   })
 
-  it('fades a leaver held in its office door after 15 s, where it stands', () => {
+  it('fades a leaver at once, whatever stands in its office door', () => {
     const { world, door, crew } = seatedWorld([member('mate', 'teammate')])
     world.setBodyObstacles([{ id: 'player', x: door.x, z: door.z, elevation: 0, radius: 0.55 }])
     crew([])
-    const { largestStep, goneAtMs, firstFadeAtMs } = follow(world, `${LEAD}#mate`, 300)
-    expect({ largestStep: largestStep <= MAX_STEP_METRES }).toEqual({ largestStep: true })
-    // A few seconds' walk to the door, 15 s held there, then half a second of fade.
-    expect(firstFadeAtMs).toBeGreaterThanOrEqual(15_000)
-    expect((goneAtMs ?? Infinity) - (firstFadeAtMs ?? 0)).toBeLessThanOrEqual(600)
-    expect(goneAtMs).toBeLessThanOrEqual(20_000)
+    const { walked, goneAtMs, firstFadeAtMs } = follow(world, `${LEAD}#mate`, 300)
+    expect({ walked, firstFadeAtMs, isGone: (goneAtMs ?? Infinity) <= 600 }).toEqual({
+      walked: 0,
+      firstFadeAtMs: 100,
+      isGone: true
+    })
   })
 
   it('forgets the crew record of an arrival whose work ended before it got in', () => {
@@ -119,26 +118,43 @@ describe('departures: fade at the desk, walk out, or fade when stuck', () => {
     expect(world['members'].size).toBe(1)
   })
 
-  it('never fades or moves an arriver by fiat; it sits once the door clears', () => {
+  it('materialises an arriver at its desk, whatever stands in the office door', () => {
     const { world, door, crew } = seatedWorld([])
     world.setBodyObstacles([{ id: 'player', x: door.x, z: door.z, elevation: 0, radius: 0.55 }])
     crew([member('mate', 'teammate')])
-    const held = follow(world, `${LEAD}#mate`, 400)
-    expect({ goneAtMs: held.goneAtMs, firstFadeAtMs: held.firstFadeAtMs }).toEqual({
-      goneAtMs: null,
-      firstFadeAtMs: null
-    })
-    expect(held.largestStep).toBeLessThanOrEqual(MAX_STEP_METRES)
+    const first = world.step(0).find((view) => view.agentKey === `${LEAD}#mate`)
+    const arrived = follow(world, `${LEAD}#mate`, 6)
+    expect({
+      isFadedAtFirst: first?.fade !== undefined,
+      isAtDesk: deskGap(world, first) < 0.02,
+      walked: arrived.walked,
+      fade: arrived.last?.fade
+    }).toEqual({ isFadedAtFirst: true, isAtDesk: true, walked: 0, fade: undefined })
+  })
+
+  it('keeps an arriver faded while a body stands on its desk, then seats it', () => {
+    const { world, crew } = seatedWorld([])
+    crew([member('mate', 'teammate')])
+    const arriving = world.step(0).find((view) => view.agentKey === `${LEAD}#mate`)!
+    world.setBodyObstacles([
+      { id: 'player', x: arriving.x, z: arriving.z, elevation: 0, radius: 0.55 }
+    ])
+    const held = follow(world, `${LEAD}#mate`, 20)
     world.setBodyObstacles([])
-    follow(world, `${LEAD}#mate`, 300)
-    const seated = world.step(0).find((view) => view.agentKey === `${LEAD}#mate`)!
-    const seat = world
-      .layout()
-      .floors.flatMap((floor) => floor.rooms)
-      .find((room) => room.id === seated.roomId)
-      ?.slots.find((slot) => slot.id === seated.slotId)
-    expect(
-      Math.hypot(seated.x - (seat?.x ?? Infinity), seated.z - (seat?.z ?? Infinity))
-    ).toBeLessThan(0.02)
+    const seated = follow(world, `${LEAD}#mate`, 2)
+    expect({ heldFade: held.last?.fade, seatedFade: seated.last?.fade }).toEqual({
+      heldFade: expect.any(Number),
+      seatedFade: undefined
+    })
+    expect(deskGap(world, seated.last)).toBeLessThan(0.02)
   })
 })
+
+function deskGap(world: World, view: AgentView | undefined): number {
+  const seat = world
+    .layout()
+    .floors.flatMap((floor) => floor.rooms)
+    .find((room) => room.id === view?.roomId)
+    ?.slots.find((slot) => slot.id === view?.slotId)
+  return view && seat ? Math.hypot(view.x - seat.x, view.z - seat.z) : Infinity
+}

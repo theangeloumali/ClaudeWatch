@@ -4,7 +4,6 @@ import { bodiesShareElevation } from './body-sweep'
 // dry-new: swept steps are stateless; a narrow doorway needs a remembered, bounded yielding detour.
 type BodyWalker = Pick<BodyStepOptions, 'body' | 'to'>
 interface PassageOptions extends BodyStepOptions {
-  readonly isExiting?: boolean
   readonly walkers: readonly BodyWalker[]
   readonly tick: number
   readonly routeTo: (target: BodyPoint) => BodyPoint[]
@@ -82,12 +81,8 @@ export class BodyPassages {
         const forwardProjection = (dx * gapX + dz * gapZ) / distance
         const otherProjection = (otherDx * gapX + otherDz * gapZ) / otherDistance
         const alignment = (dx * otherDx + dz * otherDz) / (distance * otherDistance)
-        // Converging exits also need a leader; parallel queues and diverging paths do not.
-        return (
-          alignment < (options.isExiting ? 0.5 : -0.5) &&
-          forwardProjection > 0 &&
-          forwardProjection > otherProjection
-        )
+        // Oncoming traffic needs a leader; parallel queues and diverging paths do not.
+        return alignment < -0.5 && forwardProjection > 0 && forwardProjection > otherProjection
       })
     if (!leader) return undefined
     const span = options.body.radius + leader.body.radius + YIELD_MARGIN_METRES

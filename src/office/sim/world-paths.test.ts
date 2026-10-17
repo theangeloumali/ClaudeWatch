@@ -46,9 +46,15 @@ it('finds new routes once the floor changes', () => {
   sim.apply({
     type: 'hello',
     v: 1,
-    snapshot: { rev: 0, generatedAtMs: 0, sessions: [session('a')], sources: [] }
+    snapshot: { rev: 0, generatedAtMs: 0, sessions: [done('a')], sources: [] }
   })
+  // The same round trip as above, but a newcomer changes the floor before it.
+  settle(sim)
+  patch(sim, [session('a')])
+  settle(sim)
   vi.mocked(findPath).mockClear()
-  patch(sim, [session('b')])
+
+  patch(sim, [done('a'), session('b')])
+  settle(sim)
   expect(findPath).toHaveBeenCalled()
 })

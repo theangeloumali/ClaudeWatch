@@ -2,7 +2,7 @@ import { expect, it } from 'vitest'
 import { World } from './world'
 import { session } from './fixtures'
 
-// An office that was open and empty when session `a` started, so `a` walks in.
+// An office that was open and empty when session `a` started, so `a` fades in at its desk.
 function world() {
   const world = new World()
   world.apply({
@@ -22,12 +22,9 @@ it('keeps applying later messages after one it could not place', () => {
   expect(() =>
     sim.apply({ type: 'patch', v: 1, seq: 3, upserts: [session('b')], removed: [] })
   ).not.toThrow()
-  expect([...sim.step(0).map((agent) => agent.agentKey), ...sim['arrivals'].keys()].sort()).toEqual(
-    ['a', 'b']
-  )
+  expect(sim.step(0).map((agent) => agent.agentKey)).toEqual(['a', 'b'])
   expect(sim.layout().floors[0].rooms.map((room) => room.sessionKey)).toEqual(['a', 'b'])
   for (let tick = 0; tick < 1000; tick++) sim.step(100)
-  expect(sim['arrivals'].size).toBe(0)
   expect(sim.step(0).map((agent) => agent.agentKey)).toEqual(['a', 'b'])
 })
 it('reads a saved map only for order and bays, never as the floor it moves agents from', () => {
@@ -61,23 +58,48 @@ it('seats the sessions that were already running when the office opens', () => {
     .slots.find((s) => s.id === 'desk_main')!
   expect(seated).toMatchObject({ x: seat.x, z: seat.z, heading: seat.heading })
 
-  // A session that starts while the office is open walks in from the gate.
+  // A session that starts while the office is open fades in at its desk, not at the gate.
   sim.apply({ type: 'patch', v: 1, seq: 2, upserts: [session('b')], removed: [] })
-  expect(sim.step(0).find((a) => a.agentKey === 'b')).toMatchObject({ x: 0, z: 0 })
+  const desk = sim
+    .layout()
+    .floors[0].rooms.find((r) => r.sessionKey === 'b')!
+    .slots.find((s) => s.id === 'desk_main')!
+  expect(sim.step(0).find((a) => a.agentKey === 'b')).toMatchObject({
+    x: desk.x,
+    z: desk.z,
+    fade: 0
+  })
 })
 it('clamps a ten second delta to one second of walking', () => {
-  const sim = world()
-  const start = sim.step(0)[0]
+  const sim = new World()
+  sim.apply({
+    type: 'hello',
+    v: 1,
+    snapshot: {
+      rev: 0,
+      generatedAtMs: 0,
+      sessions: [{ ...session('a'), attention: 'done' }],
+      sources: []
+    }
+  })
+  // A finished agent sets off for the lounge after the delay: a walker to clamp.
+  let start = sim.step(0)[0]
+  for (let i = 0; i < 400 && start.place !== 'lounge'; i++) start = sim.step(100)[0]
   const end = sim.step(10000)[0]
-  expect(Math.hypot(end.x - start.x, end.z - start.z)).toBeLessThanOrEqual(1.400001)
-  expect(end.z).not.toBe(3.75)
+  const walked = Math.hypot(end.x - start.x, end.z - start.z)
+  expect({ isWalking: walked > 0, isClamped: walked <= 1.400001 }).toEqual({
+    isWalking: true,
+    isClamped: true
+  })
 })
-it('leaves after removal and disappears at the elevator', () => {
+it('fades where it stands after removal and is gone within one fade', () => {
   const sim = world()
-  for (let i = 0; i < 1000; i++) sim.step(100)
+  for (let i = 0; i < 10; i++) sim.step(100)
+  const seated = sim.step(0)[0]
   sim.apply({ type: 'patch', v: 1, seq: 2, upserts: [], removed: ['a'] })
-  expect(sim.step(0)).toHaveLength(1)
-  for (let i = 0; i < 1000; i++) sim.step(100)
+  const leaving = sim.step(100)
+  expect(leaving).toEqual([expect.objectContaining({ x: seated.x, z: seated.z, place: 'leaving' })])
+  for (let i = 0; i < 5; i++) sim.step(100)
   expect(sim.step(0)).toEqual([])
 })
 it('creates distinct subagent views', () => {
@@ -132,7 +154,7 @@ it('applies the patch that follows the hello revision, then rejects duplicates a
   }
 })
 
-it('retains all 60 identities while admitting bodies through the shared gate', () => {
+it('retains all 60 identities, each fading in at its own desk', () => {
   const sim = new World()
   const sessions = Array.from({ length: 60 }, (_, i) => ({
     ...session(`s${i}`, `p_${i % 12}`),
@@ -146,12 +168,10 @@ it('retains all 60 identities while admitting bodies through the shared gate', (
   })
   sim.apply({ type: 'patch', v: 1, seq: 2, upserts: sessions, removed: [] })
   const arrivals = sim.step(0)
-  expect(arrivals).toHaveLength(1)
-  expect(sim['arrivals'].size).toBe(59)
-  expect([...arrivals.map((agent) => agent.agentKey), ...sim['arrivals'].keys()].sort()).toEqual(
+  expect(arrivals.map((agent) => agent.agentKey).sort()).toEqual(
     sessions.map((agent) => agent.key).sort()
   )
-  expect(arrivals.some((view) => view.x === 0 && view.z === 0)).toBe(true)
+  expect(arrivals.every((view) => view.fade !== undefined)).toBe(true)
   for (const [index, view] of arrivals.entries()) {
     expect(view.floorId).toBe('hq')
     for (const other of arrivals.slice(index + 1))
@@ -311,25 +331,28 @@ it('brings a new arrival to rest exactly on its seat', () => {
     .slots.find((s) => s.id === 'desk_main')!
   expect({ x: arrived.x, z: arrived.z }).toEqual({ x: seat.x, z: seat.z })
 })
-it('turns a robot that was walking out back to its desk when its session returns', () => {
+it('keeps a fading leaver at its desk when its session returns', () => {
   const sim = new World()
   const hello = (rev: number, sessions: ReturnType<typeof session>[]) =>
     sim.apply({ type: 'hello', v: 1, snapshot: { rev, generatedAtMs: 0, sessions, sources: [] } })
   hello(1, [session('a')])
   sim.apply({ type: 'patch', v: 1, seq: 2, upserts: [], removed: ['a'] })
-  for (let i = 0; i < 20; i++) sim.step(100)
-  const leaving = sim.step(0)[0]
+  for (let i = 0; i < 2; i++) sim.step(100)
+  expect(sim.step(0)[0]).toMatchObject({ place: 'leaving' })
 
   // The bridge restarts and the session is there again.
   sim.apply({ type: 'resync' })
   hello(1, [session('a')])
-  const back = sim.step(0)
-  expect(back).toHaveLength(1)
-  expect({ x: back[0].x, z: back[0].z }).toEqual({ x: leaving.x, z: leaving.z })
-  for (let i = 0; i < 200; i++) sim.step(100)
+  for (let i = 0; i < 6; i++) sim.step(100)
   const seat = sim
     .layout()
     .floors[0].rooms.find((r) => r.sessionKey === 'a')!
     .slots.find((s) => s.id === 'desk_main')!
-  expect(sim.step(0)[0]).toMatchObject({ x: seat.x, z: seat.z })
+  const back = sim.step(0)
+  expect(back).toHaveLength(1)
+  expect(back[0]).toMatchObject({ x: seat.x, z: seat.z })
+  expect({ place: back[0].place, fade: back[0].fade }).toEqual({
+    place: undefined,
+    fade: undefined
+  })
 })

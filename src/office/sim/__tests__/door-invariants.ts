@@ -10,9 +10,9 @@ export const TICK_MS = 100
 // Ghosting (verifier E6) breaks the clearance check, teleporting (E7) the step check.
 const CLEARANCE_SLACK_METRES = 0.02
 const MAX_STEP_METRES = 0.14 + 1e-6
-// A stuck leaver fades after 15 s of yielding and takes 0.5 s to go. Distance from an anchor
-// starts the clock a few unyielded ticks sooner than the sim's count, hence the extra second.
-const BLOCKED_LIMIT_MS = 15_000 + 500 + 1_000
+// A walker that gains no half metre in this long is jammed: leavers fade at once, so no
+// doorway wait is this long any more.
+const BLOCKED_LIMIT_MS = 16_500
 const PROGRESS_METRES = 0.5
 
 const footprint = (view: AgentView): BodyFootprint => ({
@@ -61,7 +61,9 @@ export class DoorInvariants {
 
   private checkClearance(views: readonly AgentView[], atMs: number): void {
     if (this.overlap) return
-    const bodies = views.map(footprint)
+    // A faded body is shrinking away or not grown in yet: a newcomer fades in on its desk
+    // while the one it replaces fades out there.
+    const bodies = views.filter((view) => view.fade === undefined).map(footprint)
     for (let first = 0; first < bodies.length; first++)
       for (let second = first + 1; second < bodies.length; second++) {
         const [a, b] = [bodies[first], bodies[second]]

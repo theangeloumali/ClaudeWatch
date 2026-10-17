@@ -150,14 +150,6 @@ it.each([
     others: mates,
     before: 1,
     after: 3
-  },
-  // The smaller floor's path grid no longer reaches where it sits.
-  {
-    when: 'seated as the floor shrinks from under it',
-    seconds: SETTLE_S,
-    others: neighbours,
-    before: 4,
-    after: 0
   }
 ])('walks to its moved seat from where it stands, $when', ({ seconds, others, before, after }) => {
   const sim = open([done('a'), ...others(before)])
@@ -182,6 +174,35 @@ it.each([
     last = now
   }
   expect(view(sim, 'a')).toMatchObject({ ...at(seat(sim, 0)), place: 'lounge' })
+})
+
+// The smaller floor's path grid no longer reaches where it sits, so no walk can get it out.
+it('fades home and walks back to its moved seat when the floor shrinks from under it', () => {
+  const sim = open([done('a'), ...neighbours(4)])
+  run(sim, SETTLE_S)
+  const oldSeat = seat(sim, 0)
+  expect(view(sim, 'a')).toMatchObject({ ...at(oldSeat), place: 'lounge' })
+  patch(
+    sim,
+    [],
+    neighbours(4).map((gone) => gone.key)
+  )
+  expect(at(seat(sim, 0))).not.toEqual(at(oldSeat))
+  let last = view(sim, 'a')
+  let hasFaded = false
+  for (const views of run(sim, SETTLE_S)) {
+    const now = views.find((a) => a.agentKey === 'a')!
+    hasFaded ||= now.fade !== undefined
+    // Only a visible body walks; one fading across may appear somewhere new.
+    if (last.fade === undefined && now.fade === undefined)
+      expect(Math.hypot(now.x - last.x, now.z - last.z)).toBeLessThanOrEqual(0.1401)
+    last = now
+  }
+  expect({ hasFaded, ...at(view(sim, 'a')), place: view(sim, 'a').place }).toEqual({
+    hasFaded: true,
+    ...at(seat(sim, 0)),
+    place: 'lounge'
+  })
 })
 
 it('retains finished eligibility after an off/on setting cycle and walks each leg', () => {
@@ -211,23 +232,16 @@ it('walks back to a desk that moved while it was in the lounge', () => {
   expect(view(sim, 'a').place).toBeUndefined()
 })
 
-it('leaves through the gate from the lounge when its session ends there', () => {
+it('fades where it sits when its session ends in the lounge', () => {
   const sim = open([done('a'), session('b')])
   run(sim, SETTLE_S)
   const lounging = view(sim, 'a')
-  const office = officeOf(sim, 'a')
+  expect(lounging.place).toBe('lounge')
   patch(sim, [], ['a'])
-  expect(view(sim, 'a')).toMatchObject(at(lounging))
-  expect(view(sim, 'a').place).toBe('leaving')
+  expect(view(sim, 'a')).toMatchObject({ ...at(lounging), place: 'leaving' })
 
-  const walk = run(sim, SETTLE_S).flatMap((views) => views.filter((a) => a.agentKey === 'a'))
-  expect(walk.length).toBeGreaterThan(0)
-  // Straight to the gate: it does not go by the office it no longer has.
-  for (const step of walk)
-    expect(
-      Math.abs(step.x - office.x) < office.width / 2 &&
-        Math.abs(step.z - office.z) < office.depth / 2
-    ).toBe(false)
+  const fade = run(sim, 0.6).flatMap((views) => views.filter((a) => a.agentKey === 'a'))
+  expect(fade.every((step) => step.x === lounging.x && step.z === lounging.z)).toBe(true)
   expect(sim.step(0).map((a) => a.agentKey)).toEqual(['b'])
 })
 

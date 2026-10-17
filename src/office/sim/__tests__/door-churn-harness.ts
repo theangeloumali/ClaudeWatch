@@ -3,11 +3,10 @@ import type { AgentView, SessionRef, SourceHealth, SubagentRef } from '../../../
 import { createWorldDocument } from '../../../shared/office/world-document'
 import { resolveEffectiveWorld } from '../effective-world'
 import { session, subagent } from '../fixtures'
-import type { FloorLayout, LayoutMap } from '../layout'
+import type { LayoutMap } from '../layout'
 import type { Point } from '../path'
 import { World } from '../world'
 import { floorEntrance } from '../world-floor-routes'
-import type { WorldVenue } from '../world-venues'
 import { DoorInvariants, TICK_MS } from './door-invariants'
 
 const CREW = 6
@@ -21,31 +20,14 @@ const SOURCES: SourceHealth[] = [{ id: 'source', ok: true, detail: '' }]
 const resolveLayout = (base: LayoutMap, current: readonly SessionRef[]): LayoutMap =>
   resolveEffectiveWorld(base, createWorldDocument(base, current), current)
 
-// A kiosk on the street a few metres out of the lobby door, so each round trip crosses the
-// door both ways while the crew is still turning over (Review Focus 1).
-function kioskOutside(lobby: FloorLayout): WorldVenue[] {
-  const entrance = floorEntrance(lobby)
-  const out = Math.sign(entrance.z - lobby.z) || -1
-  const at = (x: number, metres: number) => ({ x: entrance.x + x, z: entrance.z + out * metres })
-  return [
-    {
-      id: 'kiosk',
-      kind: 'market',
-      capacity: 2,
-      entrance: at(0, 4),
-      slots: [-1.5, 1.5].map((x, index) => ({ id: `kiosk_${index}`, heading: 0, ...at(x, 6) }))
-    }
-  ]
-}
-
 export interface ChurnOptions {
   kind?: SubagentRef['kind']
-  // Peers idle with fresh own evidence, so the roam rule sends them through the lobby door.
-  hasRoamingPeers?: boolean
+  // Peers idle with fresh own evidence, so the lounge rule sends them off for a seat.
+  hasLoungingPeers?: boolean
 }
 
 // A lead with a crew of six and two peers on one floor whose only door is the lobby's.
-class DoorWorld {
+export class DoorWorld {
   clock = 1_000_000
   readonly world: World
   readonly peers: SessionRef[]
@@ -62,14 +44,12 @@ class DoorWorld {
       staleAfterMs: 3_600_000
     }
     this.peers = ['claude:peer-a', 'claude:peer-b'].map((key) =>
-      options.hasRoamingPeers ? { ...session(key, 'p_app'), observation } : session(key, 'p_app')
+      options.hasLoungingPeers ? { ...session(key, 'p_app'), observation } : session(key, 'p_app')
     )
     this.lead = { ...session('claude:lead', 'p_app'), activity: 'running', subagents: this.crew(0) }
-    let venues: WorldVenue[] = []
     this.world = new World({
       resolveLayout,
-      loungeTrips: options.hasRoamingPeers ?? false,
-      getVenueTargets: () => venues,
+      loungeTrips: options.hasLoungingPeers ?? false,
       now: () => this.clock
     })
     this.world.apply({
@@ -79,14 +59,13 @@ class DoorWorld {
         rev: 1,
         generatedAtMs: this.clock,
         sessions: [this.lead, ...this.peers],
-        sources: options.hasRoamingPeers ? SOURCES : []
+        sources: options.hasLoungingPeers ? SOURCES : []
       }
     })
     this.layout = this.world.layout()
     const leadFloorId = this.world.step(0).find((view) => view.agentKey === this.lead.key)?.floorId
     const lobby = this.layout.floors.find((floor) => floor.id === leadFloorId)!
     this.entrance = floorEntrance(lobby)
-    if (options.hasRoamingPeers) venues = kioskOutside(lobby)
   }
 
   crew(generation: number): SubagentRef[] {
@@ -100,14 +79,24 @@ class DoorWorld {
     return this.lead.subagents.map((member) => agentKey(this.lead.key, member.id))
   }
 
-  patch(upserts: SessionRef[]): void {
-    this.world.apply({ type: 'patch', v: 1, seq: ++this.sequence, upserts, removed: [] })
+  patch(upserts: SessionRef[], removed: string[] = []): void {
+    this.world.apply({ type: 'patch', v: 1, seq: ++this.sequence, upserts, removed })
     this.layout = this.world.layout()
   }
 
   step(): AgentView[] {
     this.clock += TICK_MS
     return this.world.step(TICK_MS)
+  }
+
+  isLounging(view: AgentView | undefined): boolean {
+    const seats = this.layout.floors.flatMap((floor) =>
+      floor.zones.flatMap((zone) => zone.lounge?.slots ?? [])
+    )
+    return (
+      view?.place === 'lounge' &&
+      seats.some((seat) => Math.hypot(view.x - seat.x, view.z - seat.z) <= SEAT_METRES)
+    )
   }
 
   isSeated(view: AgentView | undefined): boolean {
@@ -122,12 +111,11 @@ class DoorWorld {
 // The crew swaps every 10 s for 120 s, then 90 s of quiet (seating-1…4).
 export function runDoorChurn(options: ChurnOptions) {
   const door = new DoorWorld(options)
-  const invariants = new DoorInvariants((view) => view.venueId !== undefined || door.isSeated(view))
+  const invariants = new DoorInvariants((view) => door.isLounging(view) || door.isSeated(view))
   const departed = new Set<string>()
   const peerKeys = new Set(door.peers.map((peer) => peer.key))
   const setOut = new Set<string>()
-  const wentOut = new Set<string>()
-  const returned = new Set<string>()
+  const wentOutside = new Set<string>()
   let generation = 0
   let views: AgentView[] = []
   for (let elapsed = TICK_MS; elapsed <= CHURN_MS + QUIET_MS; elapsed += TICK_MS) {
@@ -141,8 +129,7 @@ export function runDoorChurn(options: ChurnOptions) {
     for (const view of views) {
       if (!peerKeys.has(view.agentKey)) continue
       if (view.place === 'lounge') setOut.add(view.agentKey)
-      if (view.physicalFloorId === null) wentOut.add(view.agentKey)
-      else if (wentOut.has(view.agentKey)) returned.add(view.agentKey)
+      if (view.physicalFloorId === null) wentOutside.add(view.agentKey)
     }
   }
   return {
@@ -150,22 +137,22 @@ export function runDoorChurn(options: ChurnOptions) {
     unseated: door
       .crewKeys()
       .filter((key) => !door.isSeated(views.find((view) => view.agentKey === key))).length,
-    roamersSetOut: setOut.size,
-    roamersReturned: returned.size,
+    loungersSetOut: setOut.size,
+    loungersOutside: wentOutside.size,
     ...invariants.report()
   }
 }
 
-// Both peers sit at the kiosk; then one crew swap while work calls both back (Review Focus 1).
-// The door is clear once the leavers are gone, the queue is in and nobody stands near it.
+// Both peers sit in the lounge; then one crew swap while work calls both back (Review Focus 1).
+// The door is clear once the leavers are gone, the crew is in and nobody stands near it.
 export function runMixedSwap(seatWithinMs: number) {
-  const door = new DoorWorld({ hasRoamingPeers: true })
-  const isAtKiosk = (views: AgentView[]) =>
-    door.peers.every((peer) => views.find((view) => view.agentKey === peer.key)?.venueId)
+  const door = new DoorWorld({ hasLoungingPeers: true })
+  const isLounging = (views: AgentView[]) =>
+    door.peers.every((peer) => door.isLounging(views.find((view) => view.agentKey === peer.key)))
   let views = door.step()
-  for (let elapsed = 0; elapsed < 120_000 && !isAtKiosk(views); elapsed += TICK_MS)
+  for (let elapsed = 0; elapsed < 120_000 && !isLounging(views); elapsed += TICK_MS)
     views = door.step()
-  const roamersAtKiosk = isAtKiosk(views)
+  const loungersSeated = isLounging(views)
   const departed = new Set(door.crewKeys())
   door.lead = { ...door.lead, subagents: door.crew(1) }
   door.patch([door.lead, ...door.peers.map((peer) => ({ ...peer, activity: 'thinking' as const }))])
@@ -182,7 +169,7 @@ export function runMixedSwap(seatWithinMs: number) {
     if (isDoorClear) doorClearAtMs ??= elapsed
   }
   return {
-    roamersAtKiosk,
+    loungersSeated,
     doorClearAtMs,
     unseated: arriving.filter((key) => !door.isSeated(views.find((view) => view.agentKey === key)))
       .length

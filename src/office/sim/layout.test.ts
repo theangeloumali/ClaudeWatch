@@ -195,8 +195,8 @@ it('opens every company onto the street, whichever side of it the company stands
   expect(wide.door.z).toBe(wide.z - wide.depth / 2)
   const paths = new PathCache(layout.floors[0])
   const seat = layout.floors[0].rooms.find((room) => room.companyKey === 'c_north')!.slots[1]
-  const walk = paths.via(layout.floors[0].elevator, north.door, seat)
-  expect(walk.length).toBeGreaterThan(0)
+  const legs = [paths.get(layout.floors[0].elevator, north.door), paths.get(north.door, seat)]
+  expect(legs.map((leg) => leg.length > 0)).toEqual([true, true])
 })
 
 it('keeps a company north of the street where it stands when one of its projects deepens', () => {

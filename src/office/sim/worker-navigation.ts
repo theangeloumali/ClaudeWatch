@@ -6,7 +6,6 @@ import {
 } from '../../shared/office/body-sweep'
 import type { AgentView } from '../../shared/office/types'
 import type { Point } from './path'
-import type { PathCache } from './navigation'
 import type { AgentRecord } from './behaviour'
 import type { FloorRoutes, FloorWaypoint } from './world-floor-routes'
 import { floorElevation } from './world-floor-routes'
@@ -18,10 +17,8 @@ export function workerNavigation(options: {
   routes: FloorRoutes
   from: AgentView
   to: FloorWaypoint
-  departure?: PathCache
 }) {
   const paths =
-    options.departure ??
     options.routes.paths(options.from.physicalFloorId) ??
     options.routes.paths(options.to.physicalFloorId) ??
     options.routes.paths(options.from.floorId)
@@ -101,49 +98,25 @@ export function waitCycleLeaders(
   return leaders
 }
 
+// Every route stays on the walker's floor, so a fresh one around the crowd to its target will do.
 export function recoverWorkerRoute(options: {
   agent: AgentRecord
   routes: FloorRoutes
-  paths?: PathCache
   obstacles: readonly BodyFootprint[]
   body: BodyFootprint
 }): FloorWaypoint[] {
   const { agent, routes, body, obstacles } = options
-  const paths = options.paths ?? routes.paths(agent.view.physicalFloorId)
+  const paths = routes.paths(agent.view.physicalFloorId)
   const target = agent.path.at(-1)
   if (!target) return []
-  let indoorLength = 0
-  if (paths?.contains(body)) {
-    for (const point of agent.path) {
-      if (
-        point.connectorId !== undefined ||
-        !paths.contains(point) ||
-        (point.elevation !== undefined && point.elevation !== (agent.view.elevation ?? 0)) ||
-        (point.physicalFloorId !== undefined &&
-          point.physicalFloorId !== agent.view.physicalFloorId)
-      )
-        break
-      indoorLength++
-    }
-  }
-  // Recover to this surface's seam; later waypoints may leave its grid or change elevation.
-  const seam = agent.path[indoorLength - 1]
-  if (!seam && target.physicalFloorId && target.physicalFloorId !== agent.view.physicalFloorId) {
-    const floor = routes.floor(target.physicalFloorId)
-    return floor ? routes.toFloor(agent.view, floor, target) : []
-  }
-  if (!seam && agent.path.some((point) => point.connectorId)) return []
-  const destination = seam ?? target
   const route = paths?.contains(body)
-    ? paths.around({ body, to: destination, obstacles })
-    : routes.aroundStreet(body, destination, obstacles)
-  if (!route.length) return []
-  const recovered = route.map((point) => ({
+    ? paths.around({ body, to: target, obstacles })
+    : routes.aroundStreet(body, target, obstacles)
+  return route.map((point) => ({
     ...point,
     elevation: agent.view.elevation,
     physicalFloorId: agent.view.physicalFloorId
   }))
-  return [...recovered, ...(seam ? agent.path.slice(indoorLength) : [])]
 }
 
 export function resumeUnseatedWorker(agent: AgentRecord, routes: FloorRoutes): AgentRecord {
@@ -206,6 +179,8 @@ export function relayoutWorker(options: {
   )
     return agent
   const nextRoom = oldRoom && destination.rooms.find(matchesRoom)
+  // Its room left this floor: the agent goes to its new desk, not along with the floor.
+  if (oldRoom && !nextRoom) return agent
   const offsetX = (nextRoom?.x ?? destination.x) - (oldRoom?.x ?? previous.x)
   const offsetZ = (nextRoom?.z ?? destination.z) - (oldRoom?.z ?? previous.z)
   const elevation = floorElevation(destination)
@@ -224,8 +199,7 @@ export function relayoutWorker(options: {
       x: agent.view.x + offsetX,
       z: agent.view.z + offsetZ,
       elevation,
-      physicalFloorId: destination.id,
-      connectorId: undefined
+      physicalFloorId: destination.id
     }
   }
 }

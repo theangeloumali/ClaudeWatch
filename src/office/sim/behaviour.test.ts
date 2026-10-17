@@ -123,9 +123,9 @@ it('is in the lounge from setting off until setting off back, and keeps its desk
   expect(agent.view).toMatchObject({ x: 0, heading: desk.heading })
 })
 
-it('gives up its lounge seat when its session ends', () => {
+it('gives up its lounge seat and stops walking when its session ends', () => {
   const lounging = goToLounge(createAgent(session('a'), desk, []), loungeSeat, [{ x: 2, z: 0 }])
-  const leaving = leaveAgent(lounging, [{ x: 9, z: 9 }])
+  const leaving = leaveAgent(lounging)
   expect('place' in leaving.view).toBe(false)
-  expect(leaving.loungeSeatId).toBeNull()
+  expect({ seat: leaving.loungeSeatId, path: leaving.path }).toEqual({ seat: null, path: [] })
 })

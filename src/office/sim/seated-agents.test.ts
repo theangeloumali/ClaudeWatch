@@ -54,24 +54,22 @@ it('leaves every agent where it is when a patch changes nothing about the map', 
   for (const views of run(sim, 3)) expect(views.map((v) => [v.agentKey, at(v)])).toEqual(before)
 })
 
-it('lets an agent that is still walking in finish its walk to where its desk now is', () => {
+it('settles an agent still fading in at the desk its office slid to', () => {
   const sim = open([...mates(1)])
   run(sim, SETTLE_S)
   patch(sim, [working('a')])
-  run(sim, 2)
-  const onItsWay = at(view(sim, 'a'))
-  expect(onItsWay).not.toEqual(at(deskOf(sim, 'a')))
+  run(sim, 0.2)
+  const oldDesk = at(deskOf(sim, 'a'))
+  expect(view(sim, 'a').fade).toBeDefined()
 
   patch(sim, mates(3).slice(1))
-  // Not seated when its office slid: no jump, it walks on from where it stands.
-  expect(at(view(sim, 'a'))).toEqual(onItsWay)
-  let last = onItsWay
-  for (const views of run(sim, SETTLE_S)) {
-    const now = at(views.find((v) => v.agentKey === 'a')!)
-    expect(Math.hypot(now.x - last.x, now.z - last.z)).toBeLessThanOrEqual(0.1401)
-    last = now
+  expect(at(deskOf(sim, 'a'))).not.toEqual(oldDesk)
+  // Still faded when its office slid: it appears at the new desk, never visible elsewhere.
+  for (const views of run(sim, 1)) {
+    const now = views.find((v) => v.agentKey === 'a')!
+    if (now.fade === undefined) expect(at(now)).toEqual(at(deskOf(sim, 'a')))
   }
-  expect(last).toEqual(at(deskOf(sim, 'a')))
+  expect(view(sim, 'a').fade).toBeUndefined()
 })
 
 // A lead's crew as the feed sends it: two teammates for good, subagents coming and going.
@@ -127,16 +125,13 @@ const withSubagents = (key: string, ids: string[]): SessionRef => ({
   subagents: ids.map((id) => subagent(id))
 })
 
-// No agent lost or doubled, and no two on one seat. Agents walking out are not counted.
+// No agent lost or doubled, and no two on one seat. Agents fading out are not counted.
 function expectEverySeatOnce(sim: World, sessions: Iterable<SessionRef>): void {
   const expected = [...sessions].flatMap((s) => [
     s.key,
     ...s.subagents.map((g) => `${s.key}#${g.id}`)
   ])
-  // Queued actors own real seats but have no on-scene body until admission.
-  const live = [...sim.step(0), ...[...sim['arrivals'].values()].map((agent) => agent.view)].filter(
-    (agent) => expected.includes(agent.agentKey)
-  )
+  const live = sim.step(0).filter((agent) => expected.includes(agent.agentKey))
   expect(live.map((agent) => agent.agentKey).sort()).toEqual(expected.sort())
   const seats = live.map((agent) => `${agent.roomId}/${agent.slotId}`)
   expect(new Set(seats).size).toBe(seats.length)
@@ -150,7 +145,6 @@ it('seats every guest when a session in the team area shrinks as a neighbour gro
   expect(() => patch(sim, next)).not.toThrow()
   expectEverySeatOnce(sim, next)
   run(sim, SETTLE_S)
-  expect(sim['arrivals'].size).toBe(0)
   expectEverySeatOnce(sim, next)
   const expected = new Set(
     next.flatMap((lead) => [lead.key, ...lead.subagents.map((guest) => `${lead.key}#${guest.id}`)])
