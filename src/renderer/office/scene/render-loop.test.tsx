@@ -1,5 +1,6 @@
 import { render } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
+import { cityClock } from '../logic/city-clock'
 import { QUALITY_SETTINGS } from '../logic/quality'
 import { chooseQuality, pinQuality, readQuality } from '../quality-store'
 import type { BoostSource } from '../logic/frame-governor'
@@ -43,7 +44,8 @@ const { surface, frame, graphics, draw, FakeControls } = vi.hoisted(() => {
     graphics,
     draw,
     surface,
-    frame: { callback: null as ((state: object, deltaSec: number) => void) | null }
+    // One subscription per priority, run lowest first as R3F does.
+    frame: { byPriority: new Map<number, (state: object, deltaSec: number) => void>() }
   }
 })
 const cameraBoosts = vi.hoisted(() => ({ count: 0 }))
@@ -65,15 +67,16 @@ vi.mock('../logic/frame-governor', async (original) => {
 vi.mock('@react-three/drei', () => ({ CameraControlsImpl: FakeControls }))
 vi.mock('@react-three/fiber', () => ({
   useThree: (selector: (state: typeof surface) => object) => selector(surface),
-  useFrame: (callback: (state: object, deltaSec: number) => void) => {
-    frame.callback = callback
+  useFrame: (callback: (state: object, deltaSec: number) => void, priority = 0) => {
+    frame.byPriority.set(priority, callback)
   }
 }))
 
 const PACE = QUALITY_SETTINGS.full
 
 function drawFrame(deltaSec = 1 / 30): void {
-  frame.callback?.({}, deltaSec)
+  const priorities = [...frame.byPriority.keys()].sort((a, b) => a - b)
+  for (const priority of priorities) frame.byPriority.get(priority)?.({}, deltaSec)
 }
 
 // Whether a rendered frame asks for the next one, which is what keeps the canvas at display rate.
@@ -92,6 +95,17 @@ beforeEach(() => {
   graphics.renderer = APPLE_RENDERER
   pinQuality('auto')
   chooseQuality('full')
+})
+
+it('ticks the city clock once per drawn frame, ahead of every layer', () => {
+  const wall = vi.spyOn(Date, 'now').mockReturnValue(5_000)
+  render(<FrameGovernor pace={PACE} agents={[]} />)
+  drawFrame()
+  const clockMs = cityClock.now()
+  wall.mockRestore()
+  expect(clockMs).toBe(5_000)
+  // Every scene layer subscribes at priority 0, so a negative one runs before all of them.
+  expect(Math.min(...frame.byPriority.keys())).toBeLessThan(0)
 })
 
 it('leaves the idle rate to the governor when nothing is happening', () => {

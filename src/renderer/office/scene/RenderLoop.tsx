@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import type { AgentView } from '../../../shared/office/types'
 import { officePoses } from '../../office-live/pose-store'
 import type { FrameMetrics } from '../frame-metrics'
+import { cityClock } from '../logic/city-clock'
 import {
   browserFrameEnv,
   startFrameGovernor,
@@ -16,6 +17,7 @@ import { chooseQuality, machineHints, useQualityChoice, watchQuality } from '../
 const SMOOTHING = 0.1
 const INPUT_EVENTS = ['pointerdown', 'wheel', 'keydown'] as const
 const DATASET_INTERVAL_MS = 1000
+const CITY_CLOCK_PRIORITY = -1
 
 function rendererOf(context: WebGLRenderingContext | WebGL2RenderingContext): string | undefined {
   const info = context.getExtension('WEBGL_debug_renderer_info')
@@ -94,6 +96,10 @@ export function FrameGovernor({ pace, agents }: FrameGovernorProps) {
   useEffect(() => {
     chooseQuality(levelForMachine(machineHints(rendererOf(gl.getContext()))))
   }, [gl])
+
+  // Below every layer's priority 0, so each reader in a frame sees this frame's time. A
+  // negative priority leaves R3F rendering on its own (only a positive one takes it over).
+  useFrame(() => cityClock.tick(Date.now()), CITY_CLOCK_PRIORITY)
 
   // Asking from inside a frame is what chains display-rate frames; the governor alone only
   // asks from its own callback, which can land a frame late.
