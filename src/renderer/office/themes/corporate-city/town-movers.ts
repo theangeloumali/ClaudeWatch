@@ -1,11 +1,5 @@
-import {
-  ball,
-  box,
-  tube,
-  wheel,
-  type CitizenFigure,
-  type FigurePart
-} from '../../citizens/figure-parts'
+import { ball, box, tube, type CitizenFigure, type FigurePart } from '../../citizens/figure-parts'
+import { extrudedVehicle, type VehicleDress } from '../../citizens/vehicle-body'
 import type { VehicleDesign } from '../../town/town-dress'
 import {
   CORPORATE_MATERIALS as MATERIALS,
@@ -72,51 +66,26 @@ export const CORPORATE_CITIZENS: readonly CitizenFigure[] = [
   }
 ]
 
-function transit(): FigurePart[] {
-  return [
-    box(MATERIALS.civic, [1.25, 0.9, 3.7], [0, 0.85, 0]),
-    box(MATERIALS.glass, [1.24, 0.52, 3.3], [0, 1.42, 0]),
-    box(MATERIALS.facade, [1.25, 0.1, 3.55], [0, 1.72, 0]),
-    box(MATERIALS.light, [0.99, 0.09, 0.04], [0, 0.83, 1.87]),
-    box(MATERIALS.frame, [1.05, 0.1, 0.04], [0, 0.48, 1.87]),
-    ...[-1, 1].flatMap((side) => [
-      ...[-1, 0, 1].map((axle) =>
-        wheel(MATERIALS.frame, 0.27, 0.15, [side * 0.63, 0.27, axle * 1.25], 8)
-      ),
-      ...[-1, 1].map((bay) =>
-        box(MATERIALS.frame, [0.025, 0.5, 0.055], [side * 0.63, 1.42, bay * 0.85])
-      )
-    ])
-  ]
+// Extruded bodies sized to the lanes and to each role's zebra hold (NOSE_M).
+const VEHICLE_DRESS: VehicleDress = {
+  paint: MATERIALS.civic,
+  glass: MATERIALS.glass,
+  trim: MATERIALS.frame,
+  tyre: MATERIALS.road,
+  rim: MATERIALS.concrete,
+  headlight: MATERIALS.light,
+  taillight: MATERIALS.culture
 }
 
-function freight(): FigurePart[] {
-  return [
-    box(MATERIALS.frame, [1.22, 0.18, 3.48], [0, 0.38, -0.02]),
-    box(MATERIALS.workshop, [1.25, 0.93, 1.0], [0, 0.85, 1.09]),
-    box(MATERIALS.glass, [1.22, 0.42, 0.82], [0, 1.35, 1.2]),
-    box(MATERIALS.facade, [1.22, 1.16, 2.28], [0, 0.99, -0.65]),
-    box(MATERIALS.roof, [1.25, 0.07, 2.28], [0, 1.61, -0.65]),
-    box(MATERIALS.frame, [1.02, 0.98, 0.04], [0, 0.92, -1.8]),
-    box(MATERIALS.light, [0.92, 0.1, 0.05], [0, 0.78, 1.62]),
-    ...[-1, 1].flatMap((side) =>
-      [-1, 1].map((axle) => wheel(MATERIALS.frame, 0.26, 0.16, [side * 0.62, 0.26, axle * 1.24], 8))
-    )
-  ]
-}
-
-function runabout(): FigurePart[] {
-  return [
-    box(MATERIALS.residential, [1.12, 0.5, 2.26], [0, 0.5, 0]),
-    box(MATERIALS.glass, [1.02, 0.4, 1.22], [0, 0.9, -0.12]),
-    box(MATERIALS.roof, [1.07, 0.09, 1.2], [0, 1.13, -0.12]),
-    box(MATERIALS.light, [0.98, 0.08, 0.035], [0, 0.62, 1.15]),
-    box(MATERIALS.frame, [1.12, 0.09, 0.12], [0, 0.35, 1.12]),
-    ...[-1, 1].flatMap((side) =>
-      [-1, 1].map((axle) => wheel(MATERIALS.frame, 0.23, 0.15, [side * 0.58, 0.23, axle * 0.78], 8))
-    )
-  ]
-}
+const transit = () => extrudedVehicle('bus', VEHICLE_DRESS, 3.7)
+const freight = () =>
+  extrudedVehicle(
+    'van',
+    { ...VEHICLE_DRESS, paint: MATERIALS.workshop, cargo: MATERIALS.facade },
+    2.95
+  )
+const runabout = () =>
+  extrudedVehicle('hatchback', { ...VEHICLE_DRESS, paint: MATERIALS.residential }, 2.05)
 
 export const CORPORATE_VEHICLES: readonly VehicleDesign[] = [
   { name: 'avenue electric bus', role: 'transit', parts: transit },

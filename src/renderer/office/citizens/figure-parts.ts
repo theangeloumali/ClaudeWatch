@@ -101,8 +101,11 @@ export function mergeParts(name: string, figureParts: readonly FigurePart[]): Bu
     for (let vertex = 0; vertex < count; vertex++) tint.toArray(colors, vertex * 3)
     return geometry.setAttribute('color', new BufferAttribute(colors, 3))
   })
-  const merged = mergeGeometries(parts)
-  for (const part of parts) part.dispose()
+  // Extruded parts carry no index while boxes do, and a mixed merge fails: flatten them alike.
+  const isMixed = parts.some((part) => part.index === null) && parts.some((part) => part.index)
+  const alike = isMixed ? parts.map((part) => (part.index ? part.toNonIndexed() : part)) : parts
+  const merged = mergeGeometries(alike)
+  for (const part of new Set([...parts, ...alike])) part.dispose()
   if (!merged) throw new Error(`The parts of ${name} do not merge`)
   return merged
 }

@@ -1,4 +1,5 @@
-import { box, tube, ball, person, wheel, type CitizenFigure } from '../../citizens/figure-parts'
+import { box, tube, ball, person, type CitizenFigure } from '../../citizens/figure-parts'
+import { extrudedVehicle, type VehicleDress } from '../../citizens/vehicle-body'
 import type { VehicleDesign } from '../../town/town-dress'
 import { CYBERPUNK_MATERIALS as material } from './palette'
 
@@ -40,28 +41,36 @@ export const CYBERPUNK_CITIZENS: readonly CitizenFigure[] = [
   }
 ]
 
-function streetVehicle(body: string, length: number) {
-  return [
-    box(body, [0.66, 0.28, length], [0, 0.36, 0]),
-    box(material.glass, [0.56, 0.22, length * 0.52], [0, 0.6, -length * 0.12]),
-    box(material.light, [0.47, 0.04, 0.025], [0, 0.39, length / 2 + 0.015]),
-    ...[-1, 1].flatMap((side) =>
-      [-1, 1].map((end) =>
-        wheel(material.asphalt, 0.16, 0.085, [side * 0.34, 0.18, end * length * 0.31])
-      )
-    )
-  ]
+// Extruded bodies sized to the lanes and to each role's zebra hold (NOSE_M).
+const VEHICLE_DRESS: VehicleDress = {
+  paint: material.steel,
+  glass: material.glass,
+  trim: material.graphite,
+  tyre: material.asphalt,
+  rim: material.steel,
+  headlight: material.light,
+  taillight: material.pink
 }
 
 export const CYBERPUNK_VEHICLES: readonly VehicleDesign[] = [
-  { name: 'electric shuttle', role: 'transit', parts: () => streetVehicle(material.steel, 1.6) },
+  {
+    name: 'electric shuttle',
+    role: 'transit',
+    parts: () => extrudedVehicle('bus', VEHICLE_DRESS, 2.4)
+  },
   {
     name: 'garage supply van',
     role: 'freight',
-    parts: () => [
-      ...streetVehicle(material.asphalt, 1.25),
-      box(material.amber, [0.62, 0.37, 0.6], [0, 0.64, -0.3])
-    ]
+    parts: () =>
+      extrudedVehicle(
+        'van',
+        { ...VEHICLE_DRESS, paint: material.asphalt, cargo: material.amber },
+        1.9
+      )
   },
-  { name: 'compact city taxi', role: 'runabout', parts: () => streetVehicle(material.amber, 0.95) }
+  {
+    name: 'compact city taxi',
+    role: 'runabout',
+    parts: () => extrudedVehicle('hatchback', { ...VEHICLE_DRESS, paint: material.amber }, 1.5)
+  }
 ]
