@@ -56,7 +56,8 @@ export function presenceAfter(
   delta: number,
   isReducedMotion: boolean
 ): number {
-  const target = agent.fade === undefined || isReducedMotion ? 1 : 0
+  const target = agent.fade === undefined ? 1 : 0
+  if (isReducedMotion) return target
   const step = (delta * 1000) / DEPARTURE_FADE_MS
   return target > presence ? Math.min(target, presence + step) : Math.max(target, presence - step)
 }
@@ -121,15 +122,19 @@ export function Robot({
       ) > MOVING_EPSILON
     const previousX = root.position.x
     const previousZ = root.position.z
-    root.position.x = approach(previousX, goal.x, delta, MOVE_RATE)
-    root.position.y = approach(root.position.y, goal.elevation, delta, MOVE_RATE)
-    root.position.z = approach(previousZ, goal.z, delta, MOVE_RATE)
+    const presence = presenceRef.current
+    // A robot faded to nothing goes straight to its pose: a recall seats it across town (FOUND 7).
+    if (presence?.scale.x === 0) root.position.set(goal.x, goal.elevation, goal.z)
+    else {
+      root.position.x = approach(previousX, goal.x, delta, MOVE_RATE)
+      root.position.y = approach(root.position.y, goal.elevation, delta, MOVE_RATE)
+      root.position.z = approach(previousZ, goal.z, delta, MOVE_RATE)
+    }
     travelDistanceRef.current += Math.hypot(
       root.position.x - previousX,
       root.position.z - previousZ
     )
     root.rotation.y = approachAngle(root.rotation.y, goal.heading, delta, TURN_RATE)
-    const presence = presenceRef.current
     if (presence)
       presence.scale.setScalar(presenceAfter(presence.scale.x, target, delta, isReducedMotion))
     if (motions) {

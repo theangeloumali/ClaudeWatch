@@ -24,7 +24,8 @@ describe('robot fade on departure (seating-4)', () => {
     expect(settle(undefined, false, 1, 0.3)).toBe(1)
   })
 
-  it('does not animate the fade under reduced motion', () => {
-    expect(settle(0.6, true, 0.1)).toBe(1)
+  it('under reduced motion a fading robot goes at once, and comes back at once', () => {
+    expect(settle(0.6, true, FRAME_S)).toBe(0)
+    expect(settle(undefined, true, FRAME_S, 0)).toBe(1)
   })
 })
