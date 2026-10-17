@@ -19,7 +19,7 @@ function toSeat(slot: Slot): DeskSlot {
   return { slotId: slot.id, x: slot.x, z: slot.z, heading: slot.heading }
 }
 
-function toLounge(lounge: LoungeLayout): LoungeGeometry {
+export function toLounge(lounge: LoungeLayout): LoungeGeometry {
   return {
     id: lounge.id,
     x: lounge.x,
