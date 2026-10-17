@@ -10,6 +10,7 @@ import {
   type CitySignals
 } from './city-signals'
 import { createSubscribers } from './subscribers'
+import { isSameMap } from './same-map'
 
 export interface CitySignalStore {
   update(frame: OfficeFrame | null, nowMs: number): void
@@ -33,19 +34,6 @@ const EMPTY: CitySignals = {
     mostCrew: null
   },
   companies: new Map()
-}
-
-function isSameMap<Value>(
-  a: ReadonlyMap<string, Value>,
-  b: ReadonlyMap<string, Value>,
-  isSame: (x: Value, y: Value) => boolean
-): boolean {
-  if (a.size !== b.size) return false
-  for (const [key, value] of a) {
-    const other = b.get(key)
-    if (other === undefined || !isSame(value, other)) return false
-  }
-  return true
 }
 
 // Every field but `ignored`; the signals' fields are all primitives.
