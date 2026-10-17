@@ -119,7 +119,11 @@ export class PathCache {
         }
       }
     }
-    return findPath({ ...this.grid, blockedCells }, options.body, options.to)
+    return findPath(
+      { ...this.grid, blockedCells, wallCells: this.occupancy() },
+      options.body,
+      options.to
+    )
   }
   get(from: Point, to: Point): Point[] {
     const key = `${from.x},${from.z}:${to.x},${to.z}`

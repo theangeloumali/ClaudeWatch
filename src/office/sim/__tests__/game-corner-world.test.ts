@@ -12,6 +12,10 @@ vi.setConfig({ testTimeout: 120_000 })
 const SETTLE_MS = LOUNGE_DELAY_MS + 30_000
 // Eight gamers setting off at once: the last, held behind a seated row, sat after 37.7 s.
 const FULL_CORNER_MS = LOUNGE_DELAY_MS + 45_000
+// Recalling that corner, the last sat after 30.2 s; the longest stand, 6.4 s, is a passage
+// yield, which lasts 8 s at most.
+const RECALL_MS = 35_000
+const LONGEST_STAND_MS = 8_000
 // The front row's distance from the screen, less half a grid cell for the walk along it.
 const SCREEN_STRIP_METRES = 1.2 - NAV_CELL_METRES / 2
 
@@ -115,6 +119,37 @@ describe('game corner: idle agents play on their own floor', () => {
       isWalking: true
     })
     expect(seatedAtMs).not.toBeNull()
+  })
+
+  // Before I1 a gamer stood 12 s against an office wall and the last one sat after 41.9 s.
+  it('walks a full corner of gamers home with none standing still for long', () => {
+    const idle = Array.from({ length: 9 }, (_, index) => `claude:idle-${index}`)
+    const city = new CityWorld((nowMs) => idle.map((key) => observed(key, 'p_a', nowMs)))
+    let views: AgentView[] = []
+    city.run(FULL_CORNER_MS, (frame) => {
+      views = frame
+    })
+    expect(views.filter((view) => view.place === 'lounge')).toHaveLength(8)
+    city.patch(idle.map((key) => working(key, 'p_a', city.clock)))
+    const anchors = new Map<string, { x: number; z: number; sinceMs: number }>()
+    let longestStandMs = 0
+    let seatedAtMs = Infinity
+    city.run(RECALL_MS, (frame, elapsedMs) => {
+      for (const view of frame) {
+        const anchor = anchors.get(view.agentKey)
+        if (
+          city.isSeated(view) ||
+          !anchor ||
+          Math.hypot(view.x - anchor.x, view.z - anchor.z) > 0.5
+        )
+          anchors.set(view.agentKey, { x: view.x, z: view.z, sinceMs: elapsedMs })
+        else longestStandMs = Math.max(longestStandMs, elapsedMs - anchor.sinceMs)
+      }
+      if (frame.every((view) => city.isSeated(view))) seatedAtMs = elapsedMs
+      return seatedAtMs < Infinity
+    })
+    expect(longestStandMs).toBeLessThanOrEqual(LONGEST_STAND_MS)
+    expect(seatedAtMs).toBeLessThanOrEqual(RECALL_MS)
   })
 
   it('keeps every agent at its desk while lounge trips are off', () => {

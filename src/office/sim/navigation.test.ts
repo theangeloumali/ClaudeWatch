@@ -1,8 +1,9 @@
 import { expect, it } from 'vitest'
 import { buildLayout } from './layout'
 import { session } from './fixtures'
-import { officeGrid } from './navigation'
+import { officeGrid, PathCache, ROUTE_MARGIN_METRES } from './navigation'
 import { findPath } from './path'
+import { WORKER_BODY_RADIUS } from '../../shared/office/body-footprints'
 
 it('routes from the gate through company, project and office doors only', () => {
   const floor = buildLayout([session('a')], undefined).floors[0]
@@ -52,4 +53,30 @@ it('lays the grid over the plate and reaches every desk from the gate', () => {
     const desk = office.slots.find((slot) => slot.id === 'desk_main')!
     expect(findPath(grid, floor.elevator, desk).length, office.id).toBeGreaterThan(0)
   }
+})
+
+// Inside a seated body's margin with its back to a wall, every nearby free cell is past the wall (I1).
+it('routes a walker pressed between a wall and a body along its own side of that wall', () => {
+  const floor = buildLayout([session('a')], undefined).floors[0]
+  const office = floor.rooms.find((room) => room.sessionKey === 'a')!
+  const southWall = office.z + office.depth / 2
+  const walker = {
+    id: 'walker',
+    x: office.x - 0.97,
+    z: southWall - 0.16,
+    elevation: 0,
+    radius: WORKER_BODY_RADIUS
+  }
+  const seated = { ...walker, id: 'seated', x: walker.x - 0.48, z: walker.z - 1.24 }
+  const gap = Math.hypot(walker.x - seated.x, walker.z - seated.z)
+  expect(gap > 2 * WORKER_BODY_RADIUS && gap < 2 * WORKER_BODY_RADIUS + ROUTE_MARGIN_METRES).toBe(
+    true
+  )
+  const route = new PathCache(floor).around({
+    body: walker,
+    to: { x: office.x + 1.25, z: southWall - 0.5 },
+    obstacles: [seated]
+  })
+  expect(route.length).toBeGreaterThan(1)
+  expect(route.filter((point) => point.z >= southWall)).toEqual([])
 })
