@@ -22,19 +22,22 @@ export function spireShare(
 }
 
 // Unit boxes inside the shell's batch (+0 draws); only a growing module uploads its matrix.
+// Only the stages reached today mount: a hidden module still costs its triangles in the batch.
 export function TokenSpire({
   buildingId,
   deck,
   roof,
-  theme
+  theme,
+  stage
 }: {
   buildingId: string
   deck: PlaceTop
   roof: PlaceTop
   theme: OfficeTheme
+  stage: number
 }) {
   const baseY = roof.y + SPIRE_BASE_GAP_M
-  const modules = useMemo(() => spireModules(theme), [theme])
+  const modules = useMemo(() => spireModules(theme).slice(0, stage), [theme, stage])
   const meshes = useRef<(Mesh | null)[]>([])
   useFrame(() => {
     const share = spireShare(

@@ -12,7 +12,8 @@ import { getTheme } from '../../themes/registry'
 import { everyElement } from '../../themes/scene.test-utils'
 import { PHYSICAL_STOREY_HEIGHT } from '../all-floor-model'
 import { PhysicalBuildingShell } from '../PhysicalBuildingShell'
-import { spireShare } from '../TokenSpire'
+import { spireShare, TokenSpire } from '../TokenSpire'
+import { crownAnchor } from '../../themes/physical-building-parts'
 
 vi.mock('@react-three/fiber', () => ({ useFrame: () => undefined }))
 vi.mock('react', async (original) => ({
@@ -86,9 +87,27 @@ describe('the shell and its spire', () => {
   it('mounts the spire with the crown and hides it with the roof', () => {
     const spires = (node: ReactNode) =>
       everyElement(node).filter((element) => element.props.name === 'token-spire:tower')
-    expect(spires(shell())).toHaveLength(1)
-    expect(spires(shell({ areRoofsVisible: false }))).toHaveLength(0)
-    expect(spires(shell({ focusedFloorId: 'f0' }))).toHaveLength(0)
+    expect(spires(shell({ spireStage: 2 }))).toHaveLength(1)
+    expect(spires(shell({ spireStage: 2, areRoofsVisible: false }))).toHaveLength(0)
+    expect(spires(shell({ spireStage: 2, focusedFloorId: 'f0' }))).toHaveLength(0)
+  })
+
+  // Hidden modules still cost their triangles in the batch, so an unspent day carries none.
+  it('a building that has spent nothing today carries no spire geometry', () => {
+    const spires = (node: ReactNode) =>
+      everyElement(node).filter((element) => element.props.name === 'token-spire:tower')
+    expect(spires(shell())).toHaveLength(0)
+  })
+
+  it('a spire mounts one module per stage it has reached', () => {
+    const roof = crownTopOf(floors, theme)
+    if (!roof) throw new Error('the tower has a roof')
+    const spire = (stage: number) =>
+      everyElement(
+        TokenSpire({ buildingId: 'tower', deck: crownAnchor(floors[1]), roof, theme, stage })
+      ).filter((element) => element.type === 'mesh')
+    expect(spire(1)).toHaveLength(1)
+    expect(spire(3)).toHaveLength(3)
   })
 
   it('feeds the place store its crown top on mount and clears it when it goes', () => {

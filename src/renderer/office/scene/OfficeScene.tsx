@@ -43,6 +43,7 @@ import { SceneBodies } from './BodySpace'
 import { BodyObstacleSync } from './BodyObstacleSync'
 import { ShaderPrewarm } from './ShaderPrewarm'
 import { SpireStageFeed } from './SpireStageFeed'
+import { useSpireStages } from '../logic/city-signal-store'
 import { CitySigns } from './CitySigns'
 import { LeaderCrowns } from './LeaderCrowns'
 import { ConstructionRig } from './ConstructionRig'
@@ -141,7 +142,11 @@ function OfficeScene(props: OfficeSceneProps) {
   bodies.setWorkers(agents)
   const [officeAnchors] = useState<OfficeNameAnchors>(() => new Map())
   const [canvasRoot, setCanvasRoot] = useState<RootState | null>(null)
-  const { surfaces, groups, townFloor, officeLabels, displays, revision } = useSceneFloorData(props)
+  const spireStages = useSpireStages()
+  const { surfaces, groups, townFloor, officeLabels, displays, revision } = useSceneFloorData({
+    ...props,
+    spireStages
+  })
   const visibleCards = useMemo(() => {
     const isCityView = props.viewMode === 'city'
     const roomWorkers = props.focusedRoomId
@@ -290,6 +295,7 @@ function OfficeScene(props: OfficeSceneProps) {
             onWalk={walkTo}
             onEditTarget={props.onEditTarget}
             onFocusFloor={props.onFocusFloor}
+            spireStages={spireStages}
           />
         </BatchedScene>
         {!props.isLayoutPreview && (

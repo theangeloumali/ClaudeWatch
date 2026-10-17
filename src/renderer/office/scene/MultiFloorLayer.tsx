@@ -66,7 +66,8 @@ export function MultiFloorLayer({
   viewMode = 'office',
   focusedFloorId,
   focusedRoomId,
-  venues
+  venues,
+  spireStages
 }: {
   floors: readonly FloorGeometry[]
   agents: readonly AgentView[]
@@ -87,6 +88,7 @@ export function MultiFloorLayer({
   focusedFloorId?: string | null
   focusedRoomId?: string | null
   venues?: readonly WorldVenue[]
+  spireStages?: ReadonlyMap<string, number>
 }) {
   const partition = useMemo(() => partitionPhysicalAgents(floors, agents), [floors, agents])
   const motions = useRef(new Map<string, RobotMotion>()).current
@@ -138,6 +140,7 @@ export function MultiFloorLayer({
           areRoofsVisible={areRoofsVisible}
           wallsMode={wallsMode}
           isOverview={isOverview}
+          spireStage={spireStages?.get(buildingId) ?? 0}
           onFocusFloor={onFocusFloor}
           onEditTarget={onEditTarget}
         />

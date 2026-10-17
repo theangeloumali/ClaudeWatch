@@ -26,6 +26,7 @@ export function useSceneFloorData(options: {
   viewMode?: 'city' | 'office'
   focusedFloorId?: string | null
   focusedRoomId?: string | null
+  spireStages?: ReadonlyMap<string, number>
 }) {
   const assignments = useThemeAssignments()
   const surfaces = useMemo(
@@ -110,7 +111,8 @@ export function useSceneFloorData(options: {
         options.areRoofsVisible ?? true,
         options.viewMode,
         options.focusedFloorId,
-        options.focusedRoomId
+        options.focusedRoomId,
+        [...(options.spireStages ?? [])]
       ]),
     [
       options.theme.id,
@@ -120,7 +122,8 @@ export function useSceneFloorData(options: {
       options.areRoofsVisible,
       options.viewMode,
       options.focusedFloorId,
-      options.focusedRoomId
+      options.focusedRoomId,
+      options.spireStages
     ]
   )
   return { surfaces, groups, zoneGroups, townFloor, officeLabels, displays, revision }
