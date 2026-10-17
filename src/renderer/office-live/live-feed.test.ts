@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { createCityEventLog } from './city-events'
 import { createLiveFeed, type FeedSource } from './live-feed'
 import type { FeedMessage, SessionRef } from '../../shared/office/types'
 import { createOfficeSettingsStore } from '../office/logic/office-settings'
@@ -157,6 +158,38 @@ describe('createLiveFeed', () => {
     listener?.({ type: 'patch', v: 1, seq: 2, upserts: [session('claude:a')], removed: [] })
     vi.advanceTimersByTime(200)
     expect(frames.at(-1)?.projectsToday).toEqual(projectsToday)
+  })
+
+  it('tells the city event log of every feed message, stamped with the render clock', () => {
+    const events = createCityEventLog()
+    const observe = vi.spyOn(events, 'observe')
+    createLiveFeed(source, { storage: store, events }).subscribe(() => undefined)
+    const fresh = (attention: SessionRef['attention']): SessionRef => ({
+      ...session('claude:a'),
+      attention,
+      updatedAtMs: Date.now(),
+      observation: {
+        sourceId: 'claude',
+        observedAtMs: Date.now(),
+        staleAfterMs: 60_000,
+        coverage: 'own'
+      }
+    })
+    const projectsToday = [{ projectKey: 'p_app', tokens: 5 }]
+    listener?.({
+      type: 'hello',
+      v: 1,
+      snapshot: { rev: 1, generatedAtMs: 1, sessions: [fresh('none')], sources: [], projectsToday }
+    })
+    listener?.({ type: 'patch', v: 1, seq: 2, upserts: [fresh('done')], removed: [] })
+    listener?.({ type: 'patch', v: 1, seq: 2, upserts: [fresh('none')], removed: [] })
+    listener?.({ type: 'resync' })
+    expect(observe.mock.calls.map(([type, , atMs, today]) => [type, atMs, today])).toEqual([
+      ['hello', Date.now(), projectsToday],
+      ['patch', Date.now(), projectsToday],
+      ['resync', Date.now(), undefined]
+    ])
+    expect(events.active(Date.now()).map((event) => event.kind)).toEqual(['done'])
   })
 
   it('emits only when the frame changed, not on every tick', () => {

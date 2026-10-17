@@ -21,6 +21,7 @@ import type {
 import { officeSettings, type OfficeSettingsStore } from '../office/logic/office-settings'
 import { browserVisibilityEnv, type VisibilityEnv } from '../office/logic/frame-governor'
 import type { FloorGeometry, OfficeFeed, OfficeFrame } from '../office/scene-model'
+import { cityEvents, type CityEventLog } from './city-events'
 import { toFloorGeometry } from './layout-geometry'
 import { officePoses, poseOf, structuralKey, type PoseStore } from './pose-store'
 
@@ -102,6 +103,7 @@ export function createLiveFeed(
     settings?: Pick<OfficeSettingsStore, 'get' | 'subscribe'>
     visibility?: VisibilityEnv
     poses?: PoseStore
+    events?: Pick<CityEventLog, 'observe'>
   }
 ): LiveFeed {
   const now = options.now ?? Date.now
@@ -109,6 +111,7 @@ export function createLiveFeed(
   const visibility = options.visibility ?? browserVisibilityEnv()
   const listeners = new Set<(frame: OfficeFrame) => void>()
   const poses = options.poses ?? officePoses
+  const events = options.events ?? cityEvents
   let stop: (() => void) | null = null
   let currentWorld: World | null = null
   let documentStore: WorldDocumentStore | null = null
@@ -187,6 +190,7 @@ export function createLiveFeed(
         world.apply(message)
         snapshot = null
         isDirty = true
+        events.observe('resync', [], now())
         return
       }
       const nextSnapshot = applyFeed(snapshot, message)
@@ -194,6 +198,8 @@ export function createLiveFeed(
       snapshot = nextSnapshot
       lastKnownSnapshot = snapshot
       feedReceivedAtMs = now()
+      // After the fold, so a duplicate or late patch never reaches the event log.
+      events.observe(message.type, snapshot.sessions, feedReceivedAtMs, snapshot.projectsToday)
       feedRevision = snapshot.rev
       if (message.type === 'hello') receiveHostWorld(hostStorage, snapshot)
       if (!documentStore) {
@@ -235,6 +241,7 @@ export function createLiveFeed(
       if (isStopped) return
       snapshot = null
       world.apply({ type: 'resync' })
+      events.observe('resync', [], now())
       isDirty = true
     })
 

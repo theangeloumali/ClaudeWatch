@@ -1,7 +1,7 @@
 import { dayKey } from '../../../shared/day-key'
 import { agentKey } from '../../../shared/office/agent-key'
 import { observeAgent } from '../../../shared/office/observation'
-import type { SessionRef, ToolCategory } from '../../../shared/office/types'
+import type { ProjectTokens, SessionRef, ToolCategory } from '../../../shared/office/types'
 import { worldBuildingId } from '../../../shared/office/world-document-layout'
 import { type AgentState, stateOfAttention } from '../../deck/roster'
 import { sessionTokens } from '../../deck/tokens'
@@ -87,7 +87,7 @@ export function citySignals(frame: OfficeFrame, day: DayLedger, nowMs: number): 
   for (const [buildingId, place] of knownBuildings(frame)) {
     const signal = buildingSignal(
       agents.filter((agent) => agent.buildingId === buildingId),
-      todayTokens(frame, day, place.projectKey, nowMs)
+      projectTokensToday({ projectsToday: frame.projectsToday, day, nowMs }, place.projectKey)
     )
     buildings.set(buildingId, signal)
     companies.set(place.companyKey, addCompany(companies.get(place.companyKey), signal))
@@ -166,15 +166,14 @@ function countedProjects(sessions: readonly SessionRef[]): Map<string, number> {
 }
 
 // The accounts ledger's day where the host keeps one; null is unknown, never 0.
-function todayTokens(
-  frame: OfficeFrame,
-  day: DayLedger,
-  projectKey: string,
-  nowMs: number
+export function projectTokensToday(
+  today: { projectsToday: readonly ProjectTokens[] | undefined; day: DayLedger; nowMs: number },
+  projectKey: string
 ): number | null {
-  if (frame.projectsToday)
-    return frame.projectsToday.find((entry) => entry.projectKey === projectKey)?.tokens ?? null
-  return day.dayKey === dayKey(nowMs) ? (day.highest.get(projectKey) ?? null) : null
+  if (today.projectsToday)
+    return today.projectsToday.find((entry) => entry.projectKey === projectKey)?.tokens ?? null
+  const isToday = today.day.dayKey === dayKey(today.nowMs)
+  return isToday ? (today.day.highest.get(projectKey) ?? null) : null
 }
 
 function buildingSignal(agents: readonly FreshAgent[], tokensToday: number | null): BuildingSignal {
