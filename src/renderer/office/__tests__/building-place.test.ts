@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import {
-  buildingPlace,
-  buildingPlaces,
-  createBuildingPlaces,
-  crownTopOf
-} from '../logic/building-place'
-import { SPIRE_BASE_GAP_M, spireHeight } from '../logic/token-spires'
+import { createBuildingPlaces, crownTopOf } from '../logic/building-place'
+import { SPIRE_BASE_GAP_M, SPIRE_MAX_M, SPIRE_MAX_STAGES, spireHeight } from '../logic/token-spires'
 import { PHYSICAL_STOREY_HEIGHT } from '../scene/all-floor-model'
 import { buildingCrown, buildingExteriorProfile } from '../themes/physical-building-parts'
 import { getTheme } from '../themes/registry'
@@ -37,44 +32,45 @@ describe('crownTopOf', () => {
   })
 })
 
-describe('buildingPlace', () => {
+describe('buildingPlaces', () => {
   it('has no top for a building it has no roof for', () => {
     const places = createBuildingPlaces()
     places.setStage('b1', 2, 0)
-    expect(places.place('b1').topAt(0, false)).toBeNull()
+    expect(places.topAt('b1', 0, false)).toBeNull()
     places.setRoof('b1', ROOF)
     places.setRoof('b1', null)
-    expect(places.place('b1').topAt(0, false)).toBeNull()
+    expect(places.topAt('b1', 0, false)).toBeNull()
   })
 
   it('a first stage is settled at once: an opened Office shows its spires finished', () => {
     const places = createBuildingPlaces()
     places.setRoof('b1', ROOF)
     places.setStage('b1', 3, 1_000)
-    expect(places.place('b1').topAt(1_000, false)?.y).toBeCloseTo(
+    expect(places.topAt('b1', 1_000, false)?.y).toBeCloseTo(
       ROOF.y + SPIRE_BASE_GAP_M + spireHeight(3)
     )
-    expect(places.place('b2').topAt(1_000, false)).toBeNull()
+    expect(places.topAt('b2', 1_000, false)).toBeNull()
   })
 
   it('every mark rides a growing spire', () => {
     const places = createBuildingPlaces()
     places.setRoof('b1', ROOF)
     places.setStage('b1', 0, 0)
-    const sign = places.place('b1')
-    const beacon = places.place('b1')
-    expect(sign.topAt(0, false)).toEqual(ROOF)
+    expect(places.topAt('b1', 0, false)).toEqual(ROOF)
     places.setStage('b1', 2, 10_000)
     let previous = ROOF.y
     for (let step = 0; step <= 12; step++) {
       const atMs = 10_000 + step * 100
-      const y = sign.topAt(atMs, false)?.y ?? Number.NaN
-      expect(beacon.topAt(atMs, false)?.y).toBe(y)
+      const y = places.topAt('b1', atMs, false)?.y ?? Number.NaN
       expect(y).toBeGreaterThanOrEqual(previous)
       previous = y
     }
-    expect(sign.topAt(10_600, false)?.y).toBeLessThan(ROOF.y + SPIRE_BASE_GAP_M + spireHeight(2))
-    expect(sign.topAt(11_200, false)?.y).toBeCloseTo(ROOF.y + SPIRE_BASE_GAP_M + spireHeight(2))
+    expect(places.topAt('b1', 10_600, false)?.y).toBeLessThan(
+      ROOF.y + SPIRE_BASE_GAP_M + spireHeight(2)
+    )
+    expect(places.topAt('b1', 11_200, false)?.y).toBeCloseTo(
+      ROOF.y + SPIRE_BASE_GAP_M + spireHeight(2)
+    )
   })
 
   it('reduced motion snaps to the new stage', () => {
@@ -82,7 +78,7 @@ describe('buildingPlace', () => {
     places.setRoof('b1', ROOF)
     places.setStage('b1', 1, 0)
     places.setStage('b1', 3, 5_000)
-    expect(places.place('b1').topAt(5_000, true)?.y).toBeCloseTo(
+    expect(places.topAt('b1', 5_000, true)?.y).toBeCloseTo(
       ROOF.y + SPIRE_BASE_GAP_M + spireHeight(3)
     )
   })
@@ -92,28 +88,51 @@ describe('buildingPlace', () => {
     places.setRoof('b1', ROOF)
     places.setStage('b1', 4, 0)
     places.setStage('b1', 0, 60_000)
-    const place = places.place('b1')
-    expect(place.topAt(60_000, false)?.y).toBeCloseTo(ROOF.y + SPIRE_BASE_GAP_M + spireHeight(4))
-    expect(place.topAt(60_600, false)?.y).toBeLessThan(ROOF.y + SPIRE_BASE_GAP_M + spireHeight(4))
-    expect(place.topAt(61_200, false)).toEqual(ROOF)
+    expect(places.topAt('b1', 60_000, false)?.y).toBeCloseTo(
+      ROOF.y + SPIRE_BASE_GAP_M + spireHeight(4)
+    )
+    expect(places.topAt('b1', 60_600, false)?.y).toBeLessThan(
+      ROOF.y + SPIRE_BASE_GAP_M + spireHeight(4)
+    )
+    expect(places.topAt('b1', 61_200, false)).toEqual(ROOF)
   })
 
-  it('a spire never lifts a mark above the 24 m height rule', () => {
+  it('a settled spire hands out the same top every frame, and a new roof moves it', () => {
     const places = createBuildingPlaces()
-    places.setRoof('tall', { x: 0, y: 22, z: 0 })
-    places.setStage('tall', 6, 0)
-    expect(places.place('tall').topAt(0, false)?.y).toBe(24)
-    places.setRoof('over', { x: 0, y: 25, z: 0 })
-    places.setStage('over', 6, 0)
-    expect(places.place('over').topAt(0, false)?.y).toBe(25)
+    places.setRoof('b1', ROOF)
+    places.setStage('b1', 2, 0)
+    const settled = places.topAt('b1', 5_000, false)
+    expect(places.topAt('b1', 5_016, false)).toBe(settled)
+    places.setRoof('b1', { ...ROOF, y: 12 })
+    expect(places.topAt('b1', 5_032, false)?.y).toBeCloseTo(12 + SPIRE_BASE_GAP_M + spireHeight(2))
   })
-})
 
-it('buildingPlace reads the page’s one store, so every layer sees the same roof', () => {
-  buildingPlaces.setRoof('page-b1', ROOF)
-  buildingPlaces.setStage('page-b1', 1, 0)
-  expect(buildingPlace('page-b1').topAt(0, true)).toEqual(
-    buildingPlaces.place('page-b1').topAt(0, true)
-  )
-  buildingPlaces.setRoof('page-b1', null)
+  it('bumps its version on a change, and eases only after a live crossing', () => {
+    const places = createBuildingPlaces()
+    const start = places.version()
+    places.setRoof('b1', ROOF)
+    places.setStage('b1', 1, 0)
+    expect(places.isEasing(0, false)).toBe(false)
+    places.setStage('b1', 2, 1_000)
+    expect(places.version()).toBeGreaterThan(start)
+    expect(places.isEasing(1_600, false)).toBe(true)
+    expect(places.isEasing(1_600, true)).toBe(false)
+    expect(places.isEasing(2_200, false)).toBe(false)
+  })
+
+  it('a spire on a five-storey office rises its full stage', () => {
+    const tower = Array.from({ length: 5 }, (_, level) =>
+      makeFloor({
+        floorId: `t${level}`,
+        buildingId: 'tall',
+        elevation: level * PHYSICAL_STOREY_HEIGHT
+      })
+    )
+    const roof = crownTopOf(tower, theme)
+    if (!roof) throw new Error('a tower has a roof')
+    const places = createBuildingPlaces()
+    places.setRoof('tall', roof)
+    places.setStage('tall', SPIRE_MAX_STAGES, 0)
+    expect(places.topAt('tall', 0, false)?.y).toBeCloseTo(roof.y + SPIRE_BASE_GAP_M + SPIRE_MAX_M)
+  })
 })
