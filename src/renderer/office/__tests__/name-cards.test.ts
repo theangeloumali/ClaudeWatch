@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { AgentView } from '../../../shared/office/types'
 import { ACTIVITY_UNAVAILABLE_LABEL, PLAYING_GAMES_LABEL } from '../logic/activity-summary'
 import { buildNameCards, buildProjectStacks, MAX_NAME_CARDS } from '../logic/name-cards'
 import { makeAgent, makeFloor, makeFrame, makeRoom, makeSession, makeZone } from './fixtures'
@@ -56,7 +57,7 @@ describe('buildNameCards', () => {
   })
 
   describe('an agent in its game corner', () => {
-    const gamer = (overrides: Parameters<typeof makeAgent>[0] = {}) =>
+    const gamer = (overrides: Partial<AgentView> = {}) =>
       makeAgent({ agentKey: 'a', roomId: 'r1', activity: 'idle', place: 'lounge', ...overrides })
     const cardOf = (agent: ReturnType<typeof makeAgent>, sources = frame.sources) =>
       buildNameCards(
