@@ -91,6 +91,7 @@ describe('setupOffice', () => {
     decorate: unchanged,
     decorateSession: unchanged,
     onOfficeChange: () => () => {},
+    projectsToday: () => undefined,
     isWatchingAccounts: false,
     onWatchingChange: () => () => {},
     onUsageDurable: () => () => {}

@@ -8,6 +8,8 @@ export interface UsageOffset {
   offset: number
   ino: number
   fold: UsageFold
+  // When the conversation began; absent from files saved before it was kept.
+  startedAtMs?: number
 }
 const VERSION = 1
 // Far above the live transcripts of any one machine; a file past it is not this cache.
@@ -32,7 +34,14 @@ function offsetOf(value: unknown): UsageOffset | null {
   const open = countsOf(fold.open)
   const { openId } = fold
   if (!closed || !open || (openId !== null && typeof openId !== 'string')) return null
-  return { offset: value.offset, ino: value.ino, fold: { closed, openId, open } }
+  const { startedAtMs } = value
+  if (startedAtMs !== undefined && !isCount(startedAtMs)) return null
+  return {
+    offset: value.offset,
+    ino: value.ino,
+    fold: { closed, openId, open },
+    ...(startedAtMs !== undefined && { startedAtMs })
+  }
 }
 
 // Nothing it cannot trust: a missing, oversized or malformed file, or entry, is read afresh.

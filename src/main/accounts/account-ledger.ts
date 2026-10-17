@@ -5,9 +5,15 @@ import {
   codexTotalOf,
   type UsageDelta
 } from '../../shared/accounts'
-import type { OfficeSnapshot, SessionRef } from '../../shared/office/types'
+import type { OfficeSnapshot, ProjectTokens, SessionRef } from '../../shared/office/types'
 import { mergeOrcaAccounts, setAlias, upsertClaudeAccount } from './account-records'
-import { decorateSession, decorateSnapshot, officeAccounts, toAccountsState } from './accounts-view'
+import {
+  decorateSession,
+  decorateSnapshot,
+  officeAccounts,
+  projectsToday,
+  toAccountsState
+} from './accounts-view'
 import {
   countCodexSessions,
   countUsage,
@@ -68,6 +74,14 @@ export class AccountLedger {
   private hasLoadFailed = false
   private shownToOffice = JSON.stringify(null)
   private shownDay = ''
+  // Bumped by every count, so the feed walks today's buckets once per change, not per patch.
+  private revision = 0
+  private todayTotals: {
+    state: LedgerState
+    revision: number
+    day: string
+    totals: ProjectTokens[]
+  } | null = null
   private readonly listeners = new Set<(state: AccountsState) => void>()
   private readonly officeListeners = new Set<() => void>()
   private readonly watchingListeners = new Set<() => void>()
@@ -116,6 +130,7 @@ export class AccountLedger {
     this.save()
     // Dropped, so switching back on starts from the file exactly as a restart does.
     this.state = null
+    this.todayTotals = null
     this.hasSampled = false
     this.waiting = []
     this.waitingTotals = []
@@ -166,6 +181,20 @@ export class AccountLedger {
   decorate = (snapshot: OfficeSnapshot): OfficeSnapshot => decorateSnapshot(this.tracked, snapshot)
 
   decorateSession = (session: SessionRef): SessionRef => decorateSession(this.tracked, session)
+
+  // What `decorate` adds as today's totals, without building a snapshot around them.
+  projectsToday = (): ProjectTokens[] | undefined => {
+    const state = this.tracked
+    if (!state) return undefined
+    const now = Date.now()
+    const day = dayKey(now)
+    const cached = this.todayTotals
+    if (cached?.state === state && cached.revision === this.revision && cached.day === day)
+      return cached.totals
+    const totals = projectsToday(state, now)
+    this.todayTotals = { state, revision: this.revision, day, totals }
+    return totals
+  }
 
   ingestBridgeMessage(message: unknown): void {
     this.countBridgeMessage(message)
@@ -275,6 +304,7 @@ export class AccountLedger {
   }
 
   private changed(): void {
+    this.revision++
     this.saveWithin(SAVE_DELAY_MS)
     this.publish()
   }
@@ -282,6 +312,7 @@ export class AccountLedger {
   // Tokens were counted and nothing else changed: the Office hears at once of an account that
   // came with them, the dashboard's totals follow in one batch.
   private counted(): void {
+    this.revision++
     this.saveWithin(USAGE_SAVE_DELAY_MS)
     this.publishToOffice()
     this.publishTimer ??= setTimeout(() => this.publish(), PUBLISH_DELAY_MS)

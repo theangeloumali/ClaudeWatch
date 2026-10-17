@@ -62,7 +62,11 @@ export function parseTranscript(text: string): TranscriptState {
   const latest = tools.at(-1)
   return {
     tool: current
-      ? { name: current.name, category: toolCategory(current.name), callId: current.id }
+      ? {
+          name: current.name,
+          category: toolCategory(current.name),
+          ...(isLabel(current.id) && { callId: current.id })
+        }
       : null,
     error: !!latest && results.get(latest.id) === true,
     limit
