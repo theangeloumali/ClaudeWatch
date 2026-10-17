@@ -73,7 +73,7 @@ for (const theme of REAL_THEMES)
     it(`${theme.id}${isOverview ? ' overview' : ''}: game corners add at most one draw`, () => {
       const view = floorView(corners, theme, isOverview)
       const drawnCorners = everyElement(view).filter(
-        (element) => element.props.name === (isOverview ? 'overview-lounge' : 'game-corner')
+        (element) => element.props.name === 'game-corner'
       )
       expect(drawnCorners).toHaveLength(2)
       const added =

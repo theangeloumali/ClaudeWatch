@@ -5,9 +5,7 @@ import { ROOM_DOOR_WIDTH, type WallsMode } from '../logic/room-layout'
 import { plateLocalFloor } from '../logic/zone-framing'
 import type { FloorGeometry } from '../scene-model'
 import { getTheme } from '../themes/registry'
-import { beanbagBodyPart } from '../themes/game-corner'
 import { GameCorner } from '../themes/GameCorner'
-import { Parts } from '../themes/parts'
 import type { OfficeTheme } from '../themes/types'
 import { floorConnector, floorElevation } from './all-floor-model'
 import { CutawaySlab } from './CutawaySlab'
@@ -88,28 +86,16 @@ export function FloorView({
                 <group key={company.id}>
                   {!isOpenCeiling && !isOverview && <kit.CompanyZone zone={company} />}
                   {company.lounge &&
-                    (isOverview ? (
-                      <group name="overview-lounge">
-                        {company.lounge.seats.map((seat, index) => (
-                          <group
-                            key={seat.slotId}
-                            name="lounge-seat"
-                            position={[seat.x, 0, seat.z]}
-                            rotation={[0, seat.heading, 0]}
-                            scale={FURNITURE_SCALE}
-                          >
-                            <Parts parts={[beanbagBodyPart(zoneTheme.palette, index)]} />
-                          </group>
-                        ))}
-                      </group>
-                    ) : (
-                      scaledAbout(
-                        company.lounge,
-                        FURNITURE_SCALE,
-                        company.lounge.id,
-                        <GameCorner lounge={company.lounge} palette={zoneTheme.palette} />
-                      )
-                    ))}
+                    scaledAbout(
+                      company.lounge,
+                      FURNITURE_SCALE,
+                      company.lounge.id,
+                      <GameCorner
+                        lounge={company.lounge}
+                        palette={zoneTheme.palette}
+                        detail={isOverview ? 'overview' : 'full'}
+                      />
+                    )}
                 </group>
               ))}
               {!isOpenCeiling &&

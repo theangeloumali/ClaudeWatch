@@ -42,11 +42,16 @@ function placed(parts: readonly PartSpec[], origin: { x: number; z: number }, fa
   )
 }
 
+// Each seat's parts, modelled facing +z about the seat: one transform for both views.
+function atSeats(lounge: LoungeGeometry, partsAt: (index: number) => PartSpec[]): PartSpec[] {
+  return lounge.seats.flatMap((seat, index) => placed(partsAt(index), seat, facingOf(seat.heading)))
+}
+
 // Where a seated agent's pelvis rests, before furniture scale.
 export const BEANBAG_SEAT_M = 0.24
 
 // The bag's body alone: what the overview draws, where a back or cushion would not read.
-export function beanbagBodyPart(palette: ThemePalette, index: number): PartSpec {
+function beanbagBodyPart(palette: ThemePalette, index: number): PartSpec {
   return box([0, 0.08, 0], [0.64, 0.16, 0.64], palette[BAG_COLOURS[index % BAG_COLOURS.length]])
 }
 
@@ -172,10 +177,13 @@ export function gameCornerParts(lounge: LoungeGeometry, palette: ThemePalette): 
         palette.gold
       )
     ]),
-    ...lounge.seats.flatMap((seat, index) =>
-      placed(beanbagParts(palette, index), seat, facingOf(seat.heading))
-    ),
+    ...atSeats(lounge, (index) => beanbagParts(palette, index)),
     ...placed(screenParts(site.width, palette), site.origin, reverse(ahead)),
     ...cabinets.flatMap((cabinet) => placed(arcadeCabinetParts(palette), cabinet, cabinet.facing))
   ]
+}
+
+// The overview's corner: one bag body at every seat, and nothing else.
+export function overviewCornerParts(lounge: LoungeGeometry, palette: ThemePalette): PartSpec[] {
+  return atSeats(lounge, (index) => [beanbagBodyPart(palette, index)])
 }
