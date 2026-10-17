@@ -1,3 +1,4 @@
+import { FURNITURE_SCALE } from '../../../shared/office/figure-scale'
 import type { LoungeGeometry } from '../scene-model'
 import { gapBetween, overlaps, type Rect } from './lot-math'
 
@@ -23,6 +24,22 @@ export function isWalkable(lounge: LoungeGeometry, spot: Footprint): boolean {
         }) >= BODY_CLEAR_M
     )
   )
+}
+
+// The sim's lounge shrunk about its centre to the size its theme draws. Drawn in a group scaled
+// back up about that centre, every stool lands on one of the sim's seats.
+export function loungeAsDrawn(lounge: LoungeGeometry): LoungeGeometry {
+  const shrunk = (point: { x: number; z: number }) => ({
+    x: lounge.x + (point.x - lounge.x) / FURNITURE_SCALE,
+    z: lounge.z + (point.z - lounge.z) / FURNITURE_SCALE
+  })
+  return {
+    ...lounge,
+    width: lounge.width / FURNITURE_SCALE,
+    depth: lounge.depth / FURNITURE_SCALE,
+    door: shrunk(lounge.door),
+    seats: lounge.seats.map((seat) => ({ ...seat, ...shrunk(seat) }))
+  }
 }
 
 // Where furniture of a given size may stand: against a wall or in a corner of the lounge, as

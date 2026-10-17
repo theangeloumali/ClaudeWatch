@@ -11,7 +11,8 @@ import { beanbagBodyPart } from '../themes/game-corner'
 import { GameCorner } from '../themes/GameCorner'
 import { Parts, type PartSpec } from '../themes/parts'
 import { themeForTeam } from '../themes/registry'
-import { FloorView, loungeAsDrawn } from './FloorView'
+import { loungeAsDrawn } from '../themes/lounge-layout'
+import { FloorView } from './FloorView'
 
 // The views are called as plain functions here, so their one hook is stood in for.
 vi.mock('react', async (original) => ({
@@ -131,7 +132,9 @@ describe('furniture sized for the larger agents', () => {
   it('draws the game corner with a beanbag on every sim lounge seat', () => {
     const simLounge = layout.floors[0].zones[0].lounge!
     const lounge = locate(view, GameCorner)!
-    const drawn = lounge.props.lounge as LoungeGeometry
+    // The floor's own lounge, unchanged between renders, so the corner's parts are built once.
+    expect(lounge.props.lounge).toBe(floor.zones[0].lounge)
+    const drawn = loungeAsDrawn(lounge.props.lounge as LoungeGeometry)
     expect(lounge.scale).toBe(FURNITURE_SCALE)
     expect(locate(view, theme.kit.zone.Lounge)).toBeUndefined()
     // Five agents: the corner is handed the 6 x 7 m lounge of eight seats the sim lays out.
