@@ -84,6 +84,13 @@ describe('buildNameCards', () => {
       }
     )
 
+    // The sim seats a finished turn in the corner whatever its last activity was.
+    it('reads Playing games for a finished turn whose last activity was not idle', () => {
+      expect(cardOf(gamer({ activity: 'editing', attention: 'done' }))?.detail).toBe(
+        PLAYING_GAMES_LABEL
+      )
+    })
+
     it('shows what it needs instead when it needs you', () => {
       expect(cardOf(gamer({ attention: 'permission' }))?.detail).not.toBe(PLAYING_GAMES_LABEL)
     })

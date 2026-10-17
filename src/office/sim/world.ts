@@ -6,6 +6,7 @@ import {
   type SourceHealth
 } from '../../shared/office/types'
 import { clamp } from '../../shared/range'
+import { isAtRest } from '../../shared/office/attention'
 import { BodyPassages } from '../../shared/office/body-passages'
 import { bodyStep, type BodyFootprint } from '../../shared/office/body-footprints'
 import { agentBody } from './agent-body'
@@ -164,10 +165,7 @@ export class World {
       const { session, room, slot, floorId } = placement
       this.members.set(session.key, placement.member)
       const isFinished =
-        placement.isFinished ||
-        (session.observation?.coverage === 'own' &&
-          (session.attention === 'none' || session.attention === 'done') &&
-          (session.activity === 'idle' || session.attention === 'done'))
+        placement.isFinished || (session.observation?.coverage === 'own' && isAtRest(session))
       const floor = this.map.floors.find((candidate) => candidate.id === floorId)!
       const previousAgent = this.agents.get(session.key)
       const existing =

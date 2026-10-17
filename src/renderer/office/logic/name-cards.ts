@@ -1,5 +1,6 @@
 import type { AgentView } from '../../../shared/office/types'
 import { parseAgentKey } from '../../../shared/office/agent-key'
+import { isAtRest } from '../../../shared/office/attention'
 import type { OfficeFrame } from '../scene-model'
 import { physicalFloorId } from '../scene/all-floor-model'
 import { agentCountLabel, sessionForAgent } from './floor-model'
@@ -65,10 +66,7 @@ function statusFor(agent: AgentView): CardStatus {
 }
 
 // Resting in the game corner; an agent that needs you or has failed shows that instead.
-const isGaming = (agent: AgentView): boolean =>
-  agent.place === 'lounge' &&
-  agent.activity === 'idle' &&
-  (agent.attention === 'none' || agent.attention === 'done')
+const isGaming = (agent: AgentView): boolean => agent.place === 'lounge' && isAtRest(agent)
 
 function priority(card: NameCard, selectedAgentKey: string | null): number {
   if (card.agentKey === selectedAgentKey) return 0

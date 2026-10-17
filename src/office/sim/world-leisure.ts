@@ -1,3 +1,4 @@
+import { isAtRest } from '../../shared/office/attention'
 import { observeAgent } from '../../shared/office/observation'
 import { parseAgentKey } from '../../shared/office/agent-key'
 import type { SessionRef, SourceHealth } from '../../shared/office/types'
@@ -49,12 +50,7 @@ function leisureMode(agent: AgentRecord, context: Leisure): 'legacy' | 'advanced
     (source.checkedAtMs === undefined ||
       source.staleAfterMs === undefined ||
       context.nowMs - source.checkedAtMs < source.staleAfterMs)
-  return evidence.status === 'fresh' &&
-    hasHealthySource &&
-    (evidence.attention === 'none' || evidence.attention === 'done') &&
-    (evidence.activity === 'idle' || evidence.attention === 'done')
-    ? 'advanced'
-    : 'none'
+  return evidence.status === 'fresh' && hasHealthySource && isAtRest(evidence) ? 'advanced' : 'none'
 }
 
 function returnHome(agent: AgentRecord, context: Leisure): void {
