@@ -1,4 +1,4 @@
-import { cornerReach, gameCorner } from '../../../office/sim/game-corner'
+import { cornerDepth, gameCorner } from '../../../office/sim/game-corner'
 import { LOUNGE_WIDTH } from '../../../office/sim/rooms'
 import { toLounge } from '../../office-live/layout-geometry'
 import type { LoungeGeometry } from '../scene-model'
@@ -15,7 +15,7 @@ export function gameCornerFixture(
   centre = { x: 20, z: -10 }
 ): LoungeGeometry {
   const ahead = { x: Math.round(Math.sin(heading)), z: Math.round(Math.cos(heading)) }
-  const length = OFFICES_M + cornerReach(seatCount) + 3
+  const length = OFFICES_M + cornerDepth(seatCount) + 3
   const across = LOUNGE_WIDTH + 2.5
   const sized = (along: number, beside: number) =>
     ahead.x === 0 ? { width: beside, depth: along } : { width: along, depth: beside }
