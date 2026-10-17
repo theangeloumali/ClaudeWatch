@@ -98,7 +98,7 @@ const SESSIONS: SessionRef[] = [
   })
 ]
 
-function liveFeed() {
+function liveFeed(sessions: SessionRef[] = SESSIONS) {
   const bridge = { send: (_message: FeedMessage): void => undefined }
   const source: FeedSource = {
     ready: () => Promise.resolve(),
@@ -121,7 +121,7 @@ function liveFeed() {
         snapshot: {
           rev: 1,
           generatedAtMs: Date.now(),
-          sessions: SESSIONS,
+          sessions,
           sources: [],
           accounts: ACCOUNTS
         }
@@ -132,11 +132,17 @@ function liveFeed() {
   return { feed, hello, patch }
 }
 
-// Every text node, attribute and form value a person or a screen reader could meet.
+// Every text node, attribute and form value a person or a screen reader could meet. Keys stay in
+// `data-*` and option values, which nothing reads aloud or draws: stores match on them.
+const isMachineOnly = (element: Element, attribute: Attr): boolean =>
+  attribute.name.startsWith('data-') ||
+  (element instanceof HTMLOptionElement && attribute.name === 'value')
+
 function shownText(root: Element): string {
   const parts = [root.textContent ?? '']
   for (const element of root.querySelectorAll('*')) {
-    for (const attribute of element.attributes) parts.push(attribute.value)
+    for (const attribute of element.attributes)
+      if (!isMachineOnly(element, attribute)) parts.push(attribute.value)
     if (element instanceof HTMLInputElement) parts.push(element.value)
   }
   return parts.join('\n')
@@ -220,6 +226,40 @@ describe('the Hide names setting', () => {
 
     expect(shownText(document.body).match(REAL_NAMES)).toBeNull()
     expect(screen.getByText(/· finished its turn$/, line).textContent).toMatch(/^Project A-1 › /)
+  })
+
+  it('with names hidden, no agent key, session id or name-bearing teammate id reaches the DOM', async () => {
+    // A teammate's id carries its own name and its team's: `lena@acme-payroll`.
+    const lead = makeSession({
+      ...SESSIONS[0],
+      key: 'claude:5f1c9a2e',
+      sessionId: '5f1c9a2e',
+      subagents: [
+        {
+          id: 'lena@acme-payroll',
+          type: 'general-purpose',
+          kind: 'teammate',
+          name: 'lena',
+          activity: 'editing'
+        }
+      ]
+    })
+    const { feed, hello } = liveFeed([lead])
+    render(<OfficeApp feed={feed} />)
+    hello()
+    await screen.findByText('Scene drawn', {}, { timeout: 3000 })
+    fireEvent.click(screen.getByRole('button', { name: 'Pick the first agent' }))
+    const details = screen.getByText('Evidence details', { selector: 'summary' }).parentElement
+    if (!(details instanceof HTMLDetailsElement)) throw new Error('Evidence details not found')
+    details.open = true
+    fireEvent(details, new Event('toggle'))
+    fireEvent.click(screen.getByRole('button', { name: /^List view/ }))
+    const KEYS = /5f1c9a2e|lena|acme-payroll/
+    expect(shownText(document.body)).toMatch(KEYS)
+
+    setHideNames(true)
+
+    expect(shownText(document.body).match(KEYS)).toBeNull()
   })
 
   it('it persists across a reload', async () => {

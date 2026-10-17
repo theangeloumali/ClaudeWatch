@@ -2,8 +2,13 @@ import { act, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentObservation, SessionRef, SessionUsage } from '../../../shared/office/types'
 import { buildingIdOf } from '../logic/city-signals'
-import { createCitySignalStore, useSpireStages } from '../logic/city-signal-store'
-import { useCitySignalFeed } from '../use-office-model'
+import {
+  type CitySignalStore,
+  createCitySignalStore,
+  useSpireStages
+} from '../logic/city-signal-store'
+import type { OfficeFrame } from '../scene-model'
+import { useCitySignalFeed, useOfficeClock, useOfficeLists } from '../use-office-model'
 import { makeFrame, makeSession } from './fixtures'
 
 const NOW = new Date(2026, 9, 17, 12).getTime()
@@ -85,6 +90,33 @@ describe('city signal store', () => {
     expect(store.sceneVersion()).toBe(sceneVersion + 1)
   })
 
+  // Maya's repro: turning account watching off mid-day sends a hello with no day totals.
+  it("a hello without the host's day totals keeps every spire it already raised", () => {
+    const store = createCitySignalStore()
+    const session = live('claude:a', { startedAtMs: NOW - 60_000, usage: usage(100_000) })
+    // The host's ledger also counts this morning's ended session: 4M today.
+    const withToday = makeFrame({
+      sessions: [session],
+      projectsToday: [{ projectKey: 'p_1', tokens: 4e6 }]
+    })
+    store.update(withToday, NOW)
+    const before = store.current().buildings.get(HOME)
+    expect(before?.spireStage).toBeGreaterThan(0)
+    store.update(makeFrame({ sessions: [session] }), NOW + 1_000)
+    expect(store.current().buildings.get(HOME)?.spireStage).toBe(before?.spireStage)
+    expect(store.current().buildings.get(HOME)?.tokensToday).toBe(before?.tokensToday)
+  })
+
+  it("a known project the host's day totals leave out spent 0 today, not unknown", () => {
+    const store = createCitySignalStore()
+    const idleHere = (projectsToday?: { projectKey: string; tokens: number }[]) =>
+      makeFrame({ sessions: [live('claude:a')], ...(projectsToday && { projectsToday }) })
+    store.update(idleHere(), NOW)
+    expect(store.current().buildings.get(HOME)?.tokensToday).toBeNull()
+    store.update(idleHere([{ projectKey: 'p_2', tokens: 10 }]), NOW + 500)
+    expect(store.current().buildings.get(HOME)?.tokensToday).toBe(0)
+  })
+
   it('holds no signals before the first frame', () => {
     const store = createCitySignalStore()
     expect(store.current().buildings.size).toBe(0)
@@ -116,6 +148,10 @@ describe('useSpireStages', () => {
 describe('the Office root feeds the city signals', () => {
   afterEach(() => void vi.useRealTimers())
 
+  // The root's wiring: one clock, and the feed that follows its wakes.
+  const useRootFeed = (frame: OfficeFrame, store: CitySignalStore): void =>
+    useCitySignalFeed(frame, useOfficeClock(frame), store)
+
   // Counts what the feed asks of the store; the store itself is real.
   const countingStore = () => {
     const store = createCitySignalStore()
@@ -132,7 +168,7 @@ describe('the Office root feeds the city signals', () => {
     vi.setSystemTime(NOW)
     const store = createCitySignalStore()
     const asking = makeFrame({ sessions: [live('claude:a', { attention: 'permission' })] })
-    const { rerender } = renderHook(({ frame }) => useCitySignalFeed(frame, store), {
+    const { rerender } = renderHook(({ frame }) => useRootFeed(frame, store), {
       initialProps: { frame: asking }
     })
     expect(store.current().buildings.get(HOME)?.needsYou).toBe(true)
@@ -146,7 +182,7 @@ describe('the Office root feeds the city signals', () => {
     vi.setSystemTime(NOW)
     const store = countingStore()
     const idle = makeFrame({ sessions: [live('claude:a')] })
-    const { rerender } = renderHook(() => useCitySignalFeed(idle, store))
+    const { rerender } = renderHook(() => useRootFeed(idle, store))
     for (let second = 1; second <= 5; second++) {
       act(() => void vi.advanceTimersByTime(1_000))
       rerender()
@@ -158,10 +194,29 @@ describe('the Office root feeds the city signals', () => {
     vi.useFakeTimers()
     vi.setSystemTime(NOW)
     const store = createCitySignalStore()
-    renderHook(() => useCitySignalFeed(makeFrame({ sessions: [live('claude:a')] }), store))
+    renderHook(() => useRootFeed(makeFrame({ sessions: [live('claude:a')] }), store))
     expect(store.current().buildings.get(HOME)?.hasEvidence).toBe(true)
     act(() => void vi.advanceTimersByTime(FRESH.staleAfterMs))
     expect(store.current().buildings.get(HOME)?.hasEvidence).toBe(false)
+  })
+
+  it('one timer wakes the root when evidence turns stale', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(NOW)
+    const store = createCitySignalStore()
+    const frame = makeFrame({ sessions: [live('claude:a')] })
+    let renders = 0
+    renderHook(() => {
+      renders += 1
+      const clock = useOfficeClock(frame)
+      useCitySignalFeed(frame, clock, store)
+      return useOfficeLists(frame, null, null, clock)
+    })
+    expect(vi.getTimerCount()).toBe(1)
+    const before = renders
+    act(() => void vi.advanceTimersByTime(FRESH.staleAfterMs))
+    expect(store.current().buildings.get(HOME)?.hasEvidence).toBe(false)
+    expect(renders - before).toBe(1)
   })
 
   it("at local midnight today's spend starts over with no new frame", () => {
@@ -175,7 +230,7 @@ describe('the Office root feeds the city signals', () => {
       startedAtMs: beforeMidnight - 60_000,
       usage: usage(1_500_000)
     })
-    renderHook(() => useCitySignalFeed(makeFrame({ sessions: [session] }), store))
+    renderHook(() => useRootFeed(makeFrame({ sessions: [session] }), store))
     expect(store.current().buildings.get(HOME)?.spireStage).toBe(1)
     act(() => void vi.advanceTimersByTime(30_000))
     expect(store.current().buildings.get(HOME)?.spireStage).toBe(0)

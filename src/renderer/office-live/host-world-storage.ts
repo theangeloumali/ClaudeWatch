@@ -11,32 +11,36 @@ export interface HostWorldStorage extends WorldDocumentStorage {
   receive(document: WorldDocument | null): void
 }
 
-// The page's storage as a cache of the host's city (health-13): a save goes to both, and what the
-// host holds replaces the cache. The world store's own compare-and-swap still runs on the cache.
+// A page's own copy, from before its host kept the city; read once, then removed.
+type LegacyWorldStorage = Pick<WorldDocumentStorage, 'getItem'> & {
+  removeItem?(key: string): void
+}
+
+// The host's city, held in memory (health-13): the host is the source of truth, so nothing lands
+// in the page's storage, a fixed-origin store any page there could read.
 export function hostWorldStorage(
-  cache: WorldDocumentStorage | null,
+  legacy: LegacyWorldStorage | null,
   save: (document: unknown) => Promise<WorldSaveReply>
 ): HostWorldStorage {
   const listeners = new Set<(event: WorldStorageEvent) => void>()
-  let held = readCache(cache)
+  let held = readLegacy(legacy)
   // How the last save this page made ended at the host.
   let landing: Promise<WorldSaveRefusal | null> = Promise.resolve(null)
   // What the host last said it holds; undefined until its first hello.
   let hostHeld: string | null | undefined
 
-  const hold = (serialized: string): void => {
-    held = serialized
+  // Once the host holds a city, the page's old copy has nothing left to hand over.
+  const forgetLegacy = (): void => {
     try {
-      cache?.setItem(WORLD_DOCUMENT_STORAGE_KEY, serialized)
+      legacy?.removeItem?.(WORLD_DOCUMENT_STORAGE_KEY)
     } catch {
-      // Not cached; the host still has it.
+      // Left in place; it is never read again on a host-backed page.
     }
   }
   // The host is the source of truth, so its city replaces this page's even when older.
   const adopt = (serialized: string | null): void => {
     if (serialized === held) return
-    if (serialized === null) held = null
-    else hold(serialized)
+    held = serialized
     for (const listener of listeners)
       listener({ key: WORLD_DOCUMENT_STORAGE_KEY, newValue: serialized, isAuthoritative: true })
   }
@@ -45,8 +49,10 @@ export function hostWorldStorage(
     save(JSON.parse(serialized)).then(
       (reply) => {
         const kept = reply.document ? JSON.stringify(reply.document) : null
-        if (reply.success) hostHeld = kept
-        else adopt(kept ?? before)
+        if (reply.success) {
+          hostHeld = kept
+          forgetLegacy()
+        } else adopt(kept ?? before)
         return reply.success ? null : reply.reason
       },
       // Unreachable host: it holds no such city, and the next hello brings what it does hold.
@@ -57,13 +63,12 @@ export function hostWorldStorage(
     )
 
   return {
-    getItem: (key) => (key === WORLD_DOCUMENT_STORAGE_KEY ? held : (cache?.getItem(key) ?? null)),
+    getItem: (key) => (key === WORLD_DOCUMENT_STORAGE_KEY ? held : null),
     setItem(key, serialized) {
-      if (key === WORLD_DOCUMENT_STORAGE_KEY) {
-        const before = held
-        hold(serialized)
-        landing = upload(serialized, before)
-      } else cache?.setItem(key, serialized)
+      if (key !== WORLD_DOCUMENT_STORAGE_KEY) return
+      const before = held
+      held = serialized
+      landing = upload(serialized, before)
     },
     confirm: () => landing,
     subscribe(listener) {
@@ -72,16 +77,19 @@ export function hostWorldStorage(
     },
     receive(document) {
       hostHeld = document ? JSON.stringify(document) : null
-      if (hostHeld) adopt(hostHeld)
+      if (hostHeld) {
+        adopt(hostHeld)
+        forgetLegacy()
+      }
       // A city this page kept before its host held one becomes the host's first.
       else if (held) void upload(held, held)
     }
   }
 }
 
-function readCache(cache: WorldDocumentStorage | null): string | null {
+function readLegacy(legacy: LegacyWorldStorage | null): string | null {
   try {
-    return cache?.getItem(WORLD_DOCUMENT_STORAGE_KEY) ?? null
+    return legacy?.getItem(WORLD_DOCUMENT_STORAGE_KEY) ?? null
   } catch {
     return null
   }

@@ -88,7 +88,8 @@ export function createCitySignalStore(
     update(frame, nowMs) {
       if (!frame) return
       const previous = signals
-      signals = citySignals(frame, day.observe(frame.sessions, nowMs), nowMs)
+      const today = day.observe(frame.sessions, nowMs, frame.projectsToday)
+      signals = citySignals(frame, today, nowMs)
       const isSceneSame = isSameScene(previous, signals)
       if (isSceneSame && isSameHud(previous, signals)) return
       version += 1

@@ -56,6 +56,7 @@ import {
   selectionOf,
   useCitySignalFeed,
   useNameRoles,
+  useOfficeClock,
   useOfficeLists,
   useVisibleFrame
 } from './use-office-model'
@@ -131,7 +132,8 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
   const isShowingList = state.isListView || !is3DAvailable
   useFeedSubscription(feed, dispatch)
 
-  useCitySignalFeed(state.frame)
+  const clock = useOfficeClock(state.frame)
+  useCitySignalFeed(state.frame, clock)
   const roles = useNameRoles()
   const frame = useVisibleFrame(state.frame, roles)
   const offices = useMemo(
@@ -176,7 +178,7 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
   const themeAssignments = useThemeAssignments()
 
   const floorId = state.focusedFloorId
-  const lists = useOfficeLists(frame, floorId, state.selectedAgentKey)
+  const lists = useOfficeLists(frame, floorId, state.selectedAgentKey, clock)
   const { sessions, queue, towerFloors, companies, ledger, agentFacts, activity } = lists
   const { floorAgents, cards, stacks, companyList } = lists
   const { announcement, news } = useAttentionAnnouncement(queue, sessions)

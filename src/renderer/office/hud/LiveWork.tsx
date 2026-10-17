@@ -5,6 +5,7 @@ import { PLATE_TITLE_CLASS } from '../../components/deck/deck-styles'
 import { useOfficeNow } from '../use-office-now'
 import { formatElapsedTime } from '../../lib/utils'
 import { reachBlocker, reachTarget } from '../logic/interactions'
+import { useOfficeSettings } from '../logic/office-settings'
 import { PROVIDER_LABEL } from '../office-palette'
 import type { OfficeFeed, OfficeFrame } from '../scene-model'
 import { Fact } from './Fact'
@@ -20,6 +21,8 @@ export interface LiveWorkProps {
 // dry-new: Inspector's legacy facts do not distinguish own observations from world motion.
 export function LiveWork({ frame, agentKey, feed, style, presentation = 'panel' }: LiveWorkProps) {
   const nowMs = useOfficeNow()
+  // Keys and ids can carry names (a teammate's id is `name@team`), so Hide names hides them too.
+  const { hideNames } = useOfficeSettings()
   const resolved = parseAgentKey(agentKey, frame.sessions)
   const session = resolved?.session
   const member = resolved?.member
@@ -55,7 +58,7 @@ export function LiveWork({ frame, agentKey, feed, style, presentation = 'panel' 
         <div className="flex min-w-0 items-baseline gap-2 text-body">
           <strong
             className="min-w-0 flex-1 truncate text-text-primary"
-            title={`${workerLabel} · ${agentKey}`}
+            title={hideNames ? workerLabel : `${workerLabel} · ${agentKey}`}
           >
             {workerLabel}
           </strong>
@@ -113,8 +116,8 @@ export function LiveWork({ frame, agentKey, feed, style, presentation = 'panel' 
           term="Coverage"
           value={evidence.observation?.coverage === 'own' ? 'Own record' : 'Unknown'}
         />
-        <Fact term="Session ID" value={session?.sessionId ?? 'Unknown'} />
-        <Fact term="Agent key" value={agentKey} />
+        <Fact term="Session ID" value={hideNames ? 'Hidden' : (session?.sessionId ?? 'Unknown')} />
+        <Fact term="Agent key" value={hideNames ? 'Hidden' : agentKey} />
         <Fact
           term={member && !member.cwd ? 'Working directory (lead fallback)' : 'Working directory'}
           value={member?.cwd ?? session?.cwd ?? 'Unknown'}
@@ -131,7 +134,7 @@ export function LiveWork({ frame, agentKey, feed, style, presentation = 'panel' 
           term="Terminal target"
           value={
             target
-              ? `${target.name} — ${target.key}${member && target.isLead ? ' (lead terminal)' : ''}`
+              ? `${target.name}${hideNames ? '' : ` — ${target.key}`}${member && target.isLead ? ' (lead terminal)' : ''}`
               : 'Unknown'
           }
         />

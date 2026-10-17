@@ -49,23 +49,40 @@ function nextMidnightMs(atMs: number): number {
   return midnight.getTime()
 }
 
+export interface OfficeClock {
+  // The render clock: newly received evidence is judged against it, never an older tick (trap).
+  nowMs: number
+  // Changes only when the clock wakes the root.
+  wakes: number
+}
+
+// The Office root's one timer (perf-2): it wakes when evidence next turns fresh or stale, and at
+// midnight; never on a tick, so an idle office is never woken for nothing.
+export function useOfficeClock(frame: OfficeFrame | null): OfficeClock {
+  const [wakes, setWakes] = useState(0)
+  const nowMs = Date.now()
+  const wakeAtMs = frame
+    ? Math.min(nextActivityChangeAtMs(frame, nowMs) ?? Infinity, nextMidnightMs(nowMs))
+    : null
+  // `wakes` re-arms a wake that fired early, while the next change is still the same one.
+  useEffect(() => {
+    if (wakeAtMs === null) return
+    const timer = setTimeout(() => setWakes((count) => count + 1), wakeAtMs - Date.now())
+    return () => clearTimeout(timer)
+  }, [wakeAtMs, wakes])
+  return { nowMs, wakes }
+}
+
 // The city's signals come from the real frame: they carry keys and numbers, never names. They
-// change with a frame, when evidence turns fresh or stale, and at midnight; never on a tick.
+// change with a frame and at each of the root clock's wakes.
 export function useCitySignalFeed(
   frame: OfficeFrame | null,
+  clock: OfficeClock,
   store: CitySignalStore = citySignalStore
 ): void {
-  const [wakes, setWakes] = useState(0)
+  const { wakes } = clock
   useEffect(() => {
-    if (!frame) return
-    const nowMs = Date.now()
-    store.update(frame, nowMs)
-    const wakeAtMs = Math.min(
-      nextActivityChangeAtMs(frame, nowMs) ?? Infinity,
-      nextMidnightMs(nowMs)
-    )
-    const timer = setTimeout(() => setWakes(wakes + 1), wakeAtMs - nowMs)
-    return () => clearTimeout(timer)
+    if (frame) store.update(frame, Date.now())
   }, [frame, store, wakes])
 }
 
@@ -86,31 +103,16 @@ export function useVisibleFrame(
   return useMemo(() => (frame && roles ? maskFrame(frame, roles) : frame), [frame, roles])
 }
 
-// The render clock, plus one re-render when evidence next turns fresh or stale, so activity
-// goes stale with no new frame and an idle office is never woken for nothing (perf-2).
-function useActivityClock(frame: OfficeFrame | null): number {
-  const [, setWakes] = useState(0)
-  const nowMs = Date.now()
-  const wakeAtMs = frame ? nextActivityChangeAtMs(frame, nowMs) : null
-  useEffect(() => {
-    if (wakeAtMs === null) return
-    const timer = setTimeout(() => setWakes((count) => count + 1), wakeAtMs - Date.now())
-    return () => clearTimeout(timer)
-  }, [wakeAtMs])
-  return nowMs
-}
-
 // What the HUD and the scene show, derived from the latest frame. Lists that do not depend on
 // where agents stand follow the frame's structure, so a walking step rebuilds none of them.
 export function useOfficeLists(
   frame: OfficeFrame | null,
   floorId: string | null,
-  selectedAgentKey: string | null
+  selectedAgentKey: string | null,
+  { nowMs }: OfficeClock
 ) {
   const sessions = frame?.sessions
   const structural = useStructuralFrame(frame)
-  // Newly received evidence is judged against the render clock, never an older tick (trap).
-  const nowMs = useActivityClock(structural)
   const queue = useMemo(() => buildAttentionQueue(sessions ?? []), [sessions])
   // The Tower stays as a landmark showing the building's totals; it no longer picks floors.
   const towerFloors = useMemo(() => (structural ? summariseFloors(structural) : []), [structural])

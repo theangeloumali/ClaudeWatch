@@ -21,7 +21,7 @@ import {
   partitionPhysicalAgents,
   PHYSICAL_STOREY_HEIGHT
 } from '../../scene/all-floor-model'
-import { useOfficeLists } from '../../use-office-model'
+import { useOfficeClock, useOfficeLists } from '../../use-office-model'
 import { makeAgent, makeFloor, makeFrame, makeRoom, makeSession, makeZone } from '../fixtures'
 import { createWorldDocumentStore } from '../../../office-live/world-document-store'
 import { buildLayout } from '../../../../office/sim/layout'
@@ -375,7 +375,7 @@ describe('all-floor worker labels', () => {
     'includes all cards and project stacks with focus %s',
     (focus) => {
       const frame = wholeOfficeFrame()
-      const { result } = renderHook(() => useOfficeLists(frame, focus, null))
+      const { result } = renderHook(() => useOfficeLists(frame, focus, null, useOfficeClock(frame)))
       expect(new Set(result.current.cards.map((card) => card.agentKey))).toEqual(
         new Set(frame.agents.map((agent) => agent.agentKey))
       )
@@ -393,7 +393,7 @@ describe('all-floor worker labels', () => {
       return agent
     })
     const { result, rerender } = renderHook(
-      ({ focus }) => useOfficeLists(frame, focus, 'claude:3:11'),
+      ({ focus }) => useOfficeLists(frame, focus, 'claude:3:11', useOfficeClock(frame)),
       { initialProps: { focus: 'office:0' } }
     )
     expect(result.current.cards).toHaveLength(MAX_NAME_CARDS)

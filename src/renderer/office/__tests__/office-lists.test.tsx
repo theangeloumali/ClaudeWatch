@@ -3,7 +3,7 @@ import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildFixtureFrame } from '../fixture/fixture-feed'
 import type { OfficeFrame } from '../scene-model'
-import { useOfficeLists } from '../use-office-model'
+import { useOfficeClock, useOfficeLists } from '../use-office-model'
 
 // `activity` is left out: it reads the clock, so it may change between two frames (perf-2).
 const POSITION_ONLY_LISTS = [
@@ -58,7 +58,8 @@ describe('useOfficeLists across frames', () => {
     const first = buildFixtureFrame(3, Date.now())
     expect(first.agents.length).toBeGreaterThan(0)
     const { result, rerender } = renderHook(
-      ({ frame }: { frame: OfficeFrame }) => useOfficeLists(frame, null, null),
+      ({ frame }: { frame: OfficeFrame }) =>
+        useOfficeLists(frame, null, null, useOfficeClock(frame)),
       { initialProps: { frame: first } }
     )
     const before = result.current
@@ -69,7 +70,7 @@ describe('useOfficeLists across frames', () => {
 
   it('activity still turns stale with no new frame', () => {
     const frame = observedFrame(Date.now())
-    const { result } = renderHook(() => useOfficeLists(frame, null, null))
+    const { result } = renderHook(() => useOfficeLists(frame, null, null, useOfficeClock(frame)))
     expect(result.current.activity.office.isAvailable).toBe(true)
     act(() => vi.advanceTimersByTime(70_000))
     expect(result.current.activity.office.isAvailable).toBe(false)
@@ -77,7 +78,7 @@ describe('useOfficeLists across frames', () => {
 
   it('wakes for activity only when evidence can turn stale', () => {
     const frame = observedFrame(Date.now())
-    const { result } = renderHook(() => useOfficeLists(frame, null, null))
+    const { result } = renderHook(() => useOfficeLists(frame, null, null, useOfficeClock(frame)))
     const first = result.current
     act(() => vi.advanceTimersByTime(30_000))
     expect(result.current).toBe(first)
