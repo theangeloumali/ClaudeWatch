@@ -1,8 +1,8 @@
 import type { AgentView } from '../../../shared/office/types'
 import { parseAgentKey } from '../../../shared/office/agent-key'
-import { isAtRest } from '../../../shared/office/attention'
 import type { OfficeFrame } from '../scene-model'
 import { physicalFloorId } from '../scene/all-floor-model'
+import { createGamingCheck } from '../scene/worker-seat-presence'
 import { agentCountLabel, sessionForAgent } from './floor-model'
 import { DESK_REACH } from './room-layout'
 import {
@@ -65,9 +65,6 @@ function statusFor(agent: AgentView): CardStatus {
   }
 }
 
-// Resting in the game corner; an agent that needs you or has failed shows that instead.
-const isGaming = (agent: AgentView): boolean => agent.place === 'lounge' && isAtRest(agent)
-
 function priority(card: NameCard, selectedAgentKey: string | null): number {
   if (card.agentKey === selectedAgentKey) return 0
   if (card.status === 'permission' || card.status === 'waiting') return 1
@@ -81,6 +78,8 @@ export function buildNameCards(
   selectedAgentKey: string | null
 ): NameCard[] {
   const seen = new Set<string>()
+  // Seated in its game corner; an agent that needs you or has failed shows that instead.
+  const isGaming = createGamingCheck(frame.floors)
   const cards = frame.agents
     .filter((agent) => {
       if (floorId !== null && physicalFloorId(agent) !== floorId) return false

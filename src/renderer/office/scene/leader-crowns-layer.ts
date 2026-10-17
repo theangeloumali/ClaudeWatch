@@ -74,8 +74,6 @@ const CORNERS = [-1, 1].flatMap((x) =>
   [-1, 1].flatMap((y) => [-1, 1].map((z) => new Vector3(x * 0.5, (y * CROWN_HEIGHT) / 2, z * 0.52)))
 )
 
-const isAtDesk = (agent: AgentView): boolean => agent.place === undefined
-
 // Camera turn and zoom, poses, places, agents, buildings, the pin, then one slot per crown.
 const PRINT_SLOTS = 10 + CROWNS
 
@@ -131,7 +129,8 @@ export function createLeaderCrownsLayer(palette: ThemePalette) {
         continue
       }
       const at = livePose(frame.poses, agent)
-      const buildingId = isAtDesk(agent) ? frame.buildings.get(agent.agentKey) : undefined
+      // Its desk and its game corner are both under its own building's roof.
+      const buildingId = frame.buildings.get(agent.agentKey)
       const roof = buildingId ? frame.places.topAt(buildingId, frame.nowMs, frame.isPinned) : null
       const y = Math.max(
         at.elevation + CARD_HEIGHT + overCard,

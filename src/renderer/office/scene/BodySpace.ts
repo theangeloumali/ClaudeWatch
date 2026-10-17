@@ -17,10 +17,13 @@ export class SceneBodies {
   }
 
   // Where workers stand now, so citizens and the player give way to a roamer's live pose (perf-2).
+  // A fading worker is shrunk to nothing or still growing in, so it blocks nobody.
   get workers(): readonly BodyFootprint[] {
     const version = officePoses.version()
-    if (this.placed.agents !== this.agents || this.placed.version !== version)
-      this.placed = { agents: this.agents, version, workers: this.agents.map(footprintOf) }
+    if (this.placed.agents !== this.agents || this.placed.version !== version) {
+      const workers = this.agents.filter((agent) => agent.fade === undefined).map(footprintOf)
+      this.placed = { agents: this.agents, version, workers }
+    }
     return this.placed.workers
   }
 

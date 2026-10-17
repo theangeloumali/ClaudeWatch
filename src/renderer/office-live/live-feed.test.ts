@@ -375,6 +375,28 @@ describe('createLiveFeed', () => {
       vi.advanceTimersByTime(1_000)
       expect(frames).toHaveLength(count)
     })
+
+    // A walk moves only the pose store, so sitting down needs a frame of its own for the card.
+    it('sends a frame once the gamer reaches its corner seat, not only when it sets off', () => {
+      const frames: OfficeFrame[] = []
+      const feed = createLiveFeed(source, { storage: store })
+      feed.subscribe((frame) => frames.push(frame))
+      helloDone()
+      vi.advanceTimersByTime(LOUNGE_MS)
+      const last = frames.at(-1)!
+      const seats = last.floors.flatMap((floor) =>
+        floor.zones.flatMap((zone) => zone.lounge?.seats ?? [])
+      )
+      const seatGap = ({ x, z }: { x: number; z: number }): number =>
+        Math.min(...seats.map((seat) => Math.hypot(x - seat.x, z - seat.z)))
+      const setOff = frames.find((frame) => frame.agents[0].place === 'lounge')
+      expect(setOff && seatGap(setOff.agents[0])).toBeGreaterThan(1)
+      // It has sat down: the live pose is on a seat, so only the frame can be missing.
+      expect(seatGap(feed.poses.read('claude:a')!)).toBeLessThan(0.01)
+      expect(place(frames)).toBe('lounge')
+      // Sent on the step it came within reach of the seat, as the seated pose counts arrival.
+      expect(seatGap(last.agents[0])).toBeLessThan(0.2)
+    })
   })
 
   it('forwards a focus request to the bridge and returns where it landed', async () => {

@@ -45,6 +45,8 @@ export interface RobotMotion {
   z: number
   heading: number
   travelDistance: number
+  // The floor it was drawn on: a robot remounting on another floor was carried, not walked.
+  physicalFloorId: string | null
 }
 
 // Whole unless the sim is fading the agent, in or out.
@@ -63,11 +65,6 @@ export function presenceAfter(
   if (isReducedMotion) return target
   const step = (delta * 1000) / DEPARTURE_FADE_MS
   return target > presence ? Math.min(target, presence + step) : Math.max(target, presence - step)
-}
-
-// An arrival mounts while still fading in: it starts at nothing and grows, never pops then shrinks.
-export function presenceAtMount(agent: Pick<AgentView, 'fade'>): number {
-  return presenceTarget(agent)
 }
 
 function phaseFor(key: string): number {
@@ -98,14 +95,19 @@ export function Robot({
   agentRef.current = agent
   const phase = useMemo(() => phaseFor(agent.agentKey), [agent.agentKey])
   const travelDistanceRef = useRef(0)
-  // Read once: after mounting, the frame loop alone sets the presence scale.
-  const mountedPresence = useRef(presenceAtMount(agent)).current
+  // Read once: an arrival still fading in starts at nothing, then the frame loop owns the scale.
+  const mountedPresence = useRef<number>(null)
+  mountedPresence.current ??= presenceTarget(agent)
 
   useLayoutEffect(() => {
     const root = rootRef.current
     if (!root) return
-    const initial = livePose(officePoses, agentRef.current)
-    const retained = motions?.get(agentRef.current.agentKey)
+    const agent = agentRef.current
+    const initial = livePose(officePoses, agent)
+    const kept = motions?.get(agent.agentKey)
+    const retained = kept?.physicalFloorId === physicalFloorId(agent) ? kept : undefined
+    // Carried to another floor by the sim: it grows in where it now stands, never glides there.
+    if (kept && !retained) presenceRef.current?.scale.setScalar(0)
     root.position.set(
       retained?.x ?? initial.x,
       retained?.y ?? initial.elevation,
@@ -133,7 +135,7 @@ export function Robot({
     const previousX = root.position.x
     const previousZ = root.position.z
     const presence = presenceRef.current
-    // A robot faded to nothing goes straight to its pose: a recall seats it across town (FOUND 7).
+    // A robot shrunk to nothing goes straight to its pose, so nothing invisible streaks (FOUND 7).
     if (presence?.scale.x === 0) root.position.set(goal.x, goal.elevation, goal.z)
     else {
       root.position.x = approach(previousX, goal.x, delta, MOVE_RATE)
@@ -153,8 +155,10 @@ export function Robot({
         y: 0,
         z: 0,
         heading: 0,
-        travelDistance: 0
+        travelDistance: 0,
+        physicalFloorId: null
       }
+      motion.physicalFloorId = physicalFloorId(target)
       motion.x = root.position.x
       motion.y = root.position.y
       motion.z = root.position.z
@@ -200,7 +204,7 @@ export function Robot({
 
   return (
     <group ref={rootRef} scale={agent.isSubagent ? SUBAGENT_SCALE : AGENT_SCALE}>
-      <group ref={presenceRef} scale={mountedPresence}>
+      <group ref={presenceRef} scale={mountedPresence.current}>
         <mesh
           position={[0, 0.012, 0]}
           rotation={[-Math.PI / 2, 0, 0]}
