@@ -85,6 +85,33 @@ describe('city signal store', () => {
     expect(store.sceneVersion()).toBe(sceneVersion + 1)
   })
 
+  // Maya's repro: turning account watching off mid-day sends a hello with no day totals.
+  it("a hello without the host's day totals keeps every spire it already raised", () => {
+    const store = createCitySignalStore()
+    const session = live('claude:a', { startedAtMs: NOW - 60_000, usage: usage(100_000) })
+    // The host's ledger also counts this morning's ended session: 4M today.
+    const withToday = makeFrame({
+      sessions: [session],
+      projectsToday: [{ projectKey: 'p_1', tokens: 4e6 }]
+    })
+    store.update(withToday, NOW)
+    const before = store.current().buildings.get(HOME)
+    expect(before?.spireStage).toBeGreaterThan(0)
+    store.update(makeFrame({ sessions: [session] }), NOW + 1_000)
+    expect(store.current().buildings.get(HOME)?.spireStage).toBe(before?.spireStage)
+    expect(store.current().buildings.get(HOME)?.tokensToday).toBe(before?.tokensToday)
+  })
+
+  it("a known project the host's day totals leave out spent 0 today, not unknown", () => {
+    const store = createCitySignalStore()
+    const idleHere = (projectsToday?: { projectKey: string; tokens: number }[]) =>
+      makeFrame({ sessions: [live('claude:a')], ...(projectsToday && { projectsToday }) })
+    store.update(idleHere(), NOW)
+    expect(store.current().buildings.get(HOME)?.tokensToday).toBeNull()
+    store.update(idleHere([{ projectKey: 'p_2', tokens: 10 }]), NOW + 500)
+    expect(store.current().buildings.get(HOME)?.tokensToday).toBe(0)
+  })
+
   it('holds no signals before the first frame', () => {
     const store = createCitySignalStore()
     expect(store.current().buildings.size).toBe(0)

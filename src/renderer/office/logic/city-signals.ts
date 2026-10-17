@@ -56,8 +56,8 @@ export interface CitySignals {
   companies: ReadonlyMap<string, CompanyCounts>
 }
 
-// For hosts with no accounts ledger: each session's total when today began for it, its highest
-// spend since, and each project's sum of those, so a session that ends keeps its tokens counted.
+// Each session's total when today began for it, its highest spend since, and each project's sum
+// of those, raised to the most the host's ledger reported, so losing that ledger lowers nothing.
 export interface DayLedger {
   dayKey: string
   sessionBase: ReadonlyMap<string, number>
@@ -115,7 +115,8 @@ const draftOf = (today: string, from: DayLedger = createDayLedger(today)): DayDr
 export function observeDay(
   day: DayLedger,
   sessions: readonly SessionRef[],
-  nowMs: number
+  nowMs: number,
+  projectsToday: readonly ProjectTokens[] = []
 ): DayLedger {
   const today = dayKey(nowMs)
   let draft = day.dayKey === today ? null : draftOf(today)
@@ -134,19 +135,27 @@ export function observeDay(
     const total = ledger.projectTotals.get(projectKey) ?? 0
     ledger.projectTotals.set(projectKey, total + spent - (known?.tokens ?? 0))
   }
+  // After the sessions' growth, so a frame's spend is never counted twice.
+  for (const { projectKey, tokens } of projectsToday)
+    if (tokens > ((draft ?? day).projectTotals.get(projectKey) ?? 0))
+      edit().projectTotals.set(projectKey, tokens)
   return draft ?? day
 }
 
 // The page keeps one day, so a hoist and its spire count the same tokens (one ledger, two readers).
 export interface DayLedgerStore {
-  observe(sessions: readonly SessionRef[], nowMs: number): DayLedger
+  observe(
+    sessions: readonly SessionRef[],
+    nowMs: number,
+    projectsToday?: readonly ProjectTokens[]
+  ): DayLedger
 }
 
 export function createDayLedgerStore(): DayLedgerStore {
   let day: DayLedger | null = null
   return {
-    observe(sessions, nowMs) {
-      day = observeDay(day ?? createDayLedger(dayKey(nowMs)), sessions, nowMs)
+    observe(sessions, nowMs, projectsToday) {
+      day = observeDay(day ?? createDayLedger(dayKey(nowMs)), sessions, nowMs, projectsToday)
       return day
     }
   }
@@ -230,13 +239,14 @@ function knownBuildings(frame: OfficeFrame): Map<BuildingId, Place> {
   return places
 }
 
-// The accounts ledger's day where the host keeps one; null is unknown, never 0.
+// The accounts ledger's day where the host keeps one: it knows every project's day, so one it
+// leaves out spent 0. Without it, null is unknown, never 0.
 export function projectTokensToday(
   today: { projectsToday: readonly ProjectTokens[] | undefined; day: DayLedger; nowMs: number },
   projectKey: string
 ): number | null {
   if (today.projectsToday)
-    return today.projectsToday.find((entry) => entry.projectKey === projectKey)?.tokens ?? null
+    return today.projectsToday.find((entry) => entry.projectKey === projectKey)?.tokens ?? 0
   const isToday = today.day.dayKey === dayKey(today.nowMs)
   return isToday ? (today.day.projectTotals.get(projectKey) ?? null) : null
 }
