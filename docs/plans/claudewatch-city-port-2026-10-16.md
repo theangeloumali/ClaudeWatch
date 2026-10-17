@@ -486,7 +486,8 @@ Research: `growth-events.md` A1–A5, B1–B6.
   - "a stage crossing raises a rig for 3 s, then nothing";
   - "a hello shows the finished spire with no rig" (A5 rule);
   - "reduced motion skips the hoist";
-  - "stepping quality mid-hoist rebuilds no static batch".
+  - "stepping quality mid-hoist rebuilds no static batch";
+  - "a gain under 0.5% of the project's day raises no rig" (ClearSpent `c1fcb124` construction rows).
 - [ ] Implement, verify, and commit `feat(scene): a crane hoists each new spire stage`.
 
 ### Task 4.3: Crowns
@@ -494,7 +495,9 @@ Research: `growth-events.md` A1–A5, B1–B6.
 - [ ] RED tests:
   - "the top three leaders wear crowns, 1 draw";
   - "a crown over a roaming agent follows its live pose";
-  - "a crown spans 14–32 px on screen at every zoom band and never covers its robot's name card" (N7).
+  - "a crown spans 14–32 px on screen at every zoom band and never covers its robot's name card" (N7);
+  - "nobody wears a crown before a token is spent today, and a zero never wins one";
+  - "a tie goes to the smaller agent key, whatever the roster order" (ClearSpent `c1fcb124` leaders rows).
 
   Port `leader-crowns.tsx`, instanced and dirty-ranged.
 
