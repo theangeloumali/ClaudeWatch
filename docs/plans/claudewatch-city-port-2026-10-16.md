@@ -126,6 +126,7 @@
 - **Heights.** Nothing a port adds within one block of an office stands above `min(24 m, 0.7 m per metre of distance + 4)` (`themes/surroundings.ts:27-30`, `town/distributed-town.ts:38`). Robots at their desks stay visible (N4).
 - **Scene box.** A layer outside the city grows `sceneBox` (`OfficeScene.tsx`) so `Horizon` clips correctly. It never raises the Canvas `far` (N5).
 - **Fast motion** (trains) runs at speeds that read at the governor's 5–20 fps idle pace, about 12–18 m/s (N6).
+- **Orthographic camera** (ClearSpent's note, 2026-10-16). ClearSpent sized its signs and crowns for perspective distance and wrote its follow camera around `camera-controls` dolly. CW's camera is orthographic, where size on screen follows `camera.zoom` and dolly changes nothing visible. Every ported size is tuned against CW's zoom bands (`logic/camera-bands.ts`), and every ported camera move sets zoom, never dolly (N7).
 - **Truth.**
   - Every event, sign state, leader and spire step comes from fresh evidence (`observeSession` / `isAgentActivityAvailable`).
   - `usage: null` means unknown, never 0.
@@ -165,6 +166,7 @@
 | A11 | **New HUD controls are 44 px targets.** Existing 28 px bar buttons are unchanged; they pass WCAG 2.5.8 AA.                                                                                                                                                       | No design change nobody asked for.                                                                                              |
 | A12 | **Two new bridge fields:** `CurrentTool.callId` (opaque, never drawn) and `OfficeSnapshot.projectsToday` (numbers only). Both stay optional until every consumer reads them.                                                                                     | The contract rule in `shared/office/types.ts:2`.                                                                                |
 | A13 | **One PR, stacked on the office-health PR.**                                                                                                                                                                                                                     | WHOLE-PR mandate. Angelo reviews one install.                                                                                   |
+| A14 | **Sign 18–40 px, crown 14–32 px on screen at every zoom band.**                                                                                                                                                                                                  | ClearSpent sized both for perspective distance; under CW's orthographic camera, readable size is a pixel range per band (N7).   |
 
 ---
 
@@ -326,7 +328,8 @@ Signs re-pose only when the camera's orientation changes (hook into `CameraContr
   - "signs cost 2 draws however many buildings carry one";
   - "a still camera uploads 0 sign bytes";
   - "signs face the camera at all four quarter turns";
-  - "every icon meets 3:1 contrast on its disc" (icons are ink-tinted: white fails on 4 of the 5 state colours).
+  - "every icon meets 3:1 contrast on its disc" (icons are ink-tinted: white fails on 4 of the 5 state colours);
+  - "a sign spans 18–40 px on screen at the city, building and floor bands" (N7: scale from `camera.zoom`, not distance).
 - [ ] Implement, verify, and commit `feat(scene): lit icon signs on project towers and venues`.
 
 ### Task 2.3: Venue landmarks
@@ -490,7 +493,8 @@ Research: `growth-events.md` A1–A5, B1–B6.
 
 - [ ] RED tests:
   - "the top three leaders wear crowns, 1 draw";
-  - "a crown over a roaming agent follows its live pose".
+  - "a crown over a roaming agent follows its live pose";
+  - "a crown spans 14–32 px on screen at every zoom band and never covers its robot's name card" (N7).
 
   Port `leader-crowns.tsx`, instanced and dirty-ranged.
 
@@ -607,6 +611,7 @@ Research: `hud.md` §2, §5, §6, §7, §8.
 
 - [ ] RED tests:
   - "Follow keeps a roaming agent in the HUD-safe area";
+  - "Follow and the close-up frame by zoom: the camera's distance from its target is unchanged" (N7; port ClearSpent's follow offsets as zoom, not dolly);
   - "manual input ends it";
   - "a departed agent ends it".
 - [ ] Commit `feat(office): follow an agent as it walks`.
