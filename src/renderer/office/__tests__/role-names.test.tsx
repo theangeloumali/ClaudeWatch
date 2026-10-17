@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FeedMessage, SessionRef } from '../../../shared/office/types'
 import { createLiveFeed, type FeedSource } from '../../office-live/live-feed'
 import { officeSettings } from '../logic/office-settings'
+import { isActivityAvailable } from '../logic/activity-summary'
 import { createRoleBook, maskFrame } from '../logic/role-names'
 import { OfficeApp } from '../OfficeApp'
 import type { FloorGeometry, OfficeFeed, OfficeFrame, ZoneGeometry } from '../scene-model'
@@ -184,6 +185,29 @@ describe('the privacy edge', () => {
     ])
     // Keys are hashes, never names, and the scene and stores match on them.
     expect(session).toMatchObject({ key: 'claude:a', companyKey: 'c_acme', projectKey: 'p_rocket' })
+  })
+
+  // A Claude source is named for its config folder, which holds the user's home path.
+  it('a source never shows its folder with names hidden, and keeps one role across the frame', () => {
+    const sourceId = 'claude:/Users/someone/.claude'
+    const observation = {
+      sourceId,
+      observedAtMs: 1,
+      staleAfterMs: 60_000,
+      coverage: 'own' as const
+    }
+    const frame = {
+      ...secretFrame(),
+      sessions: [makeSession({ key: 'claude:a', observation })],
+      sources: [{ id: sourceId, ok: false, detail: `${sourceId}/projects could not be read` }]
+    }
+    const masked = maskFrame(frame, createRoleBook())
+    expect(JSON.stringify(masked)).not.toMatch(/someone/)
+    expect(masked.sessions[0].observation?.sourceId).toBe(masked.sources[0].id)
+    expect(masked.sources[0].id).toBe('claude:config 1')
+    // The provider prefix stays, so a failing Claude source still marks activity unavailable.
+    expect(isActivityAvailable(masked)).toBe(false)
+    expect(maskFrame(frame, createRoleBook()).sources[0].detail).not.toMatch(/\//)
   })
 
   it('a frame that only moved agents keeps the masked floors and sessions it had', () => {

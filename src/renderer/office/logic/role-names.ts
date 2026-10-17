@@ -1,5 +1,12 @@
 import { parseAgentKey } from '../../../shared/office/agent-key'
-import type { AccountRef, AgentView, SessionRef, SubagentRef } from '../../../shared/office/types'
+import type {
+  AccountRef,
+  AgentObservation,
+  AgentView,
+  SessionRef,
+  SourceHealth,
+  SubagentRef
+} from '../../../shared/office/types'
 import type { FloorGeometry, OfficeFrame, RoomGeometry, ZoneGeometry } from '../scene-model'
 
 // Stable stand-ins for names, given by first sight: "Company A", "Project A-1", "Session A-1.1".
@@ -11,11 +18,14 @@ export interface RoleBook {
   teammate(sessionKey: string, memberId: string): string
   // Account labels can be organisation names; the plan stays, being no one's name.
   account(accountKey: string): string
+  // A Claude source is named for its config folder, which holds the user's home path.
+  source(sourceId: string): string
   // A role never changes once given, so a masked list stays valid for its input's life.
   readonly maskedFloors: WeakMap<readonly FloorGeometry[], FloorGeometry[]>
   readonly maskedSessions: WeakMap<readonly SessionRef[], SessionRef[]>
   readonly maskedAgents: WeakMap<readonly AgentView[], AgentView[]>
   readonly maskedAccounts: WeakMap<readonly AccountRef[], AccountRef[]>
+  readonly maskedSources: WeakMap<readonly SourceHealth[], SourceHealth[]>
 }
 
 const LETTERS = 26
@@ -61,10 +71,18 @@ export function createRoleBook(): RoleBook {
     sessionByKey: (sessionKey) => sessions.get(sessionKey),
     teammate: (sessionKey, memberId) => `Teammate ${numberOf(`teammate\n${sessionKey}`, memberId)}`,
     account: (accountKey) => `Account ${numberOf('account', accountKey)}`,
+    source: (sourceId) => {
+      const [family, ...folder] = sourceId.split(':')
+      // The provider prefix stays: activity checks match a failing source by it.
+      return folder.length
+        ? `${family}:config ${numberOf(`source\n${family}`, sourceId)}`
+        : sourceId
+    },
     maskedFloors: new WeakMap(),
     maskedSessions: new WeakMap(),
     maskedAgents: new WeakMap(),
-    maskedAccounts: new WeakMap()
+    maskedAccounts: new WeakMap(),
+    maskedSources: new WeakMap()
   }
 }
 
@@ -85,6 +103,9 @@ export function maskFrame(frame: OfficeFrame, roles: RoleBook): OfficeFrame {
     sessions,
     floors,
     agents,
+    sources: remembered(roles.maskedSources, frame.sources, (list) =>
+      list.map((source) => maskSource(source, roles))
+    ),
     ...(frame.accounts && {
       accounts: remembered(roles.maskedAccounts, frame.accounts, (list) =>
         list.map((account) => maskAccount(account, roles))
@@ -141,8 +162,20 @@ function maskSession(session: SessionRef, roles: RoleBook): SessionRef {
     worktree: session.worktree === null ? null : folder,
     companyLabel: company,
     projectLabel: project,
+    ...(session.observation && { observation: maskObservation(session.observation, roles) }),
     subagents: session.subagents.map((member) => maskMember(member, session.key, folder, roles))
   }
+}
+
+const maskObservation = (observation: AgentObservation, roles: RoleBook): AgentObservation => ({
+  ...observation,
+  sourceId: roles.source(observation.sourceId)
+})
+
+// A failure's detail can quote the folder it could not read; the health list words it instead.
+function maskSource(source: SourceHealth, roles: RoleBook): SourceHealth {
+  const id = roles.source(source.id)
+  return id === source.id ? source : { ...source, id, detail: '' }
 }
 
 function maskMember(
@@ -154,6 +187,7 @@ function maskMember(
   return {
     ...member,
     ...(member.name !== undefined && { name: roles.teammate(sessionKey, member.id) }),
+    ...(member.observation && { observation: maskObservation(member.observation, roles) }),
     ...(member.cwd !== undefined && { cwd: folder })
   }
 }
