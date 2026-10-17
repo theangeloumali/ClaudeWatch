@@ -62,7 +62,10 @@ export interface DayLedger {
   dayKey: string
   sessionBase: ReadonlyMap<string, number>
   sessionSpend: ReadonlyMap<string, SessionSpend>
+  // The sessions' own spend, and apart from it the highest host total seen: a host total already
+  // counts those sessions, so the two are compared, never added.
   projectTotals: ReadonlyMap<string, number>
+  hostTotals: ReadonlyMap<string, number>
 }
 
 // Counted under the project it was first seen in today, so no total ever loses it.
@@ -83,7 +86,8 @@ export const createDayLedger = (day: string): DayLedger => ({
   dayKey: day,
   sessionBase: new Map(),
   sessionSpend: new Map(),
-  projectTotals: new Map()
+  projectTotals: new Map(),
+  hostTotals: new Map()
 })
 
 // A conversation begun today spent all of its tokens today; an older one, only what came after
@@ -101,13 +105,15 @@ interface DayDraft extends DayLedger {
   sessionBase: Map<string, number>
   sessionSpend: Map<string, SessionSpend>
   projectTotals: Map<string, number>
+  hostTotals: Map<string, number>
 }
 
 const draftOf = (today: string, from: DayLedger = createDayLedger(today)): DayDraft => ({
   dayKey: today,
   sessionBase: new Map(from.sessionBase),
   sessionSpend: new Map(from.sessionSpend),
-  projectTotals: new Map(from.projectTotals)
+  projectTotals: new Map(from.projectTotals),
+  hostTotals: new Map(from.hostTotals)
 })
 
 // Grow-only within the local day, so a session ending never lowers a spire. The maps are copied
@@ -135,10 +141,9 @@ export function observeDay(
     const total = ledger.projectTotals.get(projectKey) ?? 0
     ledger.projectTotals.set(projectKey, total + spent - (known?.tokens ?? 0))
   }
-  // After the sessions' growth, so a frame's spend is never counted twice.
   for (const { projectKey, tokens } of projectsToday)
-    if (tokens > ((draft ?? day).projectTotals.get(projectKey) ?? 0))
-      edit().projectTotals.set(projectKey, tokens)
+    if (tokens > ((draft ?? day).hostTotals.get(projectKey) ?? 0))
+      edit().hostTotals.set(projectKey, tokens)
   return draft ?? day
 }
 
@@ -248,7 +253,10 @@ export function projectTokensToday(
   if (today.projectsToday)
     return today.projectsToday.find((entry) => entry.projectKey === projectKey)?.tokens ?? 0
   const isToday = today.day.dayKey === dayKey(today.nowMs)
-  return isToday ? (today.day.projectTotals.get(projectKey) ?? null) : null
+  if (!isToday) return null
+  const own = today.day.projectTotals.get(projectKey)
+  const host = today.day.hostTotals.get(projectKey)
+  return own === undefined && host === undefined ? null : Math.max(own ?? 0, host ?? 0)
 }
 
 function buildingSignal(agents: readonly FreshAgent[], tokensToday: number | null): BuildingSignal {

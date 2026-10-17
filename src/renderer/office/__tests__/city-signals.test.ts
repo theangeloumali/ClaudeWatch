@@ -211,6 +211,17 @@ describe('citySignals', () => {
     expect(signalsOf(city, later).buildings.get(HOME)?.tokensToday).toBe(4e6)
   })
 
+  // The host's total already holds the sessions' spend; growth must not land on top of it.
+  it('a host total and the sessions it already counts are not added twice', () => {
+    const spender = (tokens: number) => live('claude:a', { usage: usage(tokens) })
+    const host = ledgerFor([spender(4e6)], undefined, NOW)
+    const told = observeDay(host, [spender(4e6)], NOW, [{ projectKey: 'p_1', tokens: 10e6 }])
+    const grown = observeDay(told, [spender(5e6), live('claude:b', { usage: usage(2e6) })], NOW)
+    const city = makeFrame({ sessions: [spender(5e6)], floors: [homeFloor] })
+    // The larger of the host's 10M and the sessions' own 7M: never their sum.
+    expect(signalsOf(city, grown).buildings.get(HOME)?.tokensToday).toBe(10e6)
+  })
+
   it('a conversation resumed today counts only what it spends today', () => {
     const yesterday = NOW - 30 * 3_600_000
     const resumed = (tokens: number) => [
