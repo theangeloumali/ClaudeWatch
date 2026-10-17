@@ -1,0 +1,12 @@
+flowchart LR
+  subgraph Before
+    S1[street] --> E1[entrance] --> D1[desk]
+    D1 --> E2[entrance] --> S2[street / venue]
+    D1 --> L1[lounge: first project only]
+  end
+  subgraph After
+    A[new agent] -->|grows in| D2[desk]
+    D2 -->|idle 20 s| G[game corner, same floor]
+    G -->|work arrives| D2
+    D2 -->|session ends| F[fades in place]
+  end
