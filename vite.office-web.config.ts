@@ -5,7 +5,8 @@ import react from '@vitejs/plugin-react'
 // Each emitted file must stay under the framework repository's commit-size guard, and three
 // alone is past it. It ships as two modules, so it is split along that line.
 function officeChunk(id: string): string | undefined {
-  if (id.includes('/src/office/sim/')) return 'simulation'
+  // The simulation and the shared office model import each other, so they ship as one chunk.
+  if (id.includes('/src/office/sim/') || id.includes('/src/shared/office/')) return 'simulation'
   if (!id.includes('/node_modules/')) return undefined
   if (id.includes('/three/build/three.core')) return 'three-core'
   if (id.includes('/node_modules/three/')) return 'three-webgl'
