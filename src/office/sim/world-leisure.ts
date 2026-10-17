@@ -2,7 +2,7 @@ import { isAtRest } from '../../shared/office/attention'
 import { observeAgent } from '../../shared/office/observation'
 import { parseAgentKey } from '../../shared/office/agent-key'
 import type { SessionRef, SourceHealth } from '../../shared/office/types'
-import { goToLounge, setFinished, type AgentRecord } from './behaviour'
+import { goToLounge, setFinished, wantsLounge, type AgentRecord } from './behaviour'
 import type { LayoutMap, LoungeLayout } from './layout'
 import { loungeSeats } from './lounge'
 import type { FloorRoutes } from './world-floor-routes'
@@ -91,9 +91,11 @@ export function reconcileLeisure(leisureContext: LeisureContext): void {
     if (agent.view.place === 'lounge' && (!context.hasTrips || mode === 'none'))
       returnHome(agent, context)
   }
-  const loungeAgents = [...context.agents.values()].map((agent) =>
-    modes.get(agent.view.agentKey) === 'none' ? { ...agent, finishedForMs: null } : agent
+  // A 'none' agent outside the lounge has no finished time, so it never wants a seat.
+  const loungeAgents = [...context.agents.values()].filter(
+    (agent) => agent.view.place === 'lounge' || modes.get(agent.view.agentKey) !== 'none'
   )
+  if (!loungeAgents.some((agent) => agent.view.place === 'lounge' || wantsLounge(agent))) return
   for (const [key, seat] of loungeSeats(
     loungeAgents,
     context.hasTrips ? context.lounges : new Map()
