@@ -38,6 +38,7 @@ export class SceneBodies {
   }
 }
 
+// No agent rides a connector; the player's body carries its own through `set`.
 function footprintOf(frameAgent: AgentView): BodyFootprint {
   const agent = withLivePose(frameAgent)
   return {
@@ -45,10 +46,6 @@ function footprintOf(frameAgent: AgentView): BodyFootprint {
     x: agent.x,
     z: agent.z,
     elevation: agent.elevation ?? 0,
-    connectorId:
-      'connectorId' in agent && typeof agent.connectorId === 'string'
-        ? agent.connectorId
-        : undefined,
     radius: agent.isSubagent ? SUBAGENT_BODY_RADIUS : WORKER_BODY_RADIUS
   }
 }
