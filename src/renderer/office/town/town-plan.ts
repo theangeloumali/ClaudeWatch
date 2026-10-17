@@ -25,7 +25,7 @@ interface TownBlock extends Rect {
   zone: TownDistrict
 }
 
-// The campus planner's town: the claim it holds, which the city is laid over (distributedTown).
+// The retired single-campus town, planned whole from a claim. The city shares its shape (TownPlan).
 export interface CampusPlan {
   size: TownSize
   claim: Rect
