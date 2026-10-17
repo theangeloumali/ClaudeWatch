@@ -1010,7 +1010,7 @@ Phases 1, 2, 3 and 6 run in parallel, as do Phases 4 and 5. Wall-clock with the 
   - Not built: one static batch for the building shells. It costs about 143 draws to save 0.07 ms a frame.
   - The 51 ms orbit at building zoom did not reproduce under profiling (4.95 ms); that run caught a city relayout.
 
-### Phase 8
+### Phase 8 (merged `93638ed`)
 
 - `f855f25`: version 1.4.1; Windows reports a missing update feed instead of "up to date".
 - Main checkout: mode-only changes 90 → 0.
