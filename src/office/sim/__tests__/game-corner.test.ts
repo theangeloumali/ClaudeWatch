@@ -49,7 +49,7 @@ describe('game corner: one beside the offices on every floor', () => {
     )
   })
 
-  it('keeps every corner inside its walls, clear of offices, the lift and the entrance', () => {
+  it('keeps every corner inside its walls, clear of offices, the lift and a ground floor entrance', () => {
     for (const floor of withOffices) {
       const corner = cornerOf(floor)!
       const local = { ...corner, x: corner.x - floor.x, z: corner.z - floor.z }
@@ -59,7 +59,7 @@ describe('game corner: one beside the offices on every floor', () => {
         isInside: contains(floor, local, 1),
         offices: floor.rooms.filter((room) => overlaps(corner, room, 1 - EPSILON)).length,
         isOnLift: !!floor.connector && overlaps(corner, floor.connector),
-        isAtEntrance: overlaps(corner, entrance, 2 - EPSILON)
+        isAtEntrance: floor.floorNumber === 1 && overlaps(corner, entrance, 2 - EPSILON)
       }).toEqual({
         floor: floor.id,
         isInside: true,
@@ -141,6 +141,24 @@ describe('game corner: one beside the offices on every floor', () => {
         }
     expect(unreachable).toEqual([])
   })
+})
+
+// Offices at the same spot on both storeys; the far side's corner ends 1.4 m from the street door.
+it('keeps only the ground floor corner clear of the street door', () => {
+  const sessions = Array.from({ length: 4 }, (_, index) => session(`claude:c-${index}`, 'p_c'))
+  const base = buildLayout(sessions, undefined)
+  const document = createWorldDocument(base, sessions)
+  document.buildings[0].floors = 2
+  document.rooms.forEach((room, index) => {
+    room.floorNumber = index < 2 ? 1 : 2
+    room.position = { x: index % 2 ? -0.05 : -7.05, z: 3 }
+  })
+  const headings = resolveEffectiveWorld(base, document, sessions).floors.map(
+    (floor) => cornerOf(floor)?.slots[0].heading
+  )
+  // Laid where the far side would be, the ground floor corner must have passed it over.
+  expect(headings[0]).not.toBe(Math.PI)
+  expect(headings[1]).toBe(Math.PI)
 })
 
 describe('game corner: placement', () => {

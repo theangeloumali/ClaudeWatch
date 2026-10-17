@@ -107,7 +107,7 @@ export function buildEffectiveFloors({
         floorId,
         footprint: building.footprint,
         rooms,
-        entrance: door,
+        ...(floorNumber === 1 ? { entrance: door } : {}),
         connector,
         deskCount: rooms.flatMap((room) => room.slots).filter((slot) => slot.id !== 'door').length
       })

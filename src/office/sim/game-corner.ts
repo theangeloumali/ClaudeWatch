@@ -41,7 +41,8 @@ interface CornerFloor {
   floorId: string
   footprint: WorldFootprint
   rooms: readonly WorldFootprint[]
-  entrance: Point
+  // The street door, on the ground floor only.
+  entrance?: Point
   connector?: WorldFootprint
   deskCount: number
 }
@@ -62,12 +63,12 @@ export function gameCorner(floor: CornerFloor): LoungeLayout | undefined {
 
 function fits(area: WorldFootprint, floor: CornerFloor): boolean {
   const local = { ...area, x: area.x - floor.footprint.x, z: area.z - floor.footprint.z }
-  const entrance = { ...floor.entrance, width: 0, depth: 0 }
+  const entrance = floor.entrance && { ...floor.entrance, width: 0, depth: 0 }
   return (
     contains(floor.footprint, local, WALL_METRES) &&
     floor.rooms.every((room) => !overlaps(area, room, ROOM_METRES)) &&
     !(floor.connector && overlaps(area, floor.connector)) &&
-    !overlaps(area, entrance, ENTRANCE_METRES)
+    !(entrance && overlaps(area, entrance, ENTRANCE_METRES))
   )
 }
 
