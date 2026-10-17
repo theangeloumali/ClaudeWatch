@@ -11,26 +11,6 @@ export function floorElevation(floor: FloorLayout): number {
     : 0
 }
 
-function pointMetadata(candidate: unknown, fallback: Point): Point {
-  if (
-    typeof candidate !== 'object' ||
-    candidate === null ||
-    !('x' in candidate) ||
-    !('z' in candidate)
-  )
-    return fallback
-  return typeof candidate.x === 'number' &&
-    Number.isFinite(candidate.x) &&
-    typeof candidate.z === 'number' &&
-    Number.isFinite(candidate.z)
-    ? { x: candidate.x, z: candidate.z }
-    : fallback
-}
-
-export function floorEntrance(floor: FloorLayout): Point {
-  return pointMetadata('entrance' in floor ? floor.entrance : undefined, floor.elevator)
-}
-
 export class FloorRoutes {
   private readonly floors = new Map<string, FloorLayout>()
   private readonly caches = new Map<string, { json: string; paths: PathCache }>()
