@@ -124,6 +124,8 @@ const spender = (key: string, tokens: number | null): SessionRef =>
     key,
     activity: 'editing',
     observation: fresh,
+    // Started this morning, so every token counts toward today.
+    startedAtMs: NOW - 3_600_000,
     usage: tokens === null ? null : usage(tokens)
   })
 const roster = (sessions: readonly SessionRef[]) =>

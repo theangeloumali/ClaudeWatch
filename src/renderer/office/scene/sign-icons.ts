@@ -12,6 +12,12 @@ export const SIGN_ICON_PATHS: Record<SignIcon, readonly string[]> = {
   ],
   // OctagonAlert
   error: ['M7.86 2H16.14L22 7.86V16.14L16.14 22H7.86L2 16.14V7.86Z', 'M12 8v4', 'M12 16h.01'],
+  // CircleHelp
+  question: [
+    'M2 12a10 10 0 1 0 20 0a10 10 0 1 0 -20 0',
+    'M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3',
+    'M12 17h.01'
+  ],
   // CircleDashed
   unknown: [
     'M10.1 2.182a10 10 0 0 1 3.8 0',

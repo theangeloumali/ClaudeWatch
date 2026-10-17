@@ -1,7 +1,12 @@
 import { dayKey } from '../../../shared/day-key'
 import { agentKey } from '../../../shared/office/agent-key'
 import { observeAgent } from '../../../shared/office/observation'
-import type { ProjectTokens, SessionRef, ToolCategory } from '../../../shared/office/types'
+import type {
+  AgentAttention,
+  ProjectTokens,
+  SessionRef,
+  ToolCategory
+} from '../../../shared/office/types'
 import { worldBuildingId } from '../../../shared/office/world-document-layout'
 import { type AgentState, stateOfAttention } from '../../deck/roster'
 import { sessionTokens } from '../../deck/tokens'
@@ -16,6 +21,8 @@ export interface BuildingSignal {
   tokensToday: number | null
   spireStage: number
   needsYou: boolean
+  // What the human owes it; a permission stops the work outright, so it wins over a question.
+  asks: 'permission' | 'question' | null
   hasError: boolean
   isLimited: boolean
   isDone: boolean
@@ -49,10 +56,12 @@ export interface CitySignals {
   companies: ReadonlyMap<string, CompanyCounts>
 }
 
-// Each project's highest counted total seen today, for hosts with no accounts ledger.
+// Each project's highest counted total seen today, for hosts with no accounts ledger, and each
+// session's total when today began for it: what it spent before then is not today's.
 export interface DayLedger {
   dayKey: string
   highest: ReadonlyMap<string, number>
+  sessionBase: ReadonlyMap<string, number>
 }
 
 const CROWNS = 3
@@ -60,7 +69,19 @@ const CROWNS = 3
 export const buildingIdOf = (companyKey: string, projectKey: string): BuildingId =>
   worldBuildingId(companyKey, projectKey)
 
-export const createDayLedger = (day: string): DayLedger => ({ dayKey: day, highest: new Map() })
+export const createDayLedger = (day: string): DayLedger => ({
+  dayKey: day,
+  highest: new Map(),
+  sessionBase: new Map()
+})
+
+// A session started today spent all of its tokens today; an older one, only what came after
+// it was first seen today.
+function spentToday(day: DayLedger, session: SessionRef): number | null {
+  const tokens = sessionTokens(session.usage)
+  if (tokens === null) return null
+  return Math.max(0, tokens - (day.sessionBase.get(session.key) ?? 0))
+}
 
 // Grow-only within the local day, so a session ending never lowers a spire.
 export function observeDay(
@@ -71,13 +92,21 @@ export function observeDay(
   const today = dayKey(nowMs)
   const isNewDay = day.dayKey !== today
   const highest = new Map(isNewDay ? [] : day.highest)
-  let hasRisen = false
-  for (const [projectKey, tokens] of countedProjects(sessions)) {
+  const sessionBase = new Map(isNewDay ? [] : day.sessionBase)
+  let hasChanged = isNewDay
+  for (const session of sessions) {
+    const tokens = sessionTokens(session.usage)
+    if (tokens === null || sessionBase.has(session.key)) continue
+    sessionBase.set(session.key, dayKey(session.startedAtMs) === today ? 0 : tokens)
+    hasChanged = true
+  }
+  const next = { dayKey: today, highest, sessionBase }
+  for (const [projectKey, tokens] of countedProjects(next, sessions)) {
     if (tokens <= (highest.get(projectKey) ?? -1)) continue
     highest.set(projectKey, tokens)
-    hasRisen = true
+    hasChanged = true
   }
-  return isNewDay || hasRisen ? { dayKey: today, highest } : day
+  return hasChanged ? next : day
 }
 
 export function citySignals(frame: OfficeFrame, day: DayLedger, nowMs: number): CitySignals {
@@ -96,7 +125,7 @@ export function citySignals(frame: OfficeFrame, day: DayLedger, nowMs: number): 
     const counts = companies.get(agent.companyKey)
     if (counts) companies.set(agent.companyKey, countAgent(counts, agent.state))
   }
-  return { buildings, leaders: leadersOf(agents, nowMs), companies }
+  return { buildings, leaders: leadersOf(agents, day, nowMs), companies }
 }
 
 interface FreshAgent {
@@ -105,6 +134,7 @@ interface FreshAgent {
   buildingId: BuildingId
   companyKey: string
   state: AgentState
+  attention: AgentAttention
   category: ToolCategory | null
 }
 
@@ -127,6 +157,7 @@ function freshAgents(frame: OfficeFrame, nowMs: number): FreshAgent[] {
           buildingId: buildingIdOf(session.companyKey, session.projectKey),
           companyKey: session.companyKey,
           state,
+          attention: evidence.attention ?? 'none',
           category: evidence.currentTool?.category ?? null
         }
       ]
@@ -155,10 +186,10 @@ function knownBuildings(frame: OfficeFrame): Map<BuildingId, Place> {
   return places
 }
 
-function countedProjects(sessions: readonly SessionRef[]): Map<string, number> {
+function countedProjects(day: DayLedger, sessions: readonly SessionRef[]): Map<string, number> {
   const totals = new Map<string, number>()
   for (const session of sessions) {
-    const tokens = sessionTokens(session.usage)
+    const tokens = spentToday(day, session)
     if (tokens !== null)
       totals.set(session.projectKey, (totals.get(session.projectKey) ?? 0) + tokens)
   }
@@ -182,6 +213,11 @@ function buildingSignal(agents: readonly FreshAgent[], tokensToday: number | nul
     tokensToday,
     spireStage: stageFor(tokensToday),
     needsYou: has('needs-you'),
+    asks: agents.some((agent) => agent.attention === 'permission')
+      ? 'permission'
+      : agents.some((agent) => agent.attention === 'question')
+        ? 'question'
+        : null,
     hasError: has('error'),
     isLimited: has('limited'),
     isDone: has('done'),
@@ -210,11 +246,11 @@ function countAgent(counts: CompanyCounts, state: AgentState): CompanyCounts {
   return counts
 }
 
-function leadersOf(agents: readonly FreshAgent[], nowMs: number): Leaders {
+function leadersOf(agents: readonly FreshAgent[], day: DayLedger, nowMs: number): Leaders {
   const leads = agents.filter((agent) => agent.agentKey === agent.session.key)
   const row = (value: (session: SessionRef) => number) =>
     leads.map((lead) => ({ key: lead.session.key, value: value(lead.session) }))
-  const spenders = ranked(row((session) => sessionTokens(session.usage) ?? 0))
+  const spenders = ranked(row((session) => spentToday(day, session) ?? 0))
   const working = new Map<string, number>()
   for (const agent of agents)
     if (agent.state === 'working')

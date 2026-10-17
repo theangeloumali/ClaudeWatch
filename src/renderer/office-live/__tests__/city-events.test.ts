@@ -23,7 +23,13 @@ const usage = (tokens: number): SessionUsage => ({
 })
 // A session as the bridge reports it at `atMs`, freshly read unless told otherwise.
 const at = (atMs: number, overrides: Partial<SessionRef> = {}): SessionRef =>
-  makeSession({ key: 'claude:a', observation: seenAt(atMs), updatedAtMs: atMs, ...overrides })
+  makeSession({
+    key: 'claude:a',
+    observation: seenAt(atMs),
+    updatedAtMs: atMs,
+    startedAtMs: T0 - 60_000,
+    ...overrides
+  })
 
 describe('cityEvents', () => {
   it('a hello or resync re-seeds and fires nothing', () => {

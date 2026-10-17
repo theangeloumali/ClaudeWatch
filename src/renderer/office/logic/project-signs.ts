@@ -22,7 +22,15 @@ const VENUE_ICONS = [
 ] as const satisfies readonly WorldVenue['kind'][]
 
 // One atlas cell each, in this order.
-export const SIGN_ICONS = ['hand', 'error', 'unknown', ...TOOL_ICONS, ...VENUE_ICONS] as const
+// New icons go last, so every existing cell keeps its place.
+export const SIGN_ICONS = [
+  'hand',
+  'error',
+  'unknown',
+  ...TOOL_ICONS,
+  ...VENUE_ICONS,
+  'question'
+] as const
 export type SignIcon = (typeof SIGN_ICONS)[number]
 export type SignTint = 'needs-you' | 'error' | 'working' | 'unknown'
 
@@ -42,7 +50,8 @@ export const SIGN_BOARD: Record<SignTint, string> = {
 // Needs-you beats trouble, trouble beats work; idle or done is dark (null).
 export function signFor(signal: BuildingSignal): SignState | null {
   if (!signal.hasEvidence) return { icon: 'unknown', tint: 'unknown' }
-  if (signal.needsYou) return { icon: 'hand', tint: 'needs-you' }
+  if (signal.needsYou)
+    return { icon: signal.asks === 'question' ? 'question' : 'hand', tint: 'needs-you' }
   if (signal.hasError || signal.isLimited) return { icon: 'error', tint: 'error' }
   if (signal.busiestCategory) return { icon: signal.busiestCategory, tint: 'working' }
   return null

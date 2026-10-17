@@ -6,6 +6,7 @@ const building = (spireStage: number): BuildingSignal => ({
   tokensToday: null,
   spireStage,
   needsYou: false,
+  asks: null,
   hasError: false,
   isLimited: false,
   isDone: false,

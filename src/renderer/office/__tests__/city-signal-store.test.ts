@@ -22,7 +22,7 @@ const usage = (input: number): SessionUsage => ({
   contextLimit: null
 })
 const live = (key: string, overrides: Partial<SessionRef> = {}): SessionRef =>
-  makeSession({ key, observation: FRESH, usage: null, ...overrides })
+  makeSession({ key, observation: FRESH, usage: null, startedAtMs: NOW - 3_600_000, ...overrides })
 
 describe('city signal store', () => {
   it('keeps its version while the evidence says the same thing', () => {

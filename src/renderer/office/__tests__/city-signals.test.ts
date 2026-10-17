@@ -40,8 +40,9 @@ const usage = (tokens: number): SessionUsage => ({
   contextTokens: null,
   contextLimit: null
 })
+// Started this morning unless a row says otherwise: what a session spent before today is not today's.
 const live = (key: string, overrides: Partial<SessionRef> = {}): SessionRef =>
-  makeSession({ key, observation: FRESH, usage: null, ...overrides })
+  makeSession({ key, observation: FRESH, usage: null, startedAtMs: NOW - 3_600_000, ...overrides })
 const member = (id: string, overrides: Partial<SubagentRef> = {}): SubagentRef => ({
   id,
   type: 'general-purpose',
@@ -143,6 +144,7 @@ describe('citySignals', () => {
       hasError: false,
       isLimited: false,
       needsYou: false,
+      asks: null,
       hasEvidence: true
     }
     expect(signals.buildings.get(HOME)).toEqual(home)
@@ -162,6 +164,49 @@ describe('citySignals', () => {
     const after = signalsOf(makeFrame({ sessions: landed }), ledgerFor(landed, before))
     expect(after.buildings.get(HOME)).toMatchObject({ tokensToday: 2e6, spireStage: 2 })
     expect(after.companies.get('c_test')?.tokensToday).toBe(2e6)
+  })
+
+  it('a permission prompt and a question read apart on the building', () => {
+    const home = (sessions: SessionRef[]) => signalsOf(makeFrame({ sessions })).buildings.get(HOME)
+    expect(home([live('claude:a', { attention: 'permission' })])).toMatchObject({
+      needsYou: true,
+      asks: 'permission'
+    })
+    expect(home([live('claude:a', { attention: 'question' })])).toMatchObject({
+      needsYou: true,
+      asks: 'question'
+    })
+    // A permission stops the work outright, so it wins when both wait.
+    const both = [
+      live('claude:a', { attention: 'question' }),
+      live('claude:b', { attention: 'permission' })
+    ]
+    expect(home(both)?.asks).toBe('permission')
+  })
+
+  it('a session from yesterday wears no crown until it spends today', () => {
+    const yesterday = NOW - 30 * 3_600_000
+    const overnight = (tokens: number) => [
+      live('claude:a', { usage: usage(tokens), startedAtMs: yesterday, activity: 'editing' })
+    ]
+    const seen = ledgerFor(overnight(5e6))
+    const quiet = signalsOf(makeFrame({ sessions: overnight(5e6) }), seen)
+    expect(quiet.leaders.crowned).toEqual([])
+    expect(quiet.buildings.get(HOME)?.spireStage).toBe(0)
+    const later = signalsOf(
+      makeFrame({ sessions: overnight(6e6) }),
+      ledgerFor(overnight(6e6), seen)
+    )
+    expect(later.leaders.topSpender).toEqual({ key: 'claude:a', value: 1e6 })
+    expect(later.buildings.get(HOME)?.tokensToday).toBe(1e6)
+  })
+
+  it('a session started today counts every token it spent toward today', () => {
+    const morning = [live('claude:a', { usage: usage(2e6), activity: 'editing' })]
+    expect(signalsOf(makeFrame({ sessions: morning })).leaders.topSpender).toEqual({
+      key: 'claude:a',
+      value: 2e6
+    })
   })
 
   it('leaders: ties break by key; zero tokens never lead', () => {

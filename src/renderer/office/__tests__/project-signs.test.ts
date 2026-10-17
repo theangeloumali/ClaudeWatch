@@ -33,6 +33,7 @@ const quiet: BuildingSignal = {
   tokensToday: null,
   spireStage: 0,
   needsYou: false,
+  asks: null,
   hasError: false,
   isLimited: false,
   isDone: false,
@@ -44,6 +45,11 @@ describe('project signs', () => {
   it('a project with a permission prompt shows the hand on its sign', () => {
     const asking = live('claude:a', { attention: 'permission', activity: 'editing' })
     expect(signOf([asking])).toEqual({ icon: 'hand', tint: 'needs-you' })
+  })
+
+  it('a project with a question waiting shows the question mark on its sign', () => {
+    const asking = live('claude:a', { attention: 'question', activity: 'thinking' })
+    expect(signOf([asking])).toEqual({ icon: 'question', tint: 'needs-you' })
   })
 
   it('a working project shows the icon of its busiest fresh tool category', () => {
