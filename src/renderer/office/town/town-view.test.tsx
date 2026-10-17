@@ -1,6 +1,5 @@
 import { createElement, isValidElement, type ReactElement, type ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
-import { groupZonesByTheme, type ThemedZone } from '../logic/office-themes'
 import { BatchedScene } from '../scene/BatchedScene'
 import { CitySceneryCutaway } from '../scene/CitySceneryCutaway'
 import type { FloorGeometry } from '../scene-model'
@@ -41,11 +40,6 @@ const south = withTown(getTheme('brass-workshop'), 'test-town-south')
 registerTheme(north)
 registerTheme(south)
 
-const [firstCompany] = PAIR_FLOOR.zones
-// The first company wears `south`; the other wears `north`, and so does the floor.
-const themeIdFor = (zone: ThemedZone): string =>
-  zone.companyKey === firstCompany.companyKey ? south.id : north.id
-
 type Node = ReactElement<{
   children?: ReactNode
   placed?: readonly PlacedLot[]
@@ -65,10 +59,9 @@ function elements(node: ReactNode): Node[] {
 // The city a floor stands in, on its own site.
 const cityOf = (floor: FloorGeometry) => distributedTown(townOf(floor, null), [floor])
 
-function view(floor: FloorGeometry = PAIR_FLOOR, floorTheme = north, themeFor = themeIdFor) {
+function view(floor: FloorGeometry = PAIR_FLOOR, floorTheme = north) {
   const town = cityOf(floor)
-  const zoneGroups = groupZonesByTheme(floor, themeFor)
-  const nodes = elements(TownView({ town, floor, floorTheme, zoneGroups }))
+  const nodes = elements(TownView({ town, floor, floorTheme }))
   const [lots] = nodes.filter((node) => node.type === CitySceneryCutaway)
   return { town, lots, placedLots: lots.props.placed ?? [] }
 }
@@ -105,9 +98,8 @@ describe('TownView', () => {
 
   it('updates a moved lot even when the claim and lot count stay the same', () => {
     const town = cityOf(PAIR_FLOOR)
-    const zoneGroups = groupZonesByTheme(PAIR_FLOOR, themeIdFor)
     const cutaway = (current: typeof town) =>
-      elements(TownView({ town: current, floor: PAIR_FLOOR, floorTheme: north, zoneGroups })).find(
+      elements(TownView({ town: current, floor: PAIR_FLOOR, floorTheme: north })).find(
         (node) => node.type === CitySceneryCutaway
       )
     const [movedLot] = town.plan.lots
@@ -126,6 +118,16 @@ describe('TownView', () => {
     expect(placed.find(({ lot }) => lot.id === movedLot.id)?.lot.x).toBe(movedLot.x + 12)
   })
 
+  it('rebuilds the town batch when the town size changes, on the same lots', () => {
+    const city = cityOf(PAIR_FLOOR)
+    const village = { plan: { ...city.plan, size: 'village' as const } }
+    const cutaway = (town: typeof city) =>
+      elements(TownView({ town, floor: PAIR_FLOOR, floorTheme: north })).find(
+        (node) => node.type === CitySceneryCutaway
+      )
+    expect(cutaway(village)?.props.revision).not.toBe(cutaway(city)?.props.revision)
+  })
+
   it('rebuilds the town batch when the floor changes theme', () => {
     const otherFloor = view(PAIR_FLOOR, south)
     expect(otherFloor.lots.props.revision).not.toBe(view().lots.props.revision)
@@ -134,13 +136,11 @@ describe('TownView', () => {
 
 describe('TownAmbient', () => {
   const town = cityOf(PAIR_FLOOR)
-  const zoneGroups = groupZonesByTheme(PAIR_FLOOR, themeIdFor)
-  const ambient = (share: number, floorTheme = north, groups = zoneGroups) =>
+  const ambient = (share: number, floorTheme = north) =>
     TownAmbient({
       town,
       floor: PAIR_FLOOR,
       floorTheme,
-      zoneGroups: groups,
       share,
       isReducedMotion: false
     })
@@ -151,12 +151,11 @@ describe('TownAmbient', () => {
     expect(batch.props.isStatic).toBeUndefined()
     const handed = nodes.find((node) => node.type === north.kit.zone.Ambient)?.props.lots ?? []
     expect(handed).toHaveLength(town.plan.lots.length)
-    expect(nodes.some((node) => node.type === south.kit.zone.Ambient)).toBe(false)
   })
 
   it('hands the theme what the town drew on its lots, the very placements TownView drew', () => {
     const drawn = new Set(
-      elements(TownView({ town, floor: PAIR_FLOOR, floorTheme: north, zoneGroups }))
+      elements(TownView({ town, floor: PAIR_FLOOR, floorTheme: north }))
         .filter((node) => node.type === CitySceneryCutaway)
         .flatMap((node) => node.props.placed ?? [])
     )
@@ -168,9 +167,8 @@ describe('TownAmbient', () => {
 
   it('draws the floor theme’s steam once for the town, in the theme’s steam colour', () => {
     const edo = getTheme('neo-edo-steam')
-    const groups = groupZonesByTheme(PAIR_FLOOR, () => edo.id)
     const steamAt = (share: number) =>
-      elements(ambient(share, edo, groups)).filter((node) => node.type === RisingSteam)
+      elements(ambient(share, edo)).filter((node) => node.type === RisingSteam)
     const steam = steamAt(1)
     expect(steam.map((node) => node.props.color)).toEqual([edo.palette.steam])
     for (const node of steam) expect(node.props.stacks?.length).toBeGreaterThan(0)
@@ -197,13 +195,7 @@ describe('TownAmbient', () => {
       kit: { ...north.kit, zone: still }
     }
     registerTheme(quiet)
-    expect(
-      ambient(
-        1,
-        quiet,
-        groupZonesByTheme(PAIR_FLOOR, () => quiet.id)
-      )
-    ).toBeNull()
+    expect(ambient(1, quiet)).toBeNull()
   })
 })
 

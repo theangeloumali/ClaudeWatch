@@ -1,3 +1,4 @@
+import { useMemo, useSyncExternalStore } from 'react'
 import { dayKey } from '../../../shared/day-key'
 import type { OfficeFrame } from '../scene-model'
 import {
@@ -13,6 +14,7 @@ export interface CitySignalStore {
   current(): CitySignals
   // Bumps only when a signal changed, so scene layers re-pose on a change, not on a tick.
   version(): number
+  subscribe(listener: () => void): () => void
 }
 
 const EMPTY: CitySignals = {
@@ -40,6 +42,7 @@ export function createCitySignalStore(): CitySignalStore {
   let signals = EMPTY
   let print = fingerprint(EMPTY)
   let version = 0
+  const listeners = new Set<() => void>()
   return {
     update(frame, nowMs) {
       if (!frame) return
@@ -49,11 +52,32 @@ export function createCitySignalStore(): CitySignalStore {
       if (nextPrint === print) return
       print = nextPrint
       version += 1
+      for (const listener of listeners) listener()
     },
     current: () => signals,
-    version: () => version
+    version: () => version,
+    subscribe(listener) {
+      listeners.add(listener)
+      return () => void listeners.delete(listener)
+    }
   }
 }
 
 // The page's signals: fed once per frame at the Office root, read by layers in their frame loop.
 export const citySignalStore = createCitySignalStore()
+
+const stagesKey = (signals: CitySignals): string =>
+  JSON.stringify(
+    [...signals.buildings]
+      .filter(([, signal]) => signal.spireStage > 0)
+      .map(([buildingId, signal]) => [buildingId, signal.spireStage])
+      .sort()
+  )
+
+// Spires build into the building batch, so the scene re-renders only when a stage is reached.
+export function useSpireStages(
+  store: Pick<CitySignalStore, 'current' | 'subscribe'> = citySignalStore
+): ReadonlyMap<string, number> {
+  const key = useSyncExternalStore(store.subscribe, () => stagesKey(store.current()))
+  return useMemo(() => new Map(JSON.parse(key) as [string, number][]), [key])
+}

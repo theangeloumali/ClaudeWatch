@@ -27,6 +27,7 @@ export function PhysicalBuildingShell({
   areRoofsVisible = true,
   wallsMode = 'cutaway',
   isOverview = false,
+  spireStage = 0,
   onFocusFloor,
   onEditTarget
 }: {
@@ -36,6 +37,7 @@ export function PhysicalBuildingShell({
   areRoofsVisible?: boolean
   wallsMode?: WallsMode
   isOverview?: boolean
+  spireStage?: number
   onFocusFloor?: (floorId: string) => void
   onEditTarget?: (target: SceneEditTarget) => void
 }) {
@@ -119,8 +121,14 @@ export function PhysicalBuildingShell({
       {areRoofsVisible && (
         <group name={`physical-roof:${ground.buildingId ?? ground.floorId}`}>
           {!focused && <Parts parts={crown} />}
-          {roof && deck && (
-            <TokenSpire buildingId={buildingId} deck={deck} roof={roof} theme={theme} />
+          {roof && deck && spireStage > 0 && (
+            <TokenSpire
+              buildingId={buildingId}
+              deck={deck}
+              roof={roof}
+              theme={theme}
+              stage={spireStage}
+            />
           )}
           {!focused && (
             <group

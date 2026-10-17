@@ -58,6 +58,28 @@ export function MinimapSurface({
             className="pointer-events-none absolute inset-0 size-full"
           >
             <title id={titleId}>North-up {viewMode} map</title>
+            {model.railway && (
+              <g data-railway="" aria-hidden="true" className="stroke-text-secondary">
+                <polyline
+                  points={model.railway.ring.map((point) => `${point.x},${point.z}`).join(' ')}
+                  fill="none"
+                  vectorEffect="non-scaling-stroke"
+                  strokeWidth={1.5}
+                  strokeDasharray="4 3"
+                />
+                {model.railway.stations.map((station) => (
+                  <circle
+                    key={`${station.x},${station.z}`}
+                    cx={station.x}
+                    cy={station.z}
+                    r={radius * 1.2}
+                    className="fill-surface"
+                    vectorEffect="non-scaling-stroke"
+                    strokeWidth={1.5}
+                  />
+                ))}
+              </g>
+            )}
             {footprints.map((footprint) => (
               <rect
                 key={`${footprint.kind}:${footprint.id}`}

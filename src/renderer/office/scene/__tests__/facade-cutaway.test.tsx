@@ -194,8 +194,7 @@ describe('city cutaway (flicker-2)', () => {
       width: 4,
       depth: 4,
       maxHeight: 6,
-      seed: 1,
-      zoneId: null
+      seed: 1
     },
     design: 'probe-tower'
   })

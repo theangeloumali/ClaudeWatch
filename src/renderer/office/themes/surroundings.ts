@@ -16,8 +16,6 @@ export interface Lot {
   maxHeight: number
   // A stable 32-bit number for the theme to pick a design from.
   seed: number
-  // The company the lot belongs to; null for a lot the floor theme dresses.
-  zoneId: string | null
 }
 
 // Where the ground plane lies and lots stand: under the slab.

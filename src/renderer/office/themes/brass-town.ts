@@ -64,13 +64,5 @@ export const BRASS_TOWN: TownDress = {
   roads: { carriageway: BRASS.ink, sidewalk: '#92908A', promenade: BRASS.paper },
   citizens: BRASS_CITIZENS,
   vehicles: BRASS_VEHICLES,
-  garden: {
-    tree: 'copper planter tree',
-    lamp: 'gas lamp',
-    seat: 'iron bench',
-    feature: 'iron-fenced fountain square',
-    corner: 'bandstand green',
-    plazaPair: 'guild pennant',
-    innerTree: 'garden tree'
-  }
+  garden: 'iron-fenced fountain square'
 }

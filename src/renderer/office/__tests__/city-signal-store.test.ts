@@ -52,6 +52,18 @@ describe('city signal store', () => {
     expect(home?.spireStage).toBe(store.current().buildings.get(HOME)?.spireStage)
   })
 
+  it('tells a subscriber once per change, and nothing while the signals stand still', () => {
+    const store = createCitySignalStore()
+    let heard = 0
+    const stop = store.subscribe(() => (heard += 1))
+    store.update(makeFrame({ sessions: [live('claude:a')] }), NOW)
+    store.update(makeFrame({ sessions: [live('claude:a')] }), NOW + 500)
+    store.update(makeFrame({ sessions: [live('claude:a', { attention: 'permission' })] }), NOW)
+    stop()
+    store.update(makeFrame({ sessions: [live('claude:a')] }), NOW)
+    expect(heard).toBe(2)
+  })
+
   it('holds no signals before the first frame', () => {
     const store = createCitySignalStore()
     expect(store.current().buildings.size).toBe(0)

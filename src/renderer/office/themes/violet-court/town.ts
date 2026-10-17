@@ -44,13 +44,5 @@ export const COURT_TOWN: TownDress = {
   roads: { carriageway: '#1C1922', sidewalk: '#6E6880', promenade: '#A9A2BC' },
   citizens: COURT_CITIZENS,
   vehicles: COURT_VEHICLES,
-  garden: {
-    tree: 'topiary',
-    lamp: 'lamp-post',
-    seat: 'bench',
-    feature: 'parterre',
-    corner: 'cloister-lawn',
-    plazaPair: 'statue',
-    innerTree: 'garden tree'
-  }
+  garden: 'parterre'
 }

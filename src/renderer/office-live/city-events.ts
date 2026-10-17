@@ -144,7 +144,8 @@ export function createCityEventLog(): CityEventLog {
       seen = new Map(sessions.map((session) => [session.key, seenOf(session)]))
       totals = next
     },
-    // Read every drawn frame: it allocates only when an event has just ended.
+    // Read every drawn frame: it allocates only when an event has just ended. Pass wall time:
+    // under reduced motion the city clock stands still, and nothing would ever end.
     active(nowMs) {
       const isLive = (event: CityEvent): boolean =>
         nowMs - event.atMs < CITY_EVENT_LIFE_MS[event.kind]

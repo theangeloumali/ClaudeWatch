@@ -20,6 +20,7 @@ import { buildThemeRows, countThemeChoices, useThemeAssignments } from './logic/
 import { findZone } from './logic/zone-model'
 import { HUD_GRID_STYLE } from './logic/hud-layout'
 import { buildOperationsModel } from './logic/operations-model'
+import { citySignalStore } from './logic/city-signal-store'
 import { createFrameMetrics } from './frame-metrics'
 import { AgentActions } from './hud/AgentActions'
 import { PlayerControls } from './hud/PlayerControls'
@@ -28,6 +29,8 @@ import { BottomBar } from './hud/BottomBar'
 import { EmptyState } from './hud/EmptyState'
 import { FocusNotice } from './hud/FocusNotice'
 import { HealthBanner } from './hud/HealthBanner'
+import { LeadersCard } from './hud/LeadersCard'
+import { headerWithNewsLine, NewsLine } from './hud/NewsLine'
 import { Inspector } from './hud/Inspector'
 import { useInspectorPanel } from './hud/use-inspector-panel'
 import { ListView } from './hud/ListView'
@@ -166,7 +169,12 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
   const lists = useOfficeLists(frame, floorId, state.selectedAgentKey)
   const { sessions, queue, towerFloors, companies, ledger, agentFacts, activity } = lists
   const { floorAgents, cards, stacks, companyList } = lists
-  const announcement = useAttentionAnnouncement(queue)
+  const { announcement, news } = useAttentionAnnouncement(queue, sessions)
+  const { measureTotals } = inspectorPanel
+  const measureHeader = useCallback(
+    (height: number) => measureTotals(headerWithNewsLine(height)),
+    [measureTotals]
+  )
   const themeRows = useMemo(
     () => buildThemeRows(companies, themeAssignments, theme.id),
     [companies, themeAssignments, theme.id]
@@ -344,8 +352,9 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
             hasHiddenTitleBar={hasHiddenTitleBar}
             onChooseFloor={chooseOffice}
             onToggleList={() => dispatch({ type: 'list-toggled' })}
-            onHeightChange={inspectorPanel.measureTotals}
+            onHeightChange={measureHeader}
           />
+          <NewsLine news={news} />
         </div>
         <div
           ref={navigationRef}
@@ -395,6 +404,19 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
               }
             />
           </details>
+          {!isShowingList && sessions && sessions.length > 0 && (
+            <details open={!inspectorPanel.isNarrow} className="min-w-0">
+              <summary className={`${BUTTON_QUIET_COMPACT_CLASS} min-[1100px]:hidden`}>
+                Leaders
+              </summary>
+              <LeadersCard
+                version={citySignalStore.version()}
+                sessions={sessions}
+                companies={companies}
+                onFlyToZone={goToZone}
+              />
+            </details>
+          )}
           <div className="max-[1099px]:hidden">
             <AttentionRail
               queue={queue}
