@@ -80,12 +80,24 @@ export function foldLines(
       cacheWrite: open.cacheWrite - before.cacheWrite,
       cacheRead: open.cacheRead - before.cacheRead
     }
-    const atMs = typeof record.timestamp === 'string' ? Date.parse(record.timestamp) : Number.NaN
+    const atMs = recordAtMs(record)
     // Without a time the tokens cannot be placed under an account; the fold still counts them.
     if (Number.isFinite(atMs) && Object.values(added).some((amount) => amount > 0))
       onAdded({ atMs, position, counts: added })
   }
   return { closed, openId, open }
+}
+
+const recordAtMs = (record: Record<string, unknown> | null): number =>
+  typeof record?.timestamp === 'string' ? Date.parse(record.timestamp) : Number.NaN
+
+// When a transcript's conversation began: the time of its first timestamped record.
+export function firstRecordAtMs(head: string): number | undefined {
+  for (const line of head.split('\n')) {
+    const atMs = recordAtMs(jsonObject(line))
+    if (Number.isFinite(atMs)) return atMs
+  }
+  return undefined
 }
 
 export function foldTotal(fold: UsageFold): TokenCounts {
