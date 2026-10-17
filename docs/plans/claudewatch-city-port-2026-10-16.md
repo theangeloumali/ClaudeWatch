@@ -42,13 +42,13 @@
 
 ## Phase ledger
 
-- [ ] Phase 0: Base and baseline (office-health 7c and Task 8.3 merged in; budgets measured)
-- [ ] Phase 1: Foundation (budget harness, city clock, city signals and today's tokens, evidence-edge event log, privacy edge, bounded sign cache)
-- [ ] Phase 2: Landmarks (four-sided facades, lit icon signs, venue landmarks, sightline guard)
-- [ ] Phase 3: Traffic and rail (tool-call ids, work trips, railway ring, trains, stations, car kit, mini-map railway)
-- [ ] Phase 4: Growth, leaders and events (token spires, construction rig, crowns, leaders card, beacons, smoke and the `limited` producer, milestone fireworks, done flags, news line)
-- [ ] Phase 5: HUD (hide panels, privacy toggle, mini-map footprint and pan, Follow, labels round the chrome)
-- [ ] Phase 6: Company lens (re-tint per company, company cards)
+- [x] Phase 0: Base and baseline (office-health 7c and Task 8.3 merged in; budgets measured)
+- [x] Phase 1: Foundation (budget harness, city clock, city signals and today's tokens, evidence-edge event log, privacy edge, bounded sign cache)
+- [x] Phase 2: Landmarks (four-sided facades, lit icon signs, venue landmarks, sightline guard)
+- [x] Phase 3: Traffic and rail (tool-call ids, work trips, railway ring, trains, stations, car kit, mini-map railway)
+- [x] Phase 4: Growth, leaders and events (token spires, construction rig, crowns, leaders card, beacons, smoke and the `limited` producer, milestone fireworks, done flags, news line)
+- [x] Phase 5: HUD (hide panels, privacy toggle, mini-map footprint and pan, Follow, labels round the chrome)
+- [x] Phase 6: Company lens (re-tint per company, company cards)
 - [ ] Phase 7: Integration, live re-measure, local install (no STOP, Angelo 2026-10-17)
 - [ ] Phase 8: Close: simplify, review pair, Codex, dead code, checklist, MP4 demo, vault, push and merge to `main`
 
@@ -175,8 +175,8 @@
 
 The port starts from office-health with Phase 7's roster follow-up and Task 8.3 merged, so no slice edits the dead legacy town.
 
-- [ ] `git merge --no-ff fix/office-health-2026-10-16` once office-health's 7c and 8.3 have merged there. Run `npx vitest run`.
-- [ ] Keep the lead page probe (`page-probe.mjs`, `page-instrument.mjs`, `profile-summary.mjs`) in the ignored `/Users/angeloumali/Desktop/Work/ZKidz/ClaudeWatch/.claude/archive/perf-probe/`; it needs Playwright, which is not a repo dependency, and reads its worktree from `WORKTREE`. Record the baseline at `full`, `balanced` and `light`, focused and blurred, in this plan's Results:
+- [x] `git merge --no-ff fix/office-health-2026-10-16` once office-health's 7c and 8.3 have merged there. Run `npx vitest run`.
+- [x] Keep the lead page probe (`page-probe.mjs`, `page-instrument.mjs`, `profile-summary.mjs`) in the ignored `/Users/angeloumali/Desktop/Work/ZKidz/ClaudeWatch/.claude/archive/perf-probe/`; it needs Playwright, which is not a repo dependency, and reads its worktree from `WORKTREE`. Record the baseline at `full`, `balanced` and `light`, focused and blurred, in this plan's Results:
   - draws
   - triangles
   - upload p50
@@ -218,11 +218,11 @@ Research: `cross-cutting.md` F1, F3–F6; `growth-events.md` B0 and the A1 data 
 
 **Interfaces:** Produces `CITY_LAYER_BUDGET: Record<CityLayer, { draws: Record<QualityLevel, number>; uploadBytes: number }>` and `measureLayer(layer, level)`. Every later task adds its row.
 
-- [ ] RED tests:
+- [x] RED tests:
   - `metrics-dataset.test.tsx` › "canvas.dataset.uploadBytes is a number after one frame".
   - `city-port-budget.test.tsx` › "every port layer declares an allocation, and their sum stays within +12 draws at full" (no registry yet).
   - "a port layer uploads 0 bytes on a frame where nothing it draws moved".
-- [ ] Implement, run `npx vitest run src/renderer/office/scene`, and commit `test(scene): a budget per city layer, with upload bytes on the canvas`.
+- [x] Implement, run `npx vitest run src/renderer/office/scene`, and commit `test(scene): a budget per city layer, with upload bytes on the canvas`.
 
 ### Task 1.2: One city clock
 
@@ -230,11 +230,11 @@ Research: `cross-cutting.md` F1, F3–F6; `growth-events.md` B0 and the A1 data 
 
 **Interfaces:** `cityClock.now(): number` (one value per drawn frame), `cityClock.isPinned(): boolean` (reduced motion), and `cityClock.tick(frameMs)`, called once from `FrameGovernor`.
 
-- [ ] RED tests (`city-clock.test.ts`):
+- [x] RED tests (`city-clock.test.ts`):
   - "two readers in one frame see the same time";
   - "reduced motion pins the clock";
   - "a 10 s idle gap advances the clock by 10 s, not by frames drawn".
-- [ ] Implement, verify, and commit `feat(office): one city clock for every animated layer`.
+- [x] Implement, verify, and commit `feat(office): one city clock for every animated layer`.
 
 ### Task 1.3: City signals and today's tokens
 
@@ -257,14 +257,14 @@ Research: `cross-cutting.md` F1, F3–F6; `growth-events.md` B0 and the A1 data 
 
 **The ledger field is never sent as a hello.** `office-feed.ts:38-42` sends a hello on account change, and a hello per poll would reset Task 1.4's baseline every 2 s.
 
-- [ ] RED tests (`city-signals.test.ts`):
+- [x] RED tests (`city-signals.test.ts`):
   - "a building never lowers when one of its sessions ends";
   - "a session with stale observation sets no state";
   - "null usage is unknown and raises the building once it lands";
   - "leaders: ties break by key; zero tokens never lead";
   - "signals carry keys and numbers only, never labels".
-- [ ] RED test (`office-feed.test.ts`): "projectsToday rides a patch only when a total changed, never a hello per poll".
-- [ ] Implement, verify `npx vitest run src/renderer/office src/shared/office src/main/accounts`, and commit `feat(office): city signals from live evidence and today's tokens`.
+- [x] RED test (`office-feed.test.ts`): "projectsToday rides a patch only when a total changed, never a hello per poll".
+- [x] Implement, verify `npx vitest run src/renderer/office src/shared/office src/main/accounts`, and commit `feat(office): city signals from live evidence and today's tokens`.
 
 ### Task 1.4: Evidence-edge event log
 
@@ -277,14 +277,14 @@ Research: `cross-cutting.md` F1, F3–F6; `growth-events.md` B0 and the A1 data 
 - `cityEvents.version()`.
 - `CityEvent = { id; kind: 'milestone' | 'hoist' | 'dispatch'; buildingId; sessionKey; category?; atMs }`.
 
-- [ ] RED tests (`city-events.test.ts`):
+- [x] RED tests (`city-events.test.ts`):
   - "a hello or resync re-seeds and fires nothing";
   - "first sight of a session seeds and fires nothing";
   - "a milestone crossing between two patches fires once";
   - "a stale patch fires nothing";
   - "fired ids are deduped and pruned after 10 minutes";
   - "an account-change hello after a milestone does not fire it again" (Review Focus 1).
-- [ ] Implement, verify, and commit `feat(office): city events fire from evidence edges only`.
+- [x] Implement, verify, and commit `feat(office): city events fire from evidence edges only`.
 
 ### Task 1.5: Privacy edge
 
@@ -292,19 +292,19 @@ Research: `cross-cutting.md` F1, F3–F6; `growth-events.md` B0 and the A1 data 
 
 **Interfaces:** `maskFrame(frame: OfficeFrame, roles: RoleBook): OfficeFrame` and `createRoleBook()`, with roles by first sight: `Company A`, `Project A-1`.
 
-- [ ] RED tests (`role-names.test.tsx`):
+- [x] RED tests (`role-names.test.tsx`):
   - "with names hidden, no company or project label reaches signTexture" (spy);
   - "a role keeps its letter when a new project appears";
   - "the saved world document keeps real names while the screen shows roles";
   - "session names and cwd basenames are masked too".
-- [ ] Implement, verify, and commit `feat(office): hide company and project names at the frame edge`.
+- [x] Implement, verify, and commit `feat(office): hide company and project names at the frame edge`.
 
 ### Task 1.6: Bounded sign cache
 
 **Files:** modify `src/renderer/office/scene/textures.ts`.
 
-- [ ] RED test (`textures.test.ts`): "a hundred distinct sign texts keep at most 64 textures alive, and evicted ones are disposed".
-- [ ] Implement an LRU on text with `dispose()` on eviction. Commit `fix(scene): sign textures are bounded and disposed`.
+- [x] RED test (`textures.test.ts`): "a hundred distinct sign texts keep at most 64 textures alive, and evicted ones are disposed".
+- [x] Implement an LRU on text with `dispose()` on eviction. Commit `fix(scene): sign textures are bounded and disposed`.
 
 ## Phase 2 — Landmarks (@lena-landmarks, worktree; ITEM CW-CS-LAND)
 
@@ -316,10 +316,10 @@ Research: `landmarks.md` §1, §3, §4, §5. Night windows (§2) are out, by own
 
 **Files:** modify the corporate filler curtain builders named in `landmarks.md` §1. Move `coplanarConflicts` / `partBoxes` from `scene/__tests__/facade-coplanar.test.ts` into a shared test util, then run it over town and venue designs in every theme.
 
-- [ ] RED tests:
+- [x] RED tests:
   - "every corporate filler design dresses all four faces at each quarter turn";
   - "no town or venue design in any theme has a coplanar face pair".
-- [ ] Implement with `FACADE_LAYER_STEP_M` layering. Mullion tops stop one layer step short of the glass tops; CS ties them to one plane. Verify, and commit `fix(town): filler buildings finished on every side`.
+- [x] Implement with `FACADE_LAYER_STEP_M` layering. Mullion tops stop one layer step short of the glass tops; CS ties them to one plane. Verify, and commit `fix(town): filler buildings finished on every side`.
 
 ### Task 2.2: Lit icon signs
 
@@ -339,7 +339,7 @@ Research: `landmarks.md` §1, §3, §4, §5. Night windows (§2) are out, by own
 
 Signs re-pose only when the camera's orientation changes (hook into `CameraControls` `update`, as `RenderLoop.tsx` does). Cells and tints change only on a state change.
 
-- [ ] RED tests:
+- [x] RED tests:
   - "a project with a permission prompt shows the hand on its sign";
   - "a working project shows the icon of its busiest fresh tool category";
   - "no fresh evidence shows the grey sign";
@@ -348,7 +348,7 @@ Signs re-pose only when the camera's orientation changes (hook into `CameraContr
   - "signs face the camera at all four quarter turns";
   - "every icon meets 3:1 contrast on its disc" (icons are ink-tinted: white fails on 4 of the 5 state colours);
   - "a sign spans 18–40 px on screen at the city, building and floor bands" (N7: scale from `camera.zoom`, not distance).
-- [ ] Implement, verify, and commit `feat(scene): lit icon signs on project towers and venues`.
+- [x] Implement, verify, and commit `feat(scene): lit icon signs on project towers and venues`.
 
 ### Task 2.3: Venue landmarks
 
@@ -362,17 +362,17 @@ Signs re-pose only when the camera's orientation changes (hook into `CameraContr
 
 Modify `src/renderer/office/scene/VenueLayer.tsx` to draw them through `Parts` inside its static `BatchedScene`.
 
-- [ ] RED tests:
+- [x] RED tests:
   - "each venue kind has its own silhouette within its 12 × 10 m footprint";
   - "venue slots and entrances are unchanged";
   - "venue landmarks add at most 1 draw per theme" (budget row);
   - "every face is dressed at each quarter turn".
-- [ ] Implement, verify, and commit `feat(themes): venues read as landmarks`.
+- [x] Implement, verify, and commit `feat(themes): venues read as landmarks`.
 
 ### Task 2.4: Sightline guard
 
-- [ ] Add a point height to `town/sightline.test-utils.ts`. Test: "an office's crown sign and spire base stay in sight over their neighbours at all four rotations". This passes today, and pins A4.
-- [ ] Commit `test(town): signs and spires stay in sight over the street`.
+- [x] Add a point height to `town/sightline.test-utils.ts`. Test: "an office's crown sign and spire base stay in sight over their neighbours at all four rotations". This passes today, and pins A4.
+- [x] Commit `test(town): signs and spires stay in sight over the street`.
 
 ## Phase 3 — Traffic and rail (@lena-rail; @ravi for 3.1; ITEM CW-CS-RAIL)
 
@@ -391,10 +391,10 @@ Research: `traffic-rail.md` F1–F8, F10, F11. The hyperspeed line (F9) is out, 
 - Modify `src/shared/office/types.ts`: `CurrentTool.callId?: string`.
 - Modify the three readers: `src/bridge/claude.ts` (`tool_use.id`), `src/bridge/codex.ts` (`call_id`) and `src/bridge/opencode-activity.ts` (part id).
 
-- [ ] RED tests:
+- [x] RED tests:
   - "two consecutive Edit calls carry different callIds" (one per provider);
   - "callId never reaches a name card or the DOM".
-- [ ] Implement, verify `npx vitest run src/bridge src/shared`, and commit `feat(bridge): each tool call carries its own id`.
+- [x] Implement, verify `npx vitest run src/bridge src/shared`, and commit `feat(bridge): each tool call carries its own id`.
 
 ### Task 3.2: Work trips
 
@@ -414,7 +414,7 @@ Research: `traffic-rail.md` F1–F8, F10, F11. The hyperspeed line (F9) is out, 
 
 A trip borrows a fleet slot of its role and returns it, with at most 1 dispatch every 2 s city-wide. A ground ring marks a work trip (+1 draw).
 
-- [ ] RED tests (`work-trips.test.ts`):
+- [x] RED tests (`work-trips.test.ts`):
   - "an edit call sends a freight slot from the office kerb to a workshop and back";
   - "a read call sends nothing";
   - "a stale observation dispatches nothing";
@@ -422,51 +422,51 @@ A trip borrows a fleet slot of its role and returns it, with at most 1 dispatch 
   - "a dispatched trip causes no React commit";
   - "work trips never add a mover kind";
   - "a trip in flight during a relayout re-routes from where it is".
-- [ ] Implement, verify, and commit `feat(town): a real tool call sends a vehicle from its office`.
+- [x] Implement, verify, and commit `feat(town): a real tool call sends a vehicle from its office`.
 
 ### Task 3.3: Railway plan, timetable, viaduct and stations
 
 **Files:** create `src/renderer/office/town/railway-plan.ts` (pure, WeakMap memo), `railway-timetable.ts`, `scene/RailwayStructures.tsx` and `railway-stations.ts`. Modify `OfficeScene.tsx` so `sceneBox` includes the ring.
 
-- [ ] RED tests:
+- [x] RED tests:
   - "the ring sits 7 m outside the plan extent and crosses no sidewalk, zebra or lot";
   - "stations stand off the edge sidewalk";
   - "railwayPlan for 40 buildings takes under 10 ms";
   - "the timetable is a pure function of time";
   - "the viaduct is 1 draw";
   - "sceneBox contains the ring, so Horizon does not clip it".
-- [ ] Implement, verify, and commit `feat(town): a railway ring round the city`.
+- [x] Implement, verify, and commit `feat(town): a railway ring round the city`.
 
 ### Task 3.4: Trains
 
 **Files:** create `scene/RailwayTrains.tsx`: one `InstancedMesh` per car kind, posed from the timetable on the city clock, dirty-ranged.
 
-- [ ] RED tests:
+- [x] RED tests:
   - "trains upload at most 2 kB a frame";
   - "freight runs at full only";
   - "light shows the viaduct with no trains";
   - "stepping to light mid-run rebuilds no static batch" (Review Focus 4);
   - "a train's projected size at the city band stays above 6 px" (CS trap 29);
   - "trains stay on the deck at all four rotations".
-- [ ] Implement, verify, and commit `feat(scene): trains on the ring`.
+- [x] Implement, verify, and commit `feat(scene): trains on the ring`.
 
 ### Task 3.5: Car kit for corporate-city and cyberpunk-city
 
 **Files:** extend `figure-parts` with an index-safe merge. Port CS's extruded body profiles as per-theme vehicle dress.
 
-- [ ] RED tests:
+- [x] RED tests:
   - "each car model stays under 2,500 triangles";
   - "the merge keeps indexed and non-indexed parts";
   - "other themes keep their vehicles".
-- [ ] Implement, verify, and commit `feat(themes): extruded cars for the corporate and cyberpunk cities`.
+- [x] Implement, verify, and commit `feat(themes): extruded cars for the corporate and cyberpunk cities`.
 
 ### Task 3.6: Mini-map railway and budget rows
 
-- [ ] RED tests:
+- [x] RED tests:
   - "the city mini-map frames the ring";
   - "office view does not draw it";
   - budget rows: railway ≤ 4/2/1 draws (full/balanced/light), trains ≤ 2 kB a frame.
-- [ ] Implement in `logic/minimap-model.ts` and `hud/MinimapSurface.tsx`. Commit `feat(hud): the mini-map shows the railway`.
+- [x] Implement in `logic/minimap-model.ts` and `hud/MinimapSurface.tsx`. Commit `feat(hud): the mini-map shows the railway`.
 
 ## Phase 4 — Growth, leaders and events (@lena-growth; @ravi for 4.6; ITEM CW-CS-GROW)
 
@@ -487,30 +487,30 @@ Research: `growth-events.md` A1–A5, B1–B6.
 - `spireHeight(stage): number`, capped at `SPIRE_MAX_M`.
 - Built from one `BoxGeometry` mesh per module, so it shares the crown's batch.
 
-- [ ] RED tests:
+- [x] RED tests:
   - "stageFor is 0 below 1M and adds one stage per 1-2-5 step" (`999_999→0`, `1e6→1`, `2e6→2`, `5e6→3`, `1e7→4`);
   - "a stage never falls while the day's total rises or holds" (200 random non-decreasing totals);
   - "the day rollover lowers spires only when the local day key changes";
   - "100 token patches write no spire or height into the saved world document";
   - "the spire base is not coplanar with the crown top";
   - "a spire shares its batch with the crown".
-- [ ] Implement, verify, and commit `feat(scene): token spires rise as a project spends today`.
+- [x] Implement, verify, and commit `feat(scene): token spires rise as a project spends today`.
 
 ### Task 4.2: Construction rig and hoist
 
 **Files:** create `scene/ConstructionRig.tsx`, a transient of about 3 s on a spire stage crossing, at 2 draws (crane and scaffold merged; the module rides the particle mesh).
 
-- [ ] RED tests:
+- [x] RED tests:
   - "a stage crossing raises a rig for 3 s, then nothing";
   - "a hello shows the finished spire with no rig" (A5 rule);
   - "reduced motion skips the hoist";
   - "stepping quality mid-hoist rebuilds no static batch";
   - "a gain under 0.5% of the project's day raises no rig" (ClearSpent `c1fcb124` construction rows).
-- [ ] Implement, verify, and commit `feat(scene): a crane hoists each new spire stage`.
+- [x] Implement, verify, and commit `feat(scene): a crane hoists each new spire stage`.
 
 ### Task 4.3: Crowns
 
-- [ ] RED tests:
+- [x] RED tests:
   - "the top three leaders wear crowns, 1 draw";
   - "a crown over a roaming agent follows its live pose";
   - "a crown spans 14–32 px on screen at every zoom band and never covers its robot's name card" (N7);
@@ -519,7 +519,7 @@ Research: `growth-events.md` A1–A5, B1–B6.
 
   Port `leader-crowns.tsx`, instanced and dirty-ranged.
 
-- [ ] Commit `feat(scene): crowns over the day's leaders`.
+- [x] Commit `feat(scene): crowns over the day's leaders`.
 
 ### Task 4.4: Leaders card
 
@@ -534,62 +534,62 @@ Research: `growth-events.md` A1–A5, B1–B6.
 
 Rows never show ids. They honour `hideNames`.
 
-- [ ] RED tests:
+- [x] RED tests:
   - "rows come from citySignals leaders";
   - "names hidden shows roles";
   - "a row's tap flies to the building";
   - "the card commits at most once per changed patch".
-- [ ] Commit `feat(hud): a leaders card`.
+- [x] Commit `feat(hud): a leaders card`.
 
 ### Task 4.5: Needs-you beacons
 
-- [ ] RED tests:
+- [x] RED tests:
   - "a permission or question prompt raises a beacon over its building";
   - "it drops when answered";
   - "beacons cost 1 draw";
   - "the beacon ring takes its own ground layer slot".
-- [ ] Commit `feat(scene): beacons over offices that need you`.
+- [x] Commit `feat(scene): beacons over offices that need you`.
 
 ### Task 4.6: Error and rate-limit smoke, and the `limited` producer (@ravi for the bridge)
 
 **Files:** modify `src/bridge/claude.ts` and `src/bridge/codex.ts` (usage-limit and rate-limit evidence sets `attention: 'limited'`). Create `scene/CityParticles.tsx`: one shared opaque particle mesh for smoke, fireworks and hoist modules.
 
-- [ ] RED tests:
+- [x] RED tests:
   - `bridge/claude.test.ts` › "a usage-limit message in the transcript tail sets attention limited";
   - `bridge/codex.test.ts` › "a rate-limit event sets attention limited";
   - "an error or limited office puffs smoke";
   - "particles share 1 draw".
-- [ ] Commit `fix(bridge): rate-limited sessions report limited` and `feat(scene): smoke over offices in trouble`.
+- [x] Commit `fix(bridge): rate-limited sessions report limited` and `feat(scene): smoke over offices in trouble`.
 
 ### Task 4.7: Milestone fireworks
 
-- [ ] RED tests:
+- [x] RED tests:
   - "a session crossing 1M, 2M or 5M fires one burst from its building";
   - "a hello after the crossing fires nothing";
   - "bursts reuse the particle mesh".
-- [ ] Commit `feat(scene): fireworks at token milestones`.
+- [x] Commit `feat(scene): fireworks at token milestones`.
 
 ### Task 4.8: Done flags
 
-- [ ] RED tests:
+- [x] RED tests:
   - "a turn done raises a flag for the 120 s done badge";
   - "flags cost 1 draw".
-- [ ] Commit `feat(scene): a flag over a finished turn`.
+- [x] Commit `feat(scene): a flag over a finished turn`.
 
 ### Task 4.9: News line
 
-- [ ] Extend `use-office-effects.ts` `useAttentionAnnouncement` and `logic/attention-queue.ts`, then add a visible one-line ticker under the header.
-- [ ] RED tests:
+- [x] Extend `use-office-effects.ts` `useAttentionAnnouncement` and `logic/attention-queue.ts`, then add a visible one-line ticker under the header.
+- [x] RED tests:
   - "each city event yields one line";
   - "names hidden shows roles";
   - "the line commits once per event".
-- [ ] Commit `feat(hud): a news line for city events`.
+- [x] Commit `feat(hud): a news line for city events`.
 
 ### Task 4.10: One live roof per building
 
-- [ ] Port CS `SignalPlace.topAt` as `buildingPlace(buildingId).topAt(nowMs)`: roof + crown + spire stage. Signs, beacons, smoke, flags and crowns all sit on it.
-- [ ] RED test: "every mark rides a growing spire".
-- [ ] Commit `refactor(scene): one live roof height for every mark`.
+- [x] Port CS `SignalPlace.topAt` as `buildingPlace(buildingId).topAt(nowMs)`: roof + crown + spire stage. Signs, beacons, smoke, flags and crowns all sit on it.
+- [x] RED test: "every mark rides a growing spire".
+- [x] Commit `refactor(scene): one live roof height for every mark`.
 
 ## Phase 5 — HUD (@lena-hud; ITEM CW-CS-HUD)
 
@@ -599,43 +599,43 @@ Research: `hud.md` §2, §5, §6, §7, §8.
 
 ### Task 5.1: Hide the panels
 
-- [ ] RED tests:
+- [x] RED tests:
   - "the toggle hides the side and bottom panels on wide and medium layouts";
   - "phones keep the bottom sheet";
   - "safe insets drop to 0 while hidden";
   - "the control is a 44 px target with a label".
-- [ ] Commit `feat(hud): hide the panels for a clear view`.
+- [x] Commit `feat(hud): hide the panels for a clear view`.
 
 ### Task 5.2: Privacy toggle
 
 **Files:** add a row to `hud/OfficeSettings.tsx` using `SettingRow` / `ToggleSwitch`, writing `hideNames` (Task 1.5).
 
-- [ ] RED tests:
+- [x] RED tests:
   - "turning Hide names on mid-session leaves no real name in the DOM, cards, mini-map or sign textures" (Review Focus 2);
   - "it persists across a reload".
-- [ ] Commit `feat(hud): a Hide names setting for recordings`.
+- [x] Commit `feat(hud): a Hide names setting for recordings`.
 
 ### Task 5.3: Mini-map footprint and pan
 
 **Files:** extend `hud/Minimap.tsx`, `hud/MinimapSurface.tsx` and `logic/minimap-model.ts`. Add an `officeView` camera-view channel (a module store), a `CameraRequest { kind: 'point' }`, and live roamer dots drawn imperatively.
 
-- [ ] RED tests:
+- [x] RED tests:
   - "the footprint matches the orthographic view at each quarter turn";
   - "a tap pans the camera there";
   - "arrow keys pan";
   - "roamer dots move with 0 React commits".
-- [ ] Commit `feat(hud): the mini-map shows what you see and pans the city`.
+- [x] Commit `feat(hud): the mini-map shows what you see and pans the city`.
 
 ### Task 5.4: Follow
 
 **Files:** generalise `player/camera-follow.ts` `followStep` to any body that reads `officePoses`. Add `CameraRequest { kind: 'follow' }`.
 
-- [ ] RED tests:
+- [x] RED tests:
   - "Follow keeps a roaming agent in the HUD-safe area";
   - "Follow and the close-up frame by zoom: the camera's distance from its target is unchanged" (N7; port ClearSpent's follow offsets as zoom, not dolly);
   - "manual input ends it";
   - "a departed agent ends it".
-- [ ] Commit `feat(office): follow an agent as it walks`.
+- [x] Commit `feat(office): follow an agent as it walks`.
 
 ### Task 5.5: Labels round the chrome
 
@@ -643,10 +643,10 @@ Research: `hud.md` §2, §5, §6, §7, §8.
 
 The top bar is already handled: office-health `96f18b2` starts the card safe area below it and pins the selected card (reproduced live after Fly to on a walking agent). This task covers the floating controls inside the safe area (Collapse Minimap, the inspector's handles) and `OfficeNames`.
 
-- [ ] RED tests:
+- [x] RED tests:
   - "a card under a floating control is moved or culled";
   - "an office name under a floating control is moved or culled".
-- [ ] Commit `feat(cards): labels steer round the floating chrome`.
+- [x] Commit `feat(cards): labels steer round the floating chrome`.
 
 ## Phase 6 — Company lens (@lena-lens; ITEM CW-CS-LENS)
 
@@ -662,22 +662,22 @@ Research: `cross-cutting.md` X1, `hud.md` §1.
   - `logic/office-reducer.ts` (lens state);
   - the card layer (one card per company: working, needs you, errors, tokens today).
 
-- [ ] RED tests:
+- [x] RED tests:
   - "turning the lens on re-tints every office of a company to one hue and rebuilds no batch";
   - "neighbouring company keys get different hues within one theme";
   - "a company card counts working and waiting agents from fresh evidence only";
   - "the lens adds no draw";
   - "names hidden shows Company A".
-- [ ] Commit `feat(office): a company lens`.
+- [x] Commit `feat(office): a company lens`.
 
 ## Phase 7 — Integration, live re-measure, local install (lead; ITEM CW-CS-BASE)
 
 **Verify:** every gate exits 0; `codesign --verify --deep --strict /Applications/ClaudeWatch.app` exits 0; the Results table has the after row for every budget.
 
-- [ ] Merge `--no-ff` in the order 3 → 2 → 4, then 5 and 6. After each merge run `npx vitest run`.
-- [ ] Gates: prettier, `eslint .`, both `tsc`, `vitest run`, `knip`, `npm run build`.
+- [x] Merge `--no-ff` in the order 3 → 2 → 4, then 5 and 6. After each merge run `npx vitest run`.
+- [x] Gates: prettier, `eslint .`, both `tsc`, `vitest run`, `knip`, `npm run build`.
 - [ ] Page probe: full, balanced and light, focused and blurred. Record against the Phase 0 baseline and the Global Constraints budgets.
-- [ ] A 10-minute live capture on real sessions (view-only server):
+- [x] A 10-minute live capture on real sessions (view-only server):
   - 0 citizen or vehicle samples on a carriageway outside a crossing;
   - 0 working agents off their desks;
   - events fired only on evidence edges (the log against feed messages).
@@ -691,10 +691,10 @@ Research: `cross-cutting.md` X1, `hud.md` §1.
 
 **Verify:** `dead-code-check.sh` exits 0; the Wave 2 verdicts approve; the MP4 in `recordings/` is frame-verified; `gh pr view <n> --json state -q .state` prints MERGED.
 
-- [ ] Run `/simplify`.
+- [x] Run `/simplify`.
 - [ ] Review: Maya + Kai at risk 2, because names and the saved document are touched.
 - [ ] `bash ~/.claude/hooks/codex-review.sh`.
-- [ ] `bash ~/.claude/hooks/dead-code-check.sh`.
+- [x] `bash ~/.claude/hooks/dead-code-check.sh`.
 - [ ] The feature checklist.
 - [ ] An MP4 demo covering:
   - signs at four rotations
@@ -736,3 +736,32 @@ Phases 2, 3 and 4 run in parallel, and so do 5 and 6. Wall-clock is about 45% of
 Authorised by Angelo on 2026-10-17. After the close: push; merge PR #12 (`release/1.3.5`), then the office-health PR, then this PR into `main`, each with `gh pr merge --merge`. Publishing a notarised release stays behind the Apple notarisation blocker he owns (`~/.claude/state/blocker-acc6a39e-2363-4600-bc49-ff81b7c44b95.json`).
 
 ## Results
+
+### Phase 0 (baseline at `67a33e6`, page probe, view-only server on real data)
+
+| Level             | View          | Draws   | Triangles         | Upload p50     | react-dom commits / 30 s |
+| ----------------- | ------------- | ------- | ----------------- | -------------- | ------------------------ |
+| full, focused     | city / office | 38 / 37 | 130,974 / 128,306 | 21.1 / 16.4 kB | 54 / 47                  |
+| full, blurred     | city / office | 38 / 37 | 129,338 / 117,968 | 14.3 / 12.6 kB | 25 / 23                  |
+| balanced, focused | city / office | 37 / 36 | 112,302 / 111,270 | 11.1 / 11.1 kB | 48 / 48                  |
+| light, focused    | city / office | 34 / 33 | 108,318 / 108,488 | 9.9 / 12.9 kB  | 49 / 48                  |
+
+### Phases 1–6 (agent waves, merged into `feat/city-port-2026-10-16`)
+
+- Wave A (foundation, landmarks, bridge): budget harness, city clock, sign cache, city signals and today's tokens, evidence-edge events, Hide names edge, tool-call ids, `limited` from rate-limit evidence, four-sided facades (coplanar ties fixed in six more themes), venue landmarks, sightline guard.
+- Wave B (rail, growth, events): railway ring, trains, stations, work trips, car kit, mini-map railway; token spires, construction rig, crowns, lit icon signs; beacons, smoke and fireworks, done flags, leaders card, news line.
+- Wave C (HUD, lens): hide panels, Hide names toggle (editor, preview, accounts and teammates masked), mini-map footprint and pan, Follow by zoom, labels round the chrome; the company lens and company cards.
+- Lead fixes: one city signal store; marks rise 12 m over any roof and the horizon keeps room; a building carries only the spire stages it reached; crowns and spires count today's spend per session; a question shows its own sign; a company keeps its own name in each project's building; the mini-map shows the railway as soon as the scene lays it.
+- Page probe after Wave B: draws full 38 → 48, balanced 37 → 44, light 34 → 38 (within +12 / +8 / +4); triangles at full +21k (≤ 80k); upload p50 14–16 kB; react-dom commits unchanged; 0 page errors.
+
+### Phase 7 (integration at `5fb7032f`, view-only servers on real data)
+
+- Gates: both `tsc`, `eslint .`, `knip`, prettier, `vitest run` (5,226 passed), `npm run build`.
+- Hide names: 0 real company, project, session, teammate or account names in the DOM, with the lens on, in the editor and preview, and after a reload; 0 console errors. New controls: 86×44, 144×98, 294×44 px.
+- Citizens: 0 of 1,871 samples on a carriageway outside a zebra (163 on zebras); vehicles: 0 of 504 samples off the carriageway; 0 vehicle–walker pairs under 1.2 m.
+- Agents, 10 min: 591 samples of 15 agents, 0 working or unknown agents off their desks, 0 asphalt samples, 3 venue outings.
+
+### Phase 8 (close)
+
+- `/simplify`: four reviews (reuse, simplification, efficiency, altitude), fixed in three slices plus lead changes; two visible bugs fixed on the way (spires vanished on offices of four storeys or more; lots with no street were trip destinations). Spires batch city-wide (+1 draw), paid for by crowns at full only and work-trip rings counted as transient.
+- Dead-code scan: clean.
