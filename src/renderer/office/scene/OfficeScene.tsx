@@ -42,6 +42,7 @@ import { BodyObstacleSync } from './BodyObstacleSync'
 import { ShaderPrewarm } from './ShaderPrewarm'
 import { SpireStageFeed } from './SpireStageFeed'
 import { CitySigns } from './CitySigns'
+import { LeaderCrowns } from './LeaderCrowns'
 import type { BodyFootprint } from '../../../shared/office/body-footprints'
 
 interface OfficeSceneProps {
@@ -288,6 +289,9 @@ function OfficeScene(props: OfficeSceneProps) {
         </BatchedScene>
         {!props.isLayoutPreview && (
           <CitySigns venues={settings.town ? displayedVenues : undefined} palette={theme.palette} />
+        )}
+        {!props.isLayoutPreview && (
+          <LeaderCrowns agents={agents} sessions={props.sessions} palette={theme.palette} />
         )}
         {!props.isLayoutPreview && band !== 'building' && (
           <WorkstationScreens displays={visibleWorkstationDisplays(displays, selectedAgentKey)} />

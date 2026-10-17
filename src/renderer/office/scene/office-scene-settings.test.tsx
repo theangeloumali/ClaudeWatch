@@ -54,6 +54,7 @@ vi.mock('./NameCards', () => ({ NameCardLayer: () => null }))
 vi.mock('./OfficeNames', () => ({ OfficeNameLayer: () => null, OfficeNameProjector: () => null }))
 vi.mock('./WorkstationScreens', () => ({ WorkstationScreens: () => null }))
 vi.mock('./CitySigns', () => ({ CitySigns: () => null }))
+vi.mock('./LeaderCrowns', () => ({ LeaderCrowns: () => null }))
 vi.mock('./CameraRig', () => ({
   CameraRig: ({ scene }: { scene: object }) => (
     <i data-layer="camera" data-scene={JSON.stringify(scene)} />
