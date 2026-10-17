@@ -1,6 +1,7 @@
 import { gameCorner } from './game-corner'
 import type { FloorLayout, LayoutMap, RoomLayout, ZoneLayout } from './layout'
 import { bounds } from './rooms'
+import { footprintEdges } from '../../shared/office/world-document-geometry'
 import {
   WORLD_STOREY_METRES,
   worldRoomTarget,
@@ -41,6 +42,9 @@ export function buildEffectiveFloors({
           (zone) => zone.companyKey === home?.companyKey && zone.projectKey === home?.projectKey
         )
     if (!company || !project) continue
+    // Cloned without the parts each floor replaces: its rooms, and a corner of its own.
+    const { lounge: _lounge, children: _projects, ...companyFields } = company
+    const { children: _rooms, ...projectFields } = project
     for (let floorNumber = 1; floorNumber <= building.floors; floorNumber++) {
       const floorId = `${building.id}:${floorNumber}`
       const elevation = (floorNumber - 1) * WORLD_STOREY_METRES
@@ -63,7 +67,7 @@ export function buildEffectiveFloors({
         })
       const capacity = rooms.reduce((count, room) => count + room.capacity, 0)
       const projectZone: ZoneLayout = {
-        ...structuredClone(project),
+        ...structuredClone(projectFields),
         id: `${floorId}:project:${project.id}`,
         ...roomEnvelope(rooms, project, building),
         ...metadata,
@@ -77,7 +81,7 @@ export function buildEffectiveFloors({
         z: building.footprint.z + building.entrance.z
       }
       const companyZone: ZoneLayout = {
-        ...structuredClone(company),
+        ...structuredClone(companyFields),
         id: `${floorId}:company:${company.id}`,
         ...building.footprint,
         ...metadata,
@@ -99,7 +103,6 @@ export function buildEffectiveFloors({
           }
         : undefined
       // Every floor with offices gets its own corner; idle agents never leave their floor.
-      delete companyZone.lounge
       const corner = gameCorner({
         floorId,
         footprint: building.footprint,
@@ -167,10 +170,7 @@ function roomEnvelope(
   building: WorldBuilding
 ): ReturnType<typeof bounds> {
   if (!rooms.length) return bounds(building.footprint.x - 1, building.footprint.z - 1, 2, 2)
-  const west = Math.min(...rooms.map((room) => room.x - room.width / 2)) - 0.5
-  const east = Math.max(...rooms.map((room) => room.x + room.width / 2)) + 0.5
-  const north = Math.min(...rooms.map((room) => room.z - room.depth / 2)) - 0.5
-  const south = Math.max(...rooms.map((room) => room.z + room.depth / 2)) + 0.5
+  const { west, east, north, south } = footprintEdges(rooms, 0.5)
   const envelope = bounds(west, north, east - west, south - north)
   if (project.door.z > project.z) envelope.door.z = south
   return envelope

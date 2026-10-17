@@ -1,4 +1,4 @@
-import { cornerReach, cornerSeats } from '../../office/sim/game-corner'
+import { cornerDepth, cornerSeats } from '../../office/sim/game-corner'
 import { WORLD_DOCUMENT_LIMITS } from './world-document-limits'
 import type { WorldDocument, WorldRoom } from './world-document-types'
 
@@ -14,7 +14,7 @@ export function singleFloorWorldDocument(document: WorldDocument): WorldDocument
     const rooms = consolidated.rooms.filter((room) => room.buildingId === building.id)
     const packed = packRooms(rooms)
     // East of the offices, the edge margin is the corner's room gap and wall margin both.
-    const cornerBand = cornerReach(cornerSeats(rooms.flatMap((room) => room.desks).length))
+    const cornerBand = cornerDepth(cornerSeats(rooms.flatMap((room) => room.desks).length))
     const width = Math.max(12, packed.width + ROOM_EDGE_METRES * 2 + cornerBand)
     const depth = Math.max(12, packed.depth + ENTRY_HALL_METRES + ROOM_EDGE_METRES)
     if (

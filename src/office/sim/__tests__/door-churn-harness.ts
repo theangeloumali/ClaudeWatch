@@ -3,10 +3,9 @@ import type { AgentView, SessionRef, SourceHealth, SubagentRef } from '../../../
 import { createWorldDocument } from '../../../shared/office/world-document'
 import { resolveEffectiveWorld } from '../effective-world'
 import { session, subagent } from '../fixtures'
-import type { LayoutMap } from '../layout'
+import type { FloorLayout, LayoutMap } from '../layout'
 import type { Point } from '../path'
 import { World } from '../world'
-import { floorEntrance } from '../world-floor-routes'
 import { DoorInvariants, TICK_MS } from './door-invariants'
 
 const CREW = 6
@@ -19,6 +18,12 @@ const SOURCES: SourceHealth[] = [{ id: 'source', ok: true, detail: '' }]
 
 const resolveLayout = (base: LayoutMap, current: readonly SessionRef[]): LayoutMap =>
   resolveEffectiveWorld(base, createWorldDocument(base, current), current)
+
+// The floor's street entrance, or its lift when it has none.
+export function floorEntrance(floor: FloorLayout): Point {
+  const { x, z } = floor.entrance ?? floor.elevator
+  return { x, z }
+}
 
 export interface ChurnOptions {
   kind?: SubagentRef['kind']

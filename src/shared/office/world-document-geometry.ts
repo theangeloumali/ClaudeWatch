@@ -15,6 +15,18 @@ export function overlaps(first: WorldFootprint, second: WorldFootprint, clearanc
     Math.abs(first.z - second.z) < (first.depth + second.depth) / 2 + clearance - EPSILON
   )
 }
+// The outermost edges of a non-empty group of footprints, `margin` clear of them.
+export function footprintEdges(
+  footprints: readonly WorldFootprint[],
+  margin = 0
+): { west: number; east: number; north: number; south: number } {
+  return {
+    west: Math.min(...footprints.map((footprint) => footprint.x - footprint.width / 2)) - margin,
+    east: Math.max(...footprints.map((footprint) => footprint.x + footprint.width / 2)) + margin,
+    north: Math.min(...footprints.map((footprint) => footprint.z - footprint.depth / 2)) - margin,
+    south: Math.max(...footprints.map((footprint) => footprint.z + footprint.depth / 2)) + margin
+  }
+}
 export function contains(outer: WorldSize, inner: WorldFootprint, clearance = 0): boolean {
   return (
     Math.abs(inner.x) + inner.width / 2 + clearance <= outer.width / 2 + EPSILON &&

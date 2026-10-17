@@ -5,13 +5,13 @@ import type {
   SessionRef
 } from '../../shared/office/types'
 import type { Slot } from './layout'
-import type { FloorWaypoint } from './world-floor-routes'
+import type { Point } from './path'
 
 type AgentState = 'arriving' | 'working' | 'needs_you' | 'done' | 'leaving'
 export interface AgentRecord {
   view: AgentView
   state: AgentState
-  path: FloorWaypoint[]
+  path: Point[]
   dwellMs: number
   queued: AgentActivity | null
   slotHeading: number
@@ -30,29 +30,24 @@ const urgent = (attention: AgentAttention) =>
 export const LOUNGE_DELAY_MS = 20_000
 const WALK_METRES_PER_SECOND = 1.4
 
+// Seated at its destination: a newcomer fades in there, and a mover is given its route after.
 export function createAgent(
   session: SessionRef,
   destination: Destination,
-  path: FloorWaypoint[]
+  isSubagent: boolean
 ): AgentRecord {
-  const start = path[0] ?? destination
   return {
     view: {
       ...destination,
-      x: start.x,
-      z: start.z,
-      elevation: start.elevation ?? destination.elevation,
-      physicalFloorId:
-        start.physicalFloorId === undefined ? destination.physicalFloorId : start.physicalFloorId,
       agentKey: session.key,
       activity: session.activity,
       attention: session.attention,
       provider: session.provider,
-      isSubagent: false,
+      isSubagent,
       label: session.name
     },
     state: 'arriving',
-    path: path.map((p) => ({ ...p })),
+    path: [],
     dwellMs: 0,
     queued: null,
     slotHeading: destination.heading,
@@ -67,7 +62,6 @@ export function setFinished(agent: AgentRecord, isFinished: boolean): AgentRecor
 
 export function wantsLounge(agent: AgentRecord): boolean {
   return (
-    agent.state !== 'leaving' &&
     agent.path.length === 0 &&
     agent.view.place === undefined &&
     agent.finishedForMs !== null &&
@@ -75,7 +69,7 @@ export function wantsLounge(agent: AgentRecord): boolean {
   )
 }
 
-function walk(agent: AgentRecord, heading: number, path: FloorWaypoint[]): AgentRecord {
+function walk(agent: AgentRecord, heading: number, path: Point[]): AgentRecord {
   return { ...agent, state: 'arriving', slotHeading: heading, path: path.map((p) => ({ ...p })) }
 }
 
@@ -83,7 +77,7 @@ function walk(agent: AgentRecord, heading: number, path: FloorWaypoint[]): Agent
 export function goToLounge(
   agent: AgentRecord,
   seat: Pick<Slot, 'id' | 'heading'>,
-  path: FloorWaypoint[]
+  path: Point[]
 ): AgentRecord {
   const walking = walk(agent, seat.heading, path)
   return { ...walking, view: { ...agent.view, place: 'lounge' }, loungeSeatId: seat.id }
@@ -94,11 +88,7 @@ function withoutPlace(agent: AgentRecord): AgentRecord {
   return { ...agent, view, loungeSeatId: null }
 }
 
-export function returnToDesk(
-  agent: AgentRecord,
-  heading: number,
-  path: FloorWaypoint[]
-): AgentRecord {
+export function returnToDesk(agent: AgentRecord, heading: number, path: Point[]): AgentRecord {
   return walk(withoutPlace(agent), heading, path)
 }
 
@@ -108,7 +98,6 @@ export function updateAgent(
   attention: AgentAttention
 ): AgentRecord {
   const next = { ...agent, view: { ...agent.view, attention } }
-  if (next.state === 'leaving') return next
   if (urgent(attention)) {
     next.state = next.path.length ? 'arriving' : 'needs_you'
     next.view.heading = next.slotHeading
@@ -142,7 +131,7 @@ export function leaveAgent(agent: AgentRecord): AgentRecord {
 export function tickAgent(
   agent: AgentRecord,
   dtMs: number,
-  move?: (from: AgentView, to: FloorWaypoint) => FloorWaypoint
+  move?: (from: AgentView, to: Point) => Point
 ): AgentRecord {
   const next = {
     ...agent,
@@ -153,20 +142,18 @@ export function tickAgent(
   }
   if (next.state === 'arriving') {
     let distance = (dtMs / 1000) * WALK_METRES_PER_SECOND
+    // Planar: every agent route stays on the agent's own floor.
     while (next.path.length) {
-      const target = next.path[0],
-        dx = target.x - next.view.x,
-        dz = target.z - next.view.z,
-        dy = (target.elevation ?? next.view.elevation ?? 0) - (next.view.elevation ?? 0)
-      const length = Math.hypot(dx, dz, dy)
+      const target = next.path[0]
+      const dx = target.x - next.view.x
+      const dz = target.z - next.view.z
+      const length = Math.hypot(dx, dz)
       const proposed =
         length > distance
           ? {
               ...target,
               x: next.view.x + (dx / length) * distance,
-              z: next.view.z + (dz / length) * distance,
-              elevation: (next.view.elevation ?? 0) + (dy / length) * distance,
-              physicalFloorId: dy !== 0 ? null : target.physicalFloorId
+              z: next.view.z + (dz / length) * distance
             }
           : target
       const accepted = move?.(next.view, proposed) ?? proposed
@@ -174,26 +161,11 @@ export function tickAgent(
         next.view.heading = Math.atan2(accepted.x - next.view.x, accepted.z - next.view.z)
       next.view.x = accepted.x
       next.view.z = accepted.z
-      if (accepted.elevation !== undefined) next.view.elevation = accepted.elevation
-      if (accepted.physicalFloorId !== undefined)
-        next.view.physicalFloorId = accepted.physicalFloorId
       // A yield keeps the waypoint and walking state, but activity and lounge timers still advance.
-      if (
-        Math.hypot(
-          accepted.x - proposed.x,
-          accepted.z - proposed.z,
-          (accepted.elevation ?? next.view.elevation ?? 0) -
-            (proposed.elevation ?? next.view.elevation ?? 0)
-        ) > 1e-8
-      )
-        break
-      if (length > distance) {
-        break
-      }
+      if (Math.hypot(accepted.x - proposed.x, accepted.z - proposed.z) > 1e-8) break
+      if (length > distance) break
       next.view.x = target.x
       next.view.z = target.z
-      if (target.elevation !== undefined) next.view.elevation = target.elevation
-      if (target.physicalFloorId !== undefined) next.view.physicalFloorId = target.physicalFloorId
       distance -= length
       next.path.shift()
     }

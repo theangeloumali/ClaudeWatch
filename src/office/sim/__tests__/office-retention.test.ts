@@ -1,8 +1,8 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { DEPARTURE_FADE_MS, type AgentView } from '../../../shared/office/types'
 import { session } from '../fixtures'
-import { floorElevation, floorEntrance } from '../world-floor-routes'
-import { DoorWorld } from './door-churn-harness'
+import { floorElevation } from '../world-floor-routes'
+import { DoorWorld, floorEntrance } from './door-churn-harness'
 import { DoorInvariants, TICK_MS } from './door-invariants'
 
 // Full sim churn: the 5 s default times out under load (health-9).

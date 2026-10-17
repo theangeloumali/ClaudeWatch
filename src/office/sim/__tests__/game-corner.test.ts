@@ -8,6 +8,7 @@ import { gameCorner } from '../game-corner'
 import { buildLayout, type FloorLayout, type LoungeLayout } from '../layout'
 import { createAgent } from '../behaviour'
 import { FloorRoutes } from '../world-floor-routes'
+import { WORKER_BODY_RADIUS } from '../../../shared/office/body-footprints'
 
 const SCREEN_METRES = 1.2
 const EPSILON = 1e-6
@@ -94,7 +95,7 @@ describe('game corner: one beside the offices on every floor', () => {
         const farEdge = { x: corner.door.x + facing.x * reach, z: corner.door.z + facing.z * reach }
         const toScreen = (farEdge.x - seat.x) * facing.x + (farEdge.z - seat.z) * facing.z
         const fromDoor = (seat.x - corner.door.x) * facing.x + (seat.z - corner.door.z) * facing.z
-        expect({ toScreen: toScreen >= SCREEN_METRES, fromDoor: fromDoor > 0 }).toEqual({
+        expect({ toScreen: toScreen >= SCREEN_METRES - EPSILON, fromDoor: fromDoor > 0 }).toEqual({
           toScreen: true,
           fromDoor: true
         })
@@ -132,7 +133,7 @@ describe('game corner: one beside the offices on every floor', () => {
               elevation: floor.elevation,
               physicalFloorId: floor.id
             },
-            []
+            false
           )
           for (const seat of cornerOf(floor)!.slots)
             if (!routes.toFloor(agent.view, floor, seat).length)
@@ -158,9 +159,9 @@ describe('game corner: placement', () => {
     expect(corner!.z).toBeLessThan(0)
   })
 
-  // The -z corner fits its wall margin here, but its far edge is 1.15 m from the door.
+  // The -z corner fits its wall margin here, but its far edge is 1.35 m from the door.
   it('passes over a side whose corner would stand in the entrance', () => {
-    const corner = gameCorner(floor(30, 21))
+    const corner = gameCorner(floor(30, 17))
     expect(corner?.slots.map((seat) => seat.heading)).toEqual([
       Math.PI / 2,
       Math.PI / 2,
@@ -174,6 +175,31 @@ describe('game corner: placement', () => {
       connector: { x: 0, z: -8, width: 2, depth: 2 }
     })
     expect(corner?.slots[0].heading).toBe(Math.PI / 2)
+  })
+
+  // Six seats: a full front row of four and a centred back row of two.
+  it('sits the front row 1.2 m from the screen and the next a walkway nearer the door', () => {
+    const corner = gameCorner({ ...floor(30, 30, { x: 0, z: 15 }), deskCount: 6 })!
+    const facing = { x: Math.sin(corner.slots[0].heading), z: Math.cos(corner.slots[0].heading) }
+    const across = { x: -facing.z, z: facing.x }
+    const reach = Math.abs(facing.x) > 0.5 ? corner.width : corner.depth
+    const farEdge = { x: corner.door.x + facing.x * reach, z: corner.door.z + facing.z * reach }
+    const rows = [corner.slots.slice(0, 4), corner.slots.slice(4)].map((row) => ({
+      seats: row.length,
+      toScreen: Math.max(
+        ...row.map((seat) => (farEdge.x - seat.x) * facing.x + (farEdge.z - seat.z) * facing.z)
+      ),
+      offCentre:
+        row.reduce(
+          (sum, seat) => sum + (seat.x - corner.x) * across.x + (seat.z - corner.z) * across.z,
+          0
+        ) / row.length
+    }))
+    expect(rows.map((row) => row.seats)).toEqual([4, 2])
+    expect(rows[0].toScreen).toBeCloseTo(SCREEN_METRES, 6)
+    // Room to route a worker between two seated workers, its margin each side included.
+    expect(rows[1].toScreen - rows[0].toScreen).toBeGreaterThanOrEqual(4 * WORKER_BODY_RADIUS + 0.1)
+    for (const row of rows) expect(row.offCentre).toBeCloseTo(0, 6)
   })
 
   it('leaves a floor with no room on any side without a corner', () => {

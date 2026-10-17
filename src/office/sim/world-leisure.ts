@@ -2,8 +2,8 @@ import { isAtRest } from '../../shared/office/attention'
 import { observeAgent } from '../../shared/office/observation'
 import { parseAgentKey } from '../../shared/office/agent-key'
 import type { SessionRef, SourceHealth } from '../../shared/office/types'
-import { goToLounge, setFinished, type AgentRecord } from './behaviour'
-import type { FloorLayout, LayoutMap, LoungeLayout, Slot } from './layout'
+import { goToLounge, setFinished, wantsLounge, type AgentRecord } from './behaviour'
+import type { LayoutMap, LoungeLayout } from './layout'
 import { loungeSeats } from './lounge'
 import type { FloorRoutes } from './world-floor-routes'
 
@@ -19,8 +19,9 @@ interface LeisureContext {
   routes: FloorRoutes
   lounges: ReadonlyMap<string, LoungeLayout>
   clearPassage: (key: string) => void
-  // Walks it to its desk, or fades it there when no indoor route reaches it.
-  callHome: (agent: AgentRecord, floor: FloorLayout, desk: Slot) => AgentRecord
+  // Walks it to its desk, or fades it there when no indoor route reaches it; undefined when the
+  // map has no desk for it.
+  callHome: (agent: AgentRecord) => AgentRecord | undefined
 }
 
 interface Leisure extends LeisureContext {
@@ -54,17 +55,11 @@ function leisureMode(agent: AgentRecord, context: Leisure): 'legacy' | 'advanced
 }
 
 function returnHome(agent: AgentRecord, context: Leisure): void {
-  const key = agent.view.agentKey
-  const floor = context.map.floors.find((candidate) => candidate.id === agent.view.floorId)
-  const desk = floor?.rooms
-    .find((room) => room.id === agent.view.roomId)
-    ?.slots.find((slot) => slot.id === agent.view.slotId)
-  if (!floor || !desk || agent.state === 'leaving') return
-  context.clearPassage(key)
+  const returning = context.callHome(agent)
+  if (!returning) return
   // Disabling trips does not restart legacy work; advanced visits retain their cooldown.
-  const returning = context.callHome(agent, floor, desk)
   context.agents.set(
-    key,
+    agent.view.agentKey,
     leisureMode(agent, context) === 'legacy' ? returning : setFinished(returning, false)
   )
 }
@@ -96,9 +91,11 @@ export function reconcileLeisure(leisureContext: LeisureContext): void {
     if (agent.view.place === 'lounge' && (!context.hasTrips || mode === 'none'))
       returnHome(agent, context)
   }
-  const loungeAgents = [...context.agents.values()].map((agent) =>
-    modes.get(agent.view.agentKey) === 'none' ? { ...agent, finishedForMs: null } : agent
+  // A 'none' agent outside the lounge has no finished time, so it never wants a seat.
+  const loungeAgents = [...context.agents.values()].filter(
+    (agent) => agent.view.place === 'lounge' || modes.get(agent.view.agentKey) !== 'none'
   )
+  if (!loungeAgents.some((agent) => agent.view.place === 'lounge' || wantsLounge(agent))) return
   for (const [key, seat] of loungeSeats(
     loungeAgents,
     context.hasTrips ? context.lounges : new Map()
