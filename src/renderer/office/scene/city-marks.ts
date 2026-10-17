@@ -10,13 +10,12 @@ import {
 } from 'three'
 import { cityEvents, type CityEvent } from '../../office-live/city-events'
 import { buildingPlace, type PlaceTop } from '../logic/building-place'
-import type { ZoomBand } from '../logic/camera-bands'
+import type { SceneBox, ZoomBand } from '../logic/camera-bands'
 import { cityClock } from '../logic/city-clock'
 import { citySignalStore } from '../logic/city-signal-store'
 import type { BuildingSignal, CitySignals } from '../logic/city-signals'
 import { levelInUse, type QualityLevel } from '../logic/quality'
 import { useQualityChoice } from '../quality-store'
-import { MAX_LOT_HEIGHT_M } from '../themes/surroundings'
 
 // What every city mark reads in one drawn frame: the live signals, events and roofs.
 export interface CityMarkFrame {
@@ -53,9 +52,18 @@ export function useMarkLevel(): QualityLevel {
   return levelInUse(pin, chosen)
 }
 
-// The scene box always holds the 24 m height rule; a mark above a roof stops there, or Horizon
-// would clip it (N5).
-export const markCeiling = (top: PlaceTop): number => Math.max(top.y, MAX_LOT_HEIGHT_M)
+// A crown stands at most this far over its top storey; a spec pins it for every theme.
+export const CROWN_RISE_MAX_M = 3
+// The tallest mark over a roof: the beacon column.
+export const MARK_RISE_M = 12
+
+export const markCeiling = (top: PlaceTop): number => top.y + MARK_RISE_M
+
+// Horizon clips at its box, so it keeps room over the scene for a crown and its marks (N5).
+export const markClipBox = (box: SceneBox): SceneBox => ({
+  ...box,
+  maxY: box.maxY + CROWN_RISE_MAX_M + MARK_RISE_M
+})
 
 export const screenMetres = (pixels: number, zoom: number): number => pixels / Math.max(zoom, 0.1)
 

@@ -44,6 +44,7 @@ import { BodyObstacleSync } from './BodyObstacleSync'
 import { ShaderPrewarm } from './ShaderPrewarm'
 import type { BodyFootprint } from '../../../shared/office/body-footprints'
 import { CityBeacons } from './CityBeacons'
+import { markClipBox } from './city-marks'
 import { CityParticles } from './CityParticles'
 import { DoneFlags } from './DoneFlags'
 
@@ -220,6 +221,7 @@ function OfficeScene(props: OfficeSceneProps) {
     }),
     [reach, surfaces, town.plan, settings.town]
   )
+  const clipBox = useMemo(() => markClipBox(sceneBox), [sceneBox])
   const liveSessionKeys = useMemo(
     () => new Set(props.sessions.map((session) => session.key)),
     [props.sessions]
@@ -251,10 +253,7 @@ function OfficeScene(props: OfficeSceneProps) {
           }
         />
         <directionalLight position={[10, 20, 6]} intensity={isCyberpunkTheme ? 0.85 : 1.8} />
-        <Horizon
-          box={sceneBox}
-          color={isCyberpunkTheme ? theme.palette.ink : theme.palette.stone}
-        />
+        <Horizon box={clipBox} color={isCyberpunkTheme ? theme.palette.ink : theme.palette.stone} />
         {settings.town && <TownGround plan={town.plan} dress={dressOf(theme)} />}
         {settings.town && displayedVenues && (
           <VenueLayer
