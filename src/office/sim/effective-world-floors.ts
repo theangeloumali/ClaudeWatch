@@ -1,6 +1,7 @@
 import { gameCorner } from './game-corner'
 import type { FloorLayout, LayoutMap, RoomLayout, ZoneLayout } from './layout'
 import { bounds } from './rooms'
+import { footprintEdges } from '../../shared/office/world-document-geometry'
 import {
   WORLD_STOREY_METRES,
   worldRoomTarget,
@@ -167,10 +168,7 @@ function roomEnvelope(
   building: WorldBuilding
 ): ReturnType<typeof bounds> {
   if (!rooms.length) return bounds(building.footprint.x - 1, building.footprint.z - 1, 2, 2)
-  const west = Math.min(...rooms.map((room) => room.x - room.width / 2)) - 0.5
-  const east = Math.max(...rooms.map((room) => room.x + room.width / 2)) + 0.5
-  const north = Math.min(...rooms.map((room) => room.z - room.depth / 2)) - 0.5
-  const south = Math.max(...rooms.map((room) => room.z + room.depth / 2)) + 0.5
+  const { west, east, north, south } = footprintEdges(rooms, 0.5)
   const envelope = bounds(west, north, east - west, south - north)
   if (project.door.z > project.z) envelope.door.z = south
   return envelope

@@ -1,4 +1,5 @@
-import { contains, overlaps } from '../../shared/office/world-document-geometry'
+import { clamp } from '../../shared/range'
+import { contains, footprintEdges, overlaps } from '../../shared/office/world-document-geometry'
 import type { WorldFootprint } from '../../shared/office/world-document-types'
 import type { LoungeLayout, Slot } from './layout'
 import type { Point } from './path'
@@ -19,11 +20,7 @@ const SIDES = [
 type Side = (typeof SIDES)[number]
 
 // A seat for every desk on the floor, up to a full corner of eight.
-export const cornerSeats = (deskCount: number): number =>
-  Math.min(MAX_SEATS, Math.max(1, deskCount))
-
-// How far a corner reaches out from the offices it stands beside.
-export const cornerReach = (seats: number): number => loungeDepth(seats)
+export const cornerSeats = (deskCount: number): number => clamp(deskCount, [1, MAX_SEATS])
 
 interface CornerFloor {
   floorId: string
@@ -40,7 +37,7 @@ export function gameCorner(floor: CornerFloor): LoungeLayout | undefined {
   const seats = cornerSeats(floor.deskCount)
   const envelope = enclose(floor.rooms)
   for (const side of SIDES) {
-    const area = besideOffices(side, envelope, floor.footprint, cornerReach(seats))
+    const area = besideOffices(side, envelope, floor.footprint, loungeDepth(seats))
     if (fits(area, floor)) return layOut(area, side, seats, floor.floorId)
   }
   return undefined
@@ -58,10 +55,7 @@ function fits(area: WorldFootprint, floor: CornerFloor): boolean {
 }
 
 function enclose(rooms: readonly WorldFootprint[]): WorldFootprint {
-  const west = Math.min(...rooms.map((room) => room.x - room.width / 2))
-  const east = Math.max(...rooms.map((room) => room.x + room.width / 2))
-  const north = Math.min(...rooms.map((room) => room.z - room.depth / 2))
-  const south = Math.max(...rooms.map((room) => room.z + room.depth / 2))
+  const { west, east, north, south } = footprintEdges(rooms)
   return { x: (west + east) / 2, z: (north + south) / 2, width: east - west, depth: south - north }
 }
 
@@ -77,7 +71,7 @@ function besideOffices(
   const depth = isAcrossX ? LOUNGE_WIDTH : reach
   const slide = (centre: number, wall: number, span: number, size: number): number => {
     const slack = span / 2 - WALL_METRES - size / 2
-    return slack < 0 ? centre : Math.min(wall + slack, Math.max(wall - slack, centre))
+    return slack < 0 ? centre : clamp(centre, [wall - slack, wall + slack])
   }
   const offset = (span: number, size: number) => span / 2 + ROOM_METRES + size / 2
   return {
