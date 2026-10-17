@@ -12,10 +12,10 @@ const TEAMMATE_KEY = 'claude:5f1c9a2e#lena@acme-payroll'
 const KEYS = /5f1c9a2e|lena|acme-payroll/
 
 // The tooltip text and every visible word, as a recording would show them.
-const shownText = (root: Element): string =>
-  [root.textContent ?? '', ...[...root.querySelectorAll('[title]')].map((el) => el.title)].join(
-    '\n'
-  )
+const shownText = (root: Element): string => {
+  const titles = [...root.querySelectorAll('[title]')].map((el) => el.getAttribute('title'))
+  return [root.textContent, ...titles].join('\n')
+}
 
 beforeEach(() => {
   localStorage.clear()
