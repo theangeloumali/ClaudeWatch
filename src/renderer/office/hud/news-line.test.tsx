@@ -71,6 +71,40 @@ describe('news line', () => {
     expect(result.current.announcement).not.toMatch(/PropApp|auth/)
   })
 
+  it('turning Hide names on hides the name in a news line already shown', () => {
+    const { log, fire } = eventLog()
+    const named = [auth, docs]
+    const { result, rerender } = renderHook(
+      ({ sessions }) => useAttentionAnnouncement(buildAttentionQueue(sessions), sessions, log),
+      { initialProps: { sessions: named as readonly SessionRef[] } }
+    )
+    const waiting = [auth, { ...docs, attention: 'permission' as const }]
+    fire({ id: 'claude:a1b2:milestone:1', kind: 'milestone', sessionKey: auth.key })
+    rerender({ sessions: waiting })
+    expect(result.current.news?.text).toBe('PropApp › auth · reached 1M tokens')
+    expect(result.current.announcement).toMatch(/PropApp › docs.*PropApp › auth/)
+    const masked = maskFrame(makeFrame({ sessions: waiting }), createRoleBook()).sessions
+    rerender({ sessions: masked })
+    expect(result.current.news?.text).toBe('Project A-1 › Session A-1.1 · reached 1M tokens')
+    expect(result.current.announcement).toMatch(/Project A-1/)
+    expect(result.current.announcement).not.toMatch(/PropApp|auth|docs/)
+  })
+
+  it('a line whose session has left the frame is not shown', () => {
+    const { log, fire } = eventLog()
+    const { result, rerender } = renderHook(
+      ({ sessions }) => useAttentionAnnouncement(buildAttentionQueue(sessions), sessions, log),
+      { initialProps: { sessions: [auth, docs] as readonly SessionRef[] } }
+    )
+    fire({ id: 'claude:c3d4:done:1', kind: 'done', sessionKey: docs.key })
+    rerender({ sessions: [auth, docs] })
+    expect(result.current.news?.text).toBe('PropApp › docs · finished its turn')
+    // Its names could no longer follow Hide names, so the line goes rather than linger.
+    rerender({ sessions: [auth] })
+    expect(result.current.news).toBeNull()
+    expect(result.current.announcement).toBe('')
+  })
+
   it('the line commits once per event', () => {
     const { log, fire } = eventLog()
     const { result, again, counter } = hookFor([auth, docs], log)

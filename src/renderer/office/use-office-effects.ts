@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState, type Dispatch } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch } from 'react'
 import type { FocusResult, SessionRef } from '../../shared/office/types'
-import { cityEvents, type CityEventLog } from '../office-live/city-events'
+import { cityEvents, type CityEvent, type CityEventLog } from '../office-live/city-events'
 import {
   cityEventNews,
   newAttentionItems,
@@ -123,7 +123,36 @@ interface Announcement {
   news: NewsItem | null
 }
 
-const SILENT: Announcement = { announcement: '', news: null }
+// What a line reports, kept in place of its words: names are looked up in the sessions on screen
+// at each render, so a line shown before Hide names turned on never keeps a real name.
+type NewsSource = { kind: 'event'; event: CityEvent } | { kind: 'prompt'; item: AttentionItem }
+
+interface Said {
+  spoken: readonly NewsSource[]
+  latest: NewsSource | null
+}
+
+const UNSAID: Said = { spoken: [], latest: null }
+
+// The prompt as the sessions on screen name it; null once its session has left them.
+function promptNamed(item: AttentionItem, sessions: readonly SessionRef[]): AttentionItem | null {
+  const session = sessions.find((candidate) => candidate.key === item.sessionKey)
+  if (!session) return null
+  const { projectLabel, companyLabel, name: sessionName } = session
+  return { ...item, projectLabel, companyLabel, sessionName }
+}
+
+function newsOf(source: NewsSource, sessions: readonly SessionRef[]): NewsItem | null {
+  if (source.kind === 'event') return cityEventNews(source.event, sessions)
+  const item = promptNamed(source.item, sessions)
+  return item && queueNews(item)
+}
+
+function spokenOf(source: NewsSource, sessions: readonly SessionRef[]): string | null {
+  if (source.kind === 'event') return cityEventNews(source.event, sessions)?.text ?? null
+  const item = promptNamed(source.item, sessions)
+  return item && `${GEM_SPECS[item.attention].label}: ${item.projectLabel} › ${item.sessionName}`
+}
 
 // One polite, atomic message per change so screen readers hear "Needs permission: PropApp › auth", not a bare count.
 // City events join it, and the latest becomes the visible line; the first frame is a baseline
@@ -135,7 +164,7 @@ export function useAttentionAnnouncement(
 ): Announcement {
   const previousRef = useRef<readonly AttentionItem[] | null>(null)
   const wordedRef = useRef<ReadonlySet<string>>(new Set())
-  const [said, setSaid] = useState(SILENT)
+  const [said, setSaid] = useState(UNSAID)
   const firedCount = events.version()
   useEffect(() => {
     const previous = previousRef.current
@@ -145,18 +174,30 @@ export function useAttentionAnnouncement(
     const fresh = live.filter((event) => !wordedRef.current.has(event.id))
     wordedRef.current = new Set(live.map((event) => event.id))
     const isBaseline = previous === null
-    const eventNews = isBaseline
+    const worded = isBaseline
       ? []
-      : fresh.flatMap((event) => cityEventNews(event, sessions) ?? [])
-    const spoken = [
-      ...added.map(
-        (item) => `${GEM_SPECS[item.attention].label}: ${item.projectLabel} › ${item.sessionName}`
-      ),
-      ...eventNews.map((item) => item.text)
+      : fresh.filter((event) => cityEventNews(event, sessions) !== null)
+    const spoken: NewsSource[] = [
+      ...added.map((item) => ({ kind: 'prompt' as const, item })),
+      ...worded.map((event) => ({ kind: 'event' as const, event }))
     ]
-    const lines = isBaseline ? [] : [...added.map(queueNews), ...eventNews]
     if (spoken.length === 0) return
-    setSaid((current) => ({ announcement: spoken.join('. '), news: lines.at(-1) ?? current.news }))
+    setSaid((current) => ({
+      spoken,
+      latest: isBaseline ? current.latest : (spoken.at(-1) ?? null)
+    }))
   }, [queue, sessions, events, firedCount])
-  return said
+  const announcement = useMemo(
+    () => said.spoken.flatMap((source) => spokenOf(source, sessions) ?? []).join('. '),
+    [said, sessions]
+  )
+  const line = useMemo(() => said.latest && newsOf(said.latest, sessions), [said, sessions])
+  // A frame that words the line the same keeps the same object, so the memoised ticker stays put.
+  const lineId = line?.id
+  const lineText = line?.text
+  const news = useMemo(
+    () => (lineId !== undefined && lineText !== undefined ? { id: lineId, text: lineText } : null),
+    [lineId, lineText]
+  )
+  return { announcement, news }
 }
