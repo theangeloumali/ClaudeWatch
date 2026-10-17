@@ -41,6 +41,9 @@ import { SceneBodies } from './BodySpace'
 import { BodyObstacleSync } from './BodyObstacleSync'
 import { ShaderPrewarm } from './ShaderPrewarm'
 import type { BodyFootprint } from '../../../shared/office/body-footprints'
+import { CityBeacons } from './CityBeacons'
+import { CityParticles } from './CityParticles'
+import { DoneFlags } from './DoneFlags'
 
 interface OfficeSceneProps {
   // The floor's default: zones without a company or project theme inherit it.
@@ -318,6 +321,13 @@ function OfficeScene(props: OfficeSceneProps) {
             hasVehicles={settings.vehicles}
             bodies={bodies}
           />
+        )}
+        {!props.isLayoutPreview && (
+          <>
+            <CityBeacons floors={props.allFloors} palette={theme.palette} band={band} />
+            <CityParticles palette={theme.palette} band={band} />
+            <DoneFlags palette={theme.palette} band={band} />
+          </>
         )}
         {!props.isLayoutPreview && player && (
           <PlayerLayer
