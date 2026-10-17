@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { NAV_CELL_METRES } from '../../../office/sim/navigation'
+import { FURNITURE_SCALE } from '../../../shared/office/figure-scale'
 import type { LoungeGeometry } from '../scene-model'
 import { gameCornerParts } from './game-corner'
 import { gameCornerFixture, HEADINGS } from './game-corner.test-utils'
@@ -10,6 +12,11 @@ import { listThemes } from './registry'
 
 const SEAT_TOP_M = 0.3
 const CABINET_TOP_M = 1.3
+const BAG_M = 0.64
+// The sim lets a gamer rounding an outer seat walk half a nav cell past the front row.
+const WALKER_REACH = NAV_CELL_METRES / 2 / FURNITURE_SCALE
+// A passing robot's radius (layout-geometry.test), so none brushes a cabinet's front.
+const ROBOT_CLEAR = 0.3 / FURNITURE_SCALE
 const EPSILON = 1e-6
 
 const topOf = (part: PartSpec): number => partsTop([part])
@@ -41,6 +48,12 @@ function facingOf(corner: LoungeGeometry) {
   const beside = (x: number, z: number) => x * ahead.z - z * ahead.x
   const isAlongZ = Math.abs(ahead.z) > 0.5
   return { along, beside, thinAxis: isAlongZ ? 2 : 0, wideAxis: isAlongZ ? 0 : 2 }
+}
+
+// How far a part reaches back toward the seats, along the way they face.
+function nearEdgeOf(corner: LoungeGeometry, part: PartSpec): number {
+  const { along, thinAxis } = facingOf(corner)
+  return along(part.at[0], part.at[2]) - part.size[thinAxis] / 2
 }
 
 // The widest glowing part: the wall screen's panel.
@@ -136,6 +149,31 @@ describe.each(CASES)('the game corner with $name', ({ corner }) => {
     for (const cabinet of cabinets) expect(cabinet.some((part) => part.glow)).toBe(true)
   })
 
+  // The sim keeps every walker out of the strip between the front row and the far edge.
+  it('stands the cabinets in the band beyond the front row, beside the screen, facing the seats', () => {
+    const { along, beside } = facingOf(corner)
+    const frontRow = Math.max(...corner.seats.map((seat) => along(seat.x, seat.z)))
+    const panel = panelOf(corner, parts)
+    const panelSide = beside(panel.at[0], panel.at[2])
+    for (const cabinet of cabinetsOf(corner, parts)) {
+      for (const part of cabinet)
+        expect(nearEdgeOf(corner, part)).toBeGreaterThanOrEqual(
+          frontRow + WALKER_REACH + ROBOT_CLEAR
+        )
+      const [body] = cabinet.filter((part) => part.size[1] === 1.5)
+      const glow = cabinet.find((part) => part.glow)
+      if (!body || !glow) throw new Error('a cabinet has a body and a lit screen')
+      expect(along(glow.at[0], glow.at[2])).toBeLessThan(along(body.at[0], body.at[2]))
+      const lateral = Math.abs(beside(body.at[0], body.at[2]) - panelSide)
+      expect(lateral).toBeGreaterThan(panel.size[facingOf(corner).wideAxis] / 2)
+      for (const seat of corner.seats)
+        for (const part of cabinet)
+          expect(
+            gapBetween(footprintOf(part), { x: seat.x, z: seat.z, width: BAG_M, depth: BAG_M })
+          ).toBeGreaterThan(0)
+    }
+  })
+
   it('draws the same corner on every start', () => {
     expect(gameCornerParts(corner, BRASS)).toEqual(parts)
   })
@@ -154,7 +192,7 @@ it('leaves the arcade cabinets out of a corner too narrow to walk past them', ()
   expect(cabinetsOf(narrow, gameCornerParts(narrow, BRASS))).toEqual([])
 })
 
-it('moves both arcade cabinets off a far wall the screen spans', () => {
+it('leaves the cabinets out, and the screen whole, where neither fits beside it', () => {
   const slim: LoungeGeometry = {
     id: 'floor-1:games',
     x: 0,
@@ -164,7 +202,56 @@ it('moves both arcade cabinets off a far wall the screen spans', () => {
     door: { x: 0, z: -4.5 },
     seats: [{ slotId: 'games_seat_0', x: 0, z: 2.5, heading: 0 }]
   }
-  expect(cabinetsOf(slim, gameCornerParts(slim, BRASS))).toHaveLength(2)
+  const parts = gameCornerParts(slim, BRASS)
+  expect(cabinetsOf(slim, parts)).toEqual([])
+  expect(panelOf(slim, parts).size[0]).toBeCloseTo(2 - 0.14)
+})
+
+// A wide back row asks for a screen as wide as the corner allows.
+const wideBackRow: LoungeGeometry = {
+  id: 'floor-1:games',
+  x: 0,
+  z: 0,
+  width: 5,
+  depth: 6,
+  door: { x: 0, z: -3 },
+  seats: [
+    { slotId: 'games_seat_0', x: 0, z: 1.8, heading: 0 },
+    { slotId: 'games_seat_1', x: -1.875, z: -0.6, heading: 0 },
+    { slotId: 'games_seat_2', x: 1.875, z: -0.6, heading: 0 }
+  ]
+}
+
+it('narrows the screen so two cabinets flank it, where the corner is wide enough', () => {
+  const parts = gameCornerParts(wideBackRow, BRASS)
+  const cabinets = cabinetsOf(wideBackRow, parts)
+  expect(cabinets).toHaveLength(2)
+  const panel = panelOf(wideBackRow, parts)
+  expect(panel.size[0]).toBeGreaterThanOrEqual(1.8)
+  expect(panel.size[0]).toBeLessThan(4.2 - 0.14)
+  const screenParts = parts.filter(
+    (part) => topOf(part) > CABINET_TOP_M && !cabinets.flat().includes(part)
+  )
+  for (const part of cabinets.flat())
+    for (const screen of screenParts)
+      expect(gapBetween(footprintOf(part), footprintOf(screen))).toBeGreaterThan(0.05)
+})
+
+it('stands one cabinet on the only side with room beside an off-centre screen', () => {
+  // Seats right of centre pull the screen 0.7 m right, too near that side's cabinet spot.
+  const offCentre: LoungeGeometry = {
+    ...wideBackRow,
+    seats: [
+      { slotId: 'games_seat_0', x: 1, z: 1.8, heading: 0 },
+      { slotId: 'games_seat_1', x: -0.4, z: -0.6, heading: 0 },
+      { slotId: 'games_seat_2', x: 2.4, z: -0.6, heading: 0 }
+    ]
+  }
+  const parts = gameCornerParts(offCentre, BRASS)
+  const cabinets = cabinetsOf(offCentre, parts)
+  expect(cabinets).toHaveLength(1)
+  expect(cabinets[0][0].at[0]).toBeLessThan(0)
+  expect(panelOf(offCentre, parts).size[0]).toBeCloseTo(2.8 + 0.8 - 0.14)
 })
 
 it('paints every part from the theme palette, in every theme', () => {
