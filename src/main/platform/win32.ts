@@ -2,6 +2,7 @@ import { readFile } from 'fs/promises'
 import { homedir, totalmem } from 'os'
 import { join } from 'path'
 import type { RawProcessInfo, PlatformDetector } from './darwin'
+import { isWindowsAppProgram } from '../../bridge/agent-cli'
 import { isJsonObject } from '../../shared/json-object'
 import {
   filetimeToMs,
@@ -85,7 +86,7 @@ export function formatElapsed(totalSeconds: number): string {
 function isClaudeCode(command: string): boolean {
   const argv = splitCommandLine(command)
   if (!argv.length || programName(argv[0]) !== 'claude') return false
-  if (/[\\/](AnthropicClaude|WindowsApps)[\\/]/i.test(argv[0])) return false
+  if (isWindowsAppProgram(argv[0])) return false
   return !argv.some((arg) => arg.startsWith('--type='))
 }
 
