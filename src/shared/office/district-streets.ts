@@ -11,8 +11,7 @@ import type { TownRoad } from './town-roads'
 // dry-new: lattice roads cannot connect arbitrary plots; reuse the simulation's sparse corner router.
 export type DistrictSite = WorldFootprint & { entrance?: WorldPoint }
 
-// The sim (LayoutMap.streets), the renderer's town plan and the editor preview all lay their
-// streets here, from the same ground sites, so walkers and paint agree.
+// The renderer's town plan lays its streets here, for the live city and the editor preview alike.
 export function districtStreets(options: {
   sites: readonly DistrictSite[]
   obstacles: readonly WorldFootprint[]

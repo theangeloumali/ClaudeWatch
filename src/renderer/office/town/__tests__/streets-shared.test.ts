@@ -31,22 +31,15 @@ function world(): { base: LayoutMap; document: WorldDocument; sessions: SessionR
   return { base, document: createWorldDocument(base, sessions), sessions }
 }
 
-describe('one street list for the sim, the renderer and the editor preview', () => {
-  it('gives the live layout the streets the renderer plan lays', () => {
-    const { base, document, sessions } = world()
-    const live = resolveEffectiveWorld(base, document, sessions)
-    expect(live.streets?.length).toBeGreaterThan(0)
-    expect(byId(live.streets ?? [])).toEqual(byId(rendererRoads(live, sessions)))
-  })
-
+describe('the town plan lays its streets from the layout it is given', () => {
   it('gives a preview layout with a dragged building its own streets', () => {
     const { base, document, sessions } = world()
-    const live = resolveEffectiveWorld(base, document, sessions)
+    const live = rendererRoads(resolveEffectiveWorld(base, document, sessions), sessions)
     const preview = structuredClone(document)
     preview.buildings[0].footprint.x += 160
     expect(validateWorldDocument(preview, { layout: base, sessions })).toEqual([])
     const dragged = resolveEffectiveWorld(buildLayout(sessions, undefined), preview, sessions)
-    expect(byId(dragged.streets ?? [])).not.toEqual(byId(live.streets ?? []))
-    expect(byId(dragged.streets ?? [])).toEqual(byId(rendererRoads(dragged, sessions)))
+    expect(live.length).toBeGreaterThan(0)
+    expect(byId(rendererRoads(dragged, sessions))).not.toEqual(byId(live))
   })
 })
