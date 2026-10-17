@@ -12,21 +12,15 @@ import { floorElevation } from './world-floor-routes'
 import type { FloorLayout } from './layout'
 import { contains } from '../../shared/office/world-document-geometry'
 
-// dry-new: a physical-floor cache alone cannot guide a body across the street/door seam.
+// Agents never leave their floor, so its grid is all the ground a walker has: off it is closed.
 export function workerNavigation(options: { routes: FloorRoutes; from: AgentView }) {
-  const paths =
-    options.routes.paths(options.from.physicalFloorId) ?? options.routes.paths(options.from.floorId)
-  const isOpen = (point: Point): boolean =>
-    paths?.contains(point)
-      ? paths.isOpen(point)
-      : (options.from.elevation ?? 0) === 0 && options.routes.isStreetOpen(point)
+  const paths = options.routes.paths(options.from.physicalFloorId)
   return {
-    paths,
-    isOpen,
+    isOpen: (point: Point): boolean => paths?.isOpen(point) ?? false,
     around: (body: BodyFootprint, target: Point, obstacles: readonly BodyFootprint[]): Point[] =>
-      paths && paths.contains(body) && paths.contains(target)
+      paths?.contains(body) && paths.contains(target)
         ? paths.around({ body, to: target, obstacles })
-        : options.routes.aroundStreet(body, target, obstacles)
+        : []
   }
 }
 
@@ -103,9 +97,7 @@ export function recoverWorkerRoute(options: {
   const paths = routes.paths(agent.view.physicalFloorId)
   const target = agent.path.at(-1)
   if (!target) return []
-  return paths?.contains(body)
-    ? paths.around({ body, to: target, obstacles })
-    : routes.aroundStreet(body, target, obstacles)
+  return paths?.contains(body) ? paths.around({ body, to: target, obstacles }) : []
 }
 
 export function resumeUnseatedWorker(agent: AgentRecord, routes: FloorRoutes): AgentRecord {
