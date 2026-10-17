@@ -56,7 +56,7 @@ function pageOn(
     save = (document: unknown) => world.save(document),
     storage = memoryStorage()
   }: {
-    save?: (document: unknown) => WorldSaveReply
+    save?: (document: unknown) => WorldSaveReply | Promise<WorldSaveReply>
     storage?: ReturnType<typeof memoryStorage>
   } = {}
 ) {
@@ -135,7 +135,7 @@ describe('one saved city per host (health-13)', () => {
     expect(open().store().get().document).toEqual(city)
   })
 
-  it('puts the host’s city back when the host refuses a save', async () => {
+  it('the editor sees a failed host save, and the host’s city comes back', async () => {
     const app = open()
     const shown = app.store().get()
     await app.store().save(renamed(shown.document, 'Arranged'), shown.revision)
@@ -144,10 +144,20 @@ describe('one saved city per host (health-13)', () => {
     })
     const { document, revision } = viewer.store().get()
     expect(await viewer.store().save(renamed(document, 'Refused'), revision)).toMatchObject({
-      success: true
+      success: false,
+      reason: 'not-permitted'
     })
-    await vi.waitFor(() =>
-      expect(viewer.store().get().document.buildings[0]?.displayName).toBe('Arranged')
-    )
+    expect(viewer.store().get()).toMatchObject({ error: 'not-permitted', unsaved: true })
+    expect(viewer.store().get().document.buildings[0]?.displayName).toBe('Arranged')
+  })
+
+  it('the editor sees a save the host never received', async () => {
+    const page = open({ save: () => Promise.reject(new Error('offline')) })
+    const { document, revision } = page.store().get()
+    expect(await page.store().save(renamed(document, 'Lost'), revision)).toMatchObject({
+      success: false,
+      reason: 'storage-write'
+    })
+    expect(page.store().get().document.buildings[0]?.displayName).not.toBe('Lost')
   })
 })

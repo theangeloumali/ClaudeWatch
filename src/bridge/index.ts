@@ -1,6 +1,6 @@
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
-import type { CodexUsageMessage, UsageMessage } from '../shared/accounts'
+import { type CodexUsageMessage, handoverOf, type UsageMessage } from '../shared/accounts'
 import { paceOf } from '../shared/office/pace'
 import type { FeedMessage } from '../shared/office/types'
 import { BridgePoller } from './poller'
@@ -26,7 +26,7 @@ export async function main(args = process.argv.slice(2), port?: BridgePort): Pro
     ...(args.includes('--accounts') && { derivesAccounts: true }),
     // Only a parent listens for added tokens; a one-shot run prints the snapshot alone.
     ...(port && {
-      onUsage: (deltas) => port.postMessage({ type: 'usage', v: 1, deltas }),
+      onUsage: (deltas, handover) => port.postMessage({ type: 'usage', v: 1, handover, deltas }),
       onCodexTotals: (totals) => port.postMessage({ type: 'codex-usage', v: 1, totals })
     })
   })
@@ -42,6 +42,8 @@ export async function main(args = process.argv.slice(2), port?: BridgePort): Pro
   port.on('message', ({ data }) => {
     const intervalMs = paceOf(data)
     if (intervalMs !== null) poller.setIntervalMs(intervalMs)
+    const durable = handoverOf(data, 'usage-durable')
+    if (durable !== null) poller.usageDurable(durable)
   })
   await poller.start((message) => port.postMessage(message))
 }

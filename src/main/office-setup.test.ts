@@ -92,7 +92,8 @@ describe('setupOffice', () => {
     decorateSession: unchanged,
     onOfficeChange: () => () => {},
     isWatchingAccounts: false,
-    onWatchingChange: () => () => {}
+    onWatchingChange: () => () => {},
+    onUsageDurable: () => () => {}
   }
   const commands = (): [string, string[]][] =>
     execFilePromise.mock.calls.map(([program, args]) => [program, args])

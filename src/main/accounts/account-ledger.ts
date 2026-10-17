@@ -37,8 +37,8 @@ const ORCA_INTERVAL_MS = 5 * 60_000
 const ORCA_MIN_GAP_MS = 30_000
 // A name the owner typed, or a change of sign-in, is written within this long.
 const SAVE_DELAY_MS = 30_000
-// Counted tokens wait longer: after a crash the bridge reports every live transcript again and
-// they are counted again. Only what a session spent and then exited within the wait is lost.
+// Counted tokens wait longer: the bridge saves its offsets only past what was saved here, so
+// after a crash it reports those lines again. Only a session that exited within the wait is lost.
 const USAGE_SAVE_DELAY_MS = 2 * 60_000
 // How long the sign-in has been watched changes at every look and is written this often, and
 // at quit: after a restart it is where the open span ends if another account is then found.
@@ -71,6 +71,7 @@ export class AccountLedger {
   private readonly listeners = new Set<(state: AccountsState) => void>()
   private readonly officeListeners = new Set<() => void>()
   private readonly watchingListeners = new Set<() => void>()
+  private readonly durableListeners = new Set<() => void>()
 
   constructor(private readonly options: AccountLedgerOptions) {
     this.isWatching = options.isWatching
@@ -121,6 +122,14 @@ export class AccountLedger {
     this.publish()
   }
 
+  // Fires when every usage line handed over so far is on disk or deliberately not counted.
+  onUsageDurable(listener: () => void): () => void {
+    this.durableListeners.add(listener)
+    return () => {
+      this.durableListeners.delete(listener)
+    }
+  }
+
   onChange(listener: (state: AccountsState) => void): () => void {
     this.listeners.add(listener)
     return () => {
@@ -159,6 +168,11 @@ export class AccountLedger {
   decorateSession = (session: SessionRef): SessionRef => decorateSession(this.tracked, session)
 
   ingestBridgeMessage(message: unknown): void {
+    this.countBridgeMessage(message)
+    this.announceDurable()
+  }
+
+  private countBridgeMessage(message: unknown): void {
     if (!this.isWatching) return
     const deltas = toUsageDeltas(message)
     const totals = toCodexTotals(message)
@@ -220,6 +234,7 @@ export class AccountLedger {
     if (before !== JSON.stringify([state.accounts, state.spans])) return this.changed()
     if (hasCounted) this.counted()
     if (isFirstLook || dayKey(now) !== this.shownDay) this.publish()
+    this.announceDurable()
   }
 
   private load(): boolean {
@@ -291,6 +306,14 @@ export class AccountLedger {
     } catch {
       console.error('[accounts] the ledger could not be saved')
     }
+    this.announceDurable()
+  }
+
+  // Lines dropped by a ledger that could not be read are not durable: a restart reports them.
+  private announceDurable(): void {
+    const isHolding = this.waiting.length > 0 || (this.isWatching && !this.state)
+    if (this.isUnsaved || isHolding) return
+    for (const listener of this.durableListeners) listener()
   }
 
   private publish(): void {
