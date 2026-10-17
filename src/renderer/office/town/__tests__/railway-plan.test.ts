@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { makeFloor } from '../../__tests__/fixtures'
 import { citySidewalks } from '../../citizens/city-sidewalks'
 import { routePose, type RoutePoint } from '../../citizens/route-pose'
@@ -9,6 +9,9 @@ import { railwayStations, stationBoxes } from '../railway-stations'
 import { timetable, trainAt } from '../railway-timetable'
 import { townOf } from '../use-town-plan'
 import type { TownPlan } from '../town-plan'
+
+// Whole-city builds take ~1.7 s alone; a loaded suite runs past the 5 s default.
+vi.setConfig({ testTimeout: 60_000 })
 
 const EPSILON_M = 1e-6
 

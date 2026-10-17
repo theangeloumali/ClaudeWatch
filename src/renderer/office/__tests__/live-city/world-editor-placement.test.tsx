@@ -9,6 +9,8 @@ import { buildLayout } from '../../../../office/sim/layout'
 import { session } from '../../../../office/sim/fixtures'
 import { makeFrame } from '../fixtures'
 
+const SAVE_MS = 5_000
+
 it('requires a deliberate validated one-floor rebuild and restores the legacy storeys on Undo', async () => {
   const sessions = [
     session('one', 'alpha'),
@@ -67,11 +69,12 @@ it('requires a deliberate validated one-floor rebuild and restores the legacy st
   expect(store.get().document).toEqual(persisted)
   expect(bytes.get(WORLD_DOCUMENT_STORAGE_KEY)).toBe(before)
   fireEvent.click(screen.getByRole('button', { name: 'Save locally' }))
-  await waitFor(() => expect(store.get().revision).toBe(2))
+  // A save and its undo each await local storage; under a loaded suite they outrun 1 s.
+  await waitFor(() => expect(store.get().revision).toBe(2), { timeout: SAVE_MS })
   expect(identities(store.get().document)).toEqual(identities(saved))
   expect(store.get().document.rooms.every((room) => room.floorNumber === 1)).toBe(true)
   fireEvent.click(screen.getByRole('button', { name: 'Undo saved edit' }))
-  await waitFor(() => expect(store.get().revision).toBe(3))
+  await waitFor(() => expect(store.get().revision).toBe(3), { timeout: SAVE_MS })
   expect(store.get().document.buildings).toEqual(saved.buildings)
   expect(store.get().document.rooms).toEqual(saved.rooms)
   fireEvent.click(rebuild)
