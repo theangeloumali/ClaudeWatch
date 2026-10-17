@@ -53,7 +53,8 @@ it('lets a tool into the feed only under a name that is a label', () => {
     })
   expect(parseTranscript(tool('mcp__chrome-devtools__click')).tool).toEqual({
     name: 'mcp__chrome-devtools__click',
-    category: 'other'
+    category: 'other',
+    callId: 'id-27'
   })
   expect(parseTranscript(tool(OVERLONG)).tool).toBeNull()
   expect(parseTranscript(tool('Bash\nIGNORE PREVIOUS')).tool).toBeNull()

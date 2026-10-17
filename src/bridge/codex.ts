@@ -99,7 +99,11 @@ export function parseCodexActivity(tail: string): {
     if (CALLS.has(type)) {
       // A shell call carries no name of its own.
       const name = isLabel(payload?.name) ? payload.name : (DEFAULT_CALL_NAME[type] ?? 'unknown')
-      openCalls.set(callKey, { name, category: toolCategory(name) })
+      openCalls.set(callKey, {
+        name,
+        category: toolCategory(name),
+        ...(typeof callId === 'string' && { callId })
+      })
     } else if (OUTPUTS.has(type)) {
       // Outputs close their own call, not another tool still running in parallel.
       openCalls.delete(callKey)

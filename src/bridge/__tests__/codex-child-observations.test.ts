@@ -445,7 +445,9 @@ it.each([180_000, 2_000_000])(
     expect(sessions[0].updatedAtMs).toBe(parentEventAt)
     expect(sessions[0].activity).toBe(quietMs < OPEN_TOOL_HOLD_MS ? 'running' : 'idle')
     expect(sessions[0].currentTool).toEqual(
-      quietMs < OPEN_TOOL_HOLD_MS ? { name: 'exec_command', category: 'run' } : null
+      quietMs < OPEN_TOOL_HOLD_MS
+        ? { name: 'exec_command', category: 'run', callId: 'call_1' }
+        : null
     )
     expect(sessions[0].subagents).toMatchObject([{ id: 'child', activity: 'running' }])
   }

@@ -13,7 +13,7 @@ describe('transcript', () => {
   it('pairs by id, preserves earlier open tools, and drops all content', async () => {
     const tail = await readFile(new URL('./__fixtures__/transcript.jsonl', import.meta.url), 'utf8')
     expect(parseTranscript(tail)).toEqual({
-      tool: { name: 'Read', category: 'read' },
+      tool: { name: 'Read', category: 'read', callId: 'a' },
       error: true
     })
     const ref = sessionFromRegistry(registryEntry(), parseTranscript(tail), [], '/repo', null)
