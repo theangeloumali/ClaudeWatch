@@ -18,7 +18,7 @@ import { canRespond } from './logic/interactions'
 import { INITIAL_OFFICE_STATE, officeReducer } from './logic/office-reducer'
 import { buildThemeRows, countThemeChoices, useThemeAssignments } from './logic/office-themes'
 import { findZone } from './logic/zone-model'
-import { HUD_GRID_STYLE } from './logic/hud-layout'
+import { HUD_COLUMNS_BREAKPOINT, HUD_GRID_STYLE } from './logic/hud-layout'
 import { buildOperationsModel } from './logic/operations-model'
 import { citySignalStore } from './logic/city-signal-store'
 import { createFrameMetrics } from './frame-metrics'
@@ -28,6 +28,7 @@ import { AttentionRail } from './hud/AttentionRail'
 import { BottomBar } from './hud/BottomBar'
 import { EmptyState } from './hud/EmptyState'
 import { FocusNotice } from './hud/FocusNotice'
+import { FollowButton } from './hud/FollowButton'
 import { HealthBanner } from './hud/HealthBanner'
 import { LeadersCard } from './hud/LeadersCard'
 import { CompanyCards } from './hud/CompanyCards'
@@ -52,7 +53,13 @@ import {
   useFocusTerminal
 } from './use-office-effects'
 import { useOfficeFeatures } from './use-office-features'
-import { selectionOf, useCitySignalFeed, useOfficeLists, useVisibleFrame } from './use-office-model'
+import {
+  selectionOf,
+  useCitySignalFeed,
+  useNameRoles,
+  useOfficeLists,
+  useVisibleFrame
+} from './use-office-model'
 import { canCreateWebGL2 } from './webgl-support'
 import { PlayerCharacterPicker } from './player/PlayerCharacterPicker'
 import { choosePlayerCharacter, usePlayerCharacter } from './player/character-choice'
@@ -119,12 +126,16 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
   const [navigationHeight, setNavigationHeight] = useState(0)
   const nowMs = useOfficeNow(OFFICE_BLURRED_TICK_MS)
 
+  // Phones keep their bottom sheet, so the panels hide on wide and medium layouts only.
+  const canHidePanels = inspectorController.layout.viewportWidth >= HUD_COLUMNS_BREAKPOINT
+  const arePanelsHidden = state.arePanelsHidden && canHidePanels
   const is3DAvailable = hasWebGL && !hasSceneFailed
   const isShowingList = state.isListView || !is3DAvailable
   useFeedSubscription(feed, dispatch)
 
   useCitySignalFeed(state.frame, nowMs)
-  const frame = useVisibleFrame(state.frame)
+  const roles = useNameRoles()
+  const frame = useVisibleFrame(state.frame, roles)
   const offices = useMemo(
     () => (frame ? buildOperationsModel({ frame, nowMs }) : []),
     [frame, nowMs]
@@ -233,7 +244,7 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
     dispatch({ type: 'zone-flown', zoneId: roomId })
   }
   // The editor works on real names, so a rebuilt city never saves a role.
-  const editing = useWorldEditing({ feed, frame: state.frame, onSelectAgent: selectAgent })
+  const editing = useWorldEditing({ feed, frame: state.frame, roles, onSelectAgent: selectAgent })
   const { previewFloors, worldStore } = editing
   const flyToAgent = useCallback(
     (agentKey: string) => dispatch({ type: 'agent-flown', agentKey }),
@@ -262,7 +273,8 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
   }
   const hudGridStyle = {
     ...HUD_GRID_STYLE,
-    '--office-right-rail': `${inspectorPanel.layout.width}px`,
+    ...(arePanelsHidden && { '--office-left-rail': '0px' }),
+    '--office-right-rail': `${arePanelsHidden ? 0 : inspectorPanel.layout.width}px`,
     '--office-summary-offset': `${inspectorPanel.layout.hudTopHeight}px`,
     '--office-summary-top': `${inspectorPanel.layout.topInset + HUD_GRID_STYLE.padding}px`,
     '--office-mobile-rail-height': `${selectedAgent ? 100 : 200}px`,
@@ -273,9 +285,10 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
       ...inspectorController.layout,
       isContextVisible: true,
       navigationHeight:
-        inspectorController.layout.hudTopHeight + navigationHeight + HUD_GRID_STYLE.gap
+        inspectorController.layout.hudTopHeight + navigationHeight + HUD_GRID_STYLE.gap,
+      arePanelsHidden
     }),
-    [inspectorController.layout, navigationHeight]
+    [inspectorController.layout, navigationHeight, arePanelsHidden]
   )
 
   return (
@@ -310,6 +323,7 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
               focusedFloorId={state.focusedFloorId}
               focusedRoomId={focusedRoomId}
               cameraRequest={state.cameraRequest}
+              followedAgentKey={state.followedAgentKey}
               onFit={fitCamera}
               onManualCameraMove={onManualCameraMove}
               isCameraManuallyOwned={state.isCameraManuallyOwned}
@@ -361,103 +375,120 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
           ref={navigationRef}
           className="pointer-events-auto flex min-h-0 min-w-0 flex-col gap-3 self-start overflow-y-auto max-[1099px]:max-h-[var(--office-mobile-rail-height)] min-[1100px]:max-h-full"
         >
-          {frame && (
-            <Minimap
-              frame={previewFloors ? { ...frame, floors: previewFloors } : frame}
-              viewMode={state.viewMode}
-              focusedFloorId={state.focusedFloorId}
-              focusedRoomId={focusedRoomId}
-              selectedAgentKey={state.selectedAgentKey}
-              isNarrow={inspectorPanel.isNarrow}
-              isPreview={previewFloors !== null}
-              player={
-                player && player.physicalFloorId !== undefined && !player.connectorId
-                  ? { ...player.position, physicalFloorId: player.physicalFloorId }
-                  : undefined
-              }
-              onChooseFloor={chooseOffice}
-              onChooseRoom={chooseRoom}
-              onChooseWorker={selectAgent}
-            />
-          )}
-          {!isShowingList && (
-            <CompanyCards
-              version={citySignalStore.version()}
-              companies={companies}
-              palette={theme.palette}
-              onFlyToZone={goToZone}
-            />
-          )}
-          {(currentOffice || inspectorPanel.isNarrow) && (
-            <WorkAreaNavigation
-              office={currentOffice}
-              focusedRoomId={focusedRoomId}
-              onChooseRoom={chooseRoom}
-              onChooseWorker={selectAgent}
-            />
-          )}
-          <details open={!inspectorPanel.isNarrow} className="min-w-0">
-            <summary className={`${BUTTON_QUIET_COMPACT_CLASS} min-[1100px]:hidden`}>
-              Projects & offices
-            </summary>
-            <OfficesPanel
-              companies={companies}
-              activity={activity}
-              ledger={ledger}
-              themeRows={themeRows}
-              onChooseTheme={officeTheme.chooseTheme}
-              focusedZoneId={state.focusedZoneId}
-              onFlyToZone={goToZone}
-              onStart={
-                isViewOnly ? null : (projectKey, provider) => feed.start(projectKey, provider)
-              }
-            />
-          </details>
-          {!isShowingList && sessions && sessions.length > 0 && (
-            <details open={!inspectorPanel.isNarrow} className="min-w-0">
-              <summary className={`${BUTTON_QUIET_COMPACT_CLASS} min-[1100px]:hidden`}>
-                Leaders
-              </summary>
-              <LeadersCard
-                version={citySignalStore.version()}
-                sessions={sessions}
-                companies={companies}
-                onFlyToZone={goToZone}
-              />
-            </details>
-          )}
-          <div className="max-[1099px]:hidden">
-            <AttentionRail
-              queue={queue}
-              activeSessionKey={selectedSession?.key ?? null}
-              onOpen={(sessionKey) => dispatch({ type: 'session-opened', sessionKey })}
-              onNext={() => dispatch({ type: 'next-attention' })}
-              reviewableKeys={reviewableKeys}
-              onReview={openReview}
-              onFocusTerminal={focusTerminal}
-            />
-          </div>
-          {frame && (
-            <details className="min-w-0">
-              <summary className={BUTTON_QUIET_COMPACT_CLASS}>Community & source health</summary>
-              <VenuesPanel
-                frame={frame}
-                selectedVenueId={selectedVenueId}
-                onSelectVenue={setSelectedVenueId}
-                onSelectAgent={selectAgent}
-              />
-              <HealthBanner sources={frame.sources} />
-            </details>
-          )}
-          {!is3DAvailable && (
-            <Plate faceClassName="px-3 py-2 text-xs text-text-secondary">
-              <p>The 3D view is unavailable on this device, so the office is shown as a list.</p>
-            </Plate>
+          {!arePanelsHidden && (
+            <>
+              {frame && (
+                <Minimap
+                  frame={previewFloors ? { ...frame, floors: previewFloors } : frame}
+                  viewMode={state.viewMode}
+                  focusedFloorId={state.focusedFloorId}
+                  focusedRoomId={focusedRoomId}
+                  selectedAgentKey={state.selectedAgentKey}
+                  isNarrow={inspectorPanel.isNarrow}
+                  isPreview={previewFloors !== null}
+                  player={
+                    player && player.physicalFloorId !== undefined && !player.connectorId
+                      ? { ...player.position, physicalFloorId: player.physicalFloorId }
+                      : undefined
+                  }
+                  onChooseFloor={chooseOffice}
+                  onChooseRoom={chooseRoom}
+                  onChooseWorker={selectAgent}
+                  onPan={
+                    isShowingList
+                      ? undefined
+                      : (point) => dispatch({ type: 'camera-pointed', ...point })
+                  }
+                />
+              )}
+              {!isShowingList && (
+                <CompanyCards
+                  version={citySignalStore.version()}
+                  companies={companies}
+                  palette={theme.palette}
+                  onFlyToZone={goToZone}
+                />
+              )}
+              {(currentOffice || inspectorPanel.isNarrow) && (
+                <WorkAreaNavigation
+                  office={currentOffice}
+                  focusedRoomId={focusedRoomId}
+                  onChooseRoom={chooseRoom}
+                  onChooseWorker={selectAgent}
+                />
+              )}
+              <details open={!inspectorPanel.isNarrow} className="min-w-0">
+                <summary className={`${BUTTON_QUIET_COMPACT_CLASS} min-[1100px]:hidden`}>
+                  Projects & offices
+                </summary>
+                <OfficesPanel
+                  companies={companies}
+                  activity={activity}
+                  ledger={ledger}
+                  themeRows={themeRows}
+                  onChooseTheme={officeTheme.chooseTheme}
+                  focusedZoneId={state.focusedZoneId}
+                  onFlyToZone={goToZone}
+                  onStart={
+                    isViewOnly ? null : (projectKey, provider) => feed.start(projectKey, provider)
+                  }
+                />
+              </details>
+              {!isShowingList && sessions && sessions.length > 0 && (
+                <details open={!inspectorPanel.isNarrow} className="min-w-0">
+                  <summary className={`${BUTTON_QUIET_COMPACT_CLASS} min-[1100px]:hidden`}>
+                    Leaders
+                  </summary>
+                  <LeadersCard
+                    version={citySignalStore.version()}
+                    sessions={sessions}
+                    companies={companies}
+                    onFlyToZone={goToZone}
+                  />
+                </details>
+              )}
+              <div className="max-[1099px]:hidden">
+                <AttentionRail
+                  queue={queue}
+                  activeSessionKey={selectedSession?.key ?? null}
+                  onOpen={(sessionKey) => dispatch({ type: 'session-opened', sessionKey })}
+                  onNext={() => dispatch({ type: 'next-attention' })}
+                  reviewableKeys={reviewableKeys}
+                  onReview={openReview}
+                  onFocusTerminal={focusTerminal}
+                />
+              </div>
+              {frame && (
+                <details className="min-w-0">
+                  <summary className={BUTTON_QUIET_COMPACT_CLASS}>
+                    Community & source health
+                  </summary>
+                  <VenuesPanel
+                    frame={frame}
+                    selectedVenueId={selectedVenueId}
+                    onSelectVenue={setSelectedVenueId}
+                    onSelectAgent={selectAgent}
+                  />
+                  <HealthBanner sources={frame.sources} />
+                </details>
+              )}
+              {!is3DAvailable && (
+                <Plate faceClassName="px-3 py-2 text-xs text-text-secondary">
+                  <p>
+                    The 3D view is unavailable on this device, so the office is shown as a list.
+                  </p>
+                </Plate>
+              )}
+            </>
           )}
         </div>
 
         <div className="flex min-h-0 flex-col items-center gap-3">
-          <div className="pointer-events-auto flex min-w-0 max-w-full flex-col items-center gap-2">
+          {/* Notices float over the scene with no inset, so name cards steer round them. */}
+          <div
+            data-canvas-obstacle
+            className="pointer-events-auto flex min-w-0 max-w-full flex-col items-center gap-2"
+          >
             <FocusNotice message={notice} onDismiss={dismissNotice} />
             {previewFloors && (
               <p className="rounded bg-surface-raised px-3 py-2 text-sm">
@@ -491,7 +522,7 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
         </div>
 
         <div className="pointer-events-auto min-h-0 min-w-0 self-start max-[1099px]:contents min-[1100px]:max-h-full min-[1100px]:overflow-y-auto">
-          {selectedAgent ? (
+          {arePanelsHidden ? null : selectedAgent ? (
             <Inspector
               panel={inspectorPanel}
               agent={selectedAgent}
@@ -511,6 +542,14 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
                 </div>
               }
             >
+              {!isShowingList && (
+                <FollowButton
+                  isFollowing={state.followedAgentKey === selectedAgent.agentKey}
+                  onToggle={() =>
+                    dispatch({ type: 'agent-followed', agentKey: selectedAgent.agentKey })
+                  }
+                />
+              )}
               {selectedSession && selectedTarget && (
                 <AgentActions
                   key={selectedTarget.key}
@@ -577,7 +616,7 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
           ref={footerRef}
           className="pointer-events-auto flex min-w-0 max-w-full flex-col gap-2 min-[1100px]:col-span-full"
         >
-          {frame && (
+          {frame && !arePanelsHidden && (
             <CurrentEvidenceStrip frame={frame} agentKey={state.selectedAgentKey} feed={feed} />
           )}
           <BottomBar
@@ -635,6 +674,8 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
             onWorkstation={frameWorkstation}
             viewMode={state.viewMode}
             onView={(view) => dispatch({ type: 'view-set', view })}
+            arePanelsHidden={arePanelsHidden}
+            onTogglePanels={canHidePanels ? () => dispatch({ type: 'panels-toggled' }) : undefined}
           />
         </div>
       </div>

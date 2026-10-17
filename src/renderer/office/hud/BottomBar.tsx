@@ -46,6 +46,9 @@ export interface BottomBarProps {
   onView?: (view: 'office' | 'city') => void
   onReset?: () => void
   onEditLayout?: () => void
+  // Offered on wide and medium layouts only; a phone keeps its bottom sheet.
+  arePanelsHidden?: boolean
+  onTogglePanels?: () => void
 }
 
 const WALL_OPTIONS: readonly { mode: WallsMode; label: string; key: string }[] = [
@@ -325,6 +328,16 @@ export function BottomBar(props: BottomBarProps) {
               />
             </div>
           </details>
+        )}
+        {props.onTogglePanels && (
+          <button
+            type="button"
+            aria-pressed={props.arePanelsHidden ?? false}
+            onClick={props.onTogglePanels}
+            className={`${BAR_BUTTON_CLASS} min-h-11 min-w-11`}
+          >
+            Hide panels
+          </button>
         )}
         {/* Never disabled: the switches are also how a struggling machine gets its 3D view back. */}
         <button

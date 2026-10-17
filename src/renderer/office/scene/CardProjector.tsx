@@ -2,7 +2,13 @@ import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import { Vector3, type Camera } from 'three'
 import type { ZoomBand } from '../logic/camera-bands'
-import { cullCards, pinInside, type CullCandidate } from '../logic/card-culling'
+import {
+  clearOfObstacles,
+  cullCards,
+  pinInside,
+  type CullCandidate,
+  type Rect
+} from '../logic/card-culling'
 import type { NameCard, ProjectStack } from '../logic/name-cards'
 import { cardSafeArea } from '../logic/zone-framing'
 import { hudSafeInsets, type InspectorLayout } from '../logic/hud-layout'
@@ -13,6 +19,7 @@ import { agentElevation, floorElevation } from './all-floor-model'
 import { findZone } from '../logic/zone-model'
 import { levelInUse, type QualityLevel } from '../logic/quality'
 import { useQualityChoice } from '../quality-store'
+import { readCanvasObstacles } from './canvas-obstacles'
 
 // Over an agent's head (scene/Robot.tsx draws agents 1.65 m tall).
 export const CARD_HEIGHT = 2.45
@@ -143,6 +150,7 @@ export function CardProjector({
     stackHeights: typeof stackHeights | null
     cap: number
     poses: number
+    obstacles: number
   }>({
     view: [],
     cards: null,
@@ -154,7 +162,8 @@ export function CardProjector({
     heights: null,
     stackHeights: null,
     cap: 0,
-    poses: -1
+    poses: -1,
+    obstacles: -1
   })
   const sizes = useMemo(
     () => new WeakMap<HTMLElement, { key: string; width: number; height: number }>(),
@@ -184,6 +193,22 @@ export function CardProjector({
       z: pose.z + Math.cos(pose.heading) * reach
     }
   }
+  // A bottom-centre anchor moved out from under floating chrome, where the area has room.
+  const clearOf = (
+    at: { x: number; y: number },
+    box: { width: number; height: number },
+    area: Rect,
+    obstacles: readonly Rect[]
+  ) => {
+    const rect = {
+      left: at.x - box.width / 2,
+      right: at.x + box.width / 2,
+      top: at.y - box.height,
+      bottom: at.y
+    }
+    const moved = clearOfObstacles(rect, area, obstacles)
+    return moved ? { x: at.x, y: moved.bottom } : at
+  }
   const measure = (element: HTMLElement, key: string) => {
     const cached = sizes.get(element)
     if (cached?.key === key) return cached
@@ -199,6 +224,7 @@ export function CardProjector({
     const zoom = 'zoom' in camera && typeof camera.zoom === 'number' ? camera.zoom : 1
     const { position, quaternion } = camera
     const last = lastRef.current
+    const obstacles = readCanvasObstacles(anchors.cards.values().next().value?.parentElement)
     const view = last.view
     const hasMoved =
       store(view, 0, position.x) |
@@ -222,7 +248,8 @@ export function CardProjector({
       last.heights === heights &&
       last.stackHeights === stackHeights &&
       last.cap === deskCardCap &&
-      last.poses === officePoses.version()
+      last.poses === officePoses.version() &&
+      last.obstacles === obstacles.version
     if (isSameView) return
     last.cards = cards
     last.stacks = stacks
@@ -234,6 +261,7 @@ export function CardProjector({
     last.stackHeights = stackHeights
     last.cap = deskCardCap
     last.poses = officePoses.version()
+    last.obstacles = obstacles.version
     // camera-controls moves the camera after three last built its matrix, and the renderer only
     // rebuilds it after this callback: without this the cards trail the canvas while it turns.
     camera.updateMatrixWorld()
@@ -265,7 +293,11 @@ export function CardProjector({
           element && card.agentKey === selectedAgentKey
             ? toScreen(camera, size, anchor.x, anchor.y, anchor.z)
             : null
-        place(element, element && at ? pinInside(at, sizeOf(element, card, true), safeArea) : null)
+        const box = element && at ? sizeOf(element, card, true) : null
+        place(
+          element,
+          at && box ? clearOf(pinInside(at, box, safeArea), box, safeArea, obstacles.rects) : null
+        )
       }
       hideAll(anchors.dots)
       const columnWidth = Math.min(STACK_COLUMN_WIDTH, Math.max(1, safeArea.right - safeArea.left))
@@ -275,7 +307,9 @@ export function CardProjector({
         const element = anchors.stacks.get(stack.projectKey)
         return element ? [element] : []
       })
-      for (const element of summaryElements) element.style.maxWidth = `${columnWidth}px`
+      for (const element of summaryElements)
+        if (element.style.maxWidth !== `${columnWidth}px`)
+          element.style.maxWidth = `${columnWidth}px`
       const summarySizes = summaryElements.map((element) => ({
         element,
         height: element.offsetHeight
@@ -293,20 +327,29 @@ export function CardProjector({
       return
     }
 
+    // Pick, then place: every size is read before any card is written, so one pass lays out once.
     const candidates: CullCandidate[] = []
     const positions = new Map<string, { x: number; y: number }>()
+    const unplaced: (HTMLElement | undefined)[] = []
     for (const card of cards) {
       const element = anchors.cards.get(card.agentKey)
       const isSelected = card.agentKey === selectedAgentKey
       const anchor = anchorOf(card, card.kind === 'card' ? CARD_HEIGHT : PILL_HEIGHT)
       const at = toScreen(camera, size, anchor.x, anchor.y, anchor.z)
       if (!element || !at) {
-        place(element, null)
+        unplaced.push(element)
         continue
       }
       const { width, height } = sizeOf(element, card, isSelected)
-      // The selected card stays readable: pinned inside the safe area as its robot nears the chrome.
-      const placed = isSelected ? pinInside(at, { width, height }, safeArea) : at
+      // The selected card stays readable: pinned inside the safe area and moved clear of chrome.
+      const placed = isSelected
+        ? clearOf(
+            pinInside(at, { width, height }, safeArea),
+            { width, height },
+            safeArea,
+            obstacles.rects
+          )
+        : at
       positions.set(card.agentKey, placed)
       candidates.push({
         agentKey: card.agentKey,
@@ -325,11 +368,12 @@ export function CardProjector({
 
     // Desk zoom culls by collision only: stacking there would fold away the neighbours in view.
     const isDesk = band === 'desk'
-    const outcome = cullCards(
-      candidates,
-      safeArea,
-      isDesk ? { stackProjects: false, cap: deskCardCap } : undefined
-    )
+    const outcome = cullCards(candidates, safeArea, {
+      stackProjects: !isDesk,
+      cap: isDesk ? deskCardCap : Number.POSITIVE_INFINITY,
+      obstacles: obstacles.rects
+    })
+    for (const element of unplaced) place(element, null)
     showOverflow(outcome.capped)
     for (const card of cards) {
       const isShown = outcome.cards.has(card.agentKey)

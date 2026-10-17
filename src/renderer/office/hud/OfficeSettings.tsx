@@ -58,6 +58,13 @@ const FEATURES: readonly Feature[] = [
   }
 ]
 
+const HIDE_NAMES: Feature = {
+  key: 'hideNames',
+  label: 'Hide names',
+  description:
+    'For recordings: roles such as Company A and Project A-1 stand in for company, project, session, teammate and account names. Your saved layout keeps the real names.'
+}
+
 const TOWN_SIZE_CHOICES: Record<TownSize, { label: string; description: string }> = {
   village: {
     label: 'Village',
@@ -178,7 +185,7 @@ export function OfficeSettingsPanel({
               </button>
             </div>
           )}
-          {FEATURES.map(({ key, label, description }) => (
+          {[...FEATURES, HIDE_NAMES].map(({ key, label, description }) => (
             <SettingRow key={key} label={label} description={description}>
               <ToggleSwitch
                 label={label}

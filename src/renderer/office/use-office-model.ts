@@ -7,7 +7,7 @@ import { buildAttentionQueue } from './logic/attention-queue'
 import { citySignalStore, type CitySignalStore } from './logic/city-signal-store'
 import { bayForAgent, summariseFloors } from './logic/floor-model'
 import { useOfficeSettings } from './logic/office-settings'
-import { createRoleBook, maskFrame } from './logic/role-names'
+import { createRoleBook, maskFrame, type RoleBook } from './logic/role-names'
 import { reachTarget } from './logic/interactions'
 import { buildNameCards, buildProjectStacks } from './logic/name-cards'
 import { workstationSeat } from './logic/workstation-framing'
@@ -47,15 +47,21 @@ export function useCitySignalFeed(
   useEffect(() => store.update(frame, nowMs), [frame, nowMs, store])
 }
 
-// The frame the HUD and scene draw. With names hidden, roles replace every name here, before
-// any DOM node or sign texture; the saved city is built from the feed, upstream of this.
-export function useVisibleFrame(frame: OfficeFrame | null): OfficeFrame | null {
+// The page's one role book while names are hidden, else null. One book, so the HUD, the scene
+// and the layout editor all give a company the same letter.
+export function useNameRoles(): RoleBook | null {
   const { hideNames } = useOfficeSettings()
   const [roles] = useState(createRoleBook)
-  return useMemo(
-    () => (frame && hideNames ? maskFrame(frame, roles) : frame),
-    [frame, hideNames, roles]
-  )
+  return hideNames ? roles : null
+}
+
+// The frame the HUD and scene draw. With names hidden, roles replace every name here, before
+// any DOM node or sign texture; the saved city is built from the feed, upstream of this.
+export function useVisibleFrame(
+  frame: OfficeFrame | null,
+  roles: RoleBook | null
+): OfficeFrame | null {
+  return useMemo(() => (frame && roles ? maskFrame(frame, roles) : frame), [frame, roles])
 }
 
 // The render clock, plus one re-render when evidence next turns fresh or stale, so activity

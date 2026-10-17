@@ -5,9 +5,12 @@ import { NumberField } from './WorldRoomFields'
 
 export function WorldBuildingFields({
   building,
+  maskedName,
   onChange
 }: {
   building: WorldBuilding
+  // Set while names are hidden: shown in place of the name, which cannot be edited then.
+  maskedName?: string
   onChange: (building: WorldBuilding) => void
 }) {
   const footprint = building.footprint
@@ -30,7 +33,8 @@ export function WorldBuildingFields({
         Building name
         <input
           className={FIELD_CLASS}
-          value={building.displayName}
+          value={maskedName ?? building.displayName}
+          readOnly={maskedName !== undefined}
           maxLength={120}
           onChange={(event) => onChange({ ...building, displayName: event.target.value })}
         />

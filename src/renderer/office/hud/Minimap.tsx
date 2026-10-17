@@ -3,6 +3,7 @@ import { BUTTON_QUIET_COMPACT_CLASS } from '../../components/deck/deck-styles'
 import { Plate } from '../../components/deck/Plate'
 import { cn } from '../../lib/utils'
 import { buildMinimapModel, type MinimapInput } from '../logic/minimap-model'
+import type { MapPoint } from '../logic/office-view'
 import { FIELD_CLASS } from './hud-styles'
 import { MinimapSurface } from './MinimapSurface'
 
@@ -11,6 +12,8 @@ export interface MinimapProps extends MinimapInput {
   onChooseFloor: (floorId: string | null) => void
   onChooseRoom: (roomId: string) => void
   onChooseWorker: (agentKey: string) => void
+  // Set where a camera can move: a tap or arrow key pans the view to that ground.
+  onPan?: (point: MapPoint) => void
 }
 
 // dry-new: physical navigation has no existing spatial, collapsible map surface.
@@ -34,6 +37,7 @@ export function Minimap(props: MinimapProps) {
         )}
         aria-expanded={isExpanded}
         aria-controls={contentId}
+        data-canvas-obstacle=""
         onClick={() => setDisclosure({ isNarrow: props.isNarrow, isExpanded: !isExpanded })}
       >
         {isExpanded ? 'Collapse Minimap' : 'Expand Minimap'}
@@ -64,6 +68,7 @@ export function Minimap(props: MinimapProps) {
                 onChooseFloor={props.onChooseFloor}
                 onChooseRoom={props.onChooseRoom}
                 onChooseWorker={props.onChooseWorker}
+                onPan={props.onPan}
               />
             ) : (
               <p className="text-xs text-text-secondary">
@@ -153,8 +158,11 @@ export function Minimap(props: MinimapProps) {
               aria-live="polite"
               className="text-xs text-text-secondary [overflow-wrap:anywhere]"
             >
-              Focus highlights are not a camera viewport. Dots: supplied worker positions; ring:
-              selected worker.{model.player ? ' Accent dot: you.' : ''}
+              {props.onPan
+                ? 'Tap the map, or use the arrow keys, to move the view there; the outline is what the camera sees.'
+                : 'Focus highlights are not a camera viewport.'}{' '}
+              Dots: supplied worker positions; ring: selected worker.
+              {model.player ? ' Accent dot: you.' : ''}
               {props.isPreview
                 ? ' Layout preview — live markers hidden.'
                 : !props.frame.connected

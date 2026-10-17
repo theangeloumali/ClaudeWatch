@@ -1,12 +1,14 @@
-import type { CSSProperties } from 'react'
+import { useRef, type CSSProperties, type KeyboardEvent, type MouseEvent } from 'react'
 import { cn } from '../../lib/utils'
 import type { MinimapModel } from '../logic/minimap-model'
+import { officeView, type MapPoint } from '../logic/office-view'
 import type { Bounds } from '../logic/zone-framing'
 import type { MinimapProps } from './Minimap'
+import { useMinimapLive } from './use-minimap-live'
 
 interface MinimapSurfaceProps extends Pick<
   MinimapProps,
-  'viewMode' | 'onChooseFloor' | 'onChooseRoom' | 'onChooseWorker'
+  'viewMode' | 'onChooseFloor' | 'onChooseRoom' | 'onChooseWorker' | 'onPan'
 > {
   model: MinimapModel
   descriptionId: string
@@ -16,15 +18,37 @@ interface MinimapSurfaceProps extends Pick<
 const MAP_TARGET_CLASS =
   'absolute inline-flex items-center justify-center rounded text-xs text-text-primary cursor-pointer touch-manipulation bg-transparent p-0 hover:bg-surface-hover/40 focus-visible:ring-2 focus-visible:ring-brass aria-[current=true]:ring-1 aria-[current=true]:ring-brass'
 
+// An arrow key moves the view an eighth of the map, north up.
+const ARROW_STEPS: Readonly<Record<string, readonly [number, number]>> = {
+  ArrowLeft: [-1, 0],
+  ArrowRight: [1, 0],
+  ArrowUp: [0, -1],
+  ArrowDown: [0, 1]
+}
+// A press within this of the last pan steps on from where that pan is headed.
+const PAN_SETTLE_MS = 1000
+
+const clampTo = (bounds: Bounds, point: MapPoint): MapPoint => ({
+  x: Math.min(bounds.maxX, Math.max(bounds.minX, point.x)),
+  z: Math.min(bounds.maxZ, Math.max(bounds.minZ, point.z))
+})
+
 // dry-new: native hit targets must share the SVG's aspect-preserving world projection.
-export function MinimapSurface({
+export function MinimapSurface({ model, ...props }: MinimapSurfaceProps) {
+  return model.bounds ? <MapArea {...props} model={model} bounds={model.bounds} /> : null
+}
+
+function MapArea({
   model,
+  bounds,
   viewMode,
   descriptionId,
+  onPan,
   ...callbacks
-}: MinimapSurfaceProps) {
-  const bounds = model.bounds
-  if (!bounds) return null
+}: Omit<MinimapSurfaceProps, 'model'> & { model: MinimapModel; bounds: Bounds }) {
+  const mapRef = useRef<HTMLDivElement>(null)
+  const pendingRef = useRef<{ point: MapPoint; atMs: number } | null>(null)
+  useMinimapLive(mapRef, bounds, onPan !== undefined)
   const width = bounds.maxX - bounds.minX
   const depth = bounds.maxZ - bounds.minZ
   const mapWidth = Math.min(1, width / depth) * 100
@@ -37,11 +61,50 @@ export function MinimapSurface({
     ...model.floors.map((floor) => ({ ...floor, id: floor.floorId, kind: 'floor' as const })),
     ...model.rooms.map((room) => ({ ...room, kind: 'room' as const }))
   ]
+  const pan = (point: MapPoint): void => {
+    const destination = clampTo(bounds, point)
+    pendingRef.current = { point: destination, atMs: Date.now() }
+    onPan?.(destination)
+  }
+  // Open ground pans; a floor, room or worker button keeps its own meaning.
+  const panToTap = (event: MouseEvent<HTMLDivElement>): void => {
+    if (event.target instanceof Element && event.target.closest('button')) return
+    const rect = event.currentTarget.getBoundingClientRect()
+    if (rect.width <= 0 || rect.height <= 0) return
+    pan({
+      x: bounds.minX + ((event.clientX - rect.left) / rect.width) * width,
+      z: bounds.minZ + ((event.clientY - rect.top) / rect.height) * depth
+    })
+  }
+  const panByKey = (event: KeyboardEvent<HTMLDivElement>): void => {
+    const step = ARROW_STEPS[event.key]
+    if (!step || event.target !== event.currentTarget) return
+    // Taken here, so the camera's own arrow-key pan leaves it alone.
+    event.preventDefault()
+    const pending = pendingRef.current
+    const view = officeView.read()
+    const from =
+      pending && Date.now() - pending.atMs < PAN_SETTLE_MS
+        ? pending.point
+        : view
+          ? { x: view.x, z: view.z }
+          : { x: bounds.minX + width / 2, z: bounds.minZ + depth / 2 }
+    pan({ x: from.x + (step[0] * width) / 8, z: from.z + (step[1] * depth) / 8 })
+  }
   return (
     <div className="relative mx-auto aspect-square w-full max-w-48 rounded-md bg-surface p-6">
       <div className="relative size-full">
         <div
-          className="absolute"
+          ref={mapRef}
+          {...(onPan && {
+            role: 'application',
+            'aria-label': `${viewMode === 'city' ? 'City' : 'Office'} map`,
+            'aria-describedby': descriptionId,
+            tabIndex: 0,
+            onClick: panToTap,
+            onKeyDown: panByKey
+          })}
+          className="absolute rounded-sm focus-visible:ring-2 focus-visible:ring-brass"
           style={{
             width: `${mapWidth}%`,
             height: `${mapHeight}%`,
@@ -95,10 +158,20 @@ export function MinimapSurface({
                 )}
               />
             ))}
+            {onPan && (
+              <polygon
+                data-view-footprint=""
+                aria-hidden="true"
+                className="fill-brass/10 stroke-brass"
+                vectorEffect="non-scaling-stroke"
+                strokeWidth={1.5}
+              />
+            )}
             {model.workers.map((worker) => (
               <g key={worker.agentKey}>
                 {worker.isSelected && (
                   <circle
+                    data-agent-ring={worker.agentKey}
                     cx={worker.x}
                     cy={worker.z}
                     r={radius * 2}

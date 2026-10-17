@@ -1,5 +1,5 @@
 import { parseAgentKey } from '../../../shared/office/agent-key'
-import type { AgentView, SessionRef } from '../../../shared/office/types'
+import type { AccountRef, AgentView, SessionRef, SubagentRef } from '../../../shared/office/types'
 import type { FloorGeometry, OfficeFrame, RoomGeometry, ZoneGeometry } from '../scene-model'
 
 // Stable stand-ins for names, given by first sight: "Company A", "Project A-1", "Session A-1.1".
@@ -8,6 +8,9 @@ export interface RoleBook {
   project(companyKey: string, projectKey: string): string
   session(session: Pick<SessionRef, 'key' | 'companyKey' | 'projectKey'>): string
   sessionByKey(sessionKey: string): string | undefined
+  teammate(sessionKey: string, memberId: string): string
+  // Account labels can be organisation names; the plan stays, being no one's name.
+  account(accountKey: string): string
   // A role never changes once given, so a masked list stays valid for its input's life.
   readonly maskedFloors: WeakMap<readonly FloorGeometry[], FloorGeometry[]>
   readonly maskedSessions: WeakMap<readonly SessionRef[], SessionRef[]>
@@ -54,6 +57,8 @@ export function createRoleBook(): RoleBook {
       return role
     },
     sessionByKey: (sessionKey) => sessions.get(sessionKey),
+    teammate: (sessionKey, memberId) => `Teammate ${numberOf(`teammate\n${sessionKey}`, memberId)}`,
+    account: (accountKey) => `Account ${numberOf('account', accountKey)}`,
     maskedFloors: new WeakMap(),
     maskedSessions: new WeakMap()
   }
@@ -71,9 +76,36 @@ export function maskFrame(frame: OfficeFrame, roles: RoleBook): OfficeFrame {
     ...frame,
     sessions,
     floors,
-    agents: frame.agents.map((agent) => maskAgent(agent, frame, roles))
+    agents: frame.agents.map((agent) => maskAgent(agent, frame, roles)),
+    ...(frame.accounts && {
+      accounts: frame.accounts.map((account) => maskAccount(account, roles))
+    })
   }
 }
+
+// Floors built outside the feed, as the layout preview is; their sessions are named first.
+export function maskFloors(
+  floors: readonly FloorGeometry[],
+  sessions: readonly SessionRef[],
+  roles: RoleBook
+): FloorGeometry[] {
+  for (const session of sessions) roles.session(session)
+  return remembered(roles.maskedFloors, floors, (list) =>
+    list.map((floor) => maskFloor(floor, roles))
+  )
+}
+
+// A saved room's stand-in, from its world target: `session:<key>` or `team:<company>:<project>`.
+export function worldTargetRole(target: string, roles: RoleBook): string {
+  const [kind, first, second] = target.split(':')
+  if (kind === 'session') return roles.sessionByKey(target.slice('session:'.length)) ?? 'Office'
+  return kind === 'team' && first && second ? `${roles.project(first, second)} team` : 'Team'
+}
+
+const maskAccount = (account: AccountRef, roles: RoleBook): AccountRef => ({
+  ...account,
+  label: roles.account(account.key)
+})
 
 function remembered<Input extends object, Output>(
   memo: WeakMap<Input, Output>,
@@ -99,9 +131,20 @@ function maskSession(session: SessionRef, roles: RoleBook): SessionRef {
     worktree: session.worktree === null ? null : folder,
     companyLabel: company,
     projectLabel: project,
-    subagents: session.subagents.map((member) =>
-      member.cwd === undefined ? member : { ...member, cwd: folder }
-    )
+    subagents: session.subagents.map((member) => maskMember(member, session.key, folder, roles))
+  }
+}
+
+function maskMember(
+  member: SubagentRef,
+  sessionKey: string,
+  folder: string,
+  roles: RoleBook
+): SubagentRef {
+  return {
+    ...member,
+    ...(member.name !== undefined && { name: roles.teammate(sessionKey, member.id) }),
+    ...(member.cwd !== undefined && { cwd: folder })
   }
 }
 
@@ -146,14 +189,8 @@ function zoneRole(zone: ZoneGeometry, roles: RoleBook): string {
 
 // A team room names its project only through its world target, `team:<company>:<project>`.
 function maskRoom(room: RoomGeometry, roles: RoleBook): RoomGeometry {
-  if (room.sessionKey)
-    return withoutDisplayLabel({ ...room, label: roles.sessionByKey(room.sessionKey) ?? 'Office' })
-  const [kind, companyKey, projectKey] = room.worldTarget?.split(':') ?? []
-  const label =
-    kind === 'team' && companyKey && projectKey
-      ? `${roles.project(companyKey, projectKey)} team`
-      : 'Team'
-  return withoutDisplayLabel({ ...room, label })
+  const target = room.sessionKey ? `session:${room.sessionKey}` : (room.worldTarget ?? '')
+  return withoutDisplayLabel({ ...room, label: worldTargetRole(target, roles) })
 }
 
 // The layout carries the saved city's own name beside the drawn label; it is dropped here.

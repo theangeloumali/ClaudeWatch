@@ -3,7 +3,8 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import { Vector3 } from 'three'
 import type { AgentView } from '../../../shared/office/types'
-import { withLivePose } from '../../office-live/pose-store'
+import { livePose, officePoses, withLivePose } from '../../office-live/pose-store'
+import { followBody } from '../player/camera-follow'
 import {
   BAND_ZOOM,
   bandForZoom,
@@ -21,6 +22,7 @@ import {
   type ZoomBand
 } from '../logic/camera-bands'
 import type { CameraRequest } from '../logic/office-reducer'
+import { officeView, type OfficeView } from '../logic/office-view'
 import { boundsOfZone, frameBounds, occupiedBounds, type Bounds } from '../logic/zone-framing'
 import { workstationFraming, workstationSeat } from '../logic/workstation-framing'
 import { hudSafeInsets, type InspectorLayout } from '../logic/hud-layout'
@@ -68,6 +70,8 @@ interface CameraRigProps {
   hasInspector?: boolean
   inspectorLayout?: InspectorLayout
   onBandChange: (band: ZoomBand) => void
+  // The agent Follow rides along with; the reducer clears it on any other camera input.
+  followedAgentKey?: string | null
 }
 
 // Bounded orthographic orbit. Presets re-arm framing; manual input owns the pose until then.
@@ -79,6 +83,8 @@ export function CameraRig(props: CameraRigProps) {
   const bandPoseRef = useRef('')
   const followRef = useRef<FollowAnchor | null>(null)
   const followElevationRef = useRef(0)
+  // Set by a Follow request, cleared by the owner's own input before the reducer hears of it.
+  const isRidingRef = useRef(false)
   const workstationAgentRef = useRef<string | null>(null)
   const workstationSpecRef = useRef<WorkstationSpec | null>(null)
   const isTransitioningRef = useRef(false)
@@ -88,8 +94,20 @@ export function CameraRig(props: CameraRigProps) {
   // Whether the owner has moved the camera by hand since the last fly-to an agent.
   const hasMovedSinceFlyRef = useRef(false)
   const targetScratch = useMemo(() => new Vector3(), [])
+  const viewScratch = useMemo(() => new Vector3(), [])
+  const viewRef = useRef<OfficeView>({
+    x: 0,
+    y: 0,
+    z: 0,
+    zoom: 1,
+    azimuth: 0,
+    polar: 0,
+    width: 0,
+    height: 0
+  })
   const size = useThree((state) => state.size)
   const camera = useThree((state) => state.camera)
+  const invalidate = useThree((state) => state.invalidate)
   const cityEnvelope = useMemo(() => floorEnvelope(props.visibleFloors), [props.visibleFloors])
   const focusedFloor =
     props.visibleFloors.find((floor) => floor.floorId === props.focusedFloorId) ?? props.floor
@@ -128,6 +146,7 @@ export function CameraRig(props: CameraRigProps) {
       rig.takeOver()
       hasMovedSinceFlyRef.current = true
       followRef.current = null
+      isRidingRef.current = false
       workstationAgentRef.current = null
       workstationSpecRef.current = null
       latestRef.current.onManualMove?.()
@@ -154,6 +173,7 @@ export function CameraRig(props: CameraRigProps) {
       rig.stopTransition()
       rig.takeOver()
       followRef.current = null
+      isRidingRef.current = false
       workstationAgentRef.current = null
       workstationSpecRef.current = null
       hasMovedSinceFlyRef.current = false
@@ -217,6 +237,22 @@ export function CameraRig(props: CameraRigProps) {
       // Reframing already includes the new room position; do not apply its follow delta again.
       followRef.current = followAnchor(agent, floor.rooms, loungesByRoom(floor.zones))
       followElevationRef.current = agentElevation(agent)
+    },
+    // The close-up is a zoom, never a dolly (N7): in to the floor band, or the owner's closer zoom.
+    followAgent(agent: AgentView): void {
+      rig.preparePreset()
+      const zoom = Math.max(camera.zoom, BAND_ZOOM.floor)
+      rig.frame(
+        { minX: agent.x, maxX: agent.x, minZ: agent.z, maxZ: agent.z },
+        {
+          minZoom: zoom,
+          maxZoom: zoom,
+          height: LOOK_HEIGHT * 2,
+          elevation: agentElevation(agent),
+          insets: latestRef.current.cityInsets
+        }
+      )
+      isRidingRef.current = true
     },
     frameWorkstation(agent: AgentView, focusedSpec?: WorkstationSpec): void {
       const controls = controlsRef.current
@@ -411,6 +447,52 @@ export function CameraRig(props: CameraRigProps) {
     if (bandRef.current === 'desk' && !workstationAgentRef.current) followRef.current = null
     bandRef.current = band
     latestRef.current.onBandChange(band)
+  })
+
+  // Follow rides the live pose with the player's margin follow; a seated agent asks no frames.
+  useFrame((_, deltaSec) => {
+    const controls = controlsRef.current
+    const { followedAgentKey, agents, size: viewport, isReducedMotion } = latestRef.current
+    if (!controls || !isRidingRef.current || !followedAgentKey) return
+    const agent = agents.find((candidate) => candidate.agentKey === followedAgentKey)
+    if (!agent || agent.place === 'leaving') {
+      isRidingRef.current = false
+      return
+    }
+    const pose = livePose(officePoses, agent)
+    controls.getTarget(targetScratch, false)
+    const ride = followBody({
+      body: { x: pose.x, y: pose.elevation + LOOK_HEIGHT, z: pose.z },
+      view: {
+        target: [targetScratch.x, targetScratch.y, targetScratch.z],
+        zoom: camera.zoom,
+        azimuth: controls.azimuthAngle,
+        polar: controls.polarAngle
+      },
+      viewport,
+      deltaSec,
+      isReducedMotion,
+      insets: latestRef.current.cityInsets
+    })
+    if (ride.target) void controls.moveTo(...ride.target, false)
+    if (!ride.isSettled) invalidate()
+  })
+
+  // The mini-map's footprint reads this; the store ignores moves it could not show.
+  useFrame(() => {
+    const controls = controlsRef.current
+    if (!controls) return
+    controls.getTarget(viewScratch, false)
+    const view = viewRef.current
+    view.x = viewScratch.x
+    view.y = viewScratch.y
+    view.z = viewScratch.z
+    view.zoom = camera.zoom
+    view.azimuth = controls.azimuthAngle
+    view.polar = controls.polarAngle
+    view.width = latestRef.current.size.width
+    view.height = latestRef.current.size.height
+    officeView.write(view)
   })
 
   // At desk zoom, keep the followed agent's office in view when the floor re-packs, and go with it
