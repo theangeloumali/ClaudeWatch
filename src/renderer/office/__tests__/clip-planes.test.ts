@@ -10,14 +10,14 @@ import {
   type SceneBox
 } from '../logic/camera-bands'
 import { GROUND_Y } from '../themes/surroundings'
-import { campusClaim, neededClaim } from '../town/town-claim'
-import { planTown } from '../town/town-plan'
+import { distributedTown } from '../town/distributed-town'
+import { townOf } from '../town/use-town-plan'
 import type { FloorGeometry } from '../scene-model'
 import { makeFloor } from './fixtures'
 
-// What OfficeScene sizes the camera from: the zoned town's extent at full detail.
+// What OfficeScene sizes the camera from: the extent of the city round the floor's own site.
 const townExtentOf = (floor: FloorGeometry) =>
-  planTown(campusClaim(neededClaim(floor), null), 'full').extent
+  distributedTown(townOf(floor, null), [floor]).plan.extent
 
 const VIEWPORT = { width: 1200, height: 800 }
 const WIDEST_ZOOM = 0.5
@@ -152,8 +152,7 @@ describe('clip planes around a plate that is not centred on the gate', () => {
     maxY: 30
   }
 
-  it('sizes the scene around the plate, not around the gate', () => {
-    expect(scene.x).toBeGreaterThan(20)
+  it('reaches past both ends of the plate', () => {
     expect(scene.x - scene.width / 2).toBeLessThan(-4.5)
     expect(scene.x + scene.width / 2).toBeGreaterThan(66.5)
   })

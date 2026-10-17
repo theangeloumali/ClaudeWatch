@@ -14,11 +14,8 @@ import { GarrisonAmbient, RadarDish, Shuttle } from './GarrisonAmbient'
 import { orbitalGarrison } from './index'
 import { FLOORS, officeGap } from './yard.test-utils'
 import { drawnTown, townDressOf } from '../../town/drawn-town.test-utils'
-import { campusClaim, neededClaim } from '../../town/town-claim'
-import { dressLot } from '../../town/town-dress'
-import { townBlocks } from '../../town/town-plan'
+import { dressLot, type DressableLot } from '../../town/town-dress'
 import { drawnTop, topOf } from '../../town/town-ambient'
-import { LIVE_FLOORS } from '../floors.test-utils'
 
 type Frame = (state: { clock: { elapsedTime: number }; invalidate: () => void }) => void
 const frames: Frame[] = []
@@ -103,12 +100,27 @@ describe('the Orbital Garrison draw budget', () => {
 })
 
 describe('what moves around the garrison', () => {
-  // No city lot is dressed as a radar tower, so the planner's own lots exercise the dish mount.
+  // No city lot is dressed as a radar tower, so a row of civic lots built here exercises the mount.
   it('mounts a dish on the pedestal of every radar tower a town draws', () => {
-    for (const [, floor] of LIVE_FLOORS) {
-      const placed = townBlocks(campusClaim(neededClaim(floor), null), 'full').lots.map((lot) =>
-        dressLot(lot, 0, townDressOf(orbitalGarrison.id))
+    for (const side of [8, 12]) {
+      const civicLots = Array.from(
+        { length: 8 },
+        (_, seed): DressableLot => ({
+          id: `civic:${side}:${seed}`,
+          kind: 'building',
+          x: seed * 16,
+          z: 0,
+          width: side,
+          depth: side,
+          maxHeight: 10,
+          seed,
+          zoneId: null,
+          zone: 'civic',
+          facing: 'south',
+          isLandmark: false
+        })
       )
+      const placed = civicLots.map((lot) => dressLot(lot, 0, townDressOf(orbitalGarrison.id)))
       const towers = placed.filter((each) => each.design === 'radar-tower')
       const mounts = radarMounts(placed)
       expect(mounts.length).toBe(towers.length)

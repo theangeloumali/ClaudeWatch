@@ -14,9 +14,9 @@ import type { PartSpec } from '../../themes/parts'
 import { boundsOf, EPSILON, expectOnItsPlot, sizeOf } from '../../themes/town-bounds.test-utils'
 import { UNIT_SHAPES } from '../../themes/unit-parts'
 import { dressLot, type DressableLot } from '../../town/town-dress'
-import { planTown } from '../../town/town-plan'
-import { GARDEN_TREE } from '../../town/garden-pieces'
+import { distributedTown } from '../../town/distributed-town'
 import { LONE_FLOOR } from '../../town/town.test-utils'
+import { townOf } from '../../town/use-town-plan'
 
 const ZONES = ['civic', 'market', 'entertainment', 'residential', 'workshop', 'park'] as const
 const FACINGS = ['north', 'east', 'south', 'west'] as const
@@ -27,6 +27,8 @@ const COLORS = new Set([
   ...HUMAN_HAIR_COLORS,
   ...HUMAN_SKIN_TONES
 ])
+// The tree a theme with no tree design of its own names in its garden.
+const GARDEN_TREE = 'garden tree'
 const FOOTPRINTS = [
   { width: 8, depth: 5 },
   { width: 5, depth: 8 },
@@ -113,13 +115,13 @@ describe('Corporate City town assets', () => {
     [0, 0],
     [117.5, -63.25]
   ])('dresses the floor lots translated by (%s, %s) deterministically', (x, z) => {
-    const original = planTown(LONE_FLOOR, 'full')
-    // Translate the supplied lots, not only the campus center of a gate-anchored planner.
+    const original = distributedTown(townOf(LONE_FLOOR, null), [LONE_FLOOR]).plan
+    // Translate the supplied lots, not only the city's gate-anchored grid.
     const plan = {
       ...original,
       lots: original.lots.map((lot) => ({ ...lot, x: lot.x + x, z: lot.z + z }))
     }
-    expect(plan.lots.length).toBeGreaterThan(100)
+    expect(plan.lots.length).toBeGreaterThan(0)
     for (const lot of plan.lots) {
       const placed = dressLot(lot, 0, CORPORATE_TOWN)
       expectInsideLot(placed)

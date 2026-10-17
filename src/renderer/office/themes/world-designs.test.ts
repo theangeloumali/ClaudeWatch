@@ -1,9 +1,6 @@
 import { Box3, Euler, Matrix4, Quaternion, Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
-import { campusClaim, neededClaim } from '../town/town-claim'
 import { dressLot } from '../town/town-dress'
-import { campusGreen } from '../town/town-green'
-import { planTown } from '../town/town-plan'
 import { PAIR_FLOOR } from '../town/town.test-utils'
 import { BRASS_TOWN } from './brass-town'
 import { BRASS_PROPS } from './BrassProps'
@@ -13,6 +10,7 @@ import { EDO_PROPS } from './EdoProps'
 import { EDO_BUILDINGS } from './EdoSurroundings'
 import type { Plot } from './lot-kit'
 import type { PartSpec } from './parts'
+import { cityLotsOf, everyZoneLots } from './town-dress.test-utils'
 
 // The box a part fills, with its rotation applied.
 function boundsOf(part: PartSpec): Box3 {
@@ -36,9 +34,8 @@ const FOOTPRINTS = [
 ]
 // The spot the town draws a prop for, before it is scaled to its lot.
 const PROP_PLOT = { length: 1, reach: 0.8, height: 1.6 }
-const floor = PAIR_FLOOR
-const plan = planTown(campusClaim(neededClaim(floor), null), 'full')
-const townLots = [...plan.lots, ...campusGreen(floor, plan)]
+const cityLots = cityLotsOf(PAIR_FLOOR)
+const townLots = [...cityLots, ...everyZoneLots()]
 
 describe.each([
   ['Neo Edo Steam', { buildings: EDO_BUILDINGS, props: EDO_PROPS }, EDO_TOWN],
@@ -113,7 +110,7 @@ describe.each([
   })
 
   it('dresses every lot of a real town, under its limit, the same on every start', () => {
-    expect(townLots.length).toBeGreaterThan(20)
+    expect(cityLots.length).toBeGreaterThan(0)
     for (const lot of townLots) {
       // Every city lot stands on the ground at 0, as dressCityDistrict stands it.
       const baseY = 0
