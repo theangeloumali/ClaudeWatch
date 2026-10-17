@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DEPARTURE_FADE_MS } from '../../../shared/office/types'
-import { presenceAfter, presenceAtMount } from '../scene/Robot'
+import { presenceAfter } from '../scene/Robot'
 
 const FRAME_S = 1 / 60
 
@@ -29,17 +29,13 @@ describe('robot fade on departure (seating-4)', () => {
     expect(settle(undefined, true, FRAME_S, 0)).toBe(1)
   })
 
-  it('starts an arrival that mounts fading at nothing, and grows it in once the fade clears', () => {
-    const mounted = presenceAtMount({ fade: 0 })
-    expect(mounted).toBe(0)
+  // robot-crew.test pins the mount itself: a fading arrival mounts at 0, anyone else whole.
+  it('holds an arrival mounted at nothing while it fades, and grows it in once the fade clears', () => {
+    const mounted = 0
     expect(settle(0.4, false, 1, mounted)).toBe(0)
     const halfway = settle(undefined, false, DEPARTURE_FADE_MS / 2000, mounted)
     expect(halfway).toBeGreaterThan(0.4)
     expect(halfway).toBeLessThan(0.6)
     expect(settle(undefined, false, DEPARTURE_FADE_MS / 1000 + FRAME_S, mounted)).toBe(1)
-  })
-
-  it('mounts a robot that is not fading whole', () => {
-    expect(presenceAtMount({})).toBe(1)
   })
 })
