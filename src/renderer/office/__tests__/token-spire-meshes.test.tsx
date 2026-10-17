@@ -13,7 +13,7 @@ import {
 import { box, Parts, type PartSpec } from '../themes/parts'
 import { listThemes } from '../themes/registry'
 import { mergedDraws } from '../themes/scene.test-utils'
-import { spireMast, spireModules } from '../themes/spire-parts'
+import { moduleFrames, spireModules } from '../themes/spire-parts'
 import { makeFloor } from './fixtures'
 
 const SILHOUETTES = ['stepped', 'split-lantern', 'offset-canopy', 'service-ribs'] as const
@@ -33,21 +33,28 @@ function towerWith(silhouette: string, storeys: number): FloorGeometry[] {
   throw new Error(`no seed draws the ${silhouette} recipe`)
 }
 
-// The spire as TokenSpire places it: the mast stands, the modules scale to the eased height.
+// The spire as TokenSpire places it: whole modules below, the top one part-grown, the first
+// reaching down to the crown deck.
 function placedSpire(floors: readonly FloorGeometry[], theme = listThemes()[0], heightM: number) {
   const top = floors.at(-1) ?? floors[0]
   const roof = crownTopOf(floors, theme)
   if (!roof) throw new Error('a tower has a roof')
   const baseY = roof.y + SPIRE_BASE_GAP_M
-  const share = heightM / SPIRE_MAX_M
-  const modules = spireModules(theme).map((part) =>
-    box(
-      [roof.x + part.at[0], baseY + part.at[1] * share, roof.z + part.at[2]],
-      [part.size[0], part.size[1] * share, part.size[2]],
-      part.color
-    )
-  )
-  return { mast: spireMast(crownAnchor(top), baseY, theme), modules, crownTop: roof.y }
+  const deck = crownAnchor(top)
+  const frames = moduleFrames(heightM, baseY - deck.y)
+  const modules = spireModules(theme).flatMap((part, stage) => {
+    const frame = frames[stage]
+    return frame
+      ? [
+          box(
+            [roof.x, baseY + frame.y, roof.z],
+            [part.size[0], frame.height, part.size[2]],
+            part.color
+          )
+        ]
+      : []
+  })
+  return { modules, deck, baseY }
 }
 
 describe('token spire meshes', () => {
@@ -62,43 +69,44 @@ describe('token spire meshes', () => {
           profile: buildingExteriorProfile({ floor: floors[0], theme })
         })
         for (let stage = 1; stage <= SPIRE_MAX_STAGES; stage += 1) {
-          const { mast, modules } = placedSpire(floors, theme, spireHeight(stage))
-          const boxes = [
-            ...partBoxes(`${theme.id}:crown`, crown, [0, 0, 0]),
-            ...partBoxes(`${theme.id}:mast`, mast, [0, 0, 0]),
-            ...partBoxes(`${theme.id}:spire${stage}`, modules, [0, 0, 0])
-          ]
-          expect(coplanarConflicts(boxes)).toEqual([])
+          for (const share of [0.01, 0.5, 1]) {
+            const heightM =
+              spireHeight(stage - 1) + share * (spireHeight(stage) - spireHeight(stage - 1))
+            const { modules } = placedSpire(floors, theme, heightM)
+            const boxes = [
+              ...partBoxes(`${theme.id}:crown`, crown, [0, 0, 0]),
+              ...partBoxes(`${theme.id}:spire${stage}`, modules, [0, 0, 0])
+            ]
+            expect(coplanarConflicts(boxes)).toEqual([])
+          }
         }
       }
   })
 
-  it('the mast stands on the crown deck, so no spire floats over an open roof', () => {
-    for (const silhouette of SILHOUETTES) {
-      const floors = towerWith(silhouette, 2)
-      const top = floors[1]
-      const { mast, modules, crownTop } = placedSpire(floors, undefined, SPIRE_MAX_M)
-      const lowest = Math.min(...mast.map((part) => part.at[1] - part.size[1] / 2))
-      const deck = crownAnchor(top)
-      expect(lowest).toBeCloseTo(deck.y)
-      expect(deck.y).toBeGreaterThan(floorElevation(top) + PHYSICAL_STOREY_HEIGHT)
-      const mastTop = Math.max(...mast.map((part) => part.at[1] + part.size[1] / 2))
-      const moduleBase = Math.min(...modules.map((part) => part.at[1] - part.size[1] / 2))
-      expect(mastTop).toBeCloseTo(moduleBase)
-      expect(moduleBase).toBeCloseTo(crownTop + SPIRE_BASE_GAP_M)
-    }
+  it('the first module stands on the crown deck, so no spire floats over an open roof', () => {
+    for (const silhouette of SILHOUETTES)
+      for (let stage = 1; stage <= SPIRE_MAX_STAGES; stage += 1) {
+        const floors = towerWith(silhouette, 2)
+        const { modules, deck, baseY } = placedSpire(floors, undefined, spireHeight(stage))
+        expect(modules).toHaveLength(stage)
+        const lowest = Math.min(...modules.map((part) => part.at[1] - part.size[1] / 2))
+        const highest = Math.max(...modules.map((part) => part.at[1] + part.size[1] / 2))
+        expect(lowest).toBeCloseTo(deck.y)
+        expect(deck.y).toBeGreaterThan(floorElevation(floors[1]) + PHYSICAL_STOREY_HEIGHT)
+        expect(highest).toBeCloseTo(baseY + spireHeight(stage))
+      }
+    expect(placedSpire(towerWith('stepped', 1), undefined, 0).modules).toEqual([])
   })
 
   it('a spire shares its batch with the crown', () => {
     for (const theme of listThemes()) {
       const floors = towerWith('split-lantern', 3)
       const crown = buildingCrown({ floor: floors[2], theme })
-      const { mast, modules } = placedSpire(floors, theme, SPIRE_MAX_M)
+      const { modules } = placedSpire(floors, theme, SPIRE_MAX_M)
       const crownOnly = mergedDraws(<Parts parts={crown} />)
       const withSpire = mergedDraws(
         <>
           <Parts parts={crown} />
-          <Parts parts={mast} />
           <group>
             <Parts parts={modules} />
           </group>

@@ -41,8 +41,7 @@ const FACE_SHARE = 0.72
 // translateZ ignores scale, so the face's offset is sized by hand.
 const FACE_GAP = 0.02
 
-export const signSizeM = (zoom: number): number =>
-  Math.min(MAX_PX / zoom, Math.max(MIN_PX / zoom, SIGN_M))
+const signSizeM = (zoom: number): number => Math.min(MAX_PX / zoom, Math.max(MIN_PX / zoom, SIGN_M))
 
 export const VENUE_BOARD = (palette: ThemePalette): string => palette.gold
 

@@ -32,7 +32,7 @@ export const NAME_CARD_MAX_PX = 72
 const CARD_GAP_PX = 6
 const ROOF_LIFT_M = 0.6
 
-export const crownSizeM = (zoom: number): number =>
+const crownSizeM = (zoom: number): number =>
   Math.min(MAX_PX / zoom, Math.max(MIN_PX / zoom, CROWN_M))
 
 // One unit across, its front toward +z: a band with corner posts and spikes, a gem front and back.

@@ -1,12 +1,13 @@
 import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
-import type { Group } from 'three'
+import type { Mesh } from 'three'
 import { buildingPlace, type BuildingPlace, type PlaceTop } from '../logic/building-place'
 import { cityClock } from '../logic/city-clock'
 import { SPIRE_BASE_GAP_M, SPIRE_MAX_M } from '../logic/token-spires'
-import { Parts } from '../themes/parts'
-import { spireMast, spireModules } from '../themes/spire-parts'
+import { moduleFrames, spireModules } from '../themes/spire-parts'
 import type { OfficeTheme } from '../themes/types'
+import { UNIT_SHAPES } from '../themes/unit-parts'
+import { Matte } from './InstancedParts'
 
 // How much of the tallest spire stands now: the live roof above the crown, eased and capped.
 export function spireShare(
@@ -20,7 +21,7 @@ export function spireShare(
   return Math.max(0, top.y - crownTopY - SPIRE_BASE_GAP_M) / SPIRE_MAX_M
 }
 
-// Plain boxes inside the shell's batch (+0 draws); only a moving share uploads its matrices.
+// Unit boxes inside the shell's batch (+0 draws); only a growing module uploads its matrix.
 export function TokenSpire({
   buildingId,
   deck,
@@ -34,26 +35,40 @@ export function TokenSpire({
 }) {
   const baseY = roof.y + SPIRE_BASE_GAP_M
   const modules = useMemo(() => spireModules(theme), [theme])
-  const mast = useMemo(() => spireMast(deck, baseY, theme), [deck, baseY, theme])
-  const spire = useRef<Group>(null)
-  const stack = useRef<Group>(null)
+  const meshes = useRef<(Mesh | null)[]>([])
   useFrame(() => {
-    if (!spire.current || !stack.current) return
     const share = spireShare(
       buildingPlace(buildingId),
       roof.y,
       cityClock.now(),
       cityClock.isPinned()
     )
-    spire.current.visible = share > 0
-    if (share > 0) stack.current.scale.y = share
+    const frames = moduleFrames(share * SPIRE_MAX_M, baseY - deck.y)
+    meshes.current.forEach((mesh, stage) => {
+      const frame = frames[stage]
+      if (!mesh) return
+      mesh.visible = frame !== null
+      if (!frame) return
+      mesh.position.y = baseY + frame.y
+      mesh.scale.y = frame.height
+    })
   })
   return (
-    <group ref={spire} name={`token-spire:${buildingId}`} visible={false}>
-      <Parts parts={mast} />
-      <group ref={stack} position={[roof.x, baseY, roof.z]}>
-        <Parts parts={modules} />
-      </group>
+    <group name={`token-spire:${buildingId}`}>
+      {modules.map((part, stage) => (
+        <mesh
+          key={stage}
+          ref={(mesh) => {
+            meshes.current[stage] = mesh
+          }}
+          position={[roof.x, baseY + part.at[1], roof.z]}
+          scale={part.size}
+          visible={false}
+        >
+          {UNIT_SHAPES.box}
+          <Matte color={part.color} />
+        </mesh>
+      ))}
     </group>
   )
 }
