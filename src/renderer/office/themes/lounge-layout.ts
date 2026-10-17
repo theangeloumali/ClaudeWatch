@@ -12,7 +12,7 @@ const WALK_SHARES = Array.from({ length: WALK_STEPS + 1 }, (_, step) => step / W
 export const WALL_GAP_M = 0.15
 
 // No agent sits on the spot or walks through it.
-export function isWalkable(lounge: LoungeGeometry, spot: Footprint): boolean {
+function isWalkable(lounge: LoungeGeometry, spot: Footprint): boolean {
   return lounge.seats.every((seat) =>
     WALK_SHARES.every(
       (share) =>
