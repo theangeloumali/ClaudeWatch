@@ -3,12 +3,11 @@ import type { CityEvent } from '../../office-live/city-events'
 import {
   buildAttentionQueue,
   cityEventNews,
-  milestoneAmount,
   newAttentionItems,
   nextAttentionKey,
   queueNews
 } from '../logic/attention-queue'
-import { milestoneStep } from '../logic/token-spires'
+import { milestoneAmount, milestoneStep } from '../logic/token-spires'
 import { usage } from '../scene/__tests__/city-marks.test-utils'
 import { makeSession } from './fixtures'
 

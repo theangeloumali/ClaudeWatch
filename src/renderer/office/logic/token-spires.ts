@@ -6,7 +6,7 @@ const STEP_FACTORS = [1, 2, 5] as const
 const MAX_MILESTONE_STEPS = 3 * 12
 
 export const SPIRE_MAX_STAGES = 6
-const SPIRE_MODULE_M = 0.8
+export const SPIRE_MODULE_M = 0.8
 // 4.8 m keeps a three-storey office with its crown under the 24 m height rule.
 export const SPIRE_MAX_M = SPIRE_MAX_STAGES * SPIRE_MODULE_M
 // The spire base clears the crown top, so the two faces never fight (flicker-1).
@@ -23,6 +23,12 @@ export function milestoneStep(tokens: number | null): number {
     }
   }
   return steps
+}
+
+// The round amount a 1-2-5 step stands for: 1 is 1M, 2 is 2M, 3 is 5M, 4 is 10M.
+export function milestoneAmount(step: number): number {
+  const decade = 10 ** Math.floor((step - 1) / STEP_FACTORS.length)
+  return STEP_FACTORS[(step - 1) % STEP_FACTORS.length] * FIRST_MILESTONE * decade
 }
 
 export function stageFor(tokens: number | null): number {

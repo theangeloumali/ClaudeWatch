@@ -1,9 +1,8 @@
-import { SPIRE_MAX_M, SPIRE_MAX_STAGES } from '../logic/token-spires'
+import { SPIRE_MAX_STAGES, SPIRE_MODULE_M } from '../logic/token-spires'
 import { FACADE_LAYER_STEP_M } from '../scene/building-window-parts'
 import { box, type PartSpec } from './parts'
 import type { OfficeTheme } from './types'
 
-const MODULE_M = SPIRE_MAX_M / SPIRE_MAX_STAGES
 // Widest at the base, so a one-stage spire still reads as the foot of a taller one. The base
 // passes through the crown, so it sits a layer step off the round widths crown parts land on.
 const BASE_WIDTH_M = 1.6 + 2 * FACADE_LAYER_STEP_M
@@ -22,7 +21,11 @@ export function spireModules(theme: OfficeTheme): PartSpec[] {
   const taper = (BASE_WIDTH_M - TOP_WIDTH_M) / (SPIRE_MAX_STAGES - 1)
   return Array.from({ length: SPIRE_MAX_STAGES }, (_, stage) => {
     const width = BASE_WIDTH_M - stage * taper
-    return box([0, (stage + 0.5) * MODULE_M, 0], [width, MODULE_M, width], colors[stage % 2])
+    return box(
+      [0, (stage + 0.5) * SPIRE_MODULE_M, 0],
+      [width, SPIRE_MODULE_M, width],
+      colors[stage % 2]
+    )
   })
 }
 
@@ -36,10 +39,10 @@ export interface ModuleFrame {
 // The first reaches `drop` metres down to the crown deck, so an off-centre crown leaves no gap.
 export function moduleFrames(heightM: number, drop: number): (ModuleFrame | null)[] {
   return Array.from({ length: SPIRE_MAX_STAGES }, (_, stage) => {
-    const shown = Math.min(MODULE_M, heightM - stage * MODULE_M)
+    const shown = Math.min(SPIRE_MODULE_M, heightM - stage * SPIRE_MODULE_M)
     if (shown <= 0) return null
-    const bottom = stage === 0 ? -drop : stage * MODULE_M
-    const top = stage * MODULE_M + shown
+    const bottom = stage === 0 ? -drop : stage * SPIRE_MODULE_M
+    const top = stage * SPIRE_MODULE_M + shown
     return { y: (bottom + top) / 2, height: top - bottom }
   })
 }

@@ -3,7 +3,7 @@ import type { SessionRef } from '../../../shared/office/types'
 import type { CityEvent, CityEventKind } from '../../office-live/city-events'
 import { formatTokens, sessionTokens } from '../../deck/tokens'
 import { GEM_SPECS } from './status-gem'
-import { milestoneStep } from './token-spires'
+import { milestoneAmount, milestoneStep } from './token-spires'
 
 export interface AttentionItem {
   sessionKey: string
@@ -55,14 +55,6 @@ export function newAttentionItems(
 export interface NewsItem {
   id: string
   text: string
-}
-
-const MILESTONE_FACTORS = [1, 2, 5] as const
-
-// The round amount a 1-2-5 step stands for: 1 is 1M, 2 is 2M, 3 is 5M, 4 is 10M.
-export function milestoneAmount(step: number): number {
-  const decade = 10 ** Math.floor((step - 1) / MILESTONE_FACTORS.length)
-  return MILESTONE_FACTORS[(step - 1) % MILESTONE_FACTORS.length] * 1_000_000 * decade
 }
 
 // A tool call has no words: one fires every few seconds per agent, too many to read.
