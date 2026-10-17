@@ -47,14 +47,61 @@ const strictlyIn = (rect: WorldFootprint, point: WorldPoint): boolean =>
   Math.abs(point.x - rect.x) < rect.width / 2 - 1e-6 &&
   Math.abs(point.z - rect.z) < rect.depth / 2 - 1e-6
 
-// The carriageways the town paints, and its zebras, built from the roads and nothing else.
+const halfCarriageway = (road: TownRoad): number => road.width / 2 - SIDEWALK_M[road.class]
+const halfWalkCentre = (road: TownRoad): number => road.width / 2 - SIDEWALK_M[road.class] / 2
+
+// Where two streets end together and neither carries on: the square outside both centre lines,
+// its carriageway part and the point its outer sidewalks meet.
+function lCorners(roads: readonly TownRoad[]) {
+  const streets = roads.filter((road) => road.class !== 'lane')
+  const isOn = (road: TownRoad, point: WorldPoint): boolean =>
+    point.x >= Math.min(road.from.x, road.to.x) - 1e-6 &&
+    point.x <= Math.max(road.from.x, road.to.x) + 1e-6 &&
+    point.z >= Math.min(road.from.z, road.to.z) - 1e-6 &&
+    point.z <= Math.max(road.from.z, road.to.z) + 1e-6
+  const isEnd = (road: TownRoad, point: WorldPoint): boolean =>
+    [road.from, road.to].some((end) => Math.hypot(end.x - point.x, end.z - point.z) < 1e-6)
+  const awayFrom = (road: TownRoad, point: WorldPoint): WorldPoint => {
+    const far =
+      Math.hypot(road.from.x - point.x, road.from.z - point.z) < 1e-6 ? road.to : road.from
+    return { x: Math.sign(far.x - point.x), z: Math.sign(far.z - point.z) }
+  }
+  return streets.flatMap((alongX) => {
+    if (alongX.from.z !== alongX.to.z) return []
+    return [alongX.from, alongX.to].flatMap((corner) => {
+      const meeting = streets.filter((road) => isOn(road, corner))
+      const alongZ = meeting.find((road) => road !== alongX)
+      if (meeting.length !== 2 || !alongZ || !meeting.every((road) => isEnd(road, corner)))
+        return []
+      const [east, south] = [awayFrom(alongX, corner).x, awayFrom(alongZ, corner).z]
+      const [reachX, reachZ] = [halfCarriageway(alongZ), halfCarriageway(alongX)]
+      return [
+        {
+          carriageway: {
+            x: corner.x - (east * reachX) / 2,
+            z: corner.z - (south * reachZ) / 2,
+            width: reachX,
+            depth: reachZ
+          },
+          sidewalkCorner: {
+            x: corner.x - east * halfWalkCentre(alongZ),
+            z: corner.z - south * halfWalkCentre(alongX)
+          }
+        }
+      ]
+    })
+  })
+}
+
+// The carriageways the town paints, an L-corner's square included, and its zebras, built from
+// the roads and nothing else.
 function asphaltOf(roads: readonly TownRoad[]) {
   const carriageways = roads
     .filter((road) => road.class !== 'lane')
     .map((road): WorldFootprint => {
       const alongX = road.from.z === road.to.z
       const length = Math.abs(road.to.x - road.from.x) + Math.abs(road.to.z - road.from.z)
-      const across = road.width - 2 * SIDEWALK_M[road.class]
+      const across = halfCarriageway(road) * 2
       return {
         x: (road.from.x + road.to.x) / 2,
         z: (road.from.z + road.to.z) / 2,
@@ -62,6 +109,7 @@ function asphaltOf(roads: readonly TownRoad[]) {
         depth: alongX ? across : length
       }
     })
+    .concat(lCorners(roads).map((corner) => corner.carriageway))
   const zebras = crosswalks(roads).map(
     (crossing): WorldFootprint => ({
       ...crossing.centre,
@@ -219,6 +267,20 @@ describe.each(CITIES)('the sidewalk network on %s', (_name, build) => {
     }
     for (const crossing of crosswalks(city.roads))
       expect(ground.isOpen(crossing.centre), crossing.id).toBe(true)
+  })
+
+  it('shuts the carriageway square where two streets end together, and opens its sidewalks', () => {
+    const ground = pedestrianGround(network, city.bounds)
+    const corners = lCorners(city.roads)
+    expect(corners.length).toBeGreaterThan(0)
+    const state = (point: WorldPoint) =>
+      `${point.x}:${point.z} ${ground.isOpen(point) ? 'open' : 'shut'}`
+    expect(corners.map((corner) => state(corner.carriageway))).toEqual(
+      corners.map(({ carriageway }) => `${carriageway.x}:${carriageway.z} shut`)
+    )
+    expect(corners.map((corner) => state(corner.sidewalkCorner))).toEqual(
+      corners.map(({ sidewalkCorner }) => `${sidewalkCorner.x}:${sidewalkCorner.z} open`)
+    )
   })
 })
 

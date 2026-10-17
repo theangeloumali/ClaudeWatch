@@ -1,6 +1,5 @@
-import { CROSSWALK_DEPTH_M, type Crosswalk } from './crosswalks'
+import type { Crosswalk } from './crosswalks'
 import { SIDEWALK_M, type TownRoad } from './town-roads'
-import type { WorldFootprint } from './world-document-types'
 
 export const EPSILON_M = 1e-6
 // Each way across a zebra keeps this far off its centre line: two bodies of 1.25–1.45 m pass (A3).
@@ -72,17 +71,26 @@ function clip(line: WalkLine, cores: readonly StreetCore[], ownId: string | null
   return pieces.map((piece) => ({ ...line, ...piece }))
 }
 
-// How far a sidewalk runs past its street's end. Meeting a cross street's centre line, an outer
-// sidewalk carries on to the cross street's outer sidewalk; with no cross street, the end is dead.
-function endReach(road: TownRoad, end: number, fixed: number, streets: readonly TownRoad[]) {
+// The cross streets whose centre line `road` ends on at `end`, each spanning its centre line.
+export function crossStreetsAt(
+  road: TownRoad,
+  end: number,
+  streets: readonly TownRoad[]
+): TownRoad[] {
   const centre = fixedOf(road)
-  const across = streets.filter(
+  return streets.filter(
     (other) =>
       isAlongX(other) !== isAlongX(road) &&
       Math.abs(fixedOf(other) - end) < EPSILON_M &&
       centre >= spanOf(other).low - EPSILON_M &&
       centre <= spanOf(other).high + EPSILON_M
   )
+}
+
+// How far a sidewalk runs past its street's end. Meeting a cross street's centre line, an outer
+// sidewalk carries on to the cross street's outer sidewalk; with no cross street, the end is dead.
+function endReach(road: TownRoad, end: number, fixed: number, streets: readonly TownRoad[]) {
+  const across = crossStreetsAt(road, end, streets)
   if (across.length === 0) return { reach: DEAD_END_M, isDead: true }
   const covering = across.filter(
     (other) => fixed > spanOf(other).low + EPSILON_M && fixed < spanOf(other).high - EPSILON_M
@@ -187,29 +195,4 @@ export function walkLines(roads: readonly TownRoad[], crossings: readonly Crossw
     )
   })
   return [...walks, ...lanes, ...zebras]
-}
-
-// Kerb to kerb of every driven road, and the zebra bands painted across them.
-export function asphaltOf(roads: readonly TownRoad[], crossings: readonly Crosswalk[]) {
-  const carriageways = roads
-    .filter((road) => road.class !== 'lane')
-    .map((road): WorldFootprint => {
-      const alongX = road.from.z === road.to.z
-      const length = Math.abs(road.to.x - road.from.x) + Math.abs(road.to.z - road.from.z)
-      const across = road.width - 2 * SIDEWALK_M[road.class]
-      return {
-        x: (road.from.x + road.to.x) / 2,
-        z: (road.from.z + road.to.z) / 2,
-        width: alongX ? length : across,
-        depth: alongX ? across : length
-      }
-    })
-  const zebras = crossings.map(
-    (crossing): WorldFootprint => ({
-      ...crossing.centre,
-      width: crossing.axis === 'z' ? CROSSWALK_DEPTH_M : crossing.halfLength * 2,
-      depth: crossing.axis === 'z' ? crossing.halfLength * 2 : CROSSWALK_DEPTH_M
-    })
-  )
-  return { carriageways, zebras }
 }

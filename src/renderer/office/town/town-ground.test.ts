@@ -1,5 +1,6 @@
 import { Color } from 'three'
 import { describe, expect, it } from 'vitest'
+import { citySidewalks } from '../citizens/city-sidewalks'
 import { EDO } from '../themes/palettes'
 import { contains, type Rect } from '../themes/lot-math'
 import { distributedTown } from './distributed-town'
@@ -42,18 +43,28 @@ describe('groundQuads', () => {
         road.id
       ).toBe(true)
       // A stub can be shorter than it is wide, so its direction is read off its ends.
+      const isAlongX = road.from.z === road.to.z
       const kerbs = SIDEWALK_M[road.class] * 2
-      const carriageway =
-        road.from.z === road.to.z
-          ? { ...strip, depth: strip.depth - kerbs }
-          : { ...strip, width: strip.width - kerbs }
-      expect(
-        driven.some((quad) => same(quad, carriageway)),
-        road.id
-      ).toBe(road.class !== 'lane')
+      const carriageway = isAlongX
+        ? { ...strip, depth: strip.depth - kerbs }
+        : { ...strip, width: strip.width - kerbs }
+      // Kerb to kerb across; along, it may carry on through a corner past either end.
+      const isDownRoad = (quad: Rect): boolean =>
+        contains(quad, carriageway) &&
+        (isAlongX
+          ? quad.z === carriageway.z && quad.depth === carriageway.depth
+          : quad.x === carriageway.x && quad.width === carriageway.width)
+      expect(driven.some(isDownRoad), road.id).toBe(road.class !== 'lane')
     }
     for (const quad of driven) expect(quad.color).toBe(dress.roads.carriageway)
     for (const quad of paved) expect(quad.color).toBe(dress.roads.sidewalk)
+  })
+
+  it('paints the carriageways the walkers’ ground shuts, and no others', () => {
+    const shut = citySidewalks(plan).network.carriageways
+    const painted = of('carriageway').map(({ x, z, width, depth }) => ({ x, z, width, depth }))
+    expect(shut.length).toBeGreaterThan(0)
+    expect(painted).toEqual(shut)
   })
 
   it('stacks the layers in order, all just above the ground the offices stand on', () => {

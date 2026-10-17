@@ -1,7 +1,8 @@
 import type { NavGrid } from '../../office/sim/path'
 import type { Crosswalk } from './crosswalks'
 import { MinHeap } from './min-heap'
-import { EPSILON_M, asphaltOf, walkLines, type WalkKind, type WalkLine } from './sidewalk-lines'
+import { EPSILON_M, walkLines, type WalkKind, type WalkLine } from './sidewalk-lines'
+import { asphaltOf } from './street-paving'
 import type { TownRoad } from './town-roads'
 import type { WorldFootprint, WorldPoint } from './world-document-types'
 
