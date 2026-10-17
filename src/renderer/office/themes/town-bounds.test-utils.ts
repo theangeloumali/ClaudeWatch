@@ -1,4 +1,4 @@
-import { Box3, Color, Euler, Matrix4, Quaternion, Vector3 } from 'three'
+import { Box3, Euler, Matrix4, Quaternion, Vector3 } from 'three'
 import { expect } from 'vitest'
 import type { CitizenFigure } from '../citizens/figure-parts'
 import type { ZoneDesign, ZonePlot } from '../town/town-dress'
@@ -19,12 +19,6 @@ export function boundsOf(part: PartSpec): Box3 {
     new Vector3(...part.size)
   )
   return new Box3(new Vector3(-0.5, -0.5, -0.5), new Vector3(0.5, 0.5, 0.5)).applyMatrix4(matrix)
-}
-
-// How light a colour reads, 0 to 1.
-export function luminance(hex: string): number {
-  const { r, g, b } = new Color(hex)
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b
 }
 
 // The box a figure fills as it is modelled, before the citizens' scale.

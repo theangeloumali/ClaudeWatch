@@ -1,4 +1,5 @@
 import { Color } from 'three'
+import { luminance } from '../themes/contrast'
 import type { ThemePalette } from '../themes/types'
 import { fallbackDesigns, fallbackProps } from './fallback-designs'
 import type { TownDress } from './town-dress'
@@ -16,11 +17,6 @@ const MAX_LIGHTENING_STEPS = 8
 
 const mix = (from: string, to: string, share: number): string =>
   hexOf(new Color(from).lerp(new Color(to), share))
-
-function luminance(hex: string): number {
-  const { r, g, b } = new Color(hex)
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b
-}
 
 // The colour itself when it is already under the limit, else the same hue brought under it.
 function darkerThan(hex: string, limit: number): string {

@@ -1,14 +1,9 @@
 import { Color, InstancedMesh, Matrix4, OrthographicCamera, Quaternion, Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
+import { contrastRatio } from '../../themes/contrast'
 import { BAND_ZOOM, ISO_POLAR, ISO_START_AZIMUTH } from '../../logic/camera-bands'
 import { MARK_RISE_M } from '../city-marks'
-import {
-  contrastRatio,
-  SIGN_BOARD,
-  SIGN_ICONS,
-  signInk,
-  type SignState
-} from '../../logic/project-signs'
+import { SIGN_BOARD, SIGN_ICONS, signInk, type SignState } from '../../logic/project-signs'
 import { CITY_LAYER_BUDGET, measureLayer } from '../../themes/city-layer-budget.test-utils'
 import { listThemes } from '../../themes/registry'
 import {

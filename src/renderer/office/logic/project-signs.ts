@@ -1,7 +1,7 @@
-import { Color } from 'three'
 import type { ToolCategory } from '../../../shared/office/types'
 import type { WorldVenue } from '../../../shared/office/world-document'
 import { SCENE_BACKGROUND, STATE_COLOR } from '../office-palette'
+import { contrastRatio } from '../themes/contrast'
 import type { BuildingId, BuildingSignal } from './city-signals'
 import { citySignalStore, type CitySignalStore } from './city-signal-store'
 
@@ -58,17 +58,6 @@ export function signFor(signal: BuildingSignal): SignState | null {
 }
 
 export const venueSign = (kind: WorldVenue['kind']): { icon: SignIcon } => ({ icon: kind })
-
-// WCAG relative luminance: three's Color holds the linear channels the formula needs.
-function luminance(color: string): number {
-  const { r, g, b } = new Color(color)
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b
-}
-
-export function contrastRatio(a: string, b: string): number {
-  const [light, dark] = [luminance(a), luminance(b)].sort((x, y) => y - x)
-  return (light + 0.05) / (dark + 0.05)
-}
 
 const SIGN_INK = SCENE_BACKGROUND
 const SIGN_PAPER = '#FFFFFF'
