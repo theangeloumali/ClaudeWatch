@@ -21,6 +21,8 @@ export const controls = {
   azimuthAngle: 0,
   polarAngle: 0,
   target: { x: 100, y: 0.6, z: 50 },
+  // Only a dolly changes it; an orthographic camera never needs one.
+  distance: 500,
   stop: vi.fn(),
   minZoom: 3,
   maxZoom: 240,
@@ -62,6 +64,7 @@ export function resetRig(): void {
   camera.zoom = 34
   surface.size = { width: 1440, height: 900 }
   controls.target = { x: 100, y: 0.6, z: 50 }
+  controls.distance = 500
   controls.azimuthAngle = 0
   controls.polarAngle = Math.PI / 4
   vi.clearAllMocks()

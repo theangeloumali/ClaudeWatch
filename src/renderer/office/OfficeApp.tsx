@@ -28,6 +28,7 @@ import { AttentionRail } from './hud/AttentionRail'
 import { BottomBar } from './hud/BottomBar'
 import { EmptyState } from './hud/EmptyState'
 import { FocusNotice } from './hud/FocusNotice'
+import { FollowButton } from './hud/FollowButton'
 import { HealthBanner } from './hud/HealthBanner'
 import { LeadersCard } from './hud/LeadersCard'
 import { headerWithNewsLine, NewsLine } from './hud/NewsLine'
@@ -321,6 +322,7 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
               focusedFloorId={state.focusedFloorId}
               focusedRoomId={focusedRoomId}
               cameraRequest={state.cameraRequest}
+              followedAgentKey={state.followedAgentKey}
               onFit={fitCamera}
               onManualCameraMove={onManualCameraMove}
               isCameraManuallyOwned={state.isCameraManuallyOwned}
@@ -527,6 +529,14 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
                 </div>
               }
             >
+              {!isShowingList && (
+                <FollowButton
+                  isFollowing={state.followedAgentKey === selectedAgent.agentKey}
+                  onToggle={() =>
+                    dispatch({ type: 'agent-followed', agentKey: selectedAgent.agentKey })
+                  }
+                />
+              )}
               {selectedSession && selectedTarget && (
                 <AgentActions
                   key={selectedTarget.key}

@@ -76,6 +76,7 @@ interface OfficeSceneProps {
   onFit?: () => void
   onManualCameraMove?: () => void
   isCameraManuallyOwned?: boolean
+  followedAgentKey?: string | null
   selectedWorkstation?: WorkstationSpec
   metrics: FrameMetrics
   onSelectAgent: (agentKey: string | null) => void
@@ -390,6 +391,7 @@ function OfficeScene(props: OfficeSceneProps) {
           hasInspector={selectedAgentKey !== null}
           inspectorLayout={props.inspectorLayout}
           onBandChange={setBand}
+          followedAgentKey={props.followedAgentKey}
           viewMode={props.viewMode}
           focusedFloorId={props.focusedFloorId}
         />
