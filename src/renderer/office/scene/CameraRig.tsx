@@ -53,7 +53,7 @@ interface CameraRigProps {
   // The extent of everything drawn; the widest zoom frames all of it.
   scene: { x?: number; z?: number; width: number; depth: number; maxY?: number }
   floor: FloorGeometry
-  visibleFloors?: readonly FloorGeometry[]
+  visibleFloors: readonly FloorGeometry[]
   viewMode?: 'city' | 'office'
   focusedFloorId?: string | null
   agents: readonly AgentView[]
@@ -90,19 +90,16 @@ export function CameraRig(props: CameraRigProps) {
   const targetScratch = useMemo(() => new Vector3(), [])
   const size = useThree((state) => state.size)
   const camera = useThree((state) => state.camera)
-  const cityEnvelope = useMemo(
-    () => (props.visibleFloors ? floorEnvelope(props.visibleFloors) : null),
-    [props.visibleFloors]
-  )
+  const cityEnvelope = useMemo(() => floorEnvelope(props.visibleFloors), [props.visibleFloors])
   const focusedFloor =
-    props.visibleFloors?.find((floor) => floor.floorId === props.focusedFloorId) ?? props.floor
+    props.visibleFloors.find((floor) => floor.floorId === props.focusedFloorId) ?? props.floor
   const envelope = useMemo(
     () => (props.viewMode === 'office' ? floorEnvelope([focusedFloor]) : cityEnvelope),
     [props.viewMode, focusedFloor, cityEnvelope]
   )
   const cameraFloor = useMemo(() => {
     if (props.viewMode === 'office') return focusedFloor
-    return props.visibleFloors ? groundEnvelope(props.visibleFloors, props.floor) : props.floor
+    return groundEnvelope(props.visibleFloors, props.floor)
   }, [props.viewMode, focusedFloor, props.visibleFloors, props.floor])
   const occupied = useMemo(
     () => occupiedBounds(cameraFloor, props.liveSessionKeys),

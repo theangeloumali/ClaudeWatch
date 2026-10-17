@@ -71,6 +71,7 @@ function project(cards: readonly NameCard[], zoom: number, selectedAgentKey: str
   }
   render(
     <CardProjector
+      visibleFloors={[]}
       cards={cards}
       stacks={[{ projectKey: 'p', zoneId: null, x: 0, z: 0, text: 'p · 5 agents' }]}
       anchors={anchors}

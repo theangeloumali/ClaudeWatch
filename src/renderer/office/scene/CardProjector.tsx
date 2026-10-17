@@ -47,7 +47,7 @@ interface CardProjectorProps {
   selectedAgentKey: string | null
   inspectorLayout?: InspectorLayout
   agents?: readonly AgentView[]
-  visibleFloors?: readonly FloorGeometry[]
+  visibleFloors: readonly FloorGeometry[]
 }
 
 // Writes a snapshot slot and returns 1 if it changed, so the idle check allocates nothing.
@@ -104,7 +104,7 @@ export function CardProjector({
     () =>
       new Map(
         stacks.map((stack) => {
-          const floor = visibleFloors?.find(
+          const floor = visibleFloors.find(
             (candidate) => stack.zoneId !== null && !!findZone(candidate, stack.zoneId)
           )
           return [stack.projectKey, floor ? floorElevation(floor) : 0] as const

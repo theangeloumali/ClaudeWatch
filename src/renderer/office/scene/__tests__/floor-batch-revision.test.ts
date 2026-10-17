@@ -1,10 +1,9 @@
 // perf-3: the floor's batches rebuild for what changes their parts, not for a click or a reply.
-// perf-11: with storeys drawn, robots batch on their own, so roster churn rebuilds only them.
+// perf-11: robots batch apart from the storeys, so roster churn rebuilds only them.
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentView } from '../../../../shared/office/types'
 import { makeAgent, makeFloor } from '../../__tests__/fixtures'
 import { EMPTY_THEME_ASSIGNMENTS } from '../../logic/office-themes'
-import type { FloorGeometry } from '../../scene-model'
 import { getTheme } from '../../themes/registry'
 import { AUTHORED_WORKER_LIMIT } from '../scene-density'
 import { crewBatchRevision } from '../batch-revision'
@@ -31,19 +30,17 @@ const roamed = (agents: readonly AgentView[]): AgentView[] =>
 function revisionOf(options: {
   agents: readonly AgentView[]
   selectedAgentKey?: string | null
-  visibleFloors?: readonly FloorGeometry[]
 }): string {
   return useSceneFloorData({
     floor,
+    visibleFloors: [floor],
+    allFloors: [floor],
     theme,
     sessions: [],
     selectedAgentKey: null,
     ...options
   }).revision
 }
-
-const storeysRevisionOf = (agents: readonly AgentView[]): string =>
-  revisionOf({ agents, visibleFloors: [floor] })
 
 function crewRevisionOf(agents: readonly AgentView[], selectedAgentKey: string | null = null) {
   return crewBatchRevision({ agents, selectedAgentKey, themeId: theme.id, zoneGroups: [] })
@@ -56,28 +53,24 @@ describe('floor batch revision', () => {
     expect(revisionOf({ agents, selectedAgentKey: 'claude:1' })).toBe(idle)
   })
 
-  it('on a single floor, whose robots share its batch, a robot changing room rebuilds it', () => {
-    const agents = crew(3)
-    expect(revisionOf({ agents: roamed(agents) })).not.toBe(revisionOf({ agents }))
-  })
-
-  it('rebuilds on a selection in overview, where the selected worker swaps its model', () => {
+  // The selected worker's model swap is the crew batch's (below), not the storeys'.
+  it('a selection in overview leaves the floor batch alone', () => {
     const agents = crew(AUTHORED_WORKER_LIMIT + 1)
-    expect(revisionOf({ agents, selectedAgentKey: 'claude:1' })).not.toBe(revisionOf({ agents }))
+    expect(revisionOf({ agents, selectedAgentKey: 'claude:1' })).toBe(revisionOf({ agents }))
   })
 
-  it('with storeys drawn, a robot changing room or storey leaves the floor batch alone', () => {
+  it('a robot changing room or storey leaves the floor batch alone', () => {
     const agents = crew(3)
-    expect(storeysRevisionOf(roamed(agents))).toBe(storeysRevisionOf(agents))
+    expect(revisionOf({ agents: roamed(agents) })).toBe(revisionOf({ agents }))
   })
 
-  it('with storeys drawn, a worker joining or leaving leaves the floor batch alone', () => {
-    expect(storeysRevisionOf(crew(4))).toBe(storeysRevisionOf(crew(3)))
+  it('a worker joining or leaving leaves the floor batch alone', () => {
+    expect(revisionOf({ agents: crew(4) })).toBe(revisionOf({ agents: crew(3) }))
   })
 
-  it('with storeys drawn, entering overview rebuilds the floor batch, which drops detail', () => {
-    expect(storeysRevisionOf(crew(AUTHORED_WORKER_LIMIT + 1))).not.toBe(
-      storeysRevisionOf(crew(AUTHORED_WORKER_LIMIT))
+  it('entering overview rebuilds the floor batch, which drops detail', () => {
+    expect(revisionOf({ agents: crew(AUTHORED_WORKER_LIMIT + 1) })).not.toBe(
+      revisionOf({ agents: crew(AUTHORED_WORKER_LIMIT) })
     )
   })
 })

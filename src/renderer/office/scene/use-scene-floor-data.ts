@@ -7,15 +7,15 @@ import { buildOfficeLabels } from '../logic/office-labels'
 import { buildWorkstationDisplays } from '../logic/workstation-displays'
 import { getTheme } from '../themes/registry'
 import { floorElevation, groundEnvelope } from './all-floor-model'
-import { crewBatchRevision, zoneThemesKey } from './batch-revision'
+import { zoneThemesKey } from './batch-revision'
 import { physicalZoneGroups } from './MultiFloorLayer'
 import { AUTHORED_WORKER_LIMIT } from './scene-density'
 
 // dry-new: one geometry revision and theme resolution serve every supplied physical storey.
 export function useSceneFloorData(options: {
   floor: FloorGeometry
-  visibleFloors?: readonly FloorGeometry[]
-  allFloors?: readonly FloorGeometry[]
+  visibleFloors: readonly FloorGeometry[]
+  allFloors: readonly FloorGeometry[]
   theme: OfficeTheme
   agents: readonly AgentView[]
   sessions: readonly SessionRef[]
@@ -28,10 +28,10 @@ export function useSceneFloorData(options: {
   focusedRoomId?: string | null
 }) {
   const assignments = useThemeAssignments()
-  const surfaces = useMemo(() => {
-    if (!options.visibleFloors) return [options.floor]
-    return [...new Map(options.visibleFloors.map((floor) => [floor.floorId, floor])).values()]
-  }, [options.floor, options.visibleFloors])
+  const surfaces = useMemo(
+    () => [...new Map(options.visibleFloors.map((floor) => [floor.floorId, floor])).values()],
+    [options.visibleFloors]
+  )
   const groups = useMemo(
     () =>
       new Map(
@@ -45,15 +45,11 @@ export function useSceneFloorData(options: {
   const zoneGroups = useMemo(() => [...groups.values()].flat(), [groups])
   const townFloor = useMemo(
     () =>
-      options.allFloors
-        ? groundEnvelope(
-            options.allFloors.filter((floor) => floorElevation(floor) === 0),
-            options.floor
-          )
-        : options.visibleFloors
-          ? groundEnvelope(surfaces, options.floor)
-          : options.floor,
-    [surfaces, options.floor, options.visibleFloors, options.allFloors]
+      groundEnvelope(
+        options.allFloors.filter((floor) => floorElevation(floor) === 0),
+        options.floor
+      ),
+    [options.floor, options.allFloors]
   )
   const selectedRoomId =
     options.focusedRoomId ??
@@ -64,12 +60,12 @@ export function useSceneFloorData(options: {
         buildOfficeLabels(floor, selectedRoomId ? { roomId: selectedRoomId } : undefined).map(
           (label) => ({
             ...label,
-            id: options.visibleFloors ? `${floor.floorId}:${label.id}` : label.id,
+            id: `${floor.floorId}:${label.id}`,
             y: label.y ?? floorElevation(floor) + 0.35
           })
         )
       ),
-    [surfaces, selectedRoomId, options.visibleFloors]
+    [surfaces, selectedRoomId]
   )
   const displays = useMemo(
     () =>
@@ -104,15 +100,6 @@ export function useSceneFloorData(options: {
   )
   // Overview draws the floors with less detail.
   const isOverview = options.agents.length > AUTHORED_WORKER_LIMIT
-  // Storeys batch their robots apart (MultiFloorLayer); a single floor's share its batch.
-  const crewKey = options.visibleFloors
-    ? null
-    : crewBatchRevision({
-        agents: options.agents,
-        selectedAgentKey: options.selectedAgentKey,
-        themeId: options.theme.id,
-        zoneGroups
-      })
   const revision = useMemo(
     () =>
       JSON.stringify([
@@ -120,7 +107,6 @@ export function useSceneFloorData(options: {
         surfaces,
         zoneThemesKey(zoneGroups),
         isOverview,
-        crewKey,
         options.areRoofsVisible ?? true,
         options.viewMode,
         options.focusedFloorId,
@@ -131,7 +117,6 @@ export function useSceneFloorData(options: {
       surfaces,
       zoneGroups,
       isOverview,
-      crewKey,
       options.areRoofsVisible,
       options.viewMode,
       options.focusedFloorId,

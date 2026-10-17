@@ -27,7 +27,7 @@ interface PresetOptions {
   request: CameraRequest | null
   agents: readonly AgentView[]
   floor: FloorGeometry
-  visibleFloors?: readonly FloorGeometry[]
+  visibleFloors: readonly FloorGeometry[]
   viewMode?: 'city' | 'office'
   focusedFloorId?: string | null
   isReducedMotion: boolean
@@ -92,7 +92,7 @@ export function useCameraPresets(options: PresetOptions): void {
       }
       case 'zone': {
         const zoneFloor =
-          visibleFloors?.find(
+          visibleFloors.find(
             (candidate) =>
               findZone(candidate, request.zoneId) ||
               candidate.rooms.some((room) => room.id === request.zoneId)
