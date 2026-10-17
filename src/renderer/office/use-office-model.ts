@@ -5,6 +5,8 @@ import { structuralKey } from '../office-live/pose-store'
 import { buildAgentFacts, type AgentFacts } from './hud/agent-facts'
 import { buildAttentionQueue } from './logic/attention-queue'
 import { bayForAgent, summariseFloors } from './logic/floor-model'
+import { useOfficeSettings } from './logic/office-settings'
+import { createRoleBook, maskFrame } from './logic/role-names'
 import { reachTarget } from './logic/interactions'
 import { buildNameCards, buildProjectStacks } from './logic/name-cards'
 import { workstationSeat } from './logic/workstation-framing'
@@ -33,6 +35,17 @@ function useStructuralFrame(frame: OfficeFrame | null): OfficeFrame | null {
     return previous.frame
   kept.current = { frame, agentsKey }
   return frame
+}
+
+// The frame the HUD and scene draw. With names hidden, roles replace every name here, before
+// any DOM node or sign texture; the saved city is built from the feed, upstream of this.
+export function useVisibleFrame(frame: OfficeFrame | null): OfficeFrame | null {
+  const { hideNames } = useOfficeSettings()
+  const [roles] = useState(createRoleBook)
+  return useMemo(
+    () => (frame && hideNames ? maskFrame(frame, roles) : frame),
+    [frame, hideNames, roles]
+  )
 }
 
 // The render clock, plus one re-render when evidence next turns fresh or stale, so activity

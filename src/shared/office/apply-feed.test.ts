@@ -95,4 +95,30 @@ describe('applyFeed', () => {
   it('clears state on resync so the next hello rebuilds it', () => {
     expect(applyFeed(snapshot([session('claude:a')]), { type: 'resync' })).toBeNull()
   })
+
+  it('keeps the latest totals for today: a patch carrying them replaces them, one without keeps them', () => {
+    const today = [{ projectKey: 'p_1', tokens: 10 }]
+    const start = { ...snapshot([session('claude:a')]), projectsToday: today }
+    const quiet = applyFeed(start, { type: 'patch', v: 1, seq: 2, upserts: [], removed: [] })
+    expect(quiet?.projectsToday).toBe(today)
+    const later = [{ projectKey: 'p_1', tokens: 30 }]
+    const counted = applyFeed(quiet, {
+      type: 'patch',
+      v: 1,
+      seq: 3,
+      upserts: [session('claude:a', { activity: 'editing' })],
+      removed: [],
+      projectsToday: later
+    })
+    expect(counted?.projectsToday).toBe(later)
+    const onlyTotals = applyFeed(counted, {
+      type: 'patch',
+      v: 1,
+      seq: 4,
+      upserts: [],
+      removed: [],
+      projectsToday: []
+    })
+    expect(onlyTotals).toMatchObject({ rev: 4, projectsToday: [] })
+  })
 })

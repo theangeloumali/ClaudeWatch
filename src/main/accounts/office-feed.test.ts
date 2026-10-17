@@ -51,6 +51,7 @@ function setup(snapshot: OfficeSnapshot | null) {
   }
   const accounts = {
     isActive: true,
+    today: [{ projectKey: 'p_1', tokens: 10 }],
     officeListeners: new Set<() => void>(),
     decorateSession: (value: SessionRef): SessionRef => ({
       ...value,
@@ -60,7 +61,8 @@ function setup(snapshot: OfficeSnapshot | null) {
     decorate: (value: OfficeSnapshot): OfficeSnapshot => ({
       ...value,
       sessions: value.sessions.map(accounts.decorateSession),
-      accounts: [{ ...ACCOUNT, isActive: accounts.isActive }]
+      accounts: [{ ...ACCOUNT, isActive: accounts.isActive }],
+      projectsToday: accounts.today
     }),
     onOfficeChange: (listener: () => void) => {
       accounts.officeListeners.add(listener)
@@ -134,5 +136,54 @@ describe('withAccounts', () => {
     accountsChanged()
     expect(received).toEqual([])
     expect(host.listeners.size + accounts.officeListeners.size).toBe(0)
+  })
+})
+
+describe('today’s tokens per project', () => {
+  it('projectsToday rides a patch only when a total changed, never a hello per poll', () => {
+    const { accounts, received, say, accountsChanged } = setup(snapshot())
+    const patch = (seq: number): FeedMessage => ({
+      type: 'patch',
+      v: 1,
+      seq,
+      upserts: [session('a')],
+      removed: []
+    })
+    say({ type: 'hello', v: 1, snapshot: snapshot() })
+    say(patch(4))
+    accounts.today = [{ projectKey: 'p_1', tokens: 25 }]
+    say(patch(5))
+    say(patch(6))
+    accountsChanged()
+    say(patch(7))
+    expect(received.map((message) => message.type)).toEqual([
+      'hello',
+      'patch',
+      'patch',
+      'patch',
+      'hello',
+      'patch'
+    ])
+    expect(received.map((message) => 'projectsToday' in message)).toEqual([
+      false,
+      false,
+      true,
+      false,
+      false,
+      false
+    ])
+    expect(received[0]).toMatchObject({ snapshot: { projectsToday: [{ tokens: 10 }] } })
+    expect(received[2]).toMatchObject({ projectsToday: [{ projectKey: 'p_1', tokens: 25 }] })
+    expect(received[4]).toMatchObject({ snapshot: { projectsToday: [{ tokens: 25 }] } })
+  })
+
+  it('a listener that took the snapshot first is sent no unchanged totals', () => {
+    const { feed, say } = setup(snapshot())
+    expect(feed.snapshot()?.projectsToday).toEqual([{ projectKey: 'p_1', tokens: 10 }])
+    const later: FeedMessage[] = []
+    feed.onMessage((message) => later.push(message))
+    say({ type: 'patch', v: 1, seq: 4, upserts: [], removed: [] })
+    expect(later).toHaveLength(1)
+    expect(later[0]).not.toHaveProperty('projectsToday')
   })
 })
