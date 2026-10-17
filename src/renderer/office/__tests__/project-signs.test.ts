@@ -26,7 +26,7 @@ const live = (key: string, overrides: Partial<SessionRef> = {}): SessionRef =>
 function signOf(sessions: readonly SessionRef[]) {
   const store = createCitySignalStore()
   store.update(makeFrame({ sessions: [...sessions] }), NOW)
-  return createProjectSigns(store).sign(HOME)
+  return createProjectSigns(store).all().get(HOME) ?? null
 }
 
 const quiet: BuildingSignal = {
@@ -104,12 +104,12 @@ describe('project signs', () => {
     const editing = live('claude:a', { activity: 'editing', currentTool: tool('edit') })
     store.update(makeFrame({ sessions: [editing] }), NOW)
     const first = signs.version()
-    expect(signs.sign(HOME)?.icon).toBe('edit')
+    expect(signs.all().get(HOME)?.icon).toBe('edit')
     store.update(makeFrame({ sessions: [{ ...editing, updatedAtMs: 5 }] }), NOW + 10)
-    expect(signs.sign(HOME)?.icon).toBe('edit')
+    expect(signs.all().get(HOME)?.icon).toBe('edit')
     expect(signs.version()).toBe(first)
     store.update(makeFrame({ sessions: [{ ...editing, attention: 'question' }] }), NOW + 20)
-    expect(signs.sign(HOME)?.tint).toBe('needs-you')
+    expect(signs.all().get(HOME)?.tint).toBe('needs-you')
     expect(signs.version()).toBe(first + 1)
   })
 })

@@ -1,8 +1,8 @@
-import { renderHook } from '@testing-library/react'
+import { act, renderHook } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import type { AgentObservation, SessionRef, SessionUsage } from '../../../shared/office/types'
 import { buildingIdOf } from '../logic/city-signals'
-import { createCitySignalStore } from '../logic/city-signal-store'
+import { createCitySignalStore, useSpireStages } from '../logic/city-signal-store'
 import { useCitySignalFeed } from '../use-office-model'
 import { makeFrame, makeSession } from './fixtures'
 
@@ -64,11 +64,52 @@ describe('city signal store', () => {
     expect(heard).toBe(2)
   })
 
+  it("today's tokens rising alone move the HUD's version, never the scene's", () => {
+    const store = createCitySignalStore()
+    const spent = (tokens: number) =>
+      makeFrame({ sessions: [live('claude:a')], projectsToday: [{ projectKey: 'p_1', tokens }] })
+    store.update(spent(1_200_000), NOW)
+    const [version, sceneVersion] = [store.version(), store.sceneVersion()]
+    store.update(spent(1_300_000), NOW + 500)
+    expect(store.version()).toBe(version + 1)
+    expect(store.sceneVersion()).toBe(sceneVersion)
+    store.update(spent(2_100_000), NOW + 1_000)
+    expect(store.sceneVersion()).toBe(sceneVersion + 1)
+  })
+
+  it('the scene version moves when a building changes state', () => {
+    const store = createCitySignalStore()
+    store.update(makeFrame({ sessions: [live('claude:a')] }), NOW)
+    const sceneVersion = store.sceneVersion()
+    store.update(makeFrame({ sessions: [live('claude:a', { attention: 'permission' })] }), NOW)
+    expect(store.sceneVersion()).toBe(sceneVersion + 1)
+  })
+
   it('holds no signals before the first frame', () => {
     const store = createCitySignalStore()
     expect(store.current().buildings.size).toBe(0)
     store.update(null, NOW)
     expect(store.current().leaders.crowned).toEqual([])
+  })
+})
+
+describe('useSpireStages', () => {
+  it('keeps the same Map until a stage changes', () => {
+    const store = createCitySignalStore()
+    const frame = (tokens: number, overrides: Partial<SessionRef> = {}) =>
+      makeFrame({
+        sessions: [live('claude:a', overrides)],
+        projectsToday: [{ projectKey: 'p_1', tokens }]
+      })
+    store.update(frame(1_200_000), NOW)
+    const { result, rerender } = renderHook(() => useSpireStages(store))
+    const first = result.current
+    expect([...first]).toEqual([[HOME, 1]])
+    act(() => store.update(frame(1_300_000, { attention: 'permission' }), NOW))
+    rerender()
+    expect(result.current).toBe(first)
+    act(() => store.update(frame(2_100_000), NOW))
+    expect([...result.current]).toEqual([[HOME, 2]])
   })
 })
 
