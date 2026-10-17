@@ -47,7 +47,7 @@ const SPARK_DIRECTIONS = Array.from({ length: SPARKS }, (_, index) => {
 const clampShare = (share: number): number => Math.min(1, Math.max(0, share))
 const easeOut = (share: number): number => 1 - (1 - share) * (1 - share)
 
-export interface ShellPart {
+interface ShellPart {
   shell: number
   pose: MarkPose
   // 0 while rising, then how far the bloom has opened.
@@ -55,7 +55,12 @@ export interface ShellPart {
 }
 
 // Every part of one burst at its age; `isPinned` holds a frozen bloom (reduced motion).
-export function burstParts(top: PlaceTop, ageMs: number, zoom: number, isPinned: boolean) {
+export function burstParts(
+  top: PlaceTop,
+  ageMs: number,
+  zoom: number,
+  isPinned: boolean
+): ShellPart[] {
   const parts: ShellPart[] = []
   const apexY = Math.min(top.y + APEX_M, markCeiling(top))
   const size = screenMetres(SPARK_PX, zoom)

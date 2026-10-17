@@ -77,9 +77,13 @@ function BoardRow({ board, onFlyToZone }: { board: Board; onFlyToZone: (id: stri
         <span>{board.title}</span>
         <span className="shrink-0 tabular-nums text-accent">{leader?.value}</span>
       </span>
-      <span className="min-w-0 truncate text-body text-text-primary">
-        {leader?.label ?? 'No agents yet'}
-      </span>
+      {leader ? (
+        <span translate="no" className="min-w-0 truncate text-body text-text-primary">
+          {leader.label}
+        </span>
+      ) : (
+        <span className="text-body text-text-tertiary">No agents yet</span>
+      )}
     </>
   )
   const zoneId = leader?.zoneId
