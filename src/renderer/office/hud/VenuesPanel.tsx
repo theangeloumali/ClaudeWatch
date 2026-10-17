@@ -40,7 +40,7 @@ export function VenuesPanel({
                   aria-pressed={selected?.id === venue.id}
                   onClick={() => onSelectVenue(venue.id)}
                 >
-                  {venue.displayName} · {venue.kind}
+                  {venue.displayName ? `${venue.displayName} · ${venue.kind}` : venue.kind}
                 </button>
               ))}
             </div>

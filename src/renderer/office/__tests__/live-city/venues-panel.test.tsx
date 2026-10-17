@@ -29,3 +29,20 @@ it('lists the city venues as places to look at, with no agent visitors to inspec
   fireEvent.click(venue)
   expect(onSelectVenue).toHaveBeenCalledWith('arcade')
 })
+
+it('names a venue saved without a display name by its kind alone', () => {
+  const frame = makeFrame({
+    venues: [
+      {
+        id: 'garage',
+        kind: 'garage',
+        footprint: { x: 0, z: 0, width: 10, depth: 10 },
+        entrance: { x: 0, z: -5 },
+        capacity: 1,
+        slots: []
+      }
+    ]
+  })
+  render(<VenuesPanel frame={frame} selectedVenueId="garage" onSelectVenue={vi.fn()} />)
+  expect(screen.getByRole('button', { name: 'garage' })).toBeInTheDocument()
+})
