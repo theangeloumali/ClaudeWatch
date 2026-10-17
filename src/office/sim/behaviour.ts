@@ -62,7 +62,6 @@ export function setFinished(agent: AgentRecord, isFinished: boolean): AgentRecor
 
 export function wantsLounge(agent: AgentRecord): boolean {
   return (
-    agent.state !== 'leaving' &&
     agent.path.length === 0 &&
     agent.view.place === undefined &&
     agent.finishedForMs !== null &&
@@ -99,7 +98,6 @@ export function updateAgent(
   attention: AgentAttention
 ): AgentRecord {
   const next = { ...agent, view: { ...agent.view, attention } }
-  if (next.state === 'leaving') return next
   if (urgent(attention)) {
     next.state = next.path.length ? 'arriving' : 'needs_you'
     next.view.heading = next.slotHeading

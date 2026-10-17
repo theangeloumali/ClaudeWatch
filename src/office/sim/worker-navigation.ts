@@ -101,7 +101,7 @@ export function recoverWorkerRoute(options: {
 }
 
 export function resumeUnseatedWorker(agent: AgentRecord, routes: FloorRoutes): AgentRecord {
-  if (agent.path.length || agent.view.place || agent.state === 'leaving') return agent
+  if (agent.path.length || agent.view.place) return agent
   const floor = routes.floor(agent.view.floorId)
   const seat = floor?.rooms
     .find((room) => room.id === agent.view.roomId)

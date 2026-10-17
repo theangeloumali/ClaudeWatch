@@ -59,7 +59,7 @@ function returnHome(agent: AgentRecord, context: Leisure): void {
   const desk = floor?.rooms
     .find((room) => room.id === agent.view.roomId)
     ?.slots.find((slot) => slot.id === agent.view.slotId)
-  if (!floor || !desk || agent.state === 'leaving') return
+  if (!floor || !desk) return
   context.clearPassage(key)
   // Disabling trips does not restart legacy work; advanced visits retain their cooldown.
   const returning = context.callHome(agent, floor, desk)
