@@ -67,7 +67,10 @@ it('offers three town sizes above the detail level, each saying what it changes'
   const sizes = within(group).getAllByRole('radio')
   expect(sizes.map((size) => size.getAttribute('value'))).toEqual(['village', 'town', 'city'])
   expect(within(group).getByRole('radio', { name: 'Village' })).toHaveAccessibleDescription(
-    'The campus, its garden and one ring of streets. Lightest.'
+    'The same streets with a third of the lots built; the rest are gardens. Lightest.'
+  )
+  expect(within(group).getByRole('radio', { name: 'City' })).toHaveAccessibleDescription(
+    'Every lot built, and the busiest streets. The most to draw.'
   )
   for (const size of sizes) expect(size).toHaveAccessibleDescription(/\w{20,}|.{40,}/)
   expect(within(group).getByRole('radio', { name: 'City' })).toBeChecked()

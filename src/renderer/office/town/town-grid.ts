@@ -8,6 +8,6 @@ export const MIN_BELT_M = 13
 // A held edge comes back in only once the plate needs this much less: more than a desk column.
 export const CLAIM_RELEASE_M = 18
 
-// How far the town reaches, the owner's choice; the detail level thins within it.
+// How built-up the city is, the owner's choice; the detail level thins within it.
 export const TOWN_SIZES = ['village', 'town', 'city'] as const
 export type TownSize = (typeof TOWN_SIZES)[number]

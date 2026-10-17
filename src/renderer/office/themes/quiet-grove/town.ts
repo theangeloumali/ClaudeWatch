@@ -44,13 +44,5 @@ export const GROVE_TOWN: TownDress = {
   roads: { carriageway: '#3B3128', sidewalk: '#8A8172', promenade: '#D8D2BF' },
   citizens: GROVE_CITIZENS,
   vehicles: GROVE_VEHICLES,
-  garden: {
-    tree: 'sapling',
-    lamp: 'stone-lantern',
-    seat: 'plank-bench',
-    feature: 'pond',
-    corner: 'pine-stand',
-    plazaPair: 'boulders',
-    innerTree: 'garden tree'
-  }
+  garden: 'pond'
 }

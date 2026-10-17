@@ -7,8 +7,7 @@ export const SIDEWALK_M = { avenue: 1.5, boulevard: 1.5, collector: 1, lane: 0 }
 export type RoadClass = keyof typeof ROAD_WIDTH_M
 
 export interface TownRoad {
-  // The campus lattice: `road:x:${line}`, `boulevard:${side}` or `avenue`. The city:
-  // `city-street:${n}` and `city-access:${x}:${z}:${n}`.
+  // `city-street:${n}`, or `city-access:${x}:${z}:${n}` for a site's own access road.
   id: string
   class: RoadClass
   // Axis-aligned centre line.

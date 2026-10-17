@@ -18,13 +18,5 @@ export const SAMURAI_TOWN: TownDress = {
   roads: { carriageway: material.charcoal, sidewalk: material.slate, promenade: material.mineral },
   citizens: SAMURAI_CITIZENS,
   vehicles: SAMURAI_VEHICLES,
-  garden: {
-    tree: 'cloud pine planter',
-    lamp: 'amber blade lantern',
-    seat: 'mineral rest bench',
-    feature: 'mineral canal garden',
-    corner: 'canal courtyard',
-    plazaPair: 'signal relay pedestal',
-    innerTree: 'mineral canal garden'
-  }
+  garden: 'mineral canal garden'
 }

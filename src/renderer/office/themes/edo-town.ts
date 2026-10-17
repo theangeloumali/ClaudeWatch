@@ -44,13 +44,5 @@ export const EDO_TOWN: TownDress = {
   roads: { carriageway: EDO.ink, sidewalk: EDO.stone, promenade: EDO.paper },
   citizens: EDO_CITIZENS,
   vehicles: EDO_VEHICLES,
-  garden: {
-    tree: 'potted pine',
-    lamp: 'stone lantern',
-    seat: 'cedar bench',
-    feature: 'pond with a bridge',
-    corner: 'stand of pines',
-    plazaPair: 'blossom sapling',
-    innerTree: 'garden tree'
-  }
+  garden: 'pond with a bridge'
 }

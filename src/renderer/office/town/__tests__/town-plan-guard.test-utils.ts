@@ -1,8 +1,10 @@
-import { renderHook } from '@testing-library/react'
+import { act, renderHook } from '@testing-library/react'
 import type { WorldFootprint } from '../../../../shared/office/world-document'
 import { makeFloor } from '../../__tests__/fixtures'
 import type { FloorGeometry } from '../../scene-model'
+import { officeSettings } from '../../logic/office-settings'
 import { LARGE_FLOOR, LONE_FLOOR } from '../town.test-utils'
+import type { TownSize } from '../town-grid'
 import { useTownPlan, type Town } from '../use-town-plan'
 
 const TWO_OFFICE_FLOOR = makeFloor({ floorId: 'two-offices', x: 0, z: 0, width: 150, depth: 150 })
@@ -21,9 +23,14 @@ export const GUARDED_CITIES: readonly (readonly [string, FloorGeometry, WorldFoo
   ['empty', LONE_FLOOR, []]
 ]
 
-// The Town a first start hands the scene, with nothing stored.
-export function firstStartTown(floor: FloorGeometry, protectedSites: WorldFootprint[]): Town {
+// The Town a first start hands the scene, with nothing stored but the owner's town size.
+export function firstStartTown(
+  floor: FloorGeometry,
+  protectedSites: WorldFootprint[],
+  size: TownSize = 'city'
+): Town {
   localStorage.clear()
+  act(() => officeSettings.setTownSize(size))
   return renderHook(() => useTownPlan(floor, { protectedSites })).result.current
 }
 

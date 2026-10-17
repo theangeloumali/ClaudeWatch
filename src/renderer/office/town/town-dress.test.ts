@@ -71,7 +71,6 @@ function lot(overrides: Partial<DressableLot> = {}): DressableLot {
     depth: 5,
     maxHeight: 12,
     seed: 77,
-    zoneId: null,
     zone: 'residential',
     facing: 'south',
     isLandmark: false,

@@ -131,8 +131,7 @@ function OfficeScene(props: OfficeSceneProps) {
   bodies.setWorkers(agents)
   const [officeAnchors] = useState<OfficeNameAnchors>(() => new Map())
   const [canvasRoot, setCanvasRoot] = useState<RootState | null>(null)
-  const { surfaces, groups, zoneGroups, townFloor, officeLabels, displays, revision } =
-    useSceneFloorData(props)
+  const { surfaces, groups, townFloor, officeLabels, displays, revision } = useSceneFloorData(props)
   const visibleCards = useMemo(() => {
     const isCityView = props.viewMode === 'city'
     const roomWorkers = props.focusedRoomId
@@ -292,7 +291,6 @@ function OfficeScene(props: OfficeSceneProps) {
               town={town}
               floor={townFloor}
               floorTheme={theme}
-              zoneGroups={zoneGroups}
               viewMode={props.viewMode}
               focusedFloor={props.floor}
             />
@@ -301,7 +299,6 @@ function OfficeScene(props: OfficeSceneProps) {
                 town={town}
                 floor={townFloor}
                 floorTheme={theme}
-                zoneGroups={zoneGroups}
                 share={quality.ambientShare}
                 isReducedMotion={isReducedMotion}
               />
