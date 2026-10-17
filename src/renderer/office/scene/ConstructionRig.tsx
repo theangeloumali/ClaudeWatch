@@ -26,13 +26,15 @@ export function ConstructionRig({
   )
   useFrame(() => {
     const nowMs = cityClock.now()
+    const isPinned = cityClock.isPinned()
     const { pin, chosen } = readQuality()
     layer.update({
-      events: cityEvents.active(nowMs),
+      // Reduced motion stills the city clock; events still age and end on the wall clock.
+      events: cityEvents.active(isPinned ? Date.now() : nowMs),
       floorsOf: (buildingId) => buildings.get(buildingId),
       places: buildingPlaces,
       nowMs,
-      isPinned: cityClock.isPinned(),
+      isPinned,
       level: levelInUse(pin, chosen)
     })
   })

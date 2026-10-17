@@ -1,25 +1,17 @@
 import { floorElevation, PHYSICAL_STOREY_HEIGHT } from '../scene/all-floor-model'
+import type { MarkPose } from '../scene/city-marks'
 import type { FloorGeometry } from '../scene-model'
-import { MAX_LOT_HEIGHT_M } from '../themes/surroundings'
 import type { PlaceTop } from './building-place'
 import { doorSide, SIDE_NORMAL } from './room-layout'
 
-// Mast, jib, counter-jib and cable, then four scaffold posts and four rails.
+// Mast, jib, counter-jib and hoist line, then four scaffold posts and four rails.
 export const BOXES_PER_RIG = 12
 const SCAFFOLD_OUT_M = 0.8
 const SCAFFOLD_ABOVE_M = 0.9
 const CRANE_OUT_M = 2
-const MAST_ABOVE_M = 3
-// Shares of the hoist: lift to the hook, swing along the jib, set down, then sink in.
-const LIFT_END = 0.35
-const HOIST_END = 0.7
-const SET_END = 0.8
-
-export interface BoxPose {
-  at: [number, number, number]
-  size: [number, number, number]
-  yaw: number
-}
+// The jib clears the module's 3 m drop onto its 0.8 m seat, well inside MARK_RISE_M.
+const MAST_ABOVE_M = 4
+const JIB_M = 0.3
 
 export interface RigSite {
   ground: FloorGeometry
@@ -27,16 +19,13 @@ export interface RigSite {
   spire: PlaceTop
 }
 
-const lerp = (from: number, to: number, share: number): number => from + (to - from) * share
-const clamp01 = (share: number): number => Math.min(1, Math.max(0, share))
-const upright = (at: BoxPose['at'], size: BoxPose['size']): BoxPose => ({ at, size, yaw: 0 })
+const upright = (
+  [x, y, z]: [number, number, number],
+  [scaleX, scaleY, scaleZ]: [number, number, number]
+): MarkPose => ({ x, y, z, scaleX, scaleY, scaleZ })
 
-// The rig's boxes and the hoisted module at `progress` (0–1) through the hoist.
-export function rigPose(
-  { ground, top, spire }: RigSite,
-  progress: number,
-  module: BoxPose['size']
-): { boxes: (BoxPose | null)[]; module: BoxPose } {
+// The rig stands still for the whole hoist; the module itself rides the particle mesh.
+export function rigPose({ ground, top, spire }: RigSite, lineEndY: number): MarkPose[] {
   const door = ground.entrance ?? { x: ground.x, z: ground.z + ground.depth / 2 }
   // Agents walk in through the entrance, so the crane stands behind the building.
   const front = SIDE_NORMAL[doorSide({ ...ground, door })]
@@ -44,32 +33,22 @@ export function rigPose(
   const across = Math.abs(front.z) * top.width + Math.abs(front.x) * top.depth
   const footX = top.x - front.x * (reach / 2 + CRANE_OUT_M) + front.z * across * 0.3
   const footZ = top.z - front.z * (reach / 2 + CRANE_OUT_M) - front.x * across * 0.3
-  const mastTop = Math.min(MAX_LOT_HEIGHT_M, spire.y + MAST_ABOVE_M)
+  const mastTop = spire.y + MAST_ABOVE_M
   const toSpire = Math.hypot(spire.x - footX, spire.z - footZ)
   const [alongX, alongZ] = [(spire.x - footX) / toSpire, (spire.z - footZ) / toSpire]
-  const yaw = Math.atan2(alongX, alongZ)
+  const rotationY = Math.atan2(alongX, alongZ)
   const jibM = toSpire + 1.5
-  const onJib = (share: number): [number, number, number] => [
-    footX + alongX * jibM * share,
-    mastTop,
-    footZ + alongZ * jibM * share
-  ]
-  const hookY = mastTop - 0.15
-  const [width, height, depth] = module
-  const [pickupX, pickupZ] = [footX + alongX * 1.5, footZ + alongZ * 1.5]
-  const travel = clamp01((progress - LIFT_END) / (HOIST_END - LIFT_END))
-  const y =
-    progress < HOIST_END
-      ? lerp(height / 2, hookY - 1, clamp01(progress / LIFT_END))
-      : lerp(
-          hookY - 1,
-          spire.y + height / 2,
-          clamp01((progress - HOIST_END) / (SET_END - HOIST_END))
-        )
-  const x = lerp(pickupX, spire.x, travel)
-  const z = lerp(pickupZ, spire.z, travel)
-  const sink = progress < SET_END ? 1 : 1 - (progress - SET_END) / (1 - SET_END)
-  const cableM = hookY - (y + height / 2)
+  const onJib = (share: number, [scaleX, scaleY, scaleZ]: [number, number, number]) => ({
+    x: footX + alongX * jibM * share,
+    y: mastTop,
+    z: footZ + alongZ * jibM * share,
+    scaleX,
+    scaleY,
+    scaleZ,
+    rotationY
+  })
+  const hookY = mastTop - JIB_M / 2
+  const lineM = Math.max(0, hookY - lineEndY)
   const base = floorElevation(top)
   const railY = base + PHYSICAL_STOREY_HEIGHT + SCAFFOLD_ABOVE_M
   const outWidth = top.width + 2 * SCAFFOLD_OUT_M
@@ -86,17 +65,12 @@ export function rigPose(
     upright([top.x, railY, top.z + (side * outDepth) / 2], [outWidth, 0.15, 0.15]),
     upright([top.x + (side * outWidth) / 2, railY, top.z], [0.15, 0.15, outDepth])
   ])
-  return {
-    boxes: [
-      upright([footX, mastTop / 2, footZ], [0.5, mastTop, 0.5]),
-      { at: onJib(0.5), size: [0.3, 0.3, jibM], yaw },
-      { at: onJib(-0.17), size: [0.4, 0.4, jibM * 0.35], yaw },
-      progress < SET_END && cableM > 0
-        ? upright([x, y + height / 2 + cableM / 2, z], [0.06, cableM, 0.06])
-        : null,
-      ...posts,
-      ...rails
-    ],
-    module: upright([x, y, z], [width, height * sink, depth])
-  }
+  return [
+    upright([footX, mastTop / 2, footZ], [0.5, mastTop, 0.5]),
+    onJib(0.5, [JIB_M, JIB_M, jibM]),
+    onJib(-0.17, [0.4, 0.4, jibM * 0.35]),
+    upright([spire.x, lineEndY + lineM / 2, spire.z], [0.06, lineM, 0.06]),
+    ...posts,
+    ...rails
+  ]
 }

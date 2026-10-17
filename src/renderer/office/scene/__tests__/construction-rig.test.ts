@@ -5,6 +5,7 @@ import {
   Matrix4,
   Mesh,
   MeshStandardMaterial,
+  Quaternion,
   Vector3
 } from 'three'
 import { describe, expect, it } from 'vitest'
@@ -17,6 +18,9 @@ import { SPIRE_BASE_GAP_M, spireHeight, stageFor } from '../../logic/token-spire
 import type { FloorGeometry } from '../../scene-model'
 import { CITY_LAYER_BUDGET, measureLayer } from '../../themes/city-layer-budget.test-utils'
 import { themeForTeam } from '../../themes/registry'
+import { MAX_LOT_HEIGHT_M } from '../../themes/surroundings'
+import { MARK_RISE_M } from '../city-marks'
+import { hoistPose } from '../city-particle-motion'
 import { createBatchRoot, createMeshBatches } from '../mesh-batches'
 import { createConstructionRigLayer, type RigFrame } from '../construction-rig-layer'
 
@@ -49,9 +53,9 @@ const at = (atMs: number, tokens: number): SessionRef =>
   })
 const day = (tokens: number) => [{ projectKey: 'p_1', tokens }]
 
-function placesWithRoof() {
+function placesWithRoof(roof = ROOF) {
   const places = createBuildingPlaces()
-  places.setRoof(HOME, ROOF)
+  places.setRoof(HOME, roof)
   return places
 }
 
@@ -89,13 +93,14 @@ describe('construction rig', () => {
     const layer = createConstructionRigLayer(themeForTeam())
     const frameAt = (nowMs: number) => rigFrame({ events: log.active(nowMs), nowMs })
     layer.update(frameAt(T0 + 1 + 1_500))
-    expect(shownIn(layer.rig)).toBeGreaterThan(0)
-    expect(shownIn(layer.module)).toBe(1)
-    expect(measureLayer(layer.group).draws).toBe(2)
+    expect(shownIn(layer.rig)).toBe(12)
+    // Crane and scaffold are one draw; the hoisted module rides the particle mesh.
+    expect(measureLayer(layer.group).draws).toBe(1)
     expect(CITY_LAYER_BUDGET.rig).toMatchObject({ isTransient: true, draws: { full: 2 } })
+    layer.update(frameAt(T0 + 1 + 1_600))
+    expect(measureLayer(layer.group).uploadBytes).toBe(0)
     layer.update(frameAt(T0 + 1 + CITY_EVENT_LIFE_MS.hoist))
     expect(shownIn(layer.rig)).toBe(0)
-    expect(shownIn(layer.module)).toBe(0)
     measureLayer(layer.group)
     layer.update(frameAt(T0 + 1 + CITY_EVENT_LIFE_MS.hoist + 500))
     expect(measureLayer(layer.group).uploadBytes).toBe(0)
@@ -112,7 +117,6 @@ describe('construction rig', () => {
     const layer = createConstructionRigLayer(themeForTeam())
     layer.update(rigFrame({ events: log.active(T0 + 100), nowMs: T0 + 100, places }))
     expect(shownIn(layer.rig)).toBe(0)
-    expect(shownIn(layer.module)).toBe(0)
   })
 
   it('reduced motion skips the hoist', () => {
@@ -120,7 +124,6 @@ describe('construction rig', () => {
     const layer = createConstructionRigLayer(themeForTeam())
     layer.update(rigFrame({ events: log.active(T0 + 500), nowMs: T0 + 500, isPinned: true }))
     expect(shownIn(layer.rig)).toBe(0)
-    expect(shownIn(layer.module)).toBe(0)
   })
 
   it('stepping quality mid-hoist rebuilds no static batch', () => {
@@ -141,11 +144,11 @@ describe('construction rig', () => {
     const frameAt = (nowMs: number, level: RigFrame['level']) =>
       rigFrame({ events: log.active(nowMs), nowMs, level })
     layer.update(frameAt(T0 + 800, 'full'))
-    expect(measureLayer(layer.group).draws).toBe(2)
+    expect(measureLayer(layer.group).draws).toBe(1)
     layer.update(frameAt(T0 + 1_200, 'light'))
     expect(measureLayer(layer.group).draws).toBe(CITY_LAYER_BUDGET.rig.draws.light)
     layer.update(frameAt(T0 + 1_600, 'balanced'))
-    expect(measureLayer(layer.group).draws).toBe(CITY_LAYER_BUDGET.rig.draws.balanced)
+    expect(measureLayer(layer.group).draws).toBe(1)
     expect(city.children.filter((child) => child instanceof InstancedMesh)).toEqual([batch.mesh])
     expect(batch.mesh.instanceMatrix.version).toBe(batchVersion)
   })
@@ -160,27 +163,40 @@ describe('construction rig', () => {
     const layer = createConstructionRigLayer(themeForTeam())
     layer.update(rigFrame({ events: log.active(T0 + 500), nowMs: T0 + 500 }))
     expect(shownIn(layer.rig)).toBe(0)
-    expect(shownIn(layer.module)).toBe(0)
   })
 
-  it('the crane stands on the side away from the entrance, and the module lands on the spire', () => {
-    const log = crossingLog()
-    const layer = createConstructionRigLayer(themeForTeam())
-    const events = log.active(T0 + 1)
-    const [event] = events
-    layer.update(rigFrame({ events, nowMs: event.atMs + 100 }))
-    const mast = new Vector3()
-    const matrix = new Matrix4()
-    layer.rig.getMatrixAt(0, matrix)
-    mast.setFromMatrixPosition(matrix)
-    // The entrance faces -z (north); the crane stands behind the building, past its back wall.
-    expect(mast.z).toBeGreaterThan(-4 + tower[0].depth / 2)
-    const module = new Vector3()
-    layer.update(rigFrame({ events, nowMs: event.atMs + CITY_EVENT_LIFE_MS.hoist * 0.75 }))
-    layer.module.getMatrixAt(0, matrix)
-    module.setFromMatrixPosition(matrix)
-    expect(module.x).toBeCloseTo(ROOF.x)
-    expect(module.z).toBeCloseTo(ROOF.z)
-    expect(module.y).toBeGreaterThan(ROOF.y)
+  it('the crane stands behind the building and hangs the hoist line over the roof, within 12 m of it', () => {
+    const life = CITY_EVENT_LIFE_MS.hoist
+    // A lot-height roof too: the crane still clears it rather than stopping at the height rule.
+    for (const roof of [ROOF, { ...ROOF, y: MAX_LOT_HEIGHT_M }]) {
+      const log = crossingLog()
+      const layer = createConstructionRigLayer(themeForTeam())
+      // The crossing also fires a milestone; the rig answers the hoist alone.
+      const events = log.active(T0 + 1)
+      const hoist = events.find((event) => event.kind === 'hoist')
+      if (!hoist) throw new Error('a stage crossing fires a hoist')
+      layer.update(rigFrame({ events, nowMs: hoist.atMs + 100, places: placesWithRoof(roof) }))
+      const box = (index: number) => {
+        const matrix = new Matrix4()
+        layer.rig.getMatrixAt(index, matrix)
+        const at = new Vector3()
+        const size = new Vector3()
+        matrix.decompose(at, new Quaternion(), size)
+        return { at, size }
+      }
+      const [mast, jib, , line] = [0, 1, 2, 3].map(box)
+      // The entrance faces -z (north); the crane stands past the back wall.
+      expect(mast.at.z).toBeGreaterThan(-4 + tower[0].depth / 2)
+      expect(line.at.x).toBeCloseTo(roof.x)
+      expect(line.at.z).toBeCloseTo(roof.z)
+      expect(jib.at.y).toBeCloseTo(roof.y + 4)
+      // The particles' module rides this line: from under the jib down to its seat.
+      const [lifted, seated] = [0, life].map((ageMs) => hoistPose(roof, ageMs, life))
+      expect(lifted.y + lifted.scaleY / 2).toBeLessThanOrEqual(jib.at.y - jib.size.y / 2)
+      expect(line.at.y + line.size.y / 2).toBeCloseTo(jib.at.y - jib.size.y / 2)
+      expect(line.at.y - line.size.y / 2).toBeCloseTo(seated.y + seated.scaleY / 2)
+      for (const index of [0, 1, 2, 3])
+        expect(box(index).at.y + box(index).size.y / 2).toBeLessThanOrEqual(roof.y + MARK_RISE_M)
+    }
   })
 })
