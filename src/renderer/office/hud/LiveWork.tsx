@@ -142,7 +142,7 @@ export function LiveWork({ frame, agentKey, feed, style, presentation = 'panel' 
           term="World placement"
           value={
             worldAgent
-              ? `${worldAgent.place === 'lounge' ? 'Lounge' : 'Assigned office'} — ${worldAgent.floorId} (visual placement only)`
+              ? `${worldAgent.place === 'lounge' ? 'Game corner' : 'Assigned office'} — ${worldAgent.floorId} (visual placement only)`
               : 'Unknown'
           }
         />

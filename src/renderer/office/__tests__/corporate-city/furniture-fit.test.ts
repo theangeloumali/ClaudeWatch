@@ -16,23 +16,32 @@ import {
   CORPORATE_DESK_PARTS,
   CORPORATE_LOUNGE_CHAIR_PARTS
 } from '../../themes/corporate-city/office-furniture'
-import { HUMAN_SKINS } from '../../themes/corporate-city/palette'
+import { CORPORATE_PALETTE, HUMAN_SKINS } from '../../themes/corporate-city/palette'
+import { beanbagParts } from '../../themes/game-corner'
 
 describe('adult worker and furniture scale reconciliation', () => {
-  it('supports a smaller adult subagent on the shared company lounge cushion', () => {
-    const pose = humanPose(robotPose('lounging', 0, 0), {
-      mood: 'lounging',
+  it.each([
+    ['an agent', false, AGENT_SCALE],
+    ['a smaller subagent', true, SUBAGENT_SCALE]
+  ])('seats %s on a game corner beanbag, feet on the floor', (_name, isSubagent, scale) => {
+    const pose = humanPose(robotPose('gaming', 0, 0), {
+      mood: 'gaming',
       time: 0,
       phase: 0,
       delta: 0,
       isReducedMotion: true,
-      isSubagent: true,
-      isInLounge: true
+      isSubagent,
+      isInLounge: true,
+      seatPresence: 'lounge'
     })
     const pelvis = humanParts(selectHumanAppearance('fit-worker'), HUMAN_SKINS.claude.trim).joints
       .body[1]
-    const pelvisBottom = (pose.bodyY + pelvis.at[1] - pelvis.size[1] / 2) * SUBAGENT_SCALE
-    const seatTop = 0.355 * FURNITURE_SCALE
+    const pelvisBottom = (pose.bodyY + pelvis.at[1] - pelvis.size[1] / 2) * scale
+    const cushion = beanbagParts(CORPORATE_PALETTE, 0).find(
+      (part) => Math.abs(part.at[2]) < 0.05 && part.at[1] > 0.1
+    )
+    if (!cushion) throw new Error('Missing beanbag cushion')
+    const seatTop = (cushion.at[1] + cushion.size[1] / 2) * FURNITURE_SCALE
     expect(Math.abs(pelvisBottom - seatTop)).toBeLessThanOrEqual(0.025)
     expect(pose.bodyY - 0.3 * pose.lowerLegScale).toBeCloseTo(0)
   })

@@ -32,7 +32,7 @@ function seedThemes(): void {
 }
 
 // The scripted sessions arrive the way the bridge sends them, so the preview runs the same
-// sim as the app: agents walk in, walk out and go to the lounge.
+// sim as the app: agents appear at their desks, fade where they stand and play in the game corner.
 function scriptedSource(tickMs: number): FeedSource {
   return {
     ready: async () => {},

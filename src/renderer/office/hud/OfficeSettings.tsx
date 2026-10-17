@@ -46,9 +46,9 @@ const FEATURES: readonly Feature[] = [
   },
   {
     key: 'loungeTrips',
-    label: 'Lounge trips',
+    label: 'Game corner',
     description:
-      'Finished agents walk to their lounge. Off keeps them at their desks, with no walks.'
+      'Idle agents walk to their office’s game corner and play. Off keeps them at their desks.'
   },
   {
     key: 'player',

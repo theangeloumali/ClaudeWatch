@@ -58,11 +58,11 @@ describe('theme rig pose adapter', () => {
     expect(rig.puffs.every((ref) => !ref.current?.visible)).toBe(true)
     expect(rig.gear.current?.rotation.z).toBe(0)
   })
-  it('seats a lounging agent: body low and leaning back, no steam and no thought bubble', () => {
+  it('seats a gaming agent: body low and leaning in, no steam and no thought bubble', () => {
     const rig = rigFixture()
-    const pose = robotPose('lounging', 0.5, 0)
+    const pose = robotPose('gaming', 0.5, 0)
     applyThemePose(rig, pose, {
-      mood: 'lounging',
+      mood: 'gaming',
       time: 0.5,
       phase: 0,
       delta: 0.1,
@@ -70,6 +70,7 @@ describe('theme rig pose adapter', () => {
     })
     expect(rig.body.current?.position.y).toBe(pose.bob)
     expect(rig.body.current?.rotation.x).toBe(pose.lean)
+    expect(rig.leftArm.current?.rotation.x).toBe(pose.leftArm)
     expect(rig.thought.current?.visible).toBe(false)
     expect(rig.puffs.every((ref) => !ref.current?.visible)).toBe(true)
   })

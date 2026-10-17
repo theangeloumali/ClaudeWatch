@@ -41,11 +41,11 @@ export function spotAt(
 }
 
 // The first spot no agent sits on or walks through, and nothing already placed stands on.
-export function firstClear(
+export function firstClear<Spot extends Footprint>(
   lounge: LoungeGeometry,
-  spots: readonly Footprint[],
+  spots: readonly Spot[],
   taken: readonly Footprint[] = []
-): Footprint | null {
+): Spot | null {
   return (
     spots.find(
       (spot) => isWalkable(lounge, spot) && !taken.some((other) => overlaps(spot, other))

@@ -467,7 +467,6 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
                     frame={frame}
                     selectedVenueId={selectedVenueId}
                     onSelectVenue={setSelectedVenueId}
-                    onSelectAgent={selectAgent}
                   />
                   <HealthBanner sources={frame.sources} />
                 </details>

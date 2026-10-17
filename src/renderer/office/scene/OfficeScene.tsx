@@ -284,7 +284,6 @@ function OfficeScene(props: OfficeSceneProps) {
             viewMode={props.viewMode}
             focusedFloorId={props.focusedFloorId}
             focusedRoomId={props.focusedRoomId}
-            venues={displayedVenues}
             isReducedMotion={isReducedMotion}
             selectedAgentKey={selectedAgentKey}
             speakingAgentKey={speakingAgentKey}

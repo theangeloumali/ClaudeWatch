@@ -252,43 +252,17 @@ describe('effective venues in createLiveFeed', () => {
     expect(JSON.stringify({ floors: before.floors, venues: before.venues })).toBe(serialized)
   })
 
-  it('takes leisure visitors to the moved arcade after roster adaptation', () => {
+  // Agents no longer visit venues; the arcade stays as scenery and moves with the city.
+  it('keeps the arcade through roster adaptation, moved to its adapted site', () => {
     const environment = createEnvironment()
     const initial = environment.publish(sessionsFor([1]))
     const savedArcade = initial.venues?.find((venue) => venue.kind === 'arcade')
     if (!savedArcade) throw new Error('Fixture needs an arcade')
     environment.publish(sessionsFor([1, 1]))
-    const sessions = sessionsFor([2, 1])
-    sessions[0] = {
-      ...sessions[0],
-      attention: 'done',
-      observation: {
-        sourceId: 'test-source',
-        observedAtMs: Date.now(),
-        staleAfterMs: 1_000_000,
-        coverage: 'own'
-      }
-    }
-    const adapted = environment.publish(sessions)
+    const adapted = environment.publish(sessionsFor([2, 1]))
     const movedArcade = adapted.venues?.find((venue) => venue.id === savedArcade.id)
     if (!movedArcade) throw new Error('Adaptation must retain the arcade')
     expect(movedArcade.footprint).not.toEqual(savedArcade.footprint)
-    environment.settings.set('loungeTrips', true)
-    vi.advanceTimersByTime(300_000)
-    const visits = environment.frames.flatMap((frame) =>
-      frame.agents.filter((agent) => agent.venueId !== undefined).map((agent) => ({ frame, agent }))
-    )
-    expect(visits.some(({ agent }) => agent.venueId === movedArcade.id)).toBe(true)
-    for (const { frame, agent } of visits) {
-      const venue = frame.venues?.find((candidate) => candidate.id === agent.venueId)
-      if (!venue) throw new Error(`Visited venue ${agent.venueId} is not rendered`)
-      const closestSlot = Math.min(
-        ...venue.slots.map((slot) =>
-          Math.hypot(agent.x - venue.footprint.x - slot.x, agent.z - venue.footprint.z - slot.z)
-        )
-      )
-      expect.soft(closestSlot, `${agent.agentKey} at ${venue.id}`).toBeLessThan(0.01)
-      expect(agent.elevation ?? 0).toBe(0)
-    }
+    expectSeparatedSites(adapted, [2, 1])
   })
 })

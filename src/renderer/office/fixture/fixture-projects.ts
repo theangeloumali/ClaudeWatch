@@ -92,7 +92,7 @@ export const PROJECTS: readonly FixtureProject[] = [
         name: 'widget sync',
         provider: 'codex',
         host: 'orca',
-        // Done from 10 s to 100 s: time to walk to the lounge, sit a while and be called back.
+        // Done from 10 s to 100 s: time to walk to the game corner, play and be called back.
         period: 15,
         offset: 10,
         attentionScript: ['none', 'done', 'done', 'done', 'none']
@@ -130,7 +130,7 @@ export const PROJECTS: readonly FixtureProject[] = [
       {
         name: 'e2e suite',
         provider: 'codex',
-        // Already done when the preview opens: it goes to the lounge first, and works again
+        // Already done when the preview opens: it goes to the game corner first, and works again
         // from 90 s to 150 s.
         period: 15,
         offset: 0,
