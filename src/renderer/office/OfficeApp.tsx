@@ -20,7 +20,6 @@ import { buildThemeRows, countThemeChoices, useThemeAssignments } from './logic/
 import { findZone } from './logic/zone-model'
 import { HUD_COLUMNS_BREAKPOINT, HUD_GRID_STYLE } from './logic/hud-layout'
 import { buildOperationsModel } from './logic/operations-model'
-import { citySignalStore } from './logic/city-signal-store'
 import { createFrameMetrics } from './frame-metrics'
 import { AgentActions } from './hud/AgentActions'
 import { PlayerControls } from './hud/PlayerControls'
@@ -403,7 +402,6 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
               )}
               {!isShowingList && (
                 <CompanyCards
-                  version={citySignalStore.version()}
                   companies={companies}
                   palette={theme.palette}
                   onFlyToZone={goToZone}
@@ -439,12 +437,7 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
                   <summary className={`${BUTTON_QUIET_COMPACT_CLASS} min-[1100px]:hidden`}>
                     Leaders
                   </summary>
-                  <LeadersCard
-                    version={citySignalStore.version()}
-                    sessions={sessions}
-                    companies={companies}
-                    onFlyToZone={goToZone}
-                  />
+                  <LeadersCard sessions={sessions} companies={companies} onFlyToZone={goToZone} />
                 </details>
               )}
               <div className="max-[1099px]:hidden">

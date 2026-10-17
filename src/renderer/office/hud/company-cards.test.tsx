@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import type { ComponentProps } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SessionRef } from '../../../shared/office/types'
@@ -39,7 +39,6 @@ function cardsFor(sessions: readonly SessionRef[], options: { frame?: OfficeFram
   const shown = options.frame ?? real
   const props: ComponentProps<typeof CompanyCards> = {
     store,
-    version: store.version(),
     companies: buildOfficesTree(shown),
     palette,
     onFlyToZone: vi.fn()
@@ -55,7 +54,7 @@ describe('company cards', () => {
     if (!companyLens.isOn()) companyLens.toggle()
   })
   afterEach(() => {
-    if (companyLens.isOn()) companyLens.toggle()
+    if (companyLens.isOn()) act(() => companyLens.toggle())
   })
 
   it('a company card counts working and waiting agents from fresh evidence only', () => {
@@ -74,6 +73,15 @@ describe('company cards', () => {
     expect(test).toHaveTextContent('1 error')
     expect(cardNamed('Other Co')).toHaveTextContent('1 working')
     expect(cardNamed('Other Co')).toHaveTextContent('0 needs you')
+  })
+
+  it('the cards follow the store with no new props', () => {
+    const { store, props } = cardsFor([live('claude:a1', { activity: 'editing' })])
+    render(<CompanyCards {...props} />)
+    expect(cardNamed('Test Co')).toHaveTextContent('1 working')
+    const asking = live('claude:a1', { attention: 'permission' })
+    act(() => store.update(makeFrame({ floors, sessions: [asking] }), NOW))
+    expect(cardNamed('Test Co')).toHaveTextContent('1 needs you')
   })
 
   it('tokens today read as unknown when no count exists, never as 0', () => {
@@ -124,7 +132,7 @@ describe('company cards', () => {
 
 describe('company lens toggle', () => {
   afterEach(() => {
-    if (companyLens.isOn()) companyLens.toggle()
+    if (companyLens.isOn()) act(() => companyLens.toggle())
   })
 
   it('is a 44 px target with a label that says whether the lens is on', () => {

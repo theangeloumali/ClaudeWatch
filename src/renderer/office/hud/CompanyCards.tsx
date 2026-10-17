@@ -1,4 +1,4 @@
-import { memo } from 'react'
+import { memo, useSyncExternalStore } from 'react'
 import { PLATE_TITLE_CLASS } from '../../components/deck/deck-styles'
 import { Plate } from '../../components/deck/Plate'
 import { formatTokens } from '../../deck/tokens'
@@ -7,9 +7,7 @@ import { type CompanyCounts, EMPTY_COUNTS } from '../logic/city-signals'
 import { companyHues, useCompanyLens } from '../logic/company-lens'
 import type { OfficeCompanyRow } from '../logic/zone-model'
 import type { ThemePalette } from '../themes/types'
-
-const CARD_CLASS =
-  'flex min-h-11 w-full min-w-0 touch-manipulation flex-col justify-center gap-1 rounded-md px-1.5 py-1.5 text-left transition-colors hover:bg-surface-hover'
+import { FlyRow } from './FlyRow'
 
 // A null value is unknown, and says so: never a 0.
 function Stat({ value, label }: { value: string | null; label: string }) {
@@ -35,8 +33,8 @@ interface CardProps {
 
 function CompanyCard({ company, counts, hue, onFlyToZone }: CardProps) {
   const { tokensToday } = counts
-  const body = (
-    <>
+  return (
+    <FlyRow zoneId={company.zoneId} onFlyToZone={onFlyToZone} className="gap-1 py-1.5">
       <span className="flex min-w-0 items-center gap-2">
         {hue && (
           <span
@@ -56,20 +54,11 @@ function CompanyCard({ company, counts, hue, onFlyToZone }: CardProps) {
         <Stat value={String(counts.errors)} label={counts.errors === 1 ? 'error' : 'errors'} />
       </span>
       <Stat value={tokensToday === null ? null : formatTokens(tokensToday)} label="tokens today" />
-    </>
-  )
-  const { zoneId } = company
-  if (!zoneId) return <div className={CARD_CLASS}>{body}</div>
-  return (
-    <button type="button" className={CARD_CLASS} onClick={() => onFlyToZone(zoneId)}>
-      {body}
-    </button>
+    </FlyRow>
   )
 }
 
 interface CompanyCardsProps {
-  // Bumps only when a count changes, so the cards follow evidence, not the clock.
-  version: number
   // From the shown frame: with names hidden their labels are roles.
   companies: readonly OfficeCompanyRow[]
   palette: ThemePalette
@@ -81,6 +70,8 @@ interface CompanyCardsProps {
 // are tinted by, so a card's swatch matches its offices.
 export const CompanyCards = memo(function CompanyCards(props: CompanyCardsProps) {
   const { companies, palette, onFlyToZone, store = citySignalStore } = props
+  // Counts follow the store's version, not the Office's clock.
+  useSyncExternalStore(store.subscribe, store.version)
   const isOn = useCompanyLens()
   if (!isOn) return null
   const counts = store.current().companies

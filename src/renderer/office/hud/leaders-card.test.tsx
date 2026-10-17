@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import type { ComponentProps } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import type { SessionRef } from '../../../shared/office/types'
@@ -56,7 +56,6 @@ function cardFor(sessions: readonly SessionRef[], options: { frame?: OfficeFrame
   const shown = options.frame ?? real
   const props: ComponentProps<typeof LeadersCard> = {
     store,
-    version: store.version(),
     sessions: shown.sessions,
     companies: buildOfficesTree(shown),
     onFlyToZone: vi.fn()
@@ -102,7 +101,7 @@ describe('leaders card', () => {
     expect(props.onFlyToZone).toHaveBeenNthCalledWith(2, office.id)
   })
 
-  it('the card commits at most once per changed patch', () => {
+  it('the card commits for a store change and new props, never for the clock', () => {
     const { store, props, real } = cardFor([auth, docs])
     // Each render of the card reads the store once.
     const renders = vi.spyOn(store, 'current')
@@ -111,11 +110,21 @@ describe('leaders card', () => {
     for (let tick = 1; tick <= 5; tick++) rerender(<LeadersCard {...props} />)
     expect(renders).toHaveBeenCalledTimes(1)
     const richer = { ...docs, usage: usage(9_000_000) }
-    store.update(makeFrame({ ...real, sessions: [auth, richer] }), NOW)
-    const patched = { ...props, version: store.version(), sessions: [auth, richer] }
-    rerender(<LeadersCard {...patched} />)
-    rerender(<LeadersCard {...patched} />)
+    act(() => store.update(makeFrame({ ...real, sessions: [auth, richer] }), NOW))
     expect(renders).toHaveBeenCalledTimes(2)
+    const patched = { ...props, sessions: [auth, richer] }
+    rerender(<LeadersCard {...patched} />)
+    rerender(<LeadersCard {...patched} />)
+    expect(renders).toHaveBeenCalledTimes(3)
+    expect(rowNamed('Top spender').textContent).toContain('PropApp › docs')
+  })
+
+  it('the card follows the store with no new props', () => {
+    const { store, props, real } = cardFor([auth, docs])
+    render(<LeadersCard {...props} sessions={[auth, docs]} />)
+    expect(rowNamed('Top spender').textContent).toContain('PropApp › auth')
+    const richer = { ...docs, usage: usage(9_000_000) }
+    act(() => store.update(makeFrame({ ...real, sessions: [auth, richer] }), NOW))
     expect(rowNamed('Top spender').textContent).toContain('PropApp › docs')
   })
 
