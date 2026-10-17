@@ -1,10 +1,10 @@
 import { folderKey } from './process-folders'
 import { isInsideAppBundle } from './process-table'
 
-// Where Windows desktop apps run their own programs: Store packages (ChatGPT, Claude), Claude's
-// install and ChatGPT's copy of Codex. CLI installers also use Program Files and Programs.
+// Where Windows desktop apps run their own programs: Store packages (ChatGPT, Claude), any Claude
+// desktop install and ChatGPT's copy of Codex. CLI installers also use Program Files and Programs.
 const WINDOWS_APP_PROGRAM =
-  /\\windowsapps\\|\\appdata\\local\\(anthropicclaude|openai\\codex\\bin)\\/
+  /\\windowsapps\\|\\anthropicclaude\\|\\appdata\\local\\openai\\codex\\bin\\/
 
 export const isWindowsAppProgram = (program: string): boolean =>
   WINDOWS_APP_PROGRAM.test(folderKey(program, 'win32'))

@@ -30,6 +30,11 @@ describe('a standalone Windows CLI is an agent, and a desktop app’s bundled he
       'the Claude desktop app',
       'C:\\Users\\a\\AppData\\Local\\AnthropicClaude\\app-1.0.0\\claude.exe',
       false
+    ],
+    [
+      'a per-machine Claude desktop install',
+      'C:\\Program Files\\AnthropicClaude\\app-1.0.0\\claude.exe',
+      false
     ]
   ])('%s', (_where, program, isAgent) => {
     expect(isAgentCli(program, 'win32')).toBe(isAgent)
