@@ -1,3 +1,4 @@
+import { FACADE_LAYER_STEP_M } from '../scene/building-window-parts'
 import { useMemo } from 'react'
 import type { LoungeGeometry } from '../scene-model'
 import { firstClear, spotAt, type Footprint } from './lounge-layout'
@@ -54,8 +55,9 @@ function floorLantern({ x, z }: Footprint): PartSpec[] {
 function screenPanel({ x, z, width, depth }: Footprint): PartSpec[] {
   return [
     box([x, 0.6, z], [width, 1.1, depth * 0.4], paper),
-    box([x, 1.18, z], [width, 0.07, depth], lacquer),
-    box([x, 0.04, z], [width, 0.08, depth], lacquer)
+    // flicker-1: rail and sill overhang the screen a step so their ends never share its plane.
+    box([x, 1.18, z], [width + 2 * FACADE_LAYER_STEP_M, 0.07, depth], lacquer),
+    box([x, 0.04, z], [width + 2 * FACADE_LAYER_STEP_M, 0.08, depth], lacquer)
   ]
 }
 

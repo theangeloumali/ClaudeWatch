@@ -1,5 +1,14 @@
-import { describe, expect, it } from 'vitest'
-import { coplanarConflicts, kindsOf, partBoxes } from '../scene/__tests__/coplanar.test-utils'
+import { describe, expect, it, vi } from 'vitest'
+import { buildLayout } from '../../../office/sim/layout'
+import { createWorldDocument } from '../../../shared/office/world-document'
+import { makeSession } from '../__tests__/fixtures'
+import {
+  coplanarConflicts,
+  drawnBoxes,
+  kindsOf,
+  partBoxes
+} from '../scene/__tests__/coplanar.test-utils'
+import { VenueLayer } from '../scene/VenueLayer'
 import { MAP_ROTATIONS } from '../town/sightline.test-utils'
 import type { ZoneDesign, ZonePlot } from '../town/town-dress'
 import { wing } from './corporate-city/building-parts'
@@ -8,7 +17,19 @@ import { CORPORATE_DESIGNS } from './corporate-city/town-designs'
 import { box, type PartSpec } from './parts'
 import { listThemes } from './registry'
 
+vi.mock('react', async (original) => ({
+  ...(await original<typeof import('react')>()),
+  useMemo: (factory: () => unknown) => factory(),
+  useLayoutEffect: () => undefined,
+  useEffect: () => undefined,
+  memo: (component: unknown) => component,
+  useRef: (current: unknown) => ({ current })
+}))
+vi.mock('@react-three/fiber', () => ({ useFrame: () => undefined }))
+
 const ACCENT = '#123456'
+const sessions = [makeSession({ key: 'claude:town-faces' })]
+const venues = createWorldDocument(buildLayout(sessions, undefined), sessions).venues
 // A town lot, an avenue lot seen from its front and its side, and a city parcel.
 const FOOTPRINTS = [
   { width: 8, depth: 8 },
@@ -119,7 +140,7 @@ describe('town buildings are finished on every side', () => {
   })
 
   it('no town or venue design in any theme has a coplanar face pair', () => {
-    const ties = listThemes().flatMap((theme) =>
+    const townTies = listThemes().flatMap((theme) =>
       (theme.town?.designs ?? []).flatMap((design) =>
         plotsOf(design).flatMap((plot) =>
           coplanarConflicts(partBoxes(design.name, design.build(plot), [0, 0, 0])).map(
@@ -128,6 +149,16 @@ describe('town buildings are finished on every side', () => {
         )
       )
     )
+    // Each venue as VenueLayer draws it: slab, canopy, posts, furniture, lounge and landmark.
+    const venueTies = listThemes().flatMap((theme) =>
+      venues.flatMap((venue) => {
+        const layer = VenueLayer({ venues: [venue], palette: theme.palette, theme })
+        return coplanarConflicts(drawnBoxes(layer.props.children, venue.kind)).map(
+          (line) => `${theme.id} venue: ${line}`
+        )
+      })
+    )
+    const ties = [...townTies, ...venueTies]
     expect(ties.length, `tied face kinds:\n${kindsOf(ties)}`).toBe(0)
   })
 })

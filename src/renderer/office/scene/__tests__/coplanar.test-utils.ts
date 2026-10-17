@@ -1,4 +1,6 @@
+import type { ReactNode } from 'react'
 import type { PartSpec } from '../../themes/parts'
+import { directChildren } from '../../themes/scene.test-utils'
 
 // flicker-1: boxes whose faces share a plane, point the same way and overlap tie in the depth
 // buffer; when their colours differ the tie crawls as the camera moves.
@@ -105,4 +107,43 @@ export function kindsOf(conflicts: readonly string[]): string {
     )
   )
   return [...kinds].sort().join('\n')
+}
+
+interface Placement {
+  offset: Triple
+  scale: Triple
+}
+interface DrawnProps {
+  children?: ReactNode
+  position?: Triple
+  scale?: Triple | number
+  rotation?: Triple
+  args?: readonly unknown[]
+  color?: string
+}
+const UNPLACED: Placement = { offset: [0, 0, 0], scale: [1, 1, 1] }
+const tripleOf = (value: Triple | number | undefined, fallback: number): Triple =>
+  typeof value === 'number' ? [value, value, value] : (value ?? [fallback, fallback, fallback])
+const times = (a: Triple, b: Triple): Triple => [a[0] * b[0], a[1] * b[1], a[2] * b[2]]
+
+// The unturned boxes a JSX scene draws, placed through its groups' positions and scales.
+export function drawnBoxes(node: ReactNode, label: string, placement = UNPLACED): WorldBox[] {
+  return directChildren(node).flatMap((element, index) => {
+    const props: DrawnProps = element.props
+    if (props.rotation?.some((angle) => angle !== 0)) return []
+    const centre = times(placement.scale, tripleOf(props.position, 0))
+    const here: Placement = {
+      offset: [0, 1, 2].map((axis) => placement.offset[axis] + centre[axis]) as Triple,
+      scale: times(placement.scale, tripleOf(props.scale, 1))
+    }
+    if (element.type !== 'mesh') return drawnBoxes(props.children, label, here)
+    const parts = directChildren(props.children)
+    const geometry = parts.find((part) => part.type === 'boxGeometry')
+    const material = parts.find((part) => String(part.type).endsWith('Material'))
+    const materialProps: DrawnProps | undefined = material?.props
+    if (!geometry || typeof materialProps?.color !== 'string') return []
+    const args: DrawnProps['args'] = geometry.props.args ?? [1, 1, 1]
+    const unit = args.map((value) => (typeof value === 'number' ? value : 1)) as Triple
+    return [boxOf(`${label}#${index}`, materialProps.color, here.offset, times(here.scale, unit))]
+  })
 }
