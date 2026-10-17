@@ -1,6 +1,7 @@
 import { Color, InstancedMesh, Matrix4, OrthographicCamera, Quaternion, Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import { BAND_ZOOM, ISO_POLAR, ISO_START_AZIMUTH } from '../../logic/camera-bands'
+import { MARK_RISE_M } from '../city-marks'
 import {
   contrastRatio,
   SIGN_BOARD,
@@ -19,8 +20,10 @@ import {
 import { cellOffset, createSignAtlas } from '../sign-atlas'
 
 const VIEW = { width: 1280, height: 800 }
-// Zooms across the city overview, the building band and the floor band, to the desk threshold.
-const BAND_ZOOMS = [0.5, 1, 2, 4, BAND_ZOOM.building, 20, BAND_ZOOM.floor, 54]
+// From zoom 2 in: the city overview, the building and floor bands, to the desk threshold.
+const BAND_ZOOMS = [2, 4, BAND_ZOOM.building, 20, BAND_ZOOM.floor, 54]
+// Below 18 px ÷ 11.4 m (zoom ≈ 1.58) an 18 px board would clear MARK_RISE_M, so metres cap it.
+const CAPPED_ZOOMS = [0.1, 0.25, 0.5, 1, 1.5]
 
 function cameraAt(azimuth: number, zoom: number): OrthographicCamera {
   const camera = new OrthographicCamera(
@@ -74,6 +77,18 @@ const isHidden = (mesh: InstancedMesh, index: number): boolean => {
   const matrix = new Matrix4()
   mesh.getMatrixAt(index, matrix)
   return matrix.elements.slice(0, 12).every((value) => value === 0)
+}
+
+// The board's width on screen, edge to edge along the camera's right.
+function spanPxOf(camera: OrthographicCamera, board: ReturnType<typeof posed>): number {
+  const right = new Vector3(1, 0, 0).applyQuaternion(camera.quaternion)
+  const edges = [-0.5, 0.5].map((side) =>
+    board.position
+      .clone()
+      .addScaledVector(right, side * board.scale.x)
+      .project(camera)
+  )
+  return (Math.abs(edges[1].x - edges[0].x) / 2) * VIEW.width
 }
 
 const frame = (
@@ -166,18 +181,24 @@ describe('city signs', () => {
       const layer = createCitySignsLayer(null)
       layer.update(frame(camera, hosts(1)))
       const [disc] = meshesOf(layer)
-      const board = posed(disc, 0)
-      const right = new Vector3(1, 0, 0).applyQuaternion(camera.quaternion)
-      const edges = [-0.5, 0.5].map((side) =>
-        board.position
-          .clone()
-          .addScaledVector(right, side * board.scale.x)
-          .project(camera)
-      )
-      const spanPx = (Math.abs(edges[1].x - edges[0].x) / 2) * VIEW.width
+      const spanPx = spanPxOf(camera, posed(disc, 0))
       expect(spanPx).toBeGreaterThanOrEqual(18 - 1e-3)
       // Projection rounds a hair either side of the bound.
       expect(spanPx).toBeLessThanOrEqual(40 + 1e-3)
+    }
+  })
+
+  it('a sign never rises more than MARK_RISE_M over its roof, however far out the camera is', () => {
+    for (const zoom of [...CAPPED_ZOOMS, ...BAND_ZOOMS]) {
+      const camera = cameraAt(ISO_START_AZIMUTH, zoom)
+      const layer = createCitySignsLayer(null)
+      layer.update(frame(camera, hosts(1)))
+      const [disc] = meshesOf(layer)
+      const board = posed(disc, 0)
+      expect(board.position.y + board.scale.y / 2).toBeLessThanOrEqual(8 + MARK_RISE_M + 1e-4)
+      expect(board.position.y - board.scale.y / 2).toBeGreaterThan(8)
+      // The cap binds out here: the board is held under the 18 px it would otherwise span.
+      if (CAPPED_ZOOMS.includes(zoom)) expect(spanPxOf(camera, board)).toBeLessThan(18)
     }
   })
 

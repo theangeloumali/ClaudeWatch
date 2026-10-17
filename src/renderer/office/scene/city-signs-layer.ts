@@ -28,6 +28,7 @@ import {
 } from '../logic/project-signs'
 import type { ThemePalette } from '../themes/types'
 import { venueLandmark } from '../themes/venue-landmarks'
+import { MARK_RISE_M } from './city-marks'
 import { cellOffset } from './sign-atlas'
 
 const CAPACITY = WORLD_DOCUMENT_LIMITS.buildings + 5
@@ -41,7 +42,11 @@ const FACE_SHARE = 0.72
 // translateZ ignores scale, so the face's offset is sized by hand.
 const FACE_GAP = 0.02
 
-const signSizeM = (zoom: number): number => Math.min(MAX_PX / zoom, Math.max(MIN_PX / zoom, SIGN_M))
+// The horizon clips past MARK_RISE_M, so far out the metre cap beats MIN_PX (zoom < ~1.58).
+const MAX_SIGN_M = MARK_RISE_M - LIFT_M
+
+const signSizeM = (zoom: number): number =>
+  Math.min(MAX_SIGN_M, MAX_PX / zoom, Math.max(MIN_PX / zoom, SIGN_M))
 
 export const VENUE_BOARD = (palette: ThemePalette): string => palette.gold
 
