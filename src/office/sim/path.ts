@@ -10,6 +10,8 @@ export interface NavGrid {
   blocked: string[]
   // Dynamic crowd grids already have a bitmap; static callers retain their string cell keys.
   blockedCells?: Uint8Array
+  // The walls alone, under a crowd's bitmap: a walker leaves the crowd over open floor.
+  wallCells?: Uint8Array
 }
 
 class Frontier {
@@ -50,6 +52,33 @@ class Frontier {
 }
 
 const SEARCH_RADIUS_CELLS = 8
+const STEPS = [
+  [1, 0],
+  [0, 1],
+  [-1, 0],
+  [0, -1]
+] as const
+
+// Cell ids joined to the walker's own over open floor near it; the nearest free cell across a
+// wall is no way out (I1). A walker standing in a wall has none, so any free cell will do.
+function floorAround(
+  [sx, sz]: [number, number],
+  width: number,
+  isFloor: (x: number, z: number) => boolean
+): Set<number> | undefined {
+  if (!isFloor(sx, sz)) return undefined
+  const queue: [number, number][] = [[sx, sz]]
+  const reached = new Set([sz * width + sx])
+  for (const [x, z] of queue)
+    for (const [dx, dz] of STEPS) {
+      const [nx, nz] = [x + dx, z + dz]
+      const isNear = Math.max(Math.abs(nx - sx), Math.abs(nz - sz)) <= SEARCH_RADIUS_CELLS
+      if (!isNear || !isFloor(nx, nz) || reached.has(nz * width + nx)) continue
+      reached.add(nz * width + nx)
+      queue.push([nx, nz])
+    }
+  return reached
+}
 
 function nearestFree(
   x: number,
@@ -82,10 +111,18 @@ export function findPath(grid: NavGrid, from: Point, to: Point): Point[] {
       blocked[z * grid.width + x] = 1
     }
   }
-  const valid = (x: number, z: number) =>
-    x >= 0 && z >= 0 && x < grid.width && z < grid.height && !blocked[z * grid.width + x]
+  const isInside = (x: number, z: number) => x >= 0 && z >= 0 && x < grid.width && z < grid.height
+  const valid = (x: number, z: number) => isInside(x, z) && !blocked[z * grid.width + x]
+  const walls = grid.wallCells ?? blocked
+  const joined = valid(sx, sz)
+    ? undefined
+    : floorAround([sx, sz], grid.width, (x, z) => isInside(x, z) && !walls[z * grid.width + x])
   // A walker can be standing where a later layout built a wall: leave from the nearest free cell.
-  const origin = nearestFree(sx, sz, valid)
+  const origin = nearestFree(
+    sx,
+    sz,
+    (x, z) => valid(x, z) && (!joined || joined.has(z * grid.width + x))
+  )
   if (!origin || !valid(tx, tz)) return []
   const isOnGrid = origin[0] === sx && origin[1] === sz
   const start = origin[1] * grid.width + origin[0],
@@ -113,12 +150,7 @@ export function findPath(grid: NavGrid, from: Point, to: Point): Point[] {
     closed[current] = 1
     const x = current % grid.width,
       z = Math.floor(current / grid.width)
-    for (const [dx, dz] of [
-      [1, 0],
-      [0, 1],
-      [-1, 0],
-      [0, -1]
-    ]) {
+    for (const [dx, dz] of STEPS) {
       const nx = x + dx,
         nz = z + dz,
         next = nz * grid.width + nx

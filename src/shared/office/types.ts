@@ -165,7 +165,6 @@ export type FeedMessage =
 export interface AgentView {
   elevation?: number
   physicalFloorId?: string | null
-  connectorId?: string
   agentKey: string
   floorId: string
   roomId: string

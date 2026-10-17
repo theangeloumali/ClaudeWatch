@@ -1,6 +1,6 @@
 import { bodyFits, type BodyFootprint } from '../../shared/office/body-footprints'
 import { agentBody } from './agent-body'
-import { tickAgent, type AgentRecord } from './behaviour'
+import { returnToDesk, tickAgent, type AgentRecord } from './behaviour'
 import { deskOf, type FloorLayout } from './layout'
 import { floorElevation } from './world-floor-routes'
 
@@ -13,13 +13,14 @@ export function seatAtDesk(
   const home = deskOf(floors, agent.view)
   if (!home) return null
   const { floor, desk } = home
+  const recalled = returnToDesk(agent, desk.heading, [])
   const view = {
-    ...agent.view,
+    ...recalled.view,
     x: desk.x,
     z: desk.z,
     elevation: floorElevation(floor),
     physicalFloorId: floor.id
   }
   if (!bodyFits(agentBody(view), obstacles)) return null
-  return tickAgent({ ...agent, state: 'arriving', view, path: [], slotHeading: desk.heading }, 0)
+  return tickAgent({ ...recalled, view }, 0)
 }

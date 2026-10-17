@@ -13,6 +13,19 @@ describe('deskOf: the desk an agent belongs at', () => {
     expect(deskOf(layout.floors, view)).toEqual({ floor, desk })
   })
 
+  // Every agent looks its desk up every tick (Minor 10).
+  it("reads a map's floors once however many desks it looks up", () => {
+    let reads = 0
+    const floors = new Proxy(layout.floors, {
+      get: (target, property, receiver) => {
+        if (typeof property === 'string' && /^\d+$/.test(property)) reads++
+        return Reflect.get(target, property, receiver)
+      }
+    })
+    for (let lookup = 0; lookup < 10; lookup++) deskOf(floors, view)
+    expect(reads).toBe(layout.floors.length)
+  })
+
   it('finds none once the map no longer has that floor, room or desk', () => {
     expect([
       deskOf(layout.floors, { ...view, floorId: 'gone' }),

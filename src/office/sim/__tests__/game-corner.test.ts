@@ -9,6 +9,7 @@ import { buildLayout, type FloorLayout, type LoungeLayout } from '../layout'
 import { createAgent } from '../behaviour'
 import { FloorRoutes } from '../world-floor-routes'
 import { WORKER_BODY_RADIUS } from '../../../shared/office/body-footprints'
+import { LOUNGE_WIDTH } from '../rooms'
 
 const SCREEN_METRES = 1.2
 const EPSILON = 1e-6
@@ -49,7 +50,7 @@ describe('game corner: one beside the offices on every floor', () => {
     )
   })
 
-  it('keeps every corner inside its walls, clear of offices, the lift and the entrance', () => {
+  it('keeps every corner inside its walls, clear of offices, the lift and a ground floor entrance', () => {
     for (const floor of withOffices) {
       const corner = cornerOf(floor)!
       const local = { ...corner, x: corner.x - floor.x, z: corner.z - floor.z }
@@ -59,7 +60,7 @@ describe('game corner: one beside the offices on every floor', () => {
         isInside: contains(floor, local, 1),
         offices: floor.rooms.filter((room) => overlaps(corner, room, 1 - EPSILON)).length,
         isOnLift: !!floor.connector && overlaps(corner, floor.connector),
-        isAtEntrance: overlaps(corner, entrance, 2 - EPSILON)
+        isAtEntrance: floor.floorNumber === 1 && overlaps(corner, entrance, 2 - EPSILON)
       }).toEqual({
         floor: floor.id,
         isInside: true,
@@ -143,6 +144,24 @@ describe('game corner: one beside the offices on every floor', () => {
   })
 })
 
+// Offices at the same spot on both storeys; the far side's corner ends 1.4 m from the street door.
+it('keeps only the ground floor corner clear of the street door', () => {
+  const sessions = Array.from({ length: 4 }, (_, index) => session(`claude:c-${index}`, 'p_c'))
+  const base = buildLayout(sessions, undefined)
+  const document = createWorldDocument(base, sessions)
+  document.buildings[0].floors = 2
+  document.rooms.forEach((room, index) => {
+    room.floorNumber = index < 2 ? 1 : 2
+    room.position = { x: index % 2 ? -0.05 : -7.05, z: 3 }
+  })
+  const headings = resolveEffectiveWorld(base, document, sessions).floors.map(
+    (floor) => cornerOf(floor)?.slots[0].heading
+  )
+  // Laid where the far side would be, the ground floor corner must have passed it over.
+  expect(headings[0]).not.toBe(Math.PI)
+  expect(headings[1]).toBe(Math.PI)
+})
+
 describe('game corner: placement', () => {
   const office = (x: number, z: number) => ({ x, z, width: 4, depth: 4 })
   const floor = (width: number, depth: number, entrance = { x: 0, z: -depth / 2 }) => ({
@@ -200,6 +219,32 @@ describe('game corner: placement', () => {
     // Room to route a worker between two seated workers, its margin each side included.
     expect(rows[1].toScreen - rows[0].toScreen).toBeGreaterThanOrEqual(4 * WORKER_BODY_RADIUS + 0.1)
     for (const row of rows) expect(row.offCentre).toBeCloseTo(0, 6)
+  })
+
+  // Half of 20 m holds the 3 m beside the office, a 4.15 m row and the wall, not two rows.
+  it('falls back to one row of four on a floor too small for two rows', () => {
+    const corner = gameCorner({ ...floor(20, 20), deskCount: 8 })
+    const facing = corner && {
+      x: Math.sin(corner.slots[0].heading),
+      z: Math.cos(corner.slots[0].heading)
+    }
+    const depths = corner?.slots.map((seat) =>
+      Math.round((seat.x * facing!.x + seat.z * facing!.z) * 1000)
+    )
+    expect({ seats: depths?.length, rows: new Set(depths).size }).toEqual({ seats: 4, rows: 1 })
+  })
+
+  // The renderer's screen and cabinets need the full width; a short row narrows only to fit.
+  it('keeps a full width corner for a single seat when the floor has room', () => {
+    const corner = gameCorner({ ...floor(30, 30, { x: 0, z: 15 }), deskCount: 1 })
+    expect(corner && Math.max(corner.width, corner.depth)).toBeCloseTo(LOUNGE_WIDTH, 6)
+  })
+
+  // 8 m across leaves 6 m inside the walls: a row of two fits, one of three or four does not.
+  it('falls back to fewer seats in a narrower row when a full row does not fit', () => {
+    const corner = gameCorner({ ...floor(8, 20), deskCount: 4 })
+    expect(corner?.slots).toHaveLength(2)
+    expect(corner!.width).toBeLessThanOrEqual(6)
   })
 
   it('leaves a floor with no room on any side without a corner', () => {

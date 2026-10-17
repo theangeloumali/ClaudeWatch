@@ -23,7 +23,7 @@ interface Departure {
 // Crew swaps every 10 s to 50 s, a session joins at 15 s, a peer goes at 35 s, the newcomer at 45 s.
 function runRetention() {
   const door = new DoorWorld({ hasLoungingPeers: true })
-  const invariants = new DoorInvariants((view) => door.isSeated(view))
+  const invariants = new DoorInvariants((view) => door.isLounging(view) || door.isSeated(view))
   const report = {
     outside: null as string | null,
     atEntrance: null as string | null,

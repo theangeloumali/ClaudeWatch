@@ -26,11 +26,22 @@ describe('door invariants: every agent is a body but a newcomer fading in or a l
     expect(invariants.report().overlap?.detail).toMatch(/seated and recalled/)
   })
 
-  it('lets a leaver fade out where a body comes to stand', () => {
+  it('lets a relayout carry a seated agent onto a leaver fading where it stood', () => {
     const invariants = new DoorInvariants(() => true)
-    invariants.check([view('seated', 0), view('leaver', 2)], 0)
-    invariants.check([view('seated', 0), { ...view('leaver', 0.5, 0.2), place: 'leaving' }], 100)
+    const leaver = (fade?: number): AgentView => ({ ...view('leaver', 0, fade), place: 'leaving' })
+    invariants.check([view('seated', 3), view('leaver', 0)], 0)
+    invariants.check([view('seated', 0.5), leaver(0.2)], 100)
+    invariants.check([view('seated', 0.5), leaver(0.4)], 200)
     expect(invariants.report().overlap).toBeNull()
+  })
+
+  it('flags a walker that walks into a leaver', () => {
+    const invariants = new DoorInvariants(() => false)
+    const leaver = (fade: number): AgentView => ({ ...view('leaver', 0, fade), place: 'leaving' })
+    invariants.check([view('leaver', 0), view('walker', 1.4)], 0)
+    invariants.check([leaver(0.2), view('walker', 1.3)], 100)
+    invariants.check([leaver(0.4), view('walker', 1.2)], 200)
+    expect(invariants.report().overlap?.detail).toMatch(/leaver and walker/)
   })
 
   it('lets a newcomer fade in on a desk until it is seated there', () => {
@@ -41,4 +52,11 @@ describe('door invariants: every agent is a body but a newcomer fading in or a l
     invariants.check([view('seated', 0), view('newcomer', 0.5)], 200)
     expect(invariants.report().overlap?.detail).toMatch(/seated and newcomer/)
   })
+})
+
+// The stall timer lets a walker stand 12 s before it repaths: that must be caught (I1).
+it('flags a walker held in place as long as the stall timer lets it stand', () => {
+  const invariants = new DoorInvariants(() => false)
+  for (let atMs = 0; atMs <= 12_000; atMs += 100) invariants.check([view('walker', 0)], atMs)
+  expect(invariants.report().blocked?.detail).toMatch(/walker held near/)
 })
