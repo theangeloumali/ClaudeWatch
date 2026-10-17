@@ -1,5 +1,9 @@
 import { needsHuman, type HumanAttention } from '../../../shared/office/attention'
 import type { SessionRef } from '../../../shared/office/types'
+import type { CityEvent, CityEventKind } from '../../office-live/city-events'
+import { formatTokens, sessionTokens } from '../../deck/tokens'
+import { GEM_SPECS } from './status-gem'
+import { milestoneStep } from './token-spires'
 
 export interface AttentionItem {
   sessionKey: string
@@ -45,4 +49,48 @@ export function newAttentionItems(
 ): AttentionItem[] {
   const seen = new Set(previous.map((item) => `${item.sessionKey}/${item.attention}`))
   return current.filter((item) => !seen.has(`${item.sessionKey}/${item.attention}`))
+}
+
+// One line of city news; `id` tells a new line from the same one shown again.
+export interface NewsItem {
+  id: string
+  text: string
+}
+
+const MILESTONE_FACTORS = [1, 2, 5] as const
+
+// The round amount a 1-2-5 step stands for: 1 is 1M, 2 is 2M, 3 is 5M, 4 is 10M.
+export function milestoneAmount(step: number): number {
+  const decade = 10 ** Math.floor((step - 1) / MILESTONE_FACTORS.length)
+  return MILESTONE_FACTORS[(step - 1) % MILESTONE_FACTORS.length] * 1_000_000 * decade
+}
+
+// A tool call has no words: one fires every few seconds per agent, too many to read.
+const EVENT_WORDS: Record<CityEventKind, ((session: SessionRef) => string | null) | null> = {
+  milestone: (session) => {
+    const step = milestoneStep(sessionTokens(session.usage))
+    return step > 0 ? `reached ${formatTokens(milestoneAmount(step))} tokens` : null
+  },
+  done: () => 'finished its turn',
+  hoist: () => 'built a new spire stage',
+  dispatch: null
+}
+
+const newsText = (session: Pick<AttentionItem, 'projectLabel' | 'sessionName'>, words: string) =>
+  `${session.projectLabel} › ${session.sessionName} · ${words}`
+
+// Words only: the session is named by the labels the HUD shows, never its key.
+export function cityEventNews(event: CityEvent, sessions: readonly SessionRef[]): NewsItem | null {
+  const session = sessions.find((candidate) => candidate.key === event.sessionKey)
+  const words = session && EVENT_WORDS[event.kind]?.(session)
+  if (!session || !words) return null
+  const named = { projectLabel: session.projectLabel, sessionName: session.name }
+  return { id: event.id, text: newsText(named, words) }
+}
+
+export function queueNews(item: AttentionItem): NewsItem {
+  return {
+    id: `${item.sessionKey}/${item.attention}/${item.sinceMs}`,
+    text: newsText(item, GEM_SPECS[item.attention].label.toLowerCase())
+  }
 }

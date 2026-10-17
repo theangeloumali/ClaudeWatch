@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch } from 'react'
-import type { FocusResult } from '../../shared/office/types'
-import { newAttentionItems, type AttentionItem } from './logic/attention-queue'
+import type { FocusResult, SessionRef } from '../../shared/office/types'
+import { cityEvents, type CityEventLog } from '../office-live/city-events'
+import {
+  cityEventNews,
+  newAttentionItems,
+  queueNews,
+  type AttentionItem,
+  type NewsItem
+} from './logic/attention-queue'
 import {
   commandForKey,
   inspectorOwnsKeyboard,
@@ -109,21 +116,47 @@ export function useFocusTerminal(feed: OfficeFeed) {
   return { notice, focusTerminal, dismissNotice }
 }
 
+interface Announcement {
+  // The polite status for screen readers.
+  announcement: string
+  // The visible line: the latest worded city event or needs-you prompt.
+  news: NewsItem | null
+}
+
+const SILENT: Announcement = { announcement: '', news: null }
+
 // One polite, atomic message per change so screen readers hear "Needs permission: PropApp › auth", not a bare count.
-export function useAttentionAnnouncement(queue: readonly AttentionItem[]): string {
-  const previousRef = useRef<readonly AttentionItem[]>([])
-  const [message, setMessage] = useState('')
+// City events join it, and the latest becomes the visible line; the first frame is a baseline
+// that makes no line, as a hello fires no event.
+export function useAttentionAnnouncement(
+  queue: readonly AttentionItem[],
+  sessions: readonly SessionRef[] = [],
+  events: Pick<CityEventLog, 'active' | 'version'> = cityEvents
+): Announcement {
+  const previousRef = useRef<readonly AttentionItem[] | null>(null)
+  const wordedRef = useRef<ReadonlySet<string>>(new Set())
+  const [said, setSaid] = useState(SILENT)
+  const firedCount = events.version()
   useEffect(() => {
-    const added = newAttentionItems(previousRef.current, queue)
+    const previous = previousRef.current
     previousRef.current = queue
-    if (added.length === 0) return
-    setMessage(
-      added
-        .map(
-          (item) => `${GEM_SPECS[item.attention].label}: ${item.projectLabel} › ${item.sessionName}`
-        )
-        .join('. ')
-    )
-  }, [queue])
-  return message
+    const added = newAttentionItems(previous ?? [], queue)
+    const live = events.active(Date.now())
+    const fresh = live.filter((event) => !wordedRef.current.has(event.id))
+    wordedRef.current = new Set(live.map((event) => event.id))
+    const isBaseline = previous === null
+    const eventNews = isBaseline
+      ? []
+      : fresh.flatMap((event) => cityEventNews(event, sessions) ?? [])
+    const spoken = [
+      ...added.map(
+        (item) => `${GEM_SPECS[item.attention].label}: ${item.projectLabel} › ${item.sessionName}`
+      ),
+      ...eventNews.map((item) => item.text)
+    ]
+    const lines = isBaseline ? [] : [...added.map(queueNews), ...eventNews]
+    if (spoken.length === 0) return
+    setSaid((current) => ({ announcement: spoken.join('. '), news: lines.at(-1) ?? current.news }))
+  }, [queue, sessions, events, firedCount])
+  return said
 }
