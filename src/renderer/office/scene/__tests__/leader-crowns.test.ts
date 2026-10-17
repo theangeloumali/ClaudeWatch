@@ -209,11 +209,30 @@ describe('leader crowns', () => {
     expect(Math.min(...crown.corners.map((corner) => corner.y))).toBeGreaterThan(12)
   })
 
-  it("a crown stays in Horizon's room over its roof, or its card when its agent games", () => {
+  // The game corner is inside the agent's own building, under the same roof as its desk.
+  it('a crown stays over the roof of a leader playing in its game corner', () => {
+    const places = createBuildingPlaces()
+    places.setRoof('home', { x: 3, y: 12, z: -2 })
+    const gamer = makeAgent({ agentKey: 'claude:a', x: 6, z: 1, elevation: 5.5, place: 'lounge' })
+    const layer = createLeaderCrownsLayer(palette)
+    layer.update(
+      crownFrame({
+        crowned: ['claude:a'],
+        agents: agentsOf(gamer),
+        buildings: new Map([['claude:a', 'home']]),
+        places
+      })
+    )
+    const [crown] = crownsShown(layer)
+    expect(crown.centre.x).toBeCloseTo(6)
+    expect(Math.min(...crown.corners.map((corner) => corner.y))).toBeGreaterThan(12)
+  })
+
+  it("a crown stays in Horizon's room over its roof, or its card where it has no roof", () => {
     const places = createBuildingPlaces()
     places.setRoof('home', { x: 3, y: 12, z: -2 })
     const seated = makeAgent({ agentKey: 'claude:a', x: 3, z: -2, elevation: 5.5 })
-    const roamer = makeAgent({ agentKey: 'claude:b', x: 9, z: 4, place: 'lounge' })
+    const roamer = makeAgent({ agentKey: 'claude:b', x: 9, z: 4 })
     for (const zoom of ZOOMS) {
       const camera = cameraAt(ISO_START_AZIMUTH, zoom)
       const layer = createLeaderCrownsLayer(palette)
@@ -236,7 +255,7 @@ describe('leader crowns', () => {
       )
       expect(overRoof).toBeLessThanOrEqual(12 + MARK_RISE_M + headroom)
       expect(Math.min(...crowns[0].corners.map((corner) => corner.y))).toBeGreaterThan(12)
-      // Over a gamer's card the crown is sized and lifted in pixels alone.
+      // Over a card the crown is sized and lifted in pixels alone.
       expect(overRoamer).toBeLessThanOrEqual(CARD_HEIGHT + headroom)
     }
   })
