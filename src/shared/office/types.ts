@@ -29,6 +29,8 @@ export type SessionHost = 'terminal' | 'orca' | 'vscode' | 'unknown'
 export interface CurrentTool {
   name: string
   category: ToolCategory
+  // Opaque per-call id, so two calls of one tool read as two; never drawn.
+  callId?: string
 }
 
 export interface AgentObservation {
@@ -129,12 +131,19 @@ export interface SourceHealth {
   staleAfterMs?: number
 }
 
+// Today's tokens for one project, from the accounts ledger. Numbers only.
+export interface ProjectTokens {
+  projectKey: string
+  tokens: number
+}
+
 export interface OfficeSnapshot {
   rev: number
   generatedAtMs: number
   sessions: SessionRef[]
   sources: SourceHealth[]
   accounts?: AccountRef[]
+  projectsToday?: ProjectTokens[]
 }
 
 export type FeedMessage =
@@ -147,6 +156,8 @@ export type FeedMessage =
       removed: string[]
       // Present only when a source's health changed.
       sources?: SourceHealth[]
+      // Present only when a project's total for today changed.
+      projectsToday?: ProjectTokens[]
     }
   | { type: 'resync' }
 
