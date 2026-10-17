@@ -11,18 +11,31 @@ const MAX_SIGNS = 64
 const signCache = new Map<string, CanvasTexture>()
 let blobShadow: CanvasTexture | null = null
 
-function makeCanvas(width: number, height: number): [HTMLCanvasElement, CanvasRenderingContext2D] {
+type Canvas2D = [HTMLCanvasElement, CanvasRenderingContext2D]
+
+// Null without a 2D context, as in a test or a headless page.
+export function canvas2D(width: number, height: number): Canvas2D | null {
   const canvas = document.createElement('canvas')
   canvas.width = width
   canvas.height = height
   const context = canvas.getContext('2d')
-  if (!context) throw new Error('2D canvas context unavailable')
-  return [canvas, context]
+  return context ? [canvas, context] : null
+}
+
+function makeCanvas(width: number, height: number): Canvas2D {
+  const made = canvas2D(width, height)
+  if (!made) throw new Error('2D canvas context unavailable')
+  return made
+}
+
+export function canvasTexture(canvas: HTMLCanvasElement): CanvasTexture {
+  const texture = new CanvasTexture(canvas)
+  texture.colorSpace = SRGBColorSpace
+  return texture
 }
 
 function toTexture(canvas: HTMLCanvasElement): CanvasTexture {
-  const texture = new CanvasTexture(canvas)
-  texture.colorSpace = SRGBColorSpace
+  const texture = canvasTexture(canvas)
   texture.anisotropy = 4
   return texture
 }

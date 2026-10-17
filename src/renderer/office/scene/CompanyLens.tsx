@@ -1,17 +1,18 @@
-import { useFrame } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Color, type Group, type Object3D } from 'three'
 import { citySignalStore, type CitySignalStore } from '../logic/city-signal-store'
 import { companyHues, useCompanyLens } from '../logic/company-lens'
 import type { FloorGeometry, ZoneGeometry } from '../scene-model'
 import type { ThemePalette } from '../themes/types'
+import { buildingGroupName, buildingKeyOf } from './all-floor-model'
 import { batchesOf, retintBatches, type MeshBatch } from './mesh-batches'
 
 // How far an office's own colours move toward its company's hue; its shading still reads.
 export const LENS_MIX = 0.7
 
 // PhysicalBuildingShell names each office's group after its building.
-const OFFICE_GROUP = 'physical-building:'
+const OFFICE_GROUP = buildingGroupName('')
 
 export const buildingIdOfGroup = (name: string | undefined): string | null =>
   name?.startsWith(OFFICE_GROUP) ? name.slice(OFFICE_GROUP.length) : null
@@ -28,7 +29,7 @@ function companiesIn(zones: readonly ZoneGeometry[], into: Set<string>): Set<str
 export function buildingCompanies(floors: readonly FloorGeometry[]): ReadonlyMap<string, string> {
   const held = new Map<string, Set<string>>()
   for (const floor of floors) {
-    const id = floor.buildingId ?? floor.floorId
+    const id = buildingKeyOf(floor)
     held.set(id, companiesIn(floor.zones, held.get(id) ?? new Set()))
   }
   const companies = new Map<string, string>()
@@ -90,8 +91,18 @@ export function createLensDriver(): LensDriver {
       shown = { batches: frame.batches, buildings: frame.buildings, print }
       // A rebuilt batch draws its own colours: with the lens off there is nothing to undo.
       if (isRebuilt && !byCompany) return false
+      // Every instance of a part shares its office, so each part is looked up once a pass.
+      const companies = new Map<Object3D, string | null>()
+      const companyOfPart = (part: Object3D): string | null => {
+        let company = companies.get(part)
+        if (company === undefined) {
+          company = companyOf(part, frame.buildings)
+          companies.set(part, company)
+        }
+        return company
+      }
       retintBatches(frame.batches, (part, own) => {
-        const company = byCompany && companyOf(part, frame.buildings)
+        const company = byCompany && companyOfPart(part)
         const hue = company ? byCompany.get(company) : undefined
         return hue ? mixed.copy(own).lerp(hue, LENS_MIX) : null
       })
@@ -109,13 +120,12 @@ interface CompanyLensProps {
 export function CompanyLens({ floors, palette }: CompanyLensProps) {
   const isOn = useCompanyLens()
   const anchor = useRef<Group>(null)
-  const invalidate = useRef<(() => void) | null>(null)
+  const invalidate = useThree((state) => state.invalidate)
   const [driver] = useState(createLensDriver)
   const buildings = useMemo(() => buildingCompanies(floors), [floors])
   // The demand loop draws nothing by itself: a toggle asks for the frame that shows it.
-  useEffect(() => invalidate.current?.(), [isOn])
-  useFrame((state) => {
-    invalidate.current = state.invalidate
+  useEffect(() => invalidate(), [invalidate, isOn])
+  useFrame(() => {
     const root = anchor.current?.parent
     if (root)
       driver.sync({ batches: batchesOf(root), buildings, isOn, palette, signals: citySignalStore })

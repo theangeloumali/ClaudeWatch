@@ -16,6 +16,9 @@ import OfficeScene from './OfficeScene'
 // The lights and the background are three.js elements, which the DOM cannot draw.
 vi.mock('@react-three/fiber', () => ({
   useFrame: () => undefined,
+  // The company lens asks for its invalidate.
+  useThree: (select: (state: { invalidate: () => void }) => unknown) =>
+    select({ invalidate: () => undefined }),
   Canvas: ({ children }: { children?: ReactNode }) => (
     <div>
       {Children.toArray(children).filter(
