@@ -243,7 +243,13 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
     dispatch({ type: 'zone-flown', zoneId: roomId })
   }
   // The editor works on real names, so a rebuilt city never saves a role.
-  const editing = useWorldEditing({ feed, frame: state.frame, roles, onSelectAgent: selectAgent })
+  const editing = useWorldEditing({
+    feed,
+    frame: state.frame,
+    visibleFrame: frame,
+    roles,
+    onSelectAgent: selectAgent
+  })
   const { previewFloors, worldStore } = editing
   const flyToAgent = useCallback(
     (agentKey: string) => dispatch({ type: 'agent-flown', agentKey }),

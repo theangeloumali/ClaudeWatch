@@ -195,6 +195,25 @@ describe('the privacy edge', () => {
     expect(moved.sessions).toBe(first.sessions)
   })
 
+  it('a frame that only moved agents keeps every other masked field, accounts included', () => {
+    const roles = createRoleBook()
+    const accounts = [
+      { key: 'acct-1', provider: 'claude' as const, label: 'Acme Labs', plan: null, isActive: true }
+    ]
+    const frame = { ...secretFrame(), accounts }
+    const first = maskFrame(frame, roles)
+    const moved = maskFrame({ ...frame, agents: [...frame.agents] }, roles)
+    for (const field of Object.keys(first).filter((name) => name !== 'agents'))
+      expect(Reflect.get(moved, field), field).toBe(Reflect.get(first, field))
+    expect(JSON.stringify(moved.accounts)).not.toMatch(REAL_NAMES)
+  })
+
+  it('the same agents are masked once', () => {
+    const roles = createRoleBook()
+    const frame = secretFrame()
+    expect(maskFrame({ ...frame }, roles).agents).toBe(maskFrame({ ...frame }, roles).agents)
+  })
+
   it('the saved world document keeps real names while the screen shows roles', () => {
     const bridge = { send: (_message: FeedMessage): void => undefined }
     const source: FeedSource = {

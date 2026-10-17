@@ -14,6 +14,8 @@ export interface RoleBook {
   // A role never changes once given, so a masked list stays valid for its input's life.
   readonly maskedFloors: WeakMap<readonly FloorGeometry[], FloorGeometry[]>
   readonly maskedSessions: WeakMap<readonly SessionRef[], SessionRef[]>
+  readonly maskedAgents: WeakMap<readonly AgentView[], AgentView[]>
+  readonly maskedAccounts: WeakMap<readonly AccountRef[], AccountRef[]>
 }
 
 const LETTERS = 26
@@ -60,11 +62,14 @@ export function createRoleBook(): RoleBook {
     teammate: (sessionKey, memberId) => `Teammate ${numberOf(`teammate\n${sessionKey}`, memberId)}`,
     account: (accountKey) => `Account ${numberOf('account', accountKey)}`,
     maskedFloors: new WeakMap(),
-    maskedSessions: new WeakMap()
+    maskedSessions: new WeakMap(),
+    maskedAgents: new WeakMap(),
+    maskedAccounts: new WeakMap()
   }
 }
 
-// Masks every name the HUD and the scene draw; keys stay, because stores match on them.
+// Masks every name the HUD and the scene draw; keys stay, because stores match on them. Each list
+// is masked once, so a frame that only moved agents keeps every other field (perf-2).
 export function maskFrame(frame: OfficeFrame, roles: RoleBook): OfficeFrame {
   const sessions = remembered(roles.maskedSessions, frame.sessions, (list) =>
     list.map((session) => maskSession(session, roles))
@@ -72,13 +77,18 @@ export function maskFrame(frame: OfficeFrame, roles: RoleBook): OfficeFrame {
   const floors = remembered(roles.maskedFloors, frame.floors, (list) =>
     list.map((floor) => maskFloor(floor, roles))
   )
+  const agents = remembered(roles.maskedAgents, frame.agents, (list) =>
+    list.map((agent) => maskAgent(agent, frame, roles))
+  )
   return {
     ...frame,
     sessions,
     floors,
-    agents: frame.agents.map((agent) => maskAgent(agent, frame, roles)),
+    agents,
     ...(frame.accounts && {
-      accounts: frame.accounts.map((account) => maskAccount(account, roles))
+      accounts: remembered(roles.maskedAccounts, frame.accounts, (list) =>
+        list.map((account) => maskAccount(account, roles))
+      )
     })
   }
 }
