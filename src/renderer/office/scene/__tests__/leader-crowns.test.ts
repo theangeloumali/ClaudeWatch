@@ -191,11 +191,10 @@ describe('leader crowns', () => {
       }
   })
 
-  it('a crown goes over the roof of an agent at its desk, whatever venue the feed names', () => {
+  it('a crown goes over the roof of an agent at its desk', () => {
     const places = createBuildingPlaces()
     places.setRoof('home', { x: 3, y: 12, z: -2 })
-    // Agents no longer visit venues, so a stale venue id never takes the crown off the roof.
-    const seated = makeAgent({ agentKey: 'claude:a', x: 3, z: -2, venueId: 'venue:arcade' })
+    const seated = makeAgent({ agentKey: 'claude:a', x: 3, z: -2 })
     const layer = createLeaderCrownsLayer(palette)
     layer.update(
       crownFrame({

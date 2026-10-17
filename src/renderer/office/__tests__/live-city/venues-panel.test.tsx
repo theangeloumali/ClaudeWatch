@@ -8,7 +8,7 @@ it('lists the city venues as places to look at, with no agent visitors to inspec
   const session = makeSession({ key: 'one', name: 'Visitor one' })
   const frame = makeFrame({
     sessions: [session],
-    agents: [{ ...makeAgent({ agentKey: session.key }), venueId: 'arcade' }],
+    agents: [makeAgent({ agentKey: session.key })],
     venues: [
       {
         id: 'arcade',
