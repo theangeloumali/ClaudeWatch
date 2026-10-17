@@ -166,6 +166,7 @@ export function createLiveFeed(
       lastTick = now()
     })
     let lastAgents = ''
+    let structureRevision = 0
     let lastFrameAtMs = Number.NEGATIVE_INFINITY
     let isDirty = true
     let offDocument: (() => void) | undefined
@@ -259,6 +260,7 @@ export function createLiveFeed(
       if (!isDirty && agentsKey === lastAgents) return
       if (!visibility.read().isFocused && tick - lastFrameAtMs < BLURRED_FRAME_GAP_MS) return
       isDirty = false
+      if (agentsKey !== lastAgents) structureRevision += 1
       lastAgents = agentsKey
       lastFrameAtMs = tick
       poses.retain(new Set(agents.map((agent) => agent.agentKey)))
@@ -272,6 +274,7 @@ export function createLiveFeed(
         projectsToday: lastKnownSnapshot?.projectsToday,
         feedReceivedAtMs,
         feedRevision,
+        structureRevision,
         worldRevision: documentRevision,
         venues: resolvedLayout?.effectiveVenues
       }

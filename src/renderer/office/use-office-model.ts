@@ -26,15 +26,19 @@ const isSameApartFromAgents = (a: OfficeFrame, b: OfficeFrame): boolean =>
     (field) => field === 'agents' || Object.is(Reflect.get(a, field), Reflect.get(b, field))
   )
 
+// The live feed already keyed the agents for its revision; a feed without one is keyed here.
+const structureOf = (frame: OfficeFrame): number | string =>
+  frame.structureRevision ?? structuralKey(frame.agents)
+
 // The frame as of its last structural change: a frame that only moved agents keeps it (perf-2).
 function useStructuralFrame(frame: OfficeFrame | null): OfficeFrame | null {
-  const kept = useRef<{ frame: OfficeFrame; agentsKey: string } | null>(null)
+  const kept = useRef<{ frame: OfficeFrame; structure: number | string } | null>(null)
   if (!frame) return null
-  const agentsKey = structuralKey(frame.agents)
+  const structure = structureOf(frame)
   const previous = kept.current
-  if (previous?.agentsKey === agentsKey && isSameApartFromAgents(previous.frame, frame))
+  if (previous?.structure === structure && isSameApartFromAgents(previous.frame, frame))
     return previous.frame
-  kept.current = { frame, agentsKey }
+  kept.current = { frame, structure }
   return frame
 }
 
