@@ -32,12 +32,14 @@ function open() {
 
 const feature = (name: string): HTMLElement => screen.getByRole('switch', { name })
 
-it('offers one switch per feature, all on to begin with', () => {
+it('offers one switch per feature, all on to begin with, then Hide names, off', () => {
   open()
-  expect(screen.getAllByRole('switch').map((item) => item.getAttribute('aria-label'))).toEqual(
-    SWITCHES
-  )
+  expect(screen.getAllByRole('switch').map((item) => item.getAttribute('aria-label'))).toEqual([
+    ...SWITCHES,
+    'Hide names'
+  ])
   for (const name of SWITCHES) expect(feature(name)).toHaveAttribute('aria-checked', 'true')
+  expect(feature('Hide names')).toHaveAttribute('aria-checked', 'false')
 })
 
 it('says in a line what each feature is', () => {
@@ -127,8 +129,8 @@ it('can be worked from the keyboard: focus lands on the title and every control 
   expect(screen.getByRole('heading', { name: 'Office settings' })).toHaveFocus()
   const controls = within(dialog).getAllByRole('button')
   const switches = within(dialog).getAllByRole('switch')
-  // Six switches, four levels, restore and close: native buttons, so Tab, Space and Enter work.
-  expect(controls.length + switches.length).toBe(12)
+  // Seven switches, four levels, restore and close: native buttons, so Tab, Space and Enter work.
+  expect(controls.length + switches.length).toBe(13)
   // The sizes are native radios: one tab stop, arrow keys between them.
   const sizes = within(dialog).getAllByRole('radio')
   expect(sizes).toHaveLength(3)

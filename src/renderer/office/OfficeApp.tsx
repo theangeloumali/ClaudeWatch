@@ -51,7 +51,13 @@ import {
   useFocusTerminal
 } from './use-office-effects'
 import { useOfficeFeatures } from './use-office-features'
-import { selectionOf, useCitySignalFeed, useOfficeLists, useVisibleFrame } from './use-office-model'
+import {
+  selectionOf,
+  useCitySignalFeed,
+  useNameRoles,
+  useOfficeLists,
+  useVisibleFrame
+} from './use-office-model'
 import { canCreateWebGL2 } from './webgl-support'
 import { PlayerCharacterPicker } from './player/PlayerCharacterPicker'
 import { choosePlayerCharacter, usePlayerCharacter } from './player/character-choice'
@@ -126,7 +132,8 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
   useFeedSubscription(feed, dispatch)
 
   useCitySignalFeed(state.frame, nowMs)
-  const frame = useVisibleFrame(state.frame)
+  const roles = useNameRoles()
+  const frame = useVisibleFrame(state.frame, roles)
   const offices = useMemo(
     () => (frame ? buildOperationsModel({ frame, nowMs }) : []),
     [frame, nowMs]
@@ -235,7 +242,7 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
     dispatch({ type: 'zone-flown', zoneId: roomId })
   }
   // The editor works on real names, so a rebuilt city never saves a role.
-  const editing = useWorldEditing({ feed, frame: state.frame, onSelectAgent: selectAgent })
+  const editing = useWorldEditing({ feed, frame: state.frame, roles, onSelectAgent: selectAgent })
   const { previewFloors, worldStore } = editing
   const flyToAgent = useCallback(
     (agentKey: string) => dispatch({ type: 'agent-flown', agentKey }),
