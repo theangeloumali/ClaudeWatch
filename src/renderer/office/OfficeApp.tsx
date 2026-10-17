@@ -20,6 +20,7 @@ import { buildThemeRows, countThemeChoices, useThemeAssignments } from './logic/
 import { findZone } from './logic/zone-model'
 import { HUD_GRID_STYLE } from './logic/hud-layout'
 import { buildOperationsModel } from './logic/operations-model'
+import { citySignalStore } from './logic/city-signal-store'
 import { createFrameMetrics } from './frame-metrics'
 import { AgentActions } from './hud/AgentActions'
 import { PlayerControls } from './hud/PlayerControls'
@@ -28,6 +29,7 @@ import { BottomBar } from './hud/BottomBar'
 import { EmptyState } from './hud/EmptyState'
 import { FocusNotice } from './hud/FocusNotice'
 import { HealthBanner } from './hud/HealthBanner'
+import { LeadersCard } from './hud/LeadersCard'
 import { Inspector } from './hud/Inspector'
 import { useInspectorPanel } from './hud/use-inspector-panel'
 import { ListView } from './hud/ListView'
@@ -395,6 +397,19 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
               }
             />
           </details>
+          {!isShowingList && sessions && sessions.length > 0 && (
+            <details open={!inspectorPanel.isNarrow} className="min-w-0">
+              <summary className={`${BUTTON_QUIET_COMPACT_CLASS} min-[1100px]:hidden`}>
+                Leaders
+              </summary>
+              <LeadersCard
+                version={citySignalStore.version()}
+                sessions={sessions}
+                companies={companies}
+                onFlyToZone={goToZone}
+              />
+            </details>
+          )}
           <div className="max-[1099px]:hidden">
             <AttentionRail
               queue={queue}
