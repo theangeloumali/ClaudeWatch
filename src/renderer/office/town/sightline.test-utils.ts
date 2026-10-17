@@ -9,6 +9,8 @@ export interface SightBox extends Rect {
 interface GroundPoint {
   x: number
   z: number
+  // Metres above the ground, for a sign or a roof rather than a doorstep.
+  height?: number
 }
 
 // The four quarter turns the map snaps to (logic/camera-bands.ts).
@@ -28,8 +30,8 @@ function crossing(from: number, step: number, min: number, max: number): [number
   return [Math.min(near, far), Math.max(near, far)]
 }
 
-// A ground point is hidden when a box stands between it and the orthographic camera: the line of
-// sight enters the box's footprint before it has risen over the box.
+// A point is hidden when a box stands between it and the orthographic camera: the line of sight
+// enters the box's footprint before it has risen over the box.
 export function isHidden(point: GroundPoint, boxes: readonly SightBox[], azimuth: number): boolean {
   const toCamera = { x: Math.sin(azimuth), z: Math.cos(azimuth) }
   return boxes.some((box) => {
@@ -37,7 +39,8 @@ export function isHidden(point: GroundPoint, boxes: readonly SightBox[], azimuth
     const alongZ = crossing(point.z, toCamera.z, box.z - box.depth / 2, box.z + box.depth / 2)
     const enters = Math.max(alongX[0], alongZ[0], 0)
     const leaves = Math.min(alongX[1], alongZ[1])
-    return enters < leaves - EDGE_EPSILON && enters * SIGHT_RISE < box.height - EDGE_EPSILON
+    const rise = (point.height ?? 0) + enters * SIGHT_RISE
+    return enters < leaves - EDGE_EPSILON && rise < box.height - EDGE_EPSILON
   })
 }
 
