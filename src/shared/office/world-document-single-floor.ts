@@ -33,7 +33,7 @@ export function singleFloorWorldDocument(document: WorldDocument): WorldDocument
     building.footprint.width = width
     building.footprint.depth = depth
     building.entrance = { x: 0, z: -depth / 2 }
-    // Keep the legacy transfer landing until existing upper-floor bodies finish their descent.
+    // Agents fade between storeys; the landing stays as the floor's elevator and the player's lift.
     building.connector = { x: -width / 2 + 2, z: -depth / 2 + 2, width: 2, depth: 2 }
   }
   return consolidated
