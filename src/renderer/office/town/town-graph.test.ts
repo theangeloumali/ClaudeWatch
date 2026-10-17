@@ -24,8 +24,8 @@ function reached(graph: RoadGraph, isOpen: (edge: RoadEdge) => boolean) {
 }
 
 describe.each(LIVE_FLOORS)('roadGraph: %s', (_name, floor) => {
-  const { claim, roads } = distributedTown(townOf(floor, null), [floor]).plan
-  const graph = roadGraph(roads, claim)
+  const { roads } = distributedTown(townOf(floor, null), [floor]).plan
+  const graph = roadGraph(roads)
   const placeOf = new Map(graph.nodes.map((node) => [`${node.x}:${node.z}`, node.id]))
 
   it('numbers its nodes by their place in the list, one to a place', () => {

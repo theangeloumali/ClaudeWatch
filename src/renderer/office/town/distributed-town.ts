@@ -47,7 +47,7 @@ function cityOf(town: CampusTown, parts: CityParts): Town {
       ...town,
       ...parts,
       envelope: parts.extent,
-      graph: roadGraph(parts.roads, town.claim)
+      graph: roadGraph(parts.roads)
     }
   }
 }
