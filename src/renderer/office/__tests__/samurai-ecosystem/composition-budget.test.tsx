@@ -75,14 +75,12 @@ it.each(CASES)(
     const monitors = mergedDraws(createElement(WorkstationScreens, { displays }))
     expect(monitors.draws).toBe(count)
     expect(monitors.triangles).toBe(count * 2)
-    const town = distributedTown(townOf(floor, null, 'full'), [floor])
+    const town = distributedTown(townOf(floor, null), [floor])
     const movers = mergedDraws(
       createElement(MoverLayer, {
         floor,
         plan: town.plan,
-        owners: town.owners,
         floorTheme,
-        zoneGroups,
         player: null,
         isReducedMotion: true,
         hasVehicles: true

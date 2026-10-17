@@ -109,7 +109,7 @@ it.each([20, 40, 60, 512])(
       floors.filter((floor) => floor.elevation === 0),
       floors[0]
     )
-    const town = distributedTown(townOf(ground, null, 'full'), [
+    const town = distributedTown(townOf(ground, null), [
       ...floors.filter((floor) => floor.elevation === 0),
       ...document.venues.map((venue) => venue.footprint)
     ])
@@ -134,9 +134,7 @@ it.each([20, 40, 60, 512])(
       createElement(MoverLayer, {
         floor: ground,
         plan: town.plan,
-        owners: town.owners,
         floorTheme: theme,
-        zoneGroups: [...groups.values()].flat(),
         player: null,
         isReducedMotion: true,
         hasVehicles: true

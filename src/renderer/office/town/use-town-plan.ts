@@ -2,15 +2,12 @@ import { useEffect, useMemo, useRef } from 'react'
 import { isJsonObject } from '../../../shared/json-object'
 import { readStored, writeStored } from '../../office-live/browser-storage'
 import { useOfficeSettings } from '../logic/office-settings'
-import { levelInUse, type QualityLevel } from '../logic/quality'
 import { boundsOfZone } from '../logic/zone-framing'
-import { useQualityChoice } from '../quality-store'
 import type { FloorGeometry } from '../scene-model'
 import type { Rect } from '../themes/lot-math'
 import { campusClaim, heldClaim, neededClaim } from './town-claim'
 import type { TownSize } from './town-grid'
-import { campusGreen, type GreenPlot } from './town-green'
-import { townBlocks, type CampusPlan, type TownPlan } from './town-plan'
+import type { TownPlan } from './town-plan'
 import { distributedTown } from './distributed-town'
 import type { WorldFootprint } from '../../../shared/office/world-document'
 
@@ -19,26 +16,18 @@ const STORAGE_VERSION = 1
 
 export interface Town {
   plan: TownPlan
-  // Lot id to the company that dresses it; a lot that is absent takes the floor's theme.
-  owners: ReadonlyMap<string, string>
-  green: GreenPlot[]
 }
 
-// The campus town the city is laid over: it holds the claim from floor to floor. The city reads
-// only the claim and size; the plan and garden stay for walk-ground.test.ts, its one other reader.
-export interface CampusTown extends Pick<Town, 'green'> {
-  plan: CampusPlan
-}
+// What the city is laid over: the claim, held from floor to floor, and the owner's town size.
+export type CampusTown = Pick<TownPlan, 'claim' | 'size'>
 
-// The campus town for a floor. `held` is the claim of the floor before, or null on a first start.
+// `held` is the claim of the floor before, or null on a first start.
 export function townOf(
   floor: FloorGeometry,
   held: Rect | null,
-  level: QualityLevel,
   size: TownSize = 'city'
 ): CampusTown {
-  const plan = townBlocks(campusClaim(neededClaim(floor), held), level, size)
-  return { plan, green: campusGreen(floor, plan) }
+  return { claim: campusClaim(neededClaim(floor), held), size }
 }
 
 function storedClaim(floor: FloorGeometry): Rect | null {
@@ -75,8 +64,6 @@ export function useTownPlan(
   }
 ): Town {
   const { protectedSites, preview } = options
-  const { pin, chosen } = useQualityChoice()
-  const level = levelInUse(pin, chosen)
   const { townSize } = useOfficeSettings()
   // undefined until storage has been read, which happens once.
   const heldRef = useRef<Rect | null | undefined>(undefined)
@@ -86,10 +73,10 @@ export function useTownPlan(
       heldRef.current = storedClaim(floor)
       savedRef.current = heldRef.current && claimKey(heldRef.current)
     }
-    const next = townOf(floor, heldRef.current, level, townSize)
-    heldRef.current = next.plan.claim
+    const next = townOf(floor, heldRef.current, townSize)
+    heldRef.current = next.claim
     return distributedTown(next, protectedSites)
-  }, [floor, level, townSize, protectedSites])
+  }, [floor, townSize, protectedSites])
   const key = claimKey(town.plan.claim)
   useEffect(() => {
     if (key === savedRef.current) return
@@ -99,8 +86,8 @@ export function useTownPlan(
   return useMemo(
     () =>
       preview
-        ? distributedTown(townOf(preview.floor, null, level, townSize), preview.protectedSites)
+        ? distributedTown(townOf(preview.floor, null, townSize), preview.protectedSites)
         : town,
-    [preview, level, townSize, town]
+    [preview, townSize, town]
   )
 }

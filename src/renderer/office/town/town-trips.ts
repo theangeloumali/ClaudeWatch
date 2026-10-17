@@ -29,11 +29,7 @@ export interface Trip {
 
 export interface TownInput {
   plan: TownPlan
-  // Lot id to the company that dresses it; a lot that is absent takes the floor's theme.
-  owners: ReadonlyMap<string, string>
   floorThemeId: string
-  // A company zone's id to its theme.
-  themeIdByZone: ReadonlyMap<string, string>
   detail: QualityLevel
   hasVehicles?: boolean
 }
@@ -45,11 +41,6 @@ export function themeIdsByZone(groups: readonly ThemeZoneGroup[]): Map<string, s
       companies.map((company) => [company.id, themeId] as const)
     )
   )
-}
-
-// The theme a lot's movers wear: its owning company's, else the floor's.
-export function themeOfLot(town: TownInput, lotId: string): string {
-  return town.themeIdByZone.get(town.owners.get(lotId) ?? '') ?? town.floorThemeId
 }
 
 // How many movers each detail level sends out, and how many instanced draws they may cost.

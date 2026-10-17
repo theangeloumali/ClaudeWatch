@@ -69,8 +69,8 @@ Finding ids below (`seating-1`, `P3` …) refer to those reports.
 - [x] Phase 6 — Render fixes: facade layer steps, cutaway hysteresis, desk-band card culling, context loss, canvas metrics
 - [x] Phase 7 — Performance: static and dynamic batches, motion out of React, cached batch keys, memoised validation, shader prewarm, host-served world document
 - [x] Phase 8 — Release and repo hygiene: one version line (1.4.1), honest Windows updater status, main-checkout mode noise, worktree cleanup
-- [ ] Phase 9 — Integration: full gate chain, live re-measure on real data, local install, STOP for Angelo's look
-- [ ] Phase 10 — After Angelo approves: simplify, review pair, Codex, dead code, checklist, MP4 demo, vault, push and stacked PR
+- [ ] Phase 9 — Integration: full gate chain, live re-measure on real data, owner calls, local install (no STOP, Angelo 2026-10-17)
+- [ ] Phase 10 — Close: simplify, review pair, Codex, dead code, checklist, MP4 demo, vault, push and merge to `main`
 
 ## Diagrams
 
@@ -862,12 +862,17 @@ Done in the main checkout. Nothing here is committed on this branch.
   - Use a physical `node_modules` copy, per the vault trap on signed packaging.
   - Run `npm run build && npm run build:widget`, then `electron-builder --mac dir --arm64 --publish never -c.mac.notarize=false`, signed with the Developer ID identity.
   - Quit the app, move the old bundle to `~/Applications/ClaudeWatch-1.3.5-before-office-health.app`, `ditto` the new one to `/Applications`, and run `codesign --verify --deep --strict`.
+- [ ] Owner calls, decided under Angelo's 2026-10-17 direction ("Don't want you to stop until you fucking build this and let's merge everything to `main` once you're done"):
+  - [ ] The Town size setting works in the city. Village, Town and City scale the city's filler buildings to ⅓, ⅔ and all of `CITY_SCENERY_LIMIT` (`shared/office/city-scenery.ts:6`). Today the size reaches `townOf` (`use-town-plan.ts:32-34`), but `distributedTown` never reads it (`distributed-town.ts:59-70`).
+  - [ ] The city marks one landmark lot per zone kind, its largest, instead of civic only (`distributed-town.ts:107`). This brings back the Garrison radar tower and the workshop and entertainment landmarks.
+  - Accepted unchanged: citizens in plain sight 50–70%, and the recall fade for far roamers.
+- [ ] One local install for office-health and the city port together (city-port plan Phase 7), from the final city-port commit.
 - [ ] Measure the installed renderer CPU, unfocused, over 60 s: `bash /tmp/office-audit-tools/perf/sample-procs.sh` (was 56.9%).
-- [ ] **STOP.** Tell Angelo the build is installed, with the before/after table, and wait for his look.
+- [ ] Report the before/after to Angelo. No STOP (Angelo, 2026-10-17); Phase 10 follows.
 
-## Phase 10 — After Angelo approves (lead + Wave 2)
+## Phase 10 — Close and merge (lead + Wave 2)
 
-**Verify:** `bash ~/.claude/hooks/dead-code-check.sh` exits 0; the Wave 2 verdicts approve; the MP4 in `recordings/` is frame-verified; the PR shows the stacked base `release/1.3.5`.
+**Verify:** `bash ~/.claude/hooks/dead-code-check.sh` exits 0; the Wave 2 verdicts approve; the MP4 in `recordings/` is frame-verified; PR #12 and the office-health PR show MERGED into `main`.
 
 Steps:
 
@@ -879,7 +884,7 @@ Steps:
 - `~/Desktop/eor-feature-checklists/CW-OFFICE-HEALTH-review-checklist.md`.
 - The MP4 demo via `Skill(zkidzdevteam:demo-recording)`, into the repo-root `recordings/`, frame-verified. It shows agents seated, roamers on sidewalks, citizens on zebras, still walls while rotating, and the CPU before/after.
 - `bash ~/.claude/hooks/vault-append.sh`.
-- On Angelo's word: push, then a PR stacked on `release/1.3.5` (draft #12) whose body carries `**Tickets — none (owner audit 2026-10-16; issues to file on his word)**`. Then file GitHub issues for CW-\* and mark them.
+- Push (authorised 2026-10-17). Mark #12 ready and merge it into `main` with `gh pr merge --merge`, then open this branch's PR against `main` with `**Tickets — none (owner audit 2026-10-16)**` and merge it the same way. Merge commits rather than squash, because the city port is stacked on this branch. No issues are filed and nothing goes to Slack: the verbatim quotes stay out of a public repo.
 
 ## Estimates (hours: with Claude / without)
 

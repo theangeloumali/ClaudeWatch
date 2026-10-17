@@ -3,7 +3,7 @@ import type { Rect } from '../themes/lot-math'
 import type { TownDress } from './town-dress'
 import { SIDEWALK_M } from './town-grid'
 import type { TownPlan } from './town-plan'
-import type { TownRoad } from './town-roads'
+import type { TownRoad } from '../../../shared/office/town-roads'
 import { CROSSWALK_DEPTH_M, crosswalks, roadCrossings } from '../../../shared/office/crosswalks'
 import { pavedStrip } from '../../../shared/office/street-paving'
 

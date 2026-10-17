@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { campusClaim, neededClaim } from './town-claim'
-import { townBlocks } from './town-plan'
-import { LONE_FLOOR } from './town.test-utils'
+import { makeFloor } from '../__tests__/fixtures'
+import { distributedTown } from './distributed-town'
+import { townOf } from './use-town-plan'
 import { SIDE_NORMAL, type WallSide } from '../logic/room-layout'
 import { draw } from '../themes/lot-math'
 import { box } from '../themes/parts'
@@ -198,12 +198,20 @@ describe('dressLot', () => {
   })
 
   it('spreads the designs over the real lots of a zone, whose seeds differ in few bits', () => {
-    // Neighbouring lot ids hash to seeds that share their high bits: a real plan is the test.
-    const plan = townBlocks(campusClaim(neededClaim(LONE_FLOOR), null), 'full')
-    const homes = plan.lots.filter(
+    // Neighbouring lot ids hash to seeds that share their high bits: a six-office city tests it.
+    const offices = [
+      [0, -48],
+      [48, 0],
+      [-48, 0],
+      [0, 48],
+      [96, 48],
+      [-96, -48]
+    ].map(([x, z]) => ({ x, z, width: 30, depth: 25 }))
+    const ground = makeFloor({ floorId: 'city', width: 240, depth: 160 })
+    const homes = distributedTown(townOf(ground, null), offices).plan.lots.filter(
       (each) => each.zone === 'residential' && each.kind === 'building'
     )
-    expect(homes.length).toBeGreaterThan(30)
+    expect(homes.length).toBeGreaterThan(20)
     const used = homes.map((home) => dressLot({ ...home, maxHeight: 20 }, 0, dressOf(HOMES)).design)
     for (const home of HOMES)
       expect(used.filter((name) => name === home.name).length).toBeGreaterThan(homes.length / 8)

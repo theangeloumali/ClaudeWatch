@@ -128,10 +128,7 @@ const layerProps: ComponentProps<typeof MultiFloorLayer> = {
   onFlyToZone: vi.fn()
 }
 const protectedSites = [...floors, ...worldDocument.venues.map((venue) => venue.footprint)]
-const town = distributedTown(
-  townOf(groundEnvelope(floors, floors[0]), null, 'full'),
-  protectedSites
-)
+const town = distributedTown(townOf(groundEnvelope(floors, floors[0]), null), protectedSites)
 const AUTHORED_THEME_IDS = [
   'corporate-city',
   'neo-edo-steam',
@@ -573,7 +570,7 @@ describe('authored recovered streetscape', () => {
     expect(projected).toEqual(shared)
     expect(projected).toEqual(effective.streetBlocks)
     expect(projected).toHaveLength(47)
-    expect(distributedTown(town, protectedSites).plan.lots).toEqual(town.plan.lots)
+    expect(distributedTown(town.plan, protectedSites).plan.lots).toEqual(town.plan.lots)
   })
   it.each(AUTHORED_THEME_IDS)(
     '%s fits actual rotated parts inside recovered parcels',

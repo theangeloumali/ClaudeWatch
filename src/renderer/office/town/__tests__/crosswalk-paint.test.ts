@@ -12,7 +12,7 @@ import { liveCity } from './pedestrian.test-utils'
 
 const offGridCity = (): TownPlan =>
   distributedTown(
-    townOf(makeFloor({ floorId: 'off-grid', x: 180, z: 0, width: 420, depth: 120 }), null, 'full'),
+    townOf(makeFloor({ floorId: 'off-grid', x: 180, z: 0, width: 420, depth: 120 }), null),
     OFF_GRID_SITES
   ).plan
 

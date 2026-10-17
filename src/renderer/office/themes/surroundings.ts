@@ -28,8 +28,6 @@ export const WORLD_APRON = { west: 12, east: 12, north: 19, south: 8 }
 // A thing of height h hides 1.43 h of ground behind it at the camera's 35° elevation.
 export const HEIGHT_PER_METRE = 0.7
 export const MAX_LOT_HEIGHT_M = 24
-// The lowest limit a lot is still worth building under, by kind.
-export const MIN_LOT_HEIGHT_M = { building: 2, prop: 0.4 }
 
 function flatten(zones: readonly ZoneGeometry[]): ZoneGeometry[] {
   return zones.flatMap((zone) => [zone, ...flatten(zone.children)])

@@ -6,13 +6,11 @@ import { CitySceneryCutaway } from '../scene/CitySceneryCutaway'
 import type { FloorGeometry } from '../scene-model'
 import { RisingSteam } from '../themes/ambient-parts'
 import type { PlacedLot } from '../themes/lot-kit'
-import { LotFill } from '../themes/LotFill'
 import { dressCityDistrict } from '../themes/city-district-parts'
 import { thinnedLots } from '../themes/lot-thinning'
 import { getTheme } from '../themes/registry'
 import type { OfficeTheme } from '../themes/types'
 import { fallbackDress } from './fallback-dress'
-import { placeGardenPiece } from './garden-pieces'
 import { townSteamStacks } from './town-ambient'
 import type { TownDress } from './town-dress'
 import type { TownPlan } from './town-plan'
@@ -36,11 +34,11 @@ interface TownProps {
 
 type ThemeFinder = (lot: { id: string; zoneId: string | null }) => string
 
-// The theme of whoever owns a lot or a plot of the belt: its company's, else the floor's.
-function themeFinder({ town, floorTheme, zoneGroups }: TownProps): ThemeFinder {
+// The theme of the company that owns a lot, else the floor's.
+function themeFinder({ floorTheme, zoneGroups }: TownProps): ThemeFinder {
   const themeIdByCompany = themeIdsByZone(zoneGroups)
   return (lot) => {
-    const companyId = town.owners.get(lot.id) ?? lot.zoneId
+    const companyId = lot.zoneId
     return (companyId === null ? undefined : themeIdByCompany.get(companyId)) ?? floorTheme.id
   }
 }
@@ -91,20 +89,15 @@ function dressedTown(plan: TownPlan, themeIdOf: ThemeFinder, revision: string): 
   return dressedCache.lots
 }
 
-// The buildings of the city and its planted belt, each merged once. The belt has its own batch
-// so that ordinary growth of the plate never rebuilds the town.
+// The buildings of the city, merged once per revision.
 export function TownView(props: TownProps) {
   const { town, floor } = props
   const inspectionFloor = props.focusedFloor ?? floor
   const isInspecting = props.viewMode === 'office'
   const { themeIdOf, lotsRevision } = useLotThemes(props)
-  const beltRevision = useMemo(
-    () => JSON.stringify(town.green.map((plot) => [plot, themeIdOf(plot)])),
-    [town.green, themeIdOf]
-  )
   // The same elements while a revision stands: an agent's step re-renders the scene, and React
   // must find nothing to do here.
-  const lots = useMemo(
+  return useMemo(
     () => (
       <CitySceneryCutaway
         placed={dressedTown(town.plan, themeIdOf, lotsRevision).map((each) => each.placed)}
@@ -115,23 +108,6 @@ export function TownView(props: TownProps) {
     ),
     // `lotsRevision` stands for the plan and for every lot's theme.
     [lotsRevision, inspectionFloor, isInspecting]
-  )
-  const belt = useMemo(() => {
-    const placed = town.green.map((plot) =>
-      placeGardenPiece(plot, 0, dressOf(getTheme(themeIdOf(plot))))
-    )
-    return (
-      <BatchedScene revision={beltRevision} isStatic>
-        <LotFill placed={placed} />
-      </BatchedScene>
-    )
-    // `beltRevision` stands for the plots, where they stand and what dresses them.
-  }, [beltRevision])
-  return (
-    <>
-      {lots}
-      {belt}
-    </>
   )
 }
 

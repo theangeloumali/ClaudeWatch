@@ -63,23 +63,20 @@ function elements(node: ReactNode): Node[] {
 }
 
 // The city a floor stands in, on its own site.
-const cityOf = (floor: FloorGeometry, level: 'full' | 'light' = 'full') =>
-  distributedTown(townOf(floor, null, level), [floor])
+const cityOf = (floor: FloorGeometry) => distributedTown(townOf(floor, null), [floor])
 
 function view(floor: FloorGeometry = PAIR_FLOOR, floorTheme = north, themeFor = themeIdFor) {
   const town = cityOf(floor)
   const zoneGroups = groupZonesByTheme(floor, themeFor)
   const nodes = elements(TownView({ town, floor, floorTheme, zoneGroups }))
   const [lots] = nodes.filter((node) => node.type === CitySceneryCutaway)
-  const [belt] = nodes.filter((node) => node.type === BatchedScene)
-  return { town, lots, belt, placedLots: lots.props.placed ?? [] }
+  return { town, lots, placedLots: lots.props.placed ?? [] }
 }
 
 describe('TownView', () => {
-  it('hands the city’s lots to the scenery cutaway and the belt to a batch placed once', () => {
-    const { lots, belt } = view()
+  it('hands the city’s lots to the scenery cutaway', () => {
+    const { lots } = view()
     expect(lots.props.placed?.length).toBeGreaterThan(0)
-    expect(belt.props.isStatic).toBe(true)
   })
 
   it('dresses every city lot in the floor’s theme', () => {
@@ -95,11 +92,10 @@ describe('TownView', () => {
     expect(dressOf(north)).toBe(north.town)
   })
 
-  it('rebuilds neither batch for a floor that is made again with nothing moved', () => {
+  it('keeps the town batch for a floor that is made again with nothing moved', () => {
     const first = view()
     const again = view(structuredClone(PAIR_FLOOR))
     expect(again.lots.props.revision).toBe(first.lots.props.revision)
-    expect(again.belt.props.revision).toBe(first.belt.props.revision)
   })
 
   it('rebuilds the town batch when the office’s site grows', () => {

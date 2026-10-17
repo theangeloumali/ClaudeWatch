@@ -14,6 +14,6 @@ export function townDressOf(themeId: string): TownDress {
 
 // Every lot of a first start's city at full detail, as TownView draws it in one theme.
 export function drawnTown(themeId: string, floor: FloorGeometry): PlacedLot[] {
-  const { plan } = distributedTown(townOf(floor, null, 'full'), [floor])
+  const { plan } = distributedTown(townOf(floor, null), [floor])
   return plan.lots.map((lot) => dressCityDistrict(lot, townDressOf(themeId)))
 }
