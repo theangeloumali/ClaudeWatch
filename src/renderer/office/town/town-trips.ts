@@ -5,7 +5,7 @@ import { citizenTrips } from './citizen-trips'
 import type { VehicleRole } from './town-dress'
 import type { TownSize } from './town-grid'
 import type { TownPlan } from './town-plan'
-import { vehicleTrips } from './vehicle-trips'
+import { FLEET_TO_FIRST_FREIGHT, vehicleTrips } from './vehicle-trips'
 
 const DESTINATIONS = ['market', 'entertainment', 'park', 'plaza', 'civic'] as const
 export type Destination = (typeof DESTINATIONS)[number]
@@ -43,10 +43,10 @@ export const MOVER_COUNTS: Record<
   light: { citizens: 14, vehicles: 0, citizenKinds: 3, vehicleKinds: 0 }
 }
 
-// A smaller town sends out fewer of the same movers. Seven vehicles still reach the first
-// freight cart, so a village keeps a tram, a cart and a runabout.
+// A smaller town sends out fewer of the same movers. A village still reaches the first freight
+// cart, so it keeps a tram, a cart and a runabout.
 const SIZE_MOVERS: Record<TownSize, { citizenShare: number; vehicleCap: number }> = {
-  village: { citizenShare: 0.5, vehicleCap: 7 },
+  village: { citizenShare: 0.5, vehicleCap: FLEET_TO_FIRST_FREIGHT },
   town: { citizenShare: 0.75, vehicleCap: 9 },
   city: { citizenShare: 1, vehicleCap: 12 }
 }

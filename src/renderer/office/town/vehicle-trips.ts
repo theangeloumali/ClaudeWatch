@@ -6,7 +6,7 @@ import { reversed, roadNet, roadPath, type Leg, type RoadNet } from './road-net'
 import type { VehicleRole } from './town-dress'
 import { lotsWithDoors, type DooredLot } from './town-lots'
 import type { TownPlan } from './town-plan'
-import { type TownInput, type Trip } from './town-trips'
+import type { TownInput, Trip } from './town-trips'
 import { closedLoop, lengthOf, secondsAt, sidePath } from './trip-paths'
 
 // The order vehicles are sent out in: a smaller level takes the first of them. The first six
@@ -26,6 +26,8 @@ const FLEET: readonly VehicleRole[] = [
   'runabout'
 ]
 const fleetOf = (role: VehicleRole): number => FLEET.filter((each) => each === role).length
+// The fewest vehicles that still send out the first freight cart.
+export const FLEET_TO_FIRST_FREIGHT = FLEET.indexOf('freight') + 1
 
 // One speed to a line, so nothing on it catches up with the one ahead.
 const TRANSIT_M_PER_SEC = 3.2
