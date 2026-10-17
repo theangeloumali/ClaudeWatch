@@ -35,4 +35,18 @@ describe('a live agent card', () => {
   it('still reads Idle with a fresh own observation', () => {
     expect(cardOf(observed.key)).toMatchObject({ detail: 'Idle', isAvailable: true })
   })
+
+  // A live feed whose bridge stamps nothing is still a live feed: presence is not activity.
+  it('reads Activity unavailable on a live feed that stamps no record at all', () => {
+    const quiet = makeFrame({
+      feedReceivedAtMs: NOW_MS,
+      sources: [{ id: 'claude', ok: true, detail: '' }],
+      sessions: [unobserved],
+      agents: [makeAgent({ agentKey: unobserved.key, roomId: 'room-1', activity: 'idle' })]
+    })
+    expect(buildNameCards(quiet, null, null)[0]).toMatchObject({
+      detail: ACTIVITY_UNAVAILABLE_LABEL,
+      isAvailable: false
+    })
+  })
 })

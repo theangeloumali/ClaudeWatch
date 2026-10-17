@@ -26,11 +26,21 @@ vi.mock('@react-three/fiber', () => ({ useFrame: () => undefined }))
 vi.mock('../office/scene/textures', () => ({ blobShadowTexture: () => null }))
 vi.mock('../office/webgl-support', () => ({ canCreateWebGL2: () => false }))
 
+// A live bridge stamps every session it reads; the feed shows activity only from its own record.
+const stampedBy = (sourceId: string): Pick<SessionRef, 'observation'> => ({
+  observation: { sourceId, coverage: 'own', observedAtMs: Date.now(), staleAfterMs: 10 * 60_000 }
+})
+
 function sessionsFor(host: SessionRef['host']): SessionRef[] {
   return [
-    makeSession({ ...simSession('claude:synthetic'), activity: 'editing' }),
+    makeSession({
+      ...simSession('claude:synthetic'),
+      ...stampedBy('claude'),
+      activity: 'editing'
+    }),
     makeSession({
       ...simSession('codex:synthetic'),
+      ...stampedBy('codex'),
       provider: 'codex',
       host,
       orcaPaneKey: host === 'orca' ? 'synthetic-tab:synthetic-pane' : null,

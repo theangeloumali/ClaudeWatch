@@ -60,7 +60,7 @@ export function isAgentActivityAvailable(
   // Already read by the caller, so an agent is observed once.
   observed?: AgentEvidence
 ): boolean {
-  if (!hasOwnRecords(frame)) return isActivityAvailable(frame, [agent.provider])
+  if (!hasObservedFeed(frame)) return isActivityAvailable(frame, [agent.provider])
   const evidence = observed ?? observeAgent({ ...frame, agentKey: agent.agentKey, nowMs })
   return (
     evidence.status === 'fresh' &&
