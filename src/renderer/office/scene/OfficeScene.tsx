@@ -43,6 +43,7 @@ import { ShaderPrewarm } from './ShaderPrewarm'
 import { SpireStageFeed } from './SpireStageFeed'
 import { CitySigns } from './CitySigns'
 import { LeaderCrowns } from './LeaderCrowns'
+import { ConstructionRig } from './ConstructionRig'
 import type { BodyFootprint } from '../../../shared/office/body-footprints'
 
 interface OfficeSceneProps {
@@ -293,6 +294,7 @@ function OfficeScene(props: OfficeSceneProps) {
         {!props.isLayoutPreview && (
           <LeaderCrowns agents={agents} sessions={props.sessions} palette={theme.palette} />
         )}
+        {!props.isLayoutPreview && <ConstructionRig floors={props.allFloors} theme={theme} />}
         {!props.isLayoutPreview && band !== 'building' && (
           <WorkstationScreens displays={visibleWorkstationDisplays(displays, selectedAgentKey)} />
         )}
