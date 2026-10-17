@@ -162,6 +162,11 @@ describe('game corner: idle agents play on their own floor', () => {
     city.run(SETTLE_MS, (frame) => {
       views = frame
     })
+    // With no corner to go to, staying put would prove nothing about the switch.
+    const floors = city.world.layout().floors
+    expect(
+      views.map((view) => floors.find((floor) => floor.id === view.floorId)?.zones[0].lounge?.id)
+    ).toEqual(views.map((view) => `${view.floorId}:games`))
     expect(views.map((view) => [view.agentKey, city.isSeated(view)])).toEqual([
       ['claude:idle-a', true],
       ['claude:idle-b', true]
