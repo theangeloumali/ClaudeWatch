@@ -83,6 +83,39 @@ describe('canvas obstacles', () => {
     expect(read(origin).rects).toEqual([{ left: 10, top: 40, right: 50, bottom: 80 }])
   })
 
+  it('with two origins, 10 still frames measure no more than the one-origin case', () => {
+    const stillFrameReads = (
+      origins: readonly Element[],
+      readObstacle: { mock: { calls: unknown[] } }
+    ) => {
+      const read = createObstacleReader()
+      for (const origin of origins) read(origin)
+      const settled = readObstacle.mock.calls.length
+      for (let frame = 0; frame < 10; frame++) for (const origin of origins) read(origin)
+      return readObstacle.mock.calls.length - settled
+    }
+    const { origin: cards, readObstacle } = layOut()
+    const names = document.createElement('div')
+    names.getBoundingClientRect = () => box(0, 0, 1000)
+    document.body.append(names)
+    const oneOrigin = stillFrameReads([cards], readObstacle)
+    expect(stillFrameReads([cards, names], readObstacle)).toBeLessThanOrEqual(oneOrigin)
+  })
+
+  it('a resize re-measures each origin once, against its own base', () => {
+    const read = createObstacleReader()
+    const { origin: cards, obstacle, moveTo } = layOut()
+    const names = document.createElement('div')
+    names.getBoundingClientRect = () => box(5, 5, 1000)
+    document.body.append(names)
+    read(cards)
+    read(names)
+    moveTo(box(10, 10, 80))
+    FakeResizeObserver.latest?.resize(obstacle, 80)
+    expect(read(cards).rects).toEqual([{ left: 10, top: 10, right: 90, bottom: 90 }])
+    expect(read(names).rects).toEqual([{ left: 5, top: 5, right: 85, bottom: 85 }])
+  })
+
   it('a window resize or a scroll is measured again', () => {
     const read = createObstacleReader()
     const { origin, readObstacle } = layOut()
