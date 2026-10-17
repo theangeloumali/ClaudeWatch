@@ -30,6 +30,7 @@ import { EmptyState } from './hud/EmptyState'
 import { FocusNotice } from './hud/FocusNotice'
 import { HealthBanner } from './hud/HealthBanner'
 import { LeadersCard } from './hud/LeadersCard'
+import { CompanyCards } from './hud/CompanyCards'
 import { headerWithNewsLine, NewsLine } from './hud/NewsLine'
 import { Inspector } from './hud/Inspector'
 import { useInspectorPanel } from './hud/use-inspector-panel'
@@ -377,6 +378,14 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
               onChooseFloor={chooseOffice}
               onChooseRoom={chooseRoom}
               onChooseWorker={selectAgent}
+            />
+          )}
+          {!isShowingList && (
+            <CompanyCards
+              version={citySignalStore.version()}
+              companies={companies}
+              palette={theme.palette}
+              onFlyToZone={goToZone}
             />
           )}
           {(currentOffice || inspectorPanel.isNarrow) && (
