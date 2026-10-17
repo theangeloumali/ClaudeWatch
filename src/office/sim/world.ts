@@ -50,6 +50,8 @@ export class World {
   // Agents fading where they stand, with how long each has faded. A leaver goes; any other
   // reappears at its desk: a newcomer, a desk moved off its floor, or a recall (FOUND 7).
   private readonly fading = new Map<string, number>()
+  // Newcomers still fading in: unseen, so no body until their desk takes them.
+  private readonly arrivals = new Set<string>()
   private readonly passages = new BodyPassages()
   // Who waited on whom last tick, and who could have stepped; one of each cycle steps now.
   private waitEdges = new Map<string, string>()
@@ -253,9 +255,11 @@ export class World {
     )
     this.passages.clear(key)
     this.fading.delete(key)
+    this.arrivals.delete(key)
     if (!existing) {
       this.recovery.clear(key)
       if (!isInitial) this.startFade(key)
+      if (!isInitial) this.arrivals.add(key)
       return agent
     }
     // A desk that moved does not restart its wait for the lounge.
@@ -392,10 +396,12 @@ export class World {
     if (!seated) return
     this.agents.set(key, crowd.updated(seated))
     this.fading.delete(key)
+    this.arrivals.delete(key)
   }
 
   private remove(key: string, crowd: TickCrowd): void {
     crowd.remove(key)
+    this.arrivals.delete(key)
     this.agents.delete(key)
     this.recovery.clear(key)
     this.passages.clear(key)
@@ -413,7 +419,8 @@ export class World {
       this.steppable = new Set()
       const ordered = [...this.agents].sort(([first], [second]) => first.localeCompare(second))
       const offset = this.movementTick++ % Math.max(1, ordered.length)
-      const crowd = new TickCrowd([...this.agents.values()], this.bodyObstacles)
+      const bodies = [...this.agents.values()].filter((a) => !this.arrivals.has(a.view.agentKey))
+      const crowd = new TickCrowd(bodies, this.bodyObstacles)
       for (const [key, agent] of [...ordered.slice(offset), ...ordered.slice(0, offset)]) {
         const fadedMs = this.fading.get(key)
         if (fadedMs === undefined) this.agents.set(key, this.moveAgent(agent, crowd))

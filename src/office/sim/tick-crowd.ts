@@ -29,11 +29,12 @@ export class TickCrowd {
     this.walkers = agents.flatMap((agent) => walkerOf(agent) ?? [])
   }
 
-  // Records where the agent now stands and walks to, and hands the agent back.
+  // Records where the agent now stands and walks to, and hands the agent back. One not yet
+  // among the bodies, a newcomer just seated, joins them.
   updated(agent: AgentRecord): AgentRecord {
     const key = agent.view.agentKey
-    const rank = this.ranks.get(key)
-    if (rank === undefined) return agent
+    let rank = this.ranks.get(key)
+    if (rank === undefined) this.ranks.set(key, (rank = this.bodies.length))
     this.bodies[rank] = agentBody(agent.view)
     const walker = walkerOf(agent)
     const at = this.walkers.findIndex((other) => other.body.id === key)

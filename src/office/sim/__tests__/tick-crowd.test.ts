@@ -36,6 +36,19 @@ describe('tick crowd: one tick of bodies and walkers, kept current', () => {
     expect(ids(crowd).walkers).toEqual(['a', 'c'])
   })
 
+  it('admits a newcomer it was built without, after the obstacles', () => {
+    const crowd = new TickCrowd([seated, walking], [player])
+    crowd.updated(arriving)
+    expect(ids(crowd)).toEqual({ bodies: ['a', 'b', 'player', 'c'], walkers: ['b'] })
+    crowd.remove('b')
+    crowd.updated(at('c', 5))
+    expect(crowd.bodies.map((body) => [body.id, body.x])).toEqual([
+      ['a', 0],
+      ['player', 9],
+      ['c', 5]
+    ])
+  })
+
   it('forgets a removed agent and keeps the order of the rest', () => {
     const crowd = new TickCrowd([seated, walking, arriving], [player])
     crowd.remove('b')

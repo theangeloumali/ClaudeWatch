@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { SUBAGENT_BODY_RADIUS, WORKER_BODY_RADIUS } from '../../../shared/office/body-footprints'
 import type { AgentView, SessionRef, SubagentRef } from '../../../shared/office/types'
 import { createWorldDocument } from '../../../shared/office/world-document'
 import { resolveEffectiveWorld } from '../effective-world'
@@ -150,6 +151,35 @@ describe('departures and arrivals: each fades where it stands', () => {
       seatedFade: undefined
     })
     expect(deskGap(world, seated.last)).toBeLessThan(0.02)
+  })
+})
+
+describe('an arrival fading in is not yet a body', () => {
+  it('lets a walker close in on its desk until it is seated', () => {
+    const { world, crew } = seatedWorld([])
+    crew([member('mate', 'teammate')])
+    const mate = world.step(0).find((view) => view.agentKey === `${LEAD}#mate`)!
+    const lead = world['agents'].get(LEAD)!
+    const away = Math.hypot(lead.view.x - mate.x, lead.view.z - mate.z)
+    // Staged 1.3 m out, just clear of a seated mate, and walking straight at its desk.
+    const start = {
+      x: mate.x + ((lead.view.x - mate.x) / away) * 1.3,
+      z: mate.z + ((lead.view.z - mate.z) / away) * 1.3
+    }
+    world['agents'].set(LEAD, {
+      ...lead,
+      state: 'arriving',
+      view: { ...lead.view, ...start },
+      path: [{ x: mate.x, z: mate.z }]
+    })
+    let closest = Infinity
+    for (let tick = 0; tick < 4; tick++) {
+      const views = world.step(TICK_MS)
+      const walker = views.find((view) => view.agentKey === LEAD)!
+      expect(views.find((view) => view.agentKey === `${LEAD}#mate`)?.fade).toBeDefined()
+      closest = Math.min(closest, Math.hypot(walker.x - mate.x, walker.z - mate.z))
+    }
+    expect(closest).toBeLessThan(WORKER_BODY_RADIUS + SUBAGENT_BODY_RADIUS - 0.3)
   })
 })
 
