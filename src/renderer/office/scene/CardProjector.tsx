@@ -2,7 +2,7 @@ import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import { Vector3, type Camera } from 'three'
 import type { ZoomBand } from '../logic/camera-bands'
-import { cullCards, type CullCandidate } from '../logic/card-culling'
+import { cullCards, pinInside, type CullCandidate } from '../logic/card-culling'
 import type { NameCard, ProjectStack } from '../logic/name-cards'
 import { cardSafeArea } from '../logic/zone-framing'
 import { hudSafeInsets, type InspectorLayout } from '../logic/hud-layout'
@@ -239,6 +239,12 @@ export function CardProjector({
     camera.updateMatrixWorld()
 
     const insets = hudSafeInsets(selectedAgentKey !== null, inspectorLayout)
+    const safeArea = cardSafeArea(size, insets)
+    const sizeOf = (element: HTMLElement, card: NameCard, isSelected: boolean) =>
+      measure(
+        element,
+        `${band}:${isSelected}:${card.title}:${card.detail}:${card.status}:${measurementRevision.current}`
+      )
     const showOverflow = (count: number) => {
       if (count > 0) overflow.current = overflowBadge(overflow.current, anchors)
       const badge = overflow.current
@@ -247,23 +253,24 @@ export function CardProjector({
       if (count > 0 && badge.textContent !== text) badge.textContent = text
       badge.style.transform =
         count > 0
-          ? `translate(${cardSafeArea(size, insets).left + STACK_GAP}px, ${insets.top + STACK_GAP}px)`
+          ? `translate(${safeArea.left + STACK_GAP}px, ${safeArea.top + STACK_GAP}px)`
           : OFFSCREEN
     }
     if (band === 'building') {
       showOverflow(0)
       for (const card of cards) {
-        const at = anchorOf(card, card.kind === 'card' ? CARD_HEIGHT : PILL_HEIGHT)
-        place(
-          anchors.cards.get(card.agentKey),
-          card.agentKey === selectedAgentKey ? toScreen(camera, size, at.x, at.y, at.z) : null
-        )
+        const element = anchors.cards.get(card.agentKey)
+        const anchor = anchorOf(card, card.kind === 'card' ? CARD_HEIGHT : PILL_HEIGHT)
+        const at =
+          element && card.agentKey === selectedAgentKey
+            ? toScreen(camera, size, anchor.x, anchor.y, anchor.z)
+            : null
+        place(element, element && at ? pinInside(at, sizeOf(element, card, true), safeArea) : null)
       }
       hideAll(anchors.dots)
-      const safe = { ...cardSafeArea(size, insets), top: insets.top }
-      const columnWidth = Math.min(STACK_COLUMN_WIDTH, Math.max(1, safe.right - safe.left))
-      let columnLeft = safe.left
-      let rowTop = safe.top
+      const columnWidth = Math.min(STACK_COLUMN_WIDTH, Math.max(1, safeArea.right - safeArea.left))
+      let columnLeft = safeArea.left
+      let rowTop = safeArea.top
       const summaryElements = stacks.flatMap((stack) => {
         const element = anchors.stacks.get(stack.projectKey)
         return element ? [element] : []
@@ -274,11 +281,12 @@ export function CardProjector({
         height: element.offsetHeight
       }))
       for (const { element, height } of summarySizes) {
-        if (rowTop + height > safe.bottom) {
-          rowTop = safe.top
+        if (rowTop + height > safeArea.bottom) {
+          rowTop = safeArea.top
           columnLeft += columnWidth + STACK_GAP
         }
-        const fits = columnLeft + columnWidth <= safe.right && rowTop + height <= safe.bottom
+        const fits =
+          columnLeft + columnWidth <= safeArea.right && rowTop + height <= safeArea.bottom
         place(element, fits ? { x: columnLeft + columnWidth / 2, y: rowTop + height } : null)
         rowTop += height + STACK_GAP
       }
@@ -296,18 +304,22 @@ export function CardProjector({
         place(element, null)
         continue
       }
-      const { width, height } = measure(
-        element,
-        `${band}:${isSelected}:${card.title}:${card.detail}:${card.status}:${measurementRevision.current}`
-      )
-      positions.set(card.agentKey, at)
+      const { width, height } = sizeOf(element, card, isSelected)
+      // The selected card stays readable: pinned inside the safe area as its robot nears the chrome.
+      const placed = isSelected ? pinInside(at, { width, height }, safeArea) : at
+      positions.set(card.agentKey, placed)
       candidates.push({
         agentKey: card.agentKey,
         projectKey: card.projectKey,
         status: card.status,
         updatedAtMs: card.updatedAtMs,
         isSelected,
-        rect: { left: at.x - width / 2, right: at.x + width / 2, top: at.y - height, bottom: at.y }
+        rect: {
+          left: placed.x - width / 2,
+          right: placed.x + width / 2,
+          top: placed.y - height,
+          bottom: placed.y
+        }
       })
     }
 
@@ -315,7 +327,7 @@ export function CardProjector({
     const isDesk = band === 'desk'
     const outcome = cullCards(
       candidates,
-      cardSafeArea(size, insets),
+      safeArea,
       isDesk ? { stackProjects: false, cap: deskCardCap } : undefined
     )
     showOverflow(outcome.capped)

@@ -53,6 +53,18 @@ function byPriority(a: CullCandidate, b: CullCandidate): number {
   )
 }
 
+// Moves a card's bottom-centre anchor just far enough that the whole card fits in the area.
+export function pinInside(
+  at: { x: number; y: number },
+  card: { width: number; height: number },
+  area: Rect
+): { x: number; y: number } {
+  return {
+    x: Math.min(Math.max(at.x, area.left + card.width / 2), area.right - card.width / 2),
+    y: Math.min(Math.max(at.y, area.top + card.height), area.bottom)
+  }
+}
+
 function overlaps(a: Rect, b: Rect): boolean {
   return a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom
 }
