@@ -90,6 +90,15 @@ describe('cityEvents', () => {
     expect(log.active(T0 + 2)).toEqual([])
   })
 
+  // A source that is failing reports nothing current, however recent its last stamp.
+  it('a session from a failing source fires nothing', () => {
+    const log = createCityEventLog()
+    const failing = [{ id: 'claude', ok: false, detail: 'transcripts unreadable' }]
+    log.observe('hello', [at(T0, { attention: 'none' })], T0, undefined, failing)
+    log.observe('patch', [at(T0 + 1, { attention: 'done' })], T0 + 1, undefined, failing)
+    expect(log.active(T0 + 2)).toEqual([])
+  })
+
   it('fired ids are deduped and pruned after 10 minutes', () => {
     const log = createCityEventLog()
     const cross = (atMs: number): void => {

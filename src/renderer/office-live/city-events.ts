@@ -4,6 +4,7 @@ import type {
   FeedMessage,
   ProjectTokens,
   SessionRef,
+  SourceHealth,
   ToolCategory
 } from '../../shared/office/types'
 import { sessionTokens } from '../deck/tokens'
@@ -32,11 +33,13 @@ export interface CityEvent {
 
 export interface CityEventLog {
   // `projectsToday` is the feed's day totals; without them the sessions' counts stand in.
+  // `sources` is the feed's source health: a failing source reports nothing current.
   observe(
     type: FeedMessage['type'],
     sessions: readonly SessionRef[],
     atMs: number,
-    projectsToday?: readonly ProjectTokens[]
+    projectsToday?: readonly ProjectTokens[],
+    sources?: readonly SourceHealth[]
   ): void
   active(nowMs?: number): readonly CityEvent[]
   // Counts fired events, so a frame loop can tell when a new one landed.
@@ -66,8 +69,8 @@ const seenOf = (session: SessionRef): SessionSeen => ({
   tokens: sessionTokens(session.usage)
 })
 
-const isFresh = (session: SessionRef, atMs: number): boolean =>
-  observeSession({ session, sources: [], connected: true, nowMs: atMs }).status === 'fresh'
+const isFresh = (session: SessionRef, atMs: number, sources: readonly SourceHealth[]): boolean =>
+  observeSession({ session, sources, connected: true, nowMs: atMs }).status === 'fresh'
 
 const buildingOf = (session: SessionRef): BuildingId =>
   buildingIdOf(session.companyKey, session.projectKey)
@@ -76,6 +79,7 @@ const buildingOf = (session: SessionRef): BuildingId =>
 // the one the spires count, so a hoist rises with its spire.
 export function createCityEventLog(ledger: DayLedgerStore = createDayLedgerStore()): CityEventLog {
   let seen = new Map<string, SessionSeen>()
+  let health: readonly SourceHealth[] = []
   let totals = new Map<BuildingId, number>()
   let day: DayLedger = createDayLedger('')
   const fired = new Map<string, number>()
@@ -100,7 +104,7 @@ export function createCityEventLog(ledger: DayLedgerStore = createDayLedgerStore
     const tool = now.callId !== undefined && now.callId !== previous.callId && session.currentTool
     const step = milestoneStep(now.tokens)
     const isMilestone = previous.tokens !== null && step > milestoneStep(previous.tokens)
-    if (!(isDone || tool || isMilestone) || !isFresh(session, atMs)) return
+    if (!(isDone || tool || isMilestone) || !isFresh(session, atMs, health)) return
     const base = { buildingId: buildingOf(session), sessionKey: session.key, atMs }
     if (isDone) fire({ ...base, id: `${session.key}:done:${session.updatedAtMs}`, kind: 'done' })
     if (tool)
@@ -121,7 +125,7 @@ export function createCityEventLog(ledger: DayLedgerStore = createDayLedgerStore
       const previous = totals.get(buildingId)
       if (previous === undefined || stageFor(tokens) <= stageFor(previous)) continue
       if (tokens - previous < HOIST_MIN_SHARE * tokens) continue
-      const crew = leadCrew(sessions, buildingId, atMs)
+      const crew = leadCrew(sessions, buildingId, atMs, health)
       if (crew)
         fire({
           id: `${buildingId}:hoist:${stageFor(tokens)}:${day.dayKey}`,
@@ -134,7 +138,8 @@ export function createCityEventLog(ledger: DayLedgerStore = createDayLedgerStore
   }
 
   return {
-    observe(type, sessions, atMs, projectsToday) {
+    observe(type, sessions, atMs, projectsToday, sources = []) {
+      health = sources
       forget(atMs)
       if (type === 'resync') {
         seen = new Map()
@@ -178,11 +183,12 @@ function buildingTotals(
 function leadCrew(
   sessions: readonly SessionRef[],
   buildingId: BuildingId,
-  atMs: number
+  atMs: number,
+  health: readonly SourceHealth[]
 ): string | null {
   let best: { key: string; tokens: number } | null = null
   for (const session of sessions) {
-    if (buildingOf(session) !== buildingId || !isFresh(session, atMs)) continue
+    if (buildingOf(session) !== buildingId || !isFresh(session, atMs, health)) continue
     const tokens = sessionTokens(session.usage) ?? 0
     if (!best || tokens > best.tokens || (tokens === best.tokens && session.key < best.key))
       best = { key: session.key, tokens }

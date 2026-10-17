@@ -201,7 +201,13 @@ export function createLiveFeed(
       lastKnownSnapshot = snapshot
       feedReceivedAtMs = now()
       // After the fold, so a duplicate or late patch never reaches the event log.
-      events.observe(message.type, snapshot.sessions, feedReceivedAtMs, snapshot.projectsToday)
+      events.observe(
+        message.type,
+        snapshot.sessions,
+        feedReceivedAtMs,
+        snapshot.projectsToday,
+        snapshot.sources
+      )
       feedRevision = snapshot.rev
       if (message.type === 'hello') receiveHostWorld(hostStorage, snapshot)
       if (!documentStore) {
