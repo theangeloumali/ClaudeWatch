@@ -311,7 +311,13 @@ function OfficeScene(props: OfficeSceneProps) {
             )}
           </>
         )}
-        {settings.town && <RailwayLayer plan={town.plan} palette={theme.palette} />}
+        {settings.town && (
+          <RailwayLayer
+            plan={town.plan}
+            palette={theme.palette}
+            hasTrains={settings.vehicles && !props.isLayoutPreview}
+          />
+        )}
         {!props.isLayoutPreview && settings.citizens && settings.town && (
           <MoverLayer
             floor={townFloor}

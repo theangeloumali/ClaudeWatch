@@ -13,7 +13,8 @@ import { lengthOf } from './trip-paths'
 export const RAILWAY = {
   offset: 7,
   deckTop: 5,
-  deckHalfWidth: 3.4,
+  // Wider than ClearSpent's 3.4: a 9 m car overhangs the outer track's 8.8 m bends.
+  deckHalfWidth: 4,
   // Each track's centre from the deck's: the inner one is the city side.
   track: 1.8,
   railTop: 5.3

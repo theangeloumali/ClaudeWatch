@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react'
 import { BoxGeometry, Color, InstancedMesh, MeshStandardMaterial, Object3D } from 'three'
 import type { ThemePalette } from '../themes/types'
+import { RailwayTrains } from './RailwayTrains'
 import type { TownPlan } from '../town/town-plan'
 import { RAILWAY, railwayPlan, type RailwayPlan, type RailwaySpan } from '../town/railway-plan'
 import {
@@ -41,7 +42,7 @@ const DECK_PARTS: readonly DeckPart[] = [
       })
     ),
     {
-      across: side * 3.3,
+      across: side * (RAILWAY.deckHalfWidth - 0.1),
       halfWidth: 0.1,
       bottom: RAILWAY.deckTop,
       top: RAILWAY.deckTop + 0.9,
@@ -141,8 +142,22 @@ export function RailwayStructures({
   return <primitive object={mesh} />
 }
 
-// The ring round the city; none until the city has streets.
-export function RailwayLayer({ plan, palette }: { plan: TownPlan; palette: ThemePalette }) {
+// The ring round the city, none until it has streets; trains follow the vehicles switch.
+export function RailwayLayer({
+  plan,
+  palette,
+  hasTrains
+}: {
+  plan: TownPlan
+  palette: ThemePalette
+  hasTrains: boolean
+}) {
   const railway = railwayPlan(plan)
-  return railway && <RailwayStructures railway={railway} palette={palette} />
+  if (!railway) return null
+  return (
+    <>
+      <RailwayStructures railway={railway} palette={palette} />
+      {hasTrains && <RailwayTrains railway={railway} palette={palette} />}
+    </>
+  )
 }

@@ -92,9 +92,9 @@ export function quadruped({ coat, length, girth, leg, head }: Build): FigurePart
   ]
 }
 
-// Every part in one buffer, coloured per vertex: all the citizens of one kind cost one draw.
-export function citizenGeometry(figure: CitizenFigure): BufferGeometry {
-  const parts = figure.parts().map(({ geometry, color }) => {
+// Every part in one buffer, coloured per vertex, at the size it was authored.
+export function mergeParts(name: string, figureParts: readonly FigurePart[]): BufferGeometry {
+  const parts = figureParts.map(({ geometry, color }) => {
     const count = geometry.getAttribute('position').count
     const colors = new Float32Array(count * 3)
     const tint = new Color(color)
@@ -103,6 +103,11 @@ export function citizenGeometry(figure: CitizenFigure): BufferGeometry {
   })
   const merged = mergeGeometries(parts)
   for (const part of parts) part.dispose()
-  if (!merged) throw new Error(`The parts of ${figure.name} do not merge`)
-  return merged.scale(CITIZEN_SCALE, CITIZEN_SCALE, CITIZEN_SCALE)
+  if (!merged) throw new Error(`The parts of ${name} do not merge`)
+  return merged
+}
+
+// All the citizens of one kind cost one draw.
+export function citizenGeometry(figure: CitizenFigure): BufferGeometry {
+  return mergeParts(figure.name, figure.parts()).scale(CITIZEN_SCALE, CITIZEN_SCALE, CITIZEN_SCALE)
 }

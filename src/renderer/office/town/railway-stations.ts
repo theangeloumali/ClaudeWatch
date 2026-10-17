@@ -37,9 +37,9 @@ export interface RailwayStation {
 
 const PLATFORM_M = 40
 // Cityward of the deck's centre: platform, canopy, posts and the lift tower's far face.
-const PLATFORM = { across: 4.225, halfWidth: 0.775, top: 5.75 }
+const PLATFORM = { across: 4.775, halfWidth: 0.775, top: 5.75 }
 const CANOPY = { across: 3.7, halfWidth: 1.3, bottom: 8.8, top: 9 }
-const POST = { across: 4.8, size: 0.2, spacing: 8 }
+const POST = { across: 5.4, size: 0.2, spacing: 8 }
 const TOWER = { across: 4.75, halfWidth: 0.5, length: 2, top: 9.4 }
 
 // One station mid-side, on the city side of the deck, so its tower stands 1.75 m off the extent.
