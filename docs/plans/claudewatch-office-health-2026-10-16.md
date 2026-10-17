@@ -67,8 +67,8 @@ Finding ids below (`seating-1`, `P3` …) refer to those reports.
 - [x] Phase 4 — Citizens on the network: pedestrian ground, deadlock breaker that survives replans, zebra right-of-way, ambient loops
 - [x] Phase 5 — Roaming agents via the leisure system: idle or done roam the sidewalks, unknown stays seated, working returns; guarded move of arrivals onto the network
 - [x] Phase 6 — Render fixes: facade layer steps, cutaway hysteresis, desk-band card culling, context loss, canvas metrics
-- [ ] Phase 7 — Performance: static and dynamic batches, motion out of React, cached batch keys, memoised validation, shader prewarm, host-served world document
-- [ ] Phase 8 — Release and repo hygiene: one version line (1.4.1), honest Windows updater status, main-checkout mode noise, worktree cleanup
+- [x] Phase 7 — Performance: static and dynamic batches, motion out of React, cached batch keys, memoised validation, shader prewarm, host-served world document
+- [x] Phase 8 — Release and repo hygiene: one version line (1.4.1), honest Windows updater status, main-checkout mode noise, worktree cleanup
 - [ ] Phase 9 — Integration: full gate chain, live re-measure on real data, local install, STOP for Angelo's look
 - [ ] Phase 10 — After Angelo approves: simplify, review pair, Codex, dead code, checklist, MP4 demo, vault, push and stacked PR
 
@@ -826,9 +826,9 @@ Owns:
 
 Reachability is proven: `main.tsx:32` (live feed) and `main.tsx:38` (fixture feed) both pass `worldEditing: true`, so `distributedTown` always runs.
 
-- [ ] Run `npx knip --no-progress` after removing the legacy path; it must report nothing new.
-- [ ] Delete the legacy-only rows of town, citizen and theme tests; city rows stay. Give `samurai-ecosystem/citizen-collision.test.tsx` a city version that allows the give-way pair to overlap (Phase 4 FOUND).
-- [ ] Verify: `npx vitest run` exits 0. Commit `refactor(town): retire the unreachable legacy campus town`.
+- [x] Run `npx knip --no-progress` after removing the legacy path; it must report nothing new.
+- [x] Delete the legacy-only rows of town, citizen and theme tests; city rows stay. Give `samurai-ecosystem/citizen-collision.test.tsx` a city version that allows the give-way pair to overlap (Phase 4 FOUND).
+- [x] Verify: `npx vitest run` exits 0. Commit `refactor(town): retire the unreachable legacy campus town`.
 
 ### Task 8.2: Main-checkout noise and stale worktrees (health-10, health-11, A8)
 
@@ -1004,12 +1004,22 @@ Phases 1, 2, 3 and 6 run in parallel, as do Phases 4 and 5. Wall-clock with the 
 - Lead, `bb83977`: the Office root's clock ticks every 5 s out of focus and stops while hidden. Panel clocks keep the second while the window is watched from aside (`office-clock.test.tsx`, 5 tests).
 - Lead, `c3f94fb`: dropped the unread `speakingAgentKey` scene option; unexported `HOST_ARGUMENT` and `hasOwnRecords`.
 - Integration suite at `c3f94fb`: **5,269 passed, 0 failed**. Both `tsc` and eslint are clean.
-- Running: `fix/office-health-p7c-roster`. A roamer changing room no longer rebuilds the floor batch, and the building shells become one static batch if that measures better.
+- 7c, roster (merged `53637a6`): robots batch apart from the storeys (`batch-revision.ts` `crewBatchRevision`); a nested batch owns its subtree.
+  - Floor rebuilds from roster churn: 11 → 0 over 10 min of probing. Rebuild 11.7 → 1.2 ms; its upload spike 427–757 → 39–48 kB.
+  - Draws +2 (city 36 → 38, office 35 → 37). Frame time unchanged.
+  - Not built: one static batch for the building shells. It costs about 143 draws to save 0.07 ms a frame.
+  - The 51 ms orbit at building zoom did not reproduce under profiling (4.95 ms); that run caught a city relayout.
 
-### Phase 8 (in progress)
+### Phase 8
 
 - `f855f25`: version 1.4.1; Windows reports a missing update feed instead of "up to date".
 - Main checkout: mode-only changes 90 → 0.
 - 35 merged agent worktrees removed (2.2 GB). The one with untracked `labs/` was archived first to `.claude/archive/worktree-wip-2026-10-16/`.
 - 6 merged phase worktrees removed. 5 stale feature worktrees: WIP exported as patches to `.claude/archive/worktree-wip-2026-10-16/`, then removed. `live-city-overview-fix` is kept: a live process has it as its working folder.
-- Running: Task 8.3 on `fix/office-health-p8-legacy-town`.
+- Task 8.3 (merged `93638ed`): the legacy campus town is retired. 92 files, +714 −1,671; 9 deleted, including `WorldView.tsx` and every theme's world tower, which removes the unbounded live-count sign-texture path.
+  - `worldEditing` is gone from both feeds; `TownPlan.officeSites` is required.
+  - Citizens no longer pick a lot whose door an office cut into (two-office city: 3 walked 3.5 m into a building).
+  - `77d7283`: a route clock run for days still moves on. The 537 s frozen walker no longer reproduces (worst 3.6 s over 600 s).
+  - Lead, `2c18f10`: the merged scene-revision row, after both branches changed it. `e77c19c`: the camera, cards and floor data always get the storeys; the single-plate branches go (FOUND 6).
+  - FOUND fixes running: the L-corner lane shortcut and `townOf`'s campus work (`fix/office-health-oh-found-town`); the slow walk home to work (`fix/office-health-oh-found-return`).
+  - Owner calls, raised at the Phase 9 STOP: the Town size setting does nothing in the city; city citizens are in plain sight 50–70% (campus 70%); the Garrison radar tower is never drawn in the city.
