@@ -20,6 +20,8 @@ export type CameraRequest =
   | { kind: 'workstation'; agentKey: string; nonce: number }
   | { kind: 'city'; nonce: number }
   | { kind: 'player'; position: { x: number; z: number }; nonce: number }
+  // A map tap or arrow key: pans to the ground point and keeps the zoom and heading.
+  | { kind: 'point'; x: number; z: number; nonce: number }
 
 export interface OfficeState {
   frame: OfficeFrame | null
@@ -64,6 +66,7 @@ export type OfficeAction =
   | { type: 'camera-workstation' }
   | { type: 'camera-manually-moved' }
   | { type: 'camera-player'; position: { x: number; z: number } }
+  | { type: 'camera-pointed'; x: number; z: number }
   | { type: 'view-set'; view: OfficeState['viewMode'] }
   | { type: 'walls-set'; mode: WallsMode }
   | { type: 'roofs-toggled' }
@@ -269,6 +272,12 @@ export function officeReducer(state: OfficeState, action: OfficeAction): OfficeS
         ...state,
         isCameraManuallyOwned: false,
         cameraRequest: { kind: 'player', position: action.position, nonce: nextNonce(state) }
+      }
+    case 'camera-pointed':
+      return {
+        ...state,
+        isCameraManuallyOwned: true,
+        cameraRequest: { kind: 'point', x: action.x, z: action.z, nonce: nextNonce(state) }
       }
     case 'camera-workstation': {
       const agent = state.frame?.agents.find(

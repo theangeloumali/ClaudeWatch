@@ -21,6 +21,7 @@ import {
   type ZoomBand
 } from '../logic/camera-bands'
 import type { CameraRequest } from '../logic/office-reducer'
+import { officeView, type OfficeView } from '../logic/office-view'
 import { boundsOfZone, frameBounds, occupiedBounds, type Bounds } from '../logic/zone-framing'
 import { workstationFraming, workstationSeat } from '../logic/workstation-framing'
 import { hudSafeInsets, type InspectorLayout } from '../logic/hud-layout'
@@ -88,6 +89,17 @@ export function CameraRig(props: CameraRigProps) {
   // Whether the owner has moved the camera by hand since the last fly-to an agent.
   const hasMovedSinceFlyRef = useRef(false)
   const targetScratch = useMemo(() => new Vector3(), [])
+  const viewScratch = useMemo(() => new Vector3(), [])
+  const viewRef = useRef<OfficeView>({
+    x: 0,
+    y: 0,
+    z: 0,
+    zoom: 1,
+    azimuth: 0,
+    polar: 0,
+    width: 0,
+    height: 0
+  })
   const size = useThree((state) => state.size)
   const camera = useThree((state) => state.camera)
   const cityEnvelope = useMemo(() => floorEnvelope(props.visibleFloors), [props.visibleFloors])
@@ -411,6 +423,23 @@ export function CameraRig(props: CameraRigProps) {
     if (bandRef.current === 'desk' && !workstationAgentRef.current) followRef.current = null
     bandRef.current = band
     latestRef.current.onBandChange(band)
+  })
+
+  // The mini-map's footprint reads this; the store ignores moves it could not show.
+  useFrame(() => {
+    const controls = controlsRef.current
+    if (!controls) return
+    controls.getTarget(viewScratch, false)
+    const view = viewRef.current
+    view.x = viewScratch.x
+    view.y = viewScratch.y
+    view.z = viewScratch.z
+    view.zoom = camera.zoom
+    view.azimuth = controls.azimuthAngle
+    view.polar = controls.polarAngle
+    view.width = latestRef.current.size.width
+    view.height = latestRef.current.size.height
+    officeView.write(view)
   })
 
   // At desk zoom, keep the followed agent's office in view when the floor re-packs, and go with it

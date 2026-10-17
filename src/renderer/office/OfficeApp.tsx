@@ -391,6 +391,11 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
                   onChooseFloor={chooseOffice}
                   onChooseRoom={chooseRoom}
                   onChooseWorker={selectAgent}
+                  onPan={
+                    isShowingList
+                      ? undefined
+                      : (point) => dispatch({ type: 'camera-pointed', ...point })
+                  }
                 />
               )}
               {(currentOffice || inspectorPanel.isNarrow) && (

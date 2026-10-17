@@ -1,5 +1,6 @@
 import type { CameraControlsImpl } from '@react-three/drei'
 import { useEffect, useRef, type RefObject } from 'react'
+import { Vector3 } from 'three'
 import type { AgentView } from '../../../shared/office/types'
 import { withLivePose } from '../../office-live/pose-store'
 import {
@@ -74,6 +75,13 @@ export function useCameraPresets(options: PresetOptions): void {
         return rig.frameCity()
       case 'player':
         return rig.framePlayer(request.position)
+      case 'point': {
+        const { y } = controls.getTarget(new Vector3(), false)
+        rig.preparePreset()
+        if (isAnimated) rig.startTransition()
+        void controls.moveTo(request.x, y, request.z, isAnimated)
+        return
+      }
       case 'rotate': {
         const azimuth = snapAzimuth(controls.azimuthAngle, request.direction)
         const polar = controls.polarAngle
