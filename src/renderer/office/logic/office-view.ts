@@ -40,7 +40,7 @@ function isVisibleChange(from: OfficeView, to: OfficeView): boolean {
   )
 }
 
-export function createViewStore(): ViewStore {
+function createViewStore(): ViewStore {
   let shown: OfficeView | null = null
   let changes = 0
   return {

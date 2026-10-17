@@ -37,6 +37,7 @@ export function Minimap(props: MinimapProps) {
         )}
         aria-expanded={isExpanded}
         aria-controls={contentId}
+        data-canvas-obstacle=""
         onClick={() => setDisclosure({ isNarrow: props.isNarrow, isExpanded: !isExpanded })}
       >
         {isExpanded ? 'Collapse Minimap' : 'Expand Minimap'}

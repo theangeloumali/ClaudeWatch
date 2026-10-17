@@ -475,7 +475,11 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
         </div>
 
         <div className="flex min-h-0 flex-col items-center gap-3">
-          <div className="pointer-events-auto flex min-w-0 max-w-full flex-col items-center gap-2">
+          {/* Notices float over the scene with no inset, so name cards steer round them. */}
+          <div
+            data-canvas-obstacle
+            className="pointer-events-auto flex min-w-0 max-w-full flex-col items-center gap-2"
+          >
             <FocusNotice message={notice} onDismiss={dismissNotice} />
             {previewFloors && (
               <p className="rounded bg-surface-raised px-3 py-2 text-sm">
