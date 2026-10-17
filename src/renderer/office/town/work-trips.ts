@@ -1,5 +1,6 @@
 import type { ToolCategory } from '../../../shared/office/types'
 import type { CitizenRoute, RoutePoint } from '../citizens/route-pose'
+import type { Rect } from '../themes/lot-math'
 import { railwayPlan } from './railway-plan'
 import { railwayStations } from './railway-stations'
 import { roadPath, type RoadNet } from './road-net'
@@ -31,22 +32,15 @@ const LOADING_SEC = 5
 const STATION_SEC = 4
 const BUS_STOP_SEC = 4
 
-const isPoint = (value: unknown): value is RoutePoint =>
-  typeof value === 'object' &&
-  value !== null &&
-  'x' in value &&
-  'z' in value &&
-  typeof value.x === 'number' &&
-  typeof value.z === 'number'
+// An office's ground site: a floor's names its building, and its entrance where it has one.
+type OfficeSite = Rect & { buildingId?: string; entrance?: RoutePoint }
 
 // The office's door, or its middle where the floor names no entrance; the road net finds its kerb.
 export function officeDoor(plan: TownPlan, buildingId: string): RoutePoint | null {
-  const site = plan.officeSites.find(
-    (candidate) => 'buildingId' in candidate && candidate.buildingId === buildingId
-  )
+  const sites: readonly OfficeSite[] = plan.officeSites
+  const site = sites.find((candidate) => candidate.buildingId === buildingId)
   if (!site) return null
-  const entrance = 'entrance' in site ? site.entrance : undefined
-  return isPoint(entrance) ? entrance : { x: site.x, z: site.z }
+  return site.entrance ?? { x: site.x, z: site.z }
 }
 
 const gap = (a: RoutePoint, b: RoutePoint): number => Math.hypot(a.x - b.x, a.z - b.z)
@@ -58,26 +52,41 @@ function nearest(points: readonly RoutePoint[], to: RoutePoint): RoutePoint | nu
   )
 }
 
+function nearestWorkshop(plan: TownPlan, door: RoutePoint): RoutePoint | null {
+  const doors = plan.lots.flatMap((lot) => (lot.zone === 'workshop' && lot.door ? [lot.door] : []))
+  return nearest(doors, door)
+}
+
+function nearestStation(plan: TownPlan, door: RoutePoint): RoutePoint | null {
+  const railway = railwayPlan(plan)
+  return (
+    railway &&
+    nearest(
+      railwayStations(railway).map((station) => station.entrance),
+      door
+    )
+  )
+}
+
+// Where each role's trip waits away from the office, and how long; a bus only calls at the kerb.
+const ERRANDS: Record<
+  VehicleRole,
+  { away: ((plan: TownPlan, door: RoutePoint) => RoutePoint | null) | null; sec: number }
+> = {
+  freight: { away: nearestWorkshop, sec: LOADING_SEC },
+  runabout: { away: nearestStation, sec: STATION_SEC },
+  transit: { away: null, sec: BUS_STOP_SEC }
+}
+
 // Where a role's trip waits, in order, from an office door; null when the city has nowhere to go.
 export function workStops(plan: TownPlan, role: VehicleRole, door: RoutePoint): WorkStop[] | null {
-  if (role === 'transit') return [{ point: door, sec: BUS_STOP_SEC }]
-  const railway = role === 'runabout' ? railwayPlan(plan) : null
-  const away =
-    role === 'freight'
-      ? nearest(
-          plan.lots.flatMap((lot) => (lot.zone === 'workshop' && lot.door ? [lot.door] : [])),
-          door
-        )
-      : railway &&
-        nearest(
-          railwayStations(railway).map((station) => station.entrance),
-          door
-        )
-  if (!away) return null
-  const wait = role === 'freight' ? LOADING_SEC : STATION_SEC
+  const { away, sec } = ERRANDS[role]
+  if (!away) return [{ point: door, sec }]
+  const point = away(plan, door)
+  if (!point) return null
   return [
     { point: door, sec: KERB_SEC },
-    { point: away, sec: wait },
+    { point, sec },
     { point: door, sec: KERB_SEC }
   ]
 }
