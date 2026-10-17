@@ -1,10 +1,12 @@
 import { render, renderHook, screen } from '@testing-library/react'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { SessionRef } from '../../../shared/office/types'
 import type { CityEvent } from '../../office-live/city-events'
 import { buildAttentionQueue } from '../logic/attention-queue'
 import { createRoleBook, maskFrame } from '../logic/role-names'
 import { usage } from '../scene/__tests__/city-marks.test-utils'
+import { contrastRatio } from '../themes/contrast'
 import { useAttentionAnnouncement } from '../use-office-effects'
 import { makeFrame, makeSession } from '../__tests__/fixtures'
 import { headerWithNewsLine, NEWS_LINE_HEIGHT_PX, NewsLine } from './NewsLine'
@@ -71,6 +73,40 @@ describe('news line', () => {
     expect(result.current.announcement).not.toMatch(/PropApp|auth/)
   })
 
+  it('turning Hide names on hides the name in a news line already shown', () => {
+    const { log, fire } = eventLog()
+    const named = [auth, docs]
+    const { result, rerender } = renderHook(
+      ({ sessions }) => useAttentionAnnouncement(buildAttentionQueue(sessions), sessions, log),
+      { initialProps: { sessions: named as readonly SessionRef[] } }
+    )
+    const waiting = [auth, { ...docs, attention: 'permission' as const }]
+    fire({ id: 'claude:a1b2:milestone:1', kind: 'milestone', sessionKey: auth.key })
+    rerender({ sessions: waiting })
+    expect(result.current.news?.text).toBe('PropApp › auth · reached 1M tokens')
+    expect(result.current.announcement).toMatch(/PropApp › docs.*PropApp › auth/)
+    const masked = maskFrame(makeFrame({ sessions: waiting }), createRoleBook()).sessions
+    rerender({ sessions: masked })
+    expect(result.current.news?.text).toBe('Project A-1 › Session A-1.1 · reached 1M tokens')
+    expect(result.current.announcement).toMatch(/Project A-1/)
+    expect(result.current.announcement).not.toMatch(/PropApp|auth|docs/)
+  })
+
+  it('a line whose session has left the frame is not shown', () => {
+    const { log, fire } = eventLog()
+    const { result, rerender } = renderHook(
+      ({ sessions }) => useAttentionAnnouncement(buildAttentionQueue(sessions), sessions, log),
+      { initialProps: { sessions: [auth, docs] as readonly SessionRef[] } }
+    )
+    fire({ id: 'claude:c3d4:done:1', kind: 'done', sessionKey: docs.key })
+    rerender({ sessions: [auth, docs] })
+    expect(result.current.news?.text).toBe('PropApp › docs · finished its turn')
+    // Its names could no longer follow Hide names, so the line goes rather than linger.
+    rerender({ sessions: [auth] })
+    expect(result.current.news).toBeNull()
+    expect(result.current.announcement).toBe('')
+  })
+
   it('the line commits once per event', () => {
     const { log, fire } = eventLog()
     const { result, again, counter } = hookFor([auth, docs], log)
@@ -108,6 +144,29 @@ describe('news line', () => {
   })
 })
 
+// The palette Tailwind builds from; a runtime path, as the config sits outside the web project.
+async function deckColors(): Promise<unknown> {
+  const { default: config } = await import(join(__dirname, '../../../../tailwind.config.ts'))
+  return config.theme.extend.colors
+}
+
+function colorAt(colors: unknown, path: readonly string[]): string | undefined {
+  let node = colors
+  for (const key of path)
+    node = typeof node === 'object' && node !== null ? Reflect.get(node, key) : undefined
+  if (typeof node === 'object' && node !== null) node = Reflect.get(node, 'DEFAULT')
+  return typeof node === 'string' ? node : undefined
+}
+
+// The token a `bg-*` or `text-*` class paints, e.g. `bg-surface-rail` → surface.rail.
+function paintOf(colors: unknown, element: Element, prefix: 'bg' | 'text'): string | undefined {
+  return [...element.classList].flatMap((name) =>
+    name.startsWith(`${prefix}-`)
+      ? (colorAt(colors, name.slice(prefix.length + 1).split('-')) ?? [])
+      : []
+  )[0]
+}
+
 describe('the ticker under the header', () => {
   it('shows the line as plain text: no second live region, nothing focusable', () => {
     const { container } = render(<NewsLine news={{ id: 'a', text: 'PropApp › auth · done' }} />)
@@ -121,5 +180,19 @@ describe('the ticker under the header', () => {
     const ticker = container.firstElementChild
     expect(ticker instanceof HTMLElement && ticker.style.height).toBe(`${NEWS_LINE_HEIGHT_PX}px`)
     expect(headerWithNewsLine(48)).toBe(48 + NEWS_LINE_HEIGHT_PX)
+  })
+
+  it('the news line reads at 4.5:1 or better against its own surface', async () => {
+    const colors = await deckColors()
+    const { container } = render(<NewsLine news={{ id: 'a', text: 'PropApp › auth · done' }} />)
+    const ticker = container.firstElementChild
+    const surface = ticker ? paintOf(colors, ticker, 'bg') : undefined
+    const ink = paintOf(colors, screen.getByText('PropApp › auth · done'), 'text')
+    // With no opaque surface of its own, the city ground behind it could be any colour.
+    expect({ surface, ink }).toEqual({
+      surface: expect.stringMatching(/^#/),
+      ink: expect.stringMatching(/^#/)
+    })
+    expect(contrastRatio(ink ?? '#000', surface ?? '#000')).toBeGreaterThanOrEqual(4.5)
   })
 })

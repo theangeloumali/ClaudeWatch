@@ -201,6 +201,37 @@ describe('citySignals', () => {
     expect(later.buildings.get(HOME)?.tokensToday).toBe(1e6)
   })
 
+  it('an ended session’s tokens stay in the day total while another session keeps spending', () => {
+    const spender = live('claude:a', { usage: usage(3e6) })
+    const other = (tokens: number) => live('claude:b', { usage: usage(tokens) })
+    const morning = ledgerFor([spender, other(0)])
+    const ended = ledgerFor([other(0)], morning)
+    const later = ledgerFor([other(1e6)], ended)
+    const city = makeFrame({ sessions: [other(1e6)], floors: [homeFloor] })
+    expect(signalsOf(city, later).buildings.get(HOME)?.tokensToday).toBe(4e6)
+  })
+
+  it('a conversation resumed today counts only what it spends today', () => {
+    const yesterday = NOW - 30 * 3_600_000
+    const resumed = (tokens: number) => [
+      live('claude:a', { usage: usage(tokens), threadStartedAtMs: yesterday })
+    ]
+    const tokensOn = (sessions: SessionRef[], day: DayLedger) =>
+      signalsOf(makeFrame({ sessions }), day).buildings.get(HOME)?.tokensToday
+    const seen = ledgerFor(resumed(5e6))
+    expect(tokensOn(resumed(5e6), seen)).toBe(0)
+    expect(tokensOn(resumed(6e6), ledgerFor(resumed(6e6), seen))).toBe(1e6)
+    // A conversation begun today counts all of it, though its process is older.
+    const begun = [
+      live('claude:b', {
+        usage: usage(2e6),
+        startedAtMs: yesterday,
+        threadStartedAtMs: NOW - 60_000
+      })
+    ]
+    expect(tokensOn(begun, ledgerFor(begun))).toBe(2e6)
+  })
+
   it('a session started today counts every token it spent toward today', () => {
     const morning = [live('claude:a', { usage: usage(2e6), activity: 'editing' })]
     expect(signalsOf(makeFrame({ sessions: morning })).leaders.topSpender).toEqual({

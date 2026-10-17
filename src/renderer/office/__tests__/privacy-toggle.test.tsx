@@ -127,7 +127,9 @@ function liveFeed() {
         }
       })
     )
-  return { feed, hello }
+  const patch = (upserts: SessionRef[]): void =>
+    act(() => bridge.send({ type: 'patch', v: 1, seq: 2, upserts, removed: [] }))
+  return { feed, hello, patch }
 }
 
 // Every text node, attribute and form value a person or a screen reader could meet.
@@ -195,6 +197,29 @@ describe('the Hide names setting', () => {
     const saved = JSON.stringify(feed.getWorldDocumentStore?.()?.get().document)
     expect(saved).toContain('Rocket App')
     expect(saved).not.toMatch(/Company A|Project A-1/)
+  })
+
+  it('turning Hide names on re-masks the news line already shown', async () => {
+    const { feed, hello, patch } = liveFeed()
+    render(<OfficeApp feed={feed} />)
+    hello()
+    await screen.findByText('Scene drawn', {}, { timeout: 3000 })
+    const atMs = Date.now()
+    const observation = {
+      sourceId: 'claude',
+      observedAtMs: atMs,
+      staleAfterMs: 60_000,
+      coverage: 'own' as const
+    }
+    patch([{ ...SESSIONS[0], attention: 'done', updatedAtMs: atMs, observation }])
+    // The visible line; the status region announces the same words.
+    const line = { selector: 'p' }
+    await screen.findByText('Rocket App › rocket-fix · finished its turn', line, { timeout: 3000 })
+
+    setHideNames(true)
+
+    expect(shownText(document.body).match(REAL_NAMES)).toBeNull()
+    expect(screen.getByText(/· finished its turn$/, line).textContent).toMatch(/^Project A-1 › /)
   })
 
   it('it persists across a reload', async () => {
