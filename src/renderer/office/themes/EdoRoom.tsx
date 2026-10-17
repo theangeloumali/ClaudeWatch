@@ -1,7 +1,6 @@
-import { useMemo } from 'react'
 import { DoubleSide } from 'three'
 import { doorSignPlacement } from '../logic/room-layout'
-import { signTexture } from '../scene/textures'
+import { useSignTexture } from '../scene/textures'
 import { Matte } from '../scene/InstancedParts'
 import { EDO } from './palettes'
 import { EDO_DESK_PARTS } from './edo-computer-parts'
@@ -91,7 +90,7 @@ export function EdoRoomDressing({ room }: RoomProps) {
 
 export function EdoRoomSign({ room }: RoomProps) {
   const place = doorSignPlacement(room)
-  const texture = useMemo(() => signTexture(room.label), [room.label])
+  const texture = useSignTexture(room.label)
   return (
     <group
       position={[

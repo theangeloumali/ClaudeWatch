@@ -23,7 +23,7 @@ vi.mock('react', async (original) => ({
   useRef: (current: object) => ({ current })
 }))
 vi.mock('@react-three/fiber', () => ({ useFrame: () => undefined }))
-vi.mock('../../scene/textures', () => ({ signTexture: () => new Texture() }))
+vi.mock('../../scene/textures', () => ({ useSignTexture: () => new Texture() }))
 
 function rig(): RobotRig {
   return {

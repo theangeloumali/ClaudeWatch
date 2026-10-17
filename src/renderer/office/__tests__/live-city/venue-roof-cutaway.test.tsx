@@ -29,7 +29,7 @@ vi.mock('@react-three/fiber', () => ({
   }
 }))
 vi.mock('../../scene/textures', () => ({
-  signTexture: () => new Texture(),
+  useSignTexture: () => new Texture(),
   blobShadowTexture: () => new Texture()
 }))
 afterEach(() => {
