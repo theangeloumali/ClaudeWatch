@@ -243,6 +243,31 @@ describe('citySignals', () => {
     expect(tokensOn(begun, ledgerFor(begun))).toBe(2e6)
   })
 
+  // A resumed Codex thread runs in a new process, and a placeholder key outlives the thread it showed.
+  it('a conversation seen under a new session key keeps one baseline and is not counted twice', () => {
+    const city = makeFrame({ floors: [homeFloor] })
+    const tokensOn = (day: DayLedger) => signalsOf(city, day).buildings.get(HOME)?.tokensToday
+    const thread = (key: string, tokens: number, overrides: Partial<SessionRef> = {}) =>
+      live(key, { provider: 'codex', sessionId: 'T1', usage: usage(tokens), ...overrides })
+    const begun = ledgerFor([thread('codex:pid-1-100', 3e6)])
+    expect(tokensOn(ledgerFor([thread('codex:T1', 4e6)], begun))).toBe(4e6)
+    const yesterday = NOW - 30 * 3_600_000
+    const overnight = (key: string, tokens: number) =>
+      thread(key, tokens, { threadStartedAtMs: yesterday })
+    const seen = ledgerFor([overnight('codex:pid-1-100', 5e6)])
+    const morning = ledgerFor([overnight('codex:pid-1-100', 6e6)], seen)
+    expect(tokensOn(ledgerFor([overnight('codex:pid-2-200', 7e6)], morning))).toBe(2e6)
+  })
+
+  it('a session key that moves to a new conversation counts both', () => {
+    const shown = (sessionId: string, tokens: number) =>
+      live('codex:pid-1-100', { provider: 'codex', sessionId, usage: usage(tokens) })
+    const first = ledgerFor([shown('T1', 5e6)])
+    const city = makeFrame({ floors: [homeFloor] })
+    const next = ledgerFor([shown('T2', 1e6)], first)
+    expect(signalsOf(city, next).buildings.get(HOME)?.tokensToday).toBe(6e6)
+  })
+
   it('a session started today counts every token it spent toward today', () => {
     const morning = [live('claude:a', { usage: usage(2e6), activity: 'editing' })]
     expect(signalsOf(makeFrame({ sessions: morning })).leaders.topSpender).toEqual({

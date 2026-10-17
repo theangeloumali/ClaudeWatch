@@ -56,7 +56,7 @@ export interface CitySignals {
   companies: ReadonlyMap<string, CompanyCounts>
 }
 
-// Each session's total when today began for it, its highest spend since, and each project's sum
+// Each conversation's total when today began for it, its highest spend since, and each project's sum
 // of those, raised to the most the host's ledger reported, so losing that ledger lowers nothing.
 export interface DayLedger {
   dayKey: string
@@ -95,10 +95,15 @@ export const createDayLedger = (day: string): DayLedger => ({
 const baseToday = (session: SessionRef, tokens: number, today: string): number =>
   dayKey(session.threadStartedAtMs ?? session.startedAtMs) === today ? 0 : tokens
 
+// The ledger follows the conversation, not the robot: a resumed thread gets a new process key,
+// and a kept placeholder key can move on to a new thread.
+const conversationOf = (session: SessionRef): string =>
+  session.sessionId ? `${session.provider}:${session.sessionId}` : session.key
+
 function spentToday(day: DayLedger, session: SessionRef): number | null {
   const tokens = sessionTokens(session.usage)
   if (tokens === null) return null
-  return Math.max(0, tokens - (day.sessionBase.get(session.key) ?? 0))
+  return Math.max(0, tokens - (day.sessionBase.get(conversationOf(session)) ?? 0))
 }
 
 interface DayDraft extends DayLedger {
@@ -130,14 +135,15 @@ export function observeDay(
   for (const session of sessions) {
     const tokens = sessionTokens(session.usage)
     if (tokens === null) continue
-    if (!(draft ?? day).sessionBase.has(session.key))
-      edit().sessionBase.set(session.key, baseToday(session, tokens, today))
+    const conversation = conversationOf(session)
+    if (!(draft ?? day).sessionBase.has(conversation))
+      edit().sessionBase.set(conversation, baseToday(session, tokens, today))
     const spent = spentToday(draft ?? day, session) ?? 0
-    const known = (draft ?? day).sessionSpend.get(session.key)
+    const known = (draft ?? day).sessionSpend.get(conversation)
     if (known && spent <= known.tokens) continue
     const projectKey = known?.projectKey ?? session.projectKey
     const ledger = edit()
-    ledger.sessionSpend.set(session.key, { projectKey, tokens: spent })
+    ledger.sessionSpend.set(conversation, { projectKey, tokens: spent })
     const total = ledger.projectTotals.get(projectKey) ?? 0
     ledger.projectTotals.set(projectKey, total + spent - (known?.tokens ?? 0))
   }
