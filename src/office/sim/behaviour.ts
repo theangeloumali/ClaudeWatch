@@ -148,20 +148,18 @@ export function tickAgent(
   }
   if (next.state === 'arriving') {
     let distance = (dtMs / 1000) * WALK_METRES_PER_SECOND
+    // Planar: every agent route stays on the agent's own floor.
     while (next.path.length) {
-      const target = next.path[0],
-        dx = target.x - next.view.x,
-        dz = target.z - next.view.z,
-        dy = (target.elevation ?? next.view.elevation ?? 0) - (next.view.elevation ?? 0)
-      const length = Math.hypot(dx, dz, dy)
+      const target = next.path[0]
+      const dx = target.x - next.view.x
+      const dz = target.z - next.view.z
+      const length = Math.hypot(dx, dz)
       const proposed =
         length > distance
           ? {
               ...target,
               x: next.view.x + (dx / length) * distance,
-              z: next.view.z + (dz / length) * distance,
-              elevation: (next.view.elevation ?? 0) + (dy / length) * distance,
-              physicalFloorId: dy !== 0 ? null : target.physicalFloorId
+              z: next.view.z + (dz / length) * distance
             }
           : target
       const accepted = move?.(next.view, proposed) ?? proposed
@@ -169,26 +167,11 @@ export function tickAgent(
         next.view.heading = Math.atan2(accepted.x - next.view.x, accepted.z - next.view.z)
       next.view.x = accepted.x
       next.view.z = accepted.z
-      if (accepted.elevation !== undefined) next.view.elevation = accepted.elevation
-      if (accepted.physicalFloorId !== undefined)
-        next.view.physicalFloorId = accepted.physicalFloorId
       // A yield keeps the waypoint and walking state, but activity and lounge timers still advance.
-      if (
-        Math.hypot(
-          accepted.x - proposed.x,
-          accepted.z - proposed.z,
-          (accepted.elevation ?? next.view.elevation ?? 0) -
-            (proposed.elevation ?? next.view.elevation ?? 0)
-        ) > 1e-8
-      )
-        break
-      if (length > distance) {
-        break
-      }
+      if (Math.hypot(accepted.x - proposed.x, accepted.z - proposed.z) > 1e-8) break
+      if (length > distance) break
       next.view.x = target.x
       next.view.z = target.z
-      if (target.elevation !== undefined) next.view.elevation = target.elevation
-      if (target.physicalFloorId !== undefined) next.view.physicalFloorId = target.physicalFloorId
       distance -= length
       next.path.shift()
     }
