@@ -202,6 +202,26 @@ describe('game corner: placement', () => {
     for (const row of rows) expect(row.offCentre).toBeCloseTo(0, 6)
   })
 
+  // Half of 20 m holds the 3 m beside the office, a 4.15 m row and the wall, not two rows.
+  it('falls back to one row of four on a floor too small for two rows', () => {
+    const corner = gameCorner({ ...floor(20, 20), deskCount: 8 })
+    const facing = corner && {
+      x: Math.sin(corner.slots[0].heading),
+      z: Math.cos(corner.slots[0].heading)
+    }
+    const depths = corner?.slots.map((seat) =>
+      Math.round((seat.x * facing!.x + seat.z * facing!.z) * 1000)
+    )
+    expect({ seats: depths?.length, rows: new Set(depths).size }).toEqual({ seats: 4, rows: 1 })
+  })
+
+  // 8 m across leaves 6 m inside the walls: a row of two fits, one of three or four does not.
+  it('falls back to fewer seats in a narrower row when a full row does not fit', () => {
+    const corner = gameCorner({ ...floor(8, 20), deskCount: 4 })
+    expect(corner?.slots).toHaveLength(2)
+    expect(corner!.width).toBeLessThanOrEqual(6)
+  })
+
   it('leaves a floor with no room on any side without a corner', () => {
     expect(gameCorner(floor(8, 8))).toBeUndefined()
   })
