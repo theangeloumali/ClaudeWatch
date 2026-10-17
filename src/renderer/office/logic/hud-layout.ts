@@ -51,6 +51,8 @@ export interface InspectorLayout {
   navigationHeight?: number
   isContextVisible?: boolean
   isSheetOpen?: boolean
+  // The owner hid the side and bottom panels for a clear view; phones keep their sheet.
+  arePanelsHidden?: boolean
 }
 
 export function inspectorSheetHeight(viewportHeight: number, isSheetOpen?: boolean): number {
@@ -81,6 +83,14 @@ export function hudSafeInsets(
   hasInspector: boolean,
   layout?: InspectorLayout
 ): typeof HUD_SAFE_INSETS {
+  if (layout?.arePanelsHidden && layout.viewportWidth >= HUD_COLUMNS_BREAKPOINT) {
+    return {
+      left: 0,
+      right: 0,
+      top: (layout.hudTopHeight ?? HUD_SAFE_INSETS.top) + layout.topInset,
+      bottom: layout.hudBottomHeight ?? HUD_SAFE_INSETS.bottom
+    }
+  }
   if (layout && layout.viewportWidth < (layout.isContextVisible ? 1100 : HUD_COLUMNS_BREAKPOINT)) {
     return {
       left: GRID_PADDING,

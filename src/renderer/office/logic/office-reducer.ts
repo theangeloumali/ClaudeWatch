@@ -38,6 +38,8 @@ export interface OfficeState {
   isWalking: boolean
   isCameraManuallyOwned: boolean
   cameraRequest: CameraRequest | null
+  // A clear view for recordings; not saved, so a restart shows the panels again.
+  arePanelsHidden: boolean
 }
 
 export type OfficeAction =
@@ -67,6 +69,7 @@ export type OfficeAction =
   | { type: 'roofs-toggled' }
   | { type: 'list-toggled' }
   | { type: 'metrics-toggled' }
+  | { type: 'panels-toggled' }
   | { type: 'walk-toggled' }
   | { type: 'zone-walked'; zoneId: string }
 
@@ -83,7 +86,8 @@ export const INITIAL_OFFICE_STATE: OfficeState = {
   viewMode: 'city',
   isWalking: false,
   isCameraManuallyOwned: false,
-  cameraRequest: null
+  cameraRequest: null,
+  arePanelsHidden: false
 }
 
 function nextNonce(state: OfficeState): number {
@@ -307,6 +311,8 @@ export function officeReducer(state: OfficeState, action: OfficeAction): OfficeS
       return { ...state, isListView: !state.isListView }
     case 'metrics-toggled':
       return { ...state, isMetricsVisible: !state.isMetricsVisible }
+    case 'panels-toggled':
+      return { ...state, arePanelsHidden: !state.arePanelsHidden }
     case 'walk-toggled':
       return { ...state, isWalking: !state.isWalking, isCameraManuallyOwned: false }
     // The camera goes with the player, so the office is marked current without a flight.
