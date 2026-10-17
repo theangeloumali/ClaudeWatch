@@ -102,6 +102,7 @@ export function CameraRig(props: CameraRigProps) {
   // Whether the owner has moved the camera by hand since the last fly-to an agent.
   const hasMovedSinceFlyRef = useRef(false)
   const targetScratch = useMemo(() => new Vector3(), [])
+  const liveTargetScratch = useMemo(() => new Vector3(), [])
   const viewRef = useRef<OfficeView>({
     x: 0,
     y: 0,
@@ -451,7 +452,9 @@ export function CameraRig(props: CameraRigProps) {
       return
     }
     const pose = livePose(officePoses, agent)
-    controls.getTarget(targetScratch, false)
+    // Ride from where the camera is headed: a fly-to's end until it lands, so it is never cut short.
+    controls.getTarget(targetScratch, true)
+    const isFlying = !controls.getTarget(liveTargetScratch, false).equals(targetScratch)
     const ride = followBody({
       body: { x: pose.x, y: pose.elevation + LOOK_HEIGHT, z: pose.z },
       view: {
@@ -465,7 +468,7 @@ export function CameraRig(props: CameraRigProps) {
       isReducedMotion,
       insets: latestRef.current.cityInsets
     })
-    if (ride.target) void controls.moveTo(...ride.target, false)
+    if (ride.target) void controls.moveTo(...ride.target, isFlying)
     if (!ride.isSettled) invalidate()
   })
 

@@ -9,7 +9,7 @@ import { hudSafeInsets } from '../../logic/hud-layout'
 import { officeView } from '../../logic/office-view'
 import { cardSafeArea, projectToScreen } from '../../logic/zone-framing'
 import { CameraRig } from '../CameraRig'
-import { controls, resetRig, runFrame, surface } from './camera-rig-harness'
+import { controls, holdFlights, resetRig, runFrame, surface } from './camera-rig-harness'
 
 vi.mock('@react-three/fiber', async () => (await import('./camera-rig-harness')).fiberMock())
 vi.mock('@react-three/drei', async () => (await import('./camera-rig-harness')).dreiMock())
@@ -127,6 +127,16 @@ describe('Follow', () => {
     expect(controls.dollyTo).not.toHaveBeenCalled()
     expect(controls.setLookAt).not.toHaveBeenCalled()
     expect(controls.distance).toBe(500)
+  })
+
+  it('a Follow ride never cuts short the fly-to that started it', () => {
+    const flightEnd = holdFlights()
+    const agent = walkerAt(60, 60)
+    const props = rigProps({ agents: [agent], followedAgentKey: WALKER, isReducedMotion: false })
+    render(<CameraRig {...props} request={{ kind: 'follow', agentKey: WALKER, nonce: 1 }} />)
+    const flight = { ...flightEnd() }
+    for (let frame = 0; frame < 5; frame += 1) runFrame()
+    expect(flightEnd()).toEqual(flight)
   })
 
   it('manual input ends it', () => {
