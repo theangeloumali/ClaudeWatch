@@ -132,19 +132,3 @@ export function nearestCompany(rect: Rect, zones: readonly ZoneGeometry[]): Zone
     gapBetween(rect, zone) < gapBetween(rect, best) ? zone : best
   )
 }
-
-// Which company dresses a lot: the nearest one, for lots within 24 m of the claim and outside
-// the old town. A lot that is absent takes the floor's theme.
-export function lotOwners(
-  plan: CampusPlan,
-  companies: readonly ZoneGeometry[]
-): ReadonlyMap<string, string> {
-  const owners = new Map<string, string>()
-  const oldTownEast = boundsOfZone(plan.claim).minX
-  for (const lot of plan.lots) {
-    if (lot.isFarRing || lot.x < oldTownEast) continue
-    const owner = nearestCompany(lot, companies)
-    if (owner) owners.set(lot.id, owner.id)
-  }
-  return owners
-}

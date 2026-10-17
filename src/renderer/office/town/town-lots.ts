@@ -7,7 +7,7 @@ import type { LotSite, Promenade } from './town-sites'
 import { zoneHeightCap, type TownDistrict } from './town-zones'
 
 // A Lot (themes/surroundings.ts) with a place in the plan. `zoneId` is the owning company, which
-// the plan does not know: it is null here, and `lotOwners` names the owners.
+// the plan does not know: it is null here.
 export interface TownLot extends Lot, LotSite {
   isFarRing: boolean
   isLandmark: boolean
