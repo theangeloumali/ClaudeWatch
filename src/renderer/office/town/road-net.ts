@@ -50,12 +50,27 @@ export function roadNet(plan: TownPlan): RoadNet {
   return { plan, ways, waysAt }
 }
 
+// A vehicle meets a place no nearer a dead end than the longest vehicle's half length (transit's
+// nose), so it stops and turns back on the asphalt, not across the carriageway's end.
+const DEAD_END_SETBACK_M = 3
+
+// The stretch of a way a vehicle may stop on: all of it, less the setback at a dead end.
+function stopSpan(net: RoadNet, way: Way): [Point, Point] {
+  const { nodes } = net.plan.graph
+  const [a, b] = [nodes[way.from], nodes[way.to]]
+  const length = apart(a, b)
+  if (length === 0) return [a, b]
+  const share = (node: number): number =>
+    net.waysAt[node].length === 1 ? Math.min(DEAD_END_SETBACK_M, length / 2) / length : 0
+  const at = (t: number): Point => ({ x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t })
+  return [at(share(way.from)), at(1 - share(way.to))]
+}
+
 // The nearest point of the net to a place off it: where a door meets its road.
 function attach(net: RoadNet, point: Point): { way: number; at: Point } {
-  const { nodes } = net.plan.graph
   let best = { way: -1, at: point, gap: Infinity }
   net.ways.forEach((way, index) => {
-    const [a, b] = [nodes[way.from], nodes[way.to]]
+    const [a, b] = stopSpan(net, way)
     const at = {
       x: clamp(point.x, [Math.min(a.x, b.x), Math.max(a.x, b.x)]),
       z: clamp(point.z, [Math.min(a.z, b.z), Math.max(a.z, b.z)])

@@ -22,11 +22,12 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks())
 
 describe('townOf', () => {
-  it('is the town of the floor alone when nothing is held', () => {
+  it('is the claim of the floor alone and its garden when nothing is held, and nothing more', () => {
     const town = townOf(LARGE_FLOOR, null, 'full')
+    expect(Object.keys(town)).toEqual(['plan', 'green'])
     expect(edges(town.plan.claim)).toEqual(fresh(LARGE_FLOOR))
+    expect(town.plan.size).toBe('city')
     expect(town.green.length).toBeGreaterThan(0)
-    expect(town.owners.size).toBeGreaterThan(0)
   })
 
   it('hands back the same plan for a floor that moves no claim edge', () => {

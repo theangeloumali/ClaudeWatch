@@ -32,7 +32,7 @@ describe.each(LIVE_FLOORS)('townLots: %s', (_name, floor) => {
   const { claim, promenades, sites, lots } = build(floor)
   const firstRing = lots.filter((lot) => gap(lot, claim) === CLAIM_SETBACK_M)
 
-  it('keeps every site that has room, as it was sited, and leaves its owner to lotOwners', () => {
+  it('keeps every site that has room, as it was sited, with no owner of its own', () => {
     expect(lots).toHaveLength(Math.min(sites.length, BUILDING_CAP.full))
     const sited = new Map(sites.map((site) => [site.id, site]))
     for (const lot of lots) {
