@@ -109,7 +109,7 @@ it.each([20, 40, 60, 512])(
       floors.filter((floor) => floor.elevation === 0),
       floors[0]
     )
-    const town = distributedTown(townOf(ground, null, 'full'), [
+    const town = distributedTown(townOf(ground, null), [
       ...floors.filter((floor) => floor.elevation === 0),
       ...document.venues.map((venue) => venue.footprint)
     ])

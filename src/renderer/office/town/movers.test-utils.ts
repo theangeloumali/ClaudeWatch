@@ -21,7 +21,7 @@ export function townOn(
   detail: QualityLevel = 'full',
   size: TownSize = 'city'
 ): TownInput {
-  const { plan, owners } = distributedTown(townOf(floor, null, detail, size), [floor])
+  const { plan, owners } = distributedTown(townOf(floor, null, size), [floor])
   const themes = listThemes()
   const companies = floor.zones.filter((zone) => zone.kind === 'company')
   return {

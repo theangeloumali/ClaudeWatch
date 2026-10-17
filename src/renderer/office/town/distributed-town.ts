@@ -46,10 +46,10 @@ function cityOf(town: CampusTown, parts: CityParts): Town {
     owners: new Map(),
     green: [],
     plan: {
-      ...town.plan,
+      ...town,
       ...parts,
       envelope: parts.extent,
-      graph: roadGraph(parts.roads, town.plan.claim)
+      graph: roadGraph(parts.roads, town.claim)
     }
   }
 }
@@ -64,7 +64,7 @@ export function distributedTown(town: CampusTown, protectedSites: readonly Distr
       lots: [],
       roads: [],
       promenades: [],
-      extent: town.plan.claim
+      extent: town.claim
     })
   const sites = cityScenerySites(protectedSites)
   const grid = cityGrid(protectedSites)

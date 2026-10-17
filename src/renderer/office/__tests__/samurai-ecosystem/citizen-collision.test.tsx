@@ -71,7 +71,7 @@ function givingWayPairs(clock: MoverClock, outdoors: readonly number[], held: Se
 // The clock's positions are what MoverLayer writes into the instanced bodies' matrices.
 it('keeps city citizens apart over a minute of motion, but for a pair giving way', () => {
   const floor = MOVER_FLOORS[0][1]
-  const { plan } = distributedTown(townOf(floor, null, 'full'), [floor])
+  const { plan } = distributedTown(townOf(floor, null), [floor])
   const theme = getTheme('corporate-city')
   everyElement(
     createElement(MoverLayer, {

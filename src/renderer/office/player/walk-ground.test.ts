@@ -9,12 +9,14 @@ import {
 } from '../logic/room-layout'
 import { boundsOfZone } from '../logic/zone-framing'
 import { GROUND_Y, sceneExtent } from '../themes/surroundings'
+import { distributedTown } from '../town/distributed-town'
 import { townOf } from '../town/use-town-plan'
 import type { ZoneGeometry } from '../scene-model'
 import { doorstep, groundHeight, nearestOpen, walkGround, walkPath } from './walk-ground'
 
 const [floor] = buildFixtureFrame(0, 0).floors
-const { plan, green } = townOf(floor, null, 'full')
+// The ground OfficeScene hands the player: the city on the floor's own site, a first start.
+const { plan, green } = distributedTown(townOf(floor, null), [floor])
 const lots = [...plan.lots, ...green]
 const ground = walkGround(floor, lots, plan.extent)
 const gate = nearestOpen(ground, floor.elevator)
@@ -148,10 +150,11 @@ describe('walkPath', () => {
     for (const point of pointsAlong(path)) expect(ground.isOpen(point)).toBe(true)
   })
 
-  it('walks from the gate to a road in the far ring without standing in a lot', () => {
-    const far = [...plan.lots]
-      .filter((lot) => lot.isFarRing)
-      .sort((a, b) => Math.hypot(b.x, b.z) - Math.hypot(a.x, a.z))[0]
+  const far = [...plan.lots]
+    .filter((lot) => lot.kind === 'building')
+    .sort((a, b) => Math.hypot(b.x, b.z) - Math.hypot(a.x, a.z))[0]
+
+  it('walks from the gate to the door of the farthest building without standing in a lot', () => {
     const path = walkPath(ground, gate, far.door)
     expect(path.length).toBeGreaterThan(1)
     const walked = pointsAlong(path)
@@ -168,14 +171,12 @@ describe('walkPath', () => {
   })
 
   it('sends a click on a building to the open ground beside it', () => {
-    const building = plan.lots.find((lot) => lot.kind === 'building' && lot.isFarRing)
-    if (!building) throw new Error('the seeded town has no far ring')
-    const path = walkPath(ground, gate, building)
+    const path = walkPath(ground, gate, far)
     expect(path.length).toBeGreaterThan(1)
     const end = path[path.length - 1]
     expect(ground.isOpen(end)).toBe(true)
-    expect(Math.hypot(end.x - building.x, end.z - building.z)).toBeLessThan(
-      Math.hypot(building.width, building.depth) / 2 + 1
+    expect(Math.hypot(end.x - far.x, end.z - far.z)).toBeLessThan(
+      Math.hypot(far.width, far.depth) / 2 + 1
     )
   })
 

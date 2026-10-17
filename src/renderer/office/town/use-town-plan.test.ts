@@ -22,18 +22,17 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks())
 
 describe('townOf', () => {
-  it('is the claim of the floor alone and its garden when nothing is held, and nothing more', () => {
-    const town = townOf(LARGE_FLOOR, null, 'full')
-    expect(Object.keys(town)).toEqual(['plan', 'green'])
-    expect(edges(town.plan.claim)).toEqual(fresh(LARGE_FLOOR))
-    expect(town.plan.size).toBe('city')
-    expect(town.green.length).toBeGreaterThan(0)
+  it('is the claim of the floor alone and the town size when nothing is held, and nothing more', () => {
+    const town = townOf(LARGE_FLOOR, null)
+    expect(Object.keys(town).sort()).toEqual(['claim', 'size'])
+    expect(edges(town.claim)).toEqual(fresh(LARGE_FLOOR))
+    expect(town.size).toBe('city')
+    expect(townOf(LARGE_FLOOR, null, 'village').size).toBe('village')
   })
 
-  it('hands back the same plan for a floor that moves no claim edge', () => {
-    const first = townOf(LARGE_FLOOR, null, 'full')
-    const again = townOf(structuredClone(LARGE_FLOOR), first.plan.claim, 'full')
-    expect(again.plan).toBe(first.plan)
+  it('keeps the held claim for a floor that moves no claim edge', () => {
+    const first = townOf(LARGE_FLOOR, null)
+    expect(townOf(widened(LARGE_FLOOR, 1), first.claim)).toEqual(first)
   })
 })
 

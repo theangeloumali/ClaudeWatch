@@ -63,8 +63,7 @@ function elements(node: ReactNode): Node[] {
 }
 
 // The city a floor stands in, on its own site.
-const cityOf = (floor: FloorGeometry, level: 'full' | 'light' = 'full') =>
-  distributedTown(townOf(floor, null, level), [floor])
+const cityOf = (floor: FloorGeometry) => distributedTown(townOf(floor, null), [floor])
 
 function view(floor: FloorGeometry = PAIR_FLOOR, floorTheme = north, themeFor = themeIdFor) {
   const town = cityOf(floor)

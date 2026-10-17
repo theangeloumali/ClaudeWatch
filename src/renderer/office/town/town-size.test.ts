@@ -59,12 +59,9 @@ describe.each(LIVE_FLOORS)('the town size on %s', (_name, floor) => {
     expect(Math.max(...reach.map((point) => point.x))).toBe(rim.east)
   })
 
-  it('keeps the claim and the garden whatever the size', () => {
-    const towns = TOWN_SIZES.map((size) => townOf(floor, null, 'full', size))
-    for (const town of towns) {
-      expect(town.plan.claim).toEqual(towns[0].plan.claim)
-      expect(town.green).toEqual(towns[0].green)
-    }
+  it('keeps the claim whatever the size', () => {
+    const towns = TOWN_SIZES.map((size) => townOf(floor, null, size))
+    for (const town of towns) expect(town.claim).toEqual(towns[0].claim)
   })
 
   it('is today’s full town as a city', () => {

@@ -187,7 +187,7 @@ it('renders real agents on all three usable storeys in the same canvas', () => {
 })
 const ALWAYS = ['ground', 'floor', 'agents', 'pickers', 'cards', 'camera', 'governor', 'metrics']
 // The city the scene lays round its one floor.
-const { plan } = distributedTown(townOf(floor, null, 'full', 'city'), [floor])
+const { plan } = distributedTown(townOf(floor, null, 'city'), [floor])
 
 it('mounts the whole living world while every switch is on', () => {
   const { layer, layers } = mount()

@@ -98,7 +98,7 @@ export function measure({
     })
   ])
   // The city of a first start at full detail, round the floor's own site.
-  const town = suppliedTown ?? distributedTown(townOf(floor, null, 'full', townSize), [floor])
+  const town = suppliedTown ?? distributedTown(townOf(floor, null, townSize), [floor])
   const horizon = mergedDraws(
     createElement(Horizon, {
       box: { ...town.plan.extent, minY: GROUND_Y, maxY: 1 },

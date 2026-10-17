@@ -15,7 +15,7 @@ it('places scenery and traversable streets inside the city without covering live
     { x: 0, z: -48, width: 30, depth: 25 },
     { x: 48, z: 0, width: 30, depth: 25 }
   ]
-  const town = distributedTown(townOf(envelope, null, 'full'), buildings)
+  const town = distributedTown(townOf(envelope, null), buildings)
   const lots = town.plan.lots.filter((lot) => lot.id.startsWith('city-lot:'))
   const sites = cityScenerySites(buildings)
   expect(lots.length).toBeGreaterThan(0)
@@ -57,7 +57,7 @@ it('places scenery and traversable streets inside the city without covering live
 it('paints only the city’s own ground across distributed offices, no campus street or plaza', () => {
   const envelope = makeFloor({ floorId: 'district', x: 0, z: 0, width: 150, depth: 150 })
   const sites = [{ x: 48, z: 0, width: 30, depth: 25 }]
-  const district = distributedTown(townOf(envelope, null, 'full'), sites)
+  const district = distributedTown(townOf(envelope, null), sites)
   const quads = groundQuads(district.plan, fallbackDress(EDO))
   expect(new Set(quads.map((quad) => quad.layer))).toEqual(
     new Set(['pad', 'sidewalk', 'carriageway', 'marking'])
@@ -65,7 +65,7 @@ it('paints only the city’s own ground across distributed offices, no campus st
 })
 
 it('lays an empty city in the held claim until an office stands on the ground', () => {
-  const campus = townOf(makeFloor({ floorId: 'hq' }), null, 'full')
+  const campus = townOf(makeFloor({ floorId: 'hq' }), null)
   const { plan, owners, green } = distributedTown(campus, [])
   expect(plan.officeSites).toEqual([])
   expect([plan.lots, plan.roads, plan.blocks, plan.promenades, plan.graph.edges]).toEqual([
@@ -75,7 +75,7 @@ it('lays an empty city in the held claim until an office stands on the ground', 
     [],
     []
   ])
-  expect(plan.claim).toBe(campus.plan.claim)
-  expect(plan.extent).toEqual(campus.plan.claim)
+  expect(plan.claim).toBe(campus.claim)
+  expect(plan.extent).toEqual(campus.claim)
   expect([owners.size, green.length]).toEqual([0, 0])
 })

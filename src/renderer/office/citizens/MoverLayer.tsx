@@ -25,7 +25,7 @@ import { zebraTraffic } from './zebra-traffic'
 interface MoverLayerProps {
   floor: FloorGeometry
   plan: TownPlan
-  // Lot id to the company that dresses it (`lotOwners`).
+  // Lot id to the company that dresses it (`Town.owners`); an absent lot takes the floor's theme.
   owners: ReadonlyMap<string, string>
   floorTheme: OfficeTheme
   zoneGroups: readonly ThemeZoneGroup[]
