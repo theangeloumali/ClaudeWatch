@@ -1,6 +1,7 @@
 import { useRef, type CSSProperties, type KeyboardEvent, type MouseEvent } from 'react'
+import { clamp } from '../../../shared/range'
 import { cn } from '../../lib/utils'
-import type { MinimapModel } from '../logic/minimap-model'
+import { percentAlong, type MinimapModel } from '../logic/minimap-model'
 import { officeView, type MapPoint } from '../logic/office-view'
 import type { Bounds } from '../logic/zone-framing'
 import type { MinimapProps } from './Minimap'
@@ -29,8 +30,8 @@ const ARROW_STEPS: Readonly<Record<string, readonly [number, number]>> = {
 const PAN_SETTLE_MS = 1000
 
 const clampTo = (bounds: Bounds, point: MapPoint): MapPoint => ({
-  x: Math.min(bounds.maxX, Math.max(bounds.minX, point.x)),
-  z: Math.min(bounds.maxZ, Math.max(bounds.minZ, point.z))
+  x: clamp(point.x, [bounds.minX, bounds.maxX]),
+  z: clamp(point.z, [bounds.minZ, bounds.maxZ])
 })
 
 // dry-new: native hit targets must share the SVG's aspect-preserving world projection.
@@ -257,8 +258,8 @@ function MapArea({
 function pointStyle(point: { x: number; z: number }, bounds: Bounds): CSSProperties {
   return {
     position: 'absolute',
-    left: `${((point.x - bounds.minX) / (bounds.maxX - bounds.minX)) * 100}%`,
-    top: `${((point.z - bounds.minZ) / (bounds.maxZ - bounds.minZ)) * 100}%`,
+    left: percentAlong(point.x, bounds.minX, bounds.maxX),
+    top: percentAlong(point.z, bounds.minZ, bounds.maxZ),
     transform: 'translate(-50%, -50%)'
   }
 }
