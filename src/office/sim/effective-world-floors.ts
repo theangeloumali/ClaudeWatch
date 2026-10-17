@@ -86,7 +86,7 @@ export function buildEffectiveFloors({
           x: building.footprint.x + building.entrance.x,
           z: building.footprint.z + building.entrance.z
         },
-        displayLabel: building.displayName,
+        // The building's name is its project's; the company keeps its own.
         themeId: building.themeId,
         capacity,
         children: rooms.length ? [projectZone] : []
