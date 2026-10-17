@@ -18,7 +18,7 @@ import { canRespond } from './logic/interactions'
 import { INITIAL_OFFICE_STATE, officeReducer } from './logic/office-reducer'
 import { buildThemeRows, countThemeChoices, useThemeAssignments } from './logic/office-themes'
 import { findZone } from './logic/zone-model'
-import { HUD_COLUMNS_BREAKPOINT, HUD_GRID_STYLE } from './logic/hud-layout'
+import { canHidePanels, HUD_GRID_STYLE } from './logic/hud-layout'
 import { buildOperationsModel } from './logic/operations-model'
 import { createFrameMetrics } from './frame-metrics'
 import { AgentActions } from './hud/AgentActions'
@@ -125,9 +125,8 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
   const [navigationHeight, setNavigationHeight] = useState(0)
   const nowMs = useOfficeNow(OFFICE_BLURRED_TICK_MS)
 
-  // Phones keep their bottom sheet, so the panels hide on wide and medium layouts only.
-  const canHidePanels = inspectorController.layout.viewportWidth >= HUD_COLUMNS_BREAKPOINT
-  const arePanelsHidden = state.arePanelsHidden && canHidePanels
+  const isPanelHideAllowed = canHidePanels(inspectorController.layout.viewportWidth)
+  const arePanelsHidden = state.arePanelsHidden && isPanelHideAllowed
   const is3DAvailable = hasWebGL && !hasSceneFailed
   const isShowingList = state.isListView || !is3DAvailable
   useFeedSubscription(feed, dispatch)
@@ -674,7 +673,9 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
             viewMode={state.viewMode}
             onView={(view) => dispatch({ type: 'view-set', view })}
             arePanelsHidden={arePanelsHidden}
-            onTogglePanels={canHidePanels ? () => dispatch({ type: 'panels-toggled' }) : undefined}
+            onTogglePanels={
+              isPanelHideAllowed ? () => dispatch({ type: 'panels-toggled' }) : undefined
+            }
           />
         </div>
       </div>
