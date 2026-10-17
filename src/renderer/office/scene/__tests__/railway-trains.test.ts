@@ -1,4 +1,4 @@
-import { _roots, act, createRoot } from '@react-three/fiber'
+import { act } from '@react-three/fiber'
 import { Children, createElement, isValidElement, type ReactElement, type ReactNode } from 'react'
 import { Box3, InstancedMesh, Matrix4, Object3D, Quaternion, Vector3 } from 'three'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -14,6 +14,7 @@ import { townOf } from '../../town/use-town-plan'
 import { TRAIN_SPEEDS } from '../../town/railway-runs'
 import { trainSet } from '../RailwayTrains'
 import { RailwayLayer, RailwayStructures } from '../RailwayStructures'
+import { mountInFiber } from './fiber-root.test-utils'
 
 const floors = [0, 1, 2, 3].map((index) =>
   makeFloor({ floorId: `f${index}`, x: (index % 2) * 64 + 32, z: Math.floor(index / 2) * 56 + 28 })
@@ -35,21 +36,6 @@ function layerParts(): ReactElement<Record<string, unknown>>[] {
   const layer = RailwayLayer({ plan, palette, hasTrains: true })
   if (!isValidElement<{ children?: ReactNode }>(layer)) return []
   return Children.toArray(layer.props.children).filter(isValidElement<Record<string, unknown>>)
-}
-
-// The layer under the fiber reconciler, so its hooks run; the stub renderer never draws.
-async function mountLayer() {
-  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
-  const canvas = document.createElement('canvas')
-  const root = createRoot(canvas)
-  const gl = { domElement: canvas, render() {}, setPixelRatio() {}, setSize() {}, dispose() {} }
-  await root.configure({ gl: gl as never, frameloop: 'never', events: undefined })
-  await act(async () =>
-    root.render(createElement(RailwayLayer, { plan, palette, hasTrains: true }))
-  )
-  const scene = _roots.get(canvas)?.store.getState().scene
-  if (!scene) throw new Error('no root')
-  return { scene, unmount: () => act(async () => root.unmount()) }
 }
 
 const carCount = (trains: Object3D | undefined): number =>
@@ -109,7 +95,9 @@ describe('RailwayTrains', () => {
 
   it('stepping to light mid-run rebuilds no static batch', async () => {
     pinQuality('full')
-    const { scene, unmount } = await mountLayer()
+    const { scene, unmount } = await mountInFiber(
+      createElement(RailwayLayer, { plan, palette, hasTrains: true })
+    )
     const at = () => {
       const [viaduct, trains] = scene.children
       if (!(viaduct instanceof InstancedMesh)) throw new Error('no viaduct')
