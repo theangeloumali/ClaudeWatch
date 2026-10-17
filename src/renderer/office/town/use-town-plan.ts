@@ -7,7 +7,6 @@ import type { FloorGeometry } from '../scene-model'
 import type { Rect } from '../themes/lot-math'
 import { campusClaim, heldClaim, neededClaim } from './town-claim'
 import type { TownSize } from './town-grid'
-import type { GreenPlot } from './town-green'
 import type { TownPlan } from './town-plan'
 import { distributedTown } from './distributed-town'
 import type { WorldFootprint } from '../../../shared/office/world-document'
@@ -19,7 +18,6 @@ export interface Town {
   plan: TownPlan
   // Lot id to the company that dresses it; a lot that is absent takes the floor's theme.
   owners: ReadonlyMap<string, string>
-  green: GreenPlot[]
 }
 
 // What the city is laid over: the claim, held from floor to floor, and the owner's town size.

@@ -66,7 +66,7 @@ it('paints only the city’s own ground across distributed offices, no campus st
 
 it('lays an empty city in the held claim until an office stands on the ground', () => {
   const campus = townOf(makeFloor({ floorId: 'hq' }), null)
-  const { plan, owners, green } = distributedTown(campus, [])
+  const { plan, owners } = distributedTown(campus, [])
   expect(plan.officeSites).toEqual([])
   expect([plan.lots, plan.roads, plan.blocks, plan.promenades, plan.graph.edges]).toEqual([
     [],
@@ -77,5 +77,5 @@ it('lays an empty city in the held claim until an office stands on the ground', 
   ])
   expect(plan.claim).toBe(campus.claim)
   expect(plan.extent).toEqual(campus.claim)
-  expect([owners.size, green.length]).toEqual([0, 0])
+  expect(owners.size).toBe(0)
 })

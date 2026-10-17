@@ -44,7 +44,6 @@ type CityParts = Pick<
 function cityOf(town: CampusTown, parts: CityParts): Town {
   return {
     owners: new Map(),
-    green: [],
     plan: {
       ...town,
       ...parts,

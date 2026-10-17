@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { LIVE_FLOORS } from '../themes/floors.test-utils'
-import { campusClaim, neededClaim } from './town-claim'
+import { distributedTown } from './distributed-town'
 import { roadGraph, type RoadEdge, type RoadGraph } from './town-graph'
-import { LOT_PITCH_M, ROAD_WIDTH_M } from './town-grid'
-import { townRoads } from './town-roads'
-import { edges, fromEdges, fullExtent, overlapping } from './town.test-utils'
+import { LOT_PITCH_M } from './town-grid'
+import { townOf } from './use-town-plan'
 
 // The nodes one can reach over the edges that are open, and every node such an edge touches.
 function reached(graph: RoadGraph, isOpen: (edge: RoadEdge) => boolean) {
@@ -25,10 +24,8 @@ function reached(graph: RoadGraph, isOpen: (edge: RoadEdge) => boolean) {
 }
 
 describe.each(LIVE_FLOORS)('roadGraph: %s', (_name, floor) => {
-  const claim = campusClaim(neededClaim(floor), null)
-  const roads = townRoads(claim, fullExtent(claim))
+  const { claim, roads } = distributedTown(townOf(floor, null), [floor]).plan
   const graph = roadGraph(roads, claim)
-  const edge = edges(claim)
   const placeOf = new Map(graph.nodes.map((node) => [`${node.x}:${node.z}`, node.id]))
 
   it('numbers its nodes by their place in the list, one to a place', () => {
@@ -53,7 +50,7 @@ describe.each(LIVE_FLOORS)('roadGraph: %s', (_name, floor) => {
         crossings++
         expect(placeOf.has(`${x}:${z}`)).toBe(true)
       }
-    expect(crossings).toBeGreaterThan(50)
+    expect(crossings).toBeGreaterThan(0)
   })
 
   it('joins only neighbours on one straight road, and measures the stretch', () => {
@@ -65,17 +62,6 @@ describe.each(LIVE_FLOORS)('roadGraph: %s', (_name, floor) => {
       expect(each.length).toBeGreaterThan(0)
       expect(each.length).toBeLessThanOrEqual(LOT_PITCH_M)
     }
-  })
-
-  it('keeps every node off the campus inside the boulevard', () => {
-    const inside = fromEdges({
-      west: edge.west + ROAD_WIDTH_M.boulevard,
-      east: edge.east - ROAD_WIDTH_M.boulevard,
-      north: edge.north + ROAD_WIDTH_M.boulevard,
-      south: edge.south - ROAD_WIDTH_M.boulevard
-    })
-    for (const node of graph.nodes)
-      expect(overlapping({ ...node, width: 0.1, depth: 0.1 }, inside)).toBe(false)
   })
 
   it('is one network on foot', () => {

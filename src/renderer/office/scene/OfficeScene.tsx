@@ -189,11 +189,8 @@ function OfficeScene(props: OfficeSceneProps) {
     () => ({ idleFps: isWalking ? quality.walkFps : quality.idleFps, walkFps: quality.walkFps }),
     [isWalking, quality.idleFps, quality.walkFps]
   )
-  // What the player and the citizens go round: the town's lots and the plots of the belt.
-  const solids = useMemo(
-    () => (settings.town ? [...town.plan.lots, ...town.green] : []),
-    [town, settings.town]
-  )
+  // What the player and the citizens go round: the town's lots.
+  const solids = useMemo(() => (settings.town ? town.plan.lots : []), [town, settings.town])
   // How far the scene reaches: the town to its last road, or the floor alone without one.
   const reach = useMemo(
     () => (settings.town ? town.plan.extent : sceneExtent(townFloor, [])),

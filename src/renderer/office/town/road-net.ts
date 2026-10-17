@@ -2,7 +2,7 @@ import type { Point } from '../../../office/sim/path'
 import { clamp } from '../../../shared/range'
 import { apart } from './town-graph'
 import type { TownPlan } from './town-plan'
-import type { RoadClass } from './town-roads'
+import type { RoadClass } from '../../../shared/office/town-roads'
 
 // One straight stretch of a road's centre line.
 export interface Leg {

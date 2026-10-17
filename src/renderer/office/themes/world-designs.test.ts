@@ -35,7 +35,7 @@ const FOOTPRINTS = [
 // The spot the town draws a prop for, before it is scaled to its lot.
 const PROP_PLOT = { length: 1, reach: 0.8, height: 1.6 }
 const cityLots = cityLotsOf(PAIR_FLOOR)
-const townLots = [...cityLots, ...everyZoneLots()]
+const dressedLots = [...cityLots, ...everyZoneLots()]
 
 describe.each([
   ['Neo Edo Steam', { buildings: EDO_BUILDINGS, props: EDO_PROPS }, EDO_TOWN],
@@ -111,7 +111,7 @@ describe.each([
 
   it('dresses every lot of a real town, under its limit, the same on every start', () => {
     expect(cityLots.length).toBeGreaterThan(0)
-    for (const lot of townLots) {
+    for (const lot of dressedLots) {
       // Every city lot stands on the ground at 0, as dressCityDistrict stands it.
       const baseY = 0
       const placed = dressLot(lot, baseY, dress)

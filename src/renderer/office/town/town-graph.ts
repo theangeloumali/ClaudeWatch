@@ -3,7 +3,7 @@ import { clamp } from '../../../shared/range'
 import { boundsOfZone, type Bounds } from '../logic/zone-framing'
 import { grow, type Rect } from '../themes/lot-math'
 import { LOT_PITCH_M, ROAD_WIDTH_M } from './town-grid'
-import type { RoadClass, TownRoad } from './town-roads'
+import type { RoadClass, TownRoad } from '../../../shared/office/town-roads'
 
 interface RoadNode extends Point {
   // Its place in `RoadGraph.nodes`.

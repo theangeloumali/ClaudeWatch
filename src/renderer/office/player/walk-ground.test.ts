@@ -16,8 +16,8 @@ import { doorstep, groundHeight, nearestOpen, walkGround, walkPath } from './wal
 
 const [floor] = buildFixtureFrame(0, 0).floors
 // The ground OfficeScene hands the player: the city on the floor's own site, a first start.
-const { plan, green } = distributedTown(townOf(floor, null), [floor])
-const lots = [...plan.lots, ...green]
+const { plan } = distributedTown(townOf(floor, null), [floor])
+const lots = plan.lots
 const ground = walkGround(floor, lots, plan.extent)
 const gate = nearestOpen(ground, floor.elevator)
 if (!gate) throw new Error('No open ground beside the lift')

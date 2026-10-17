@@ -116,7 +116,7 @@ export function measure({
   const townDraws = 1 + buildings.draws
   return {
     themeCount: zoneGroups.length,
-    lotCount: town.plan.lots.length + town.green.length,
+    lotCount: town.plan.lots.length,
     roadCount: town.plan.roads.length,
     townRebuildMs,
     focusedDraws: focused.draws,
