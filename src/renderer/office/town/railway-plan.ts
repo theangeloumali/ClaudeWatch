@@ -7,6 +7,7 @@ import {
 import { rectOf, type Rect } from '../themes/lot-math'
 import type { TownPlan } from './town-plan'
 import { lengthOf } from './trip-paths'
+import { createSubscribers } from '../logic/subscribers'
 
 // The ring's measures, in metres. It runs 7 m out, not ClearSpent's 4.5, so a station's lift
 // tower keeps off the edge street's sidewalk (traffic-rail F4, F8).
@@ -126,11 +127,16 @@ export function railwayReach(reach: Rect, plan: TownPlan): Rect {
 
 let shown: RailwayPlan | null = null
 
-// The ring the scene draws now, for the HUD's mini-map: a module store like `officePoses`,
-// since the HUD has no town plan of its own.
+const railwayWatchers = createSubscribers()
+
+// The ring the scene draws now, for the HUD's mini-map, which has no town plan of its own; the
+// map subscribes, so it shows the ring as soon as the scene lays it.
 export const shownRailway = {
   current: (): RailwayPlan | null => shown,
+  subscribe: railwayWatchers.subscribe,
   set(railway: RailwayPlan | null): void {
+    if (railway === shown) return
     shown = railway
+    railwayWatchers.notify()
   }
 }

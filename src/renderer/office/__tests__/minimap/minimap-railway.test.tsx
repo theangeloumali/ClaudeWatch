@@ -1,5 +1,6 @@
-import { render } from '@testing-library/react'
+import { act, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { Minimap } from '../../hud/Minimap'
 import { MinimapSurface } from '../../hud/MinimapSurface'
 import { buildMinimapModel, type MinimapInput } from '../../logic/minimap-model'
 import { distributedTown } from '../../town/distributed-town'
@@ -67,5 +68,28 @@ describe('minimap railway', () => {
     expect(group?.getAttribute('aria-hidden')).toBe('true')
     expect(group?.querySelectorAll('circle')).toHaveLength(4)
     expect(container.querySelectorAll('button')).toHaveLength(buttons)
+  })
+
+  // The scene publishes the ring after the map first renders; the map must not wait for a tick.
+  it('the mini-map draws the ring the moment the scene shows it', () => {
+    const railway = railwayPlan(plan)
+    if (!railway) throw new Error('no railway')
+    const { container } = render(
+      <Minimap
+        frame={frame}
+        viewMode="city"
+        focusedFloorId={NORTH_FLOOR_ID}
+        focusedRoomId={null}
+        selectedAgentKey={null}
+        isNarrow={false}
+        isPreview={false}
+        onChooseFloor={vi.fn()}
+        onChooseRoom={vi.fn()}
+        onChooseWorker={vi.fn()}
+      />
+    )
+    expect(container.querySelector('[data-railway]')).toBeNull()
+    act(() => shownRailway.set(railway))
+    expect(container.querySelector('[data-railway]')).not.toBeNull()
   })
 })

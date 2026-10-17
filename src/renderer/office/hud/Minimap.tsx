@@ -1,4 +1,4 @@
-import { useId, useMemo, useState } from 'react'
+import { useId, useMemo, useState, useSyncExternalStore } from 'react'
 import { officePoses } from '../../office-live/pose-store'
 import { BUTTON_QUIET_COMPACT_CLASS } from '../../components/deck/deck-styles'
 import { Plate } from '../../components/deck/Plate'
@@ -142,7 +142,7 @@ function useMinimapModel(input: MinimapInput, isExpanded: boolean): MinimapModel
   const { frame, viewMode, focusedFloorId, focusedRoomId, selectedAgentKey, isPreview } = input
   const [x, z, physicalFloorId] = [input.player?.x, input.player?.z, input.player?.physicalFloorId]
   const poseVersion = officePoses.version()
-  const railway = shownRailway.current()
+  const railway = useSyncExternalStore(shownRailway.subscribe, shownRailway.current)
   return useMemo(() => {
     if (!isExpanded) return null
     const player =
