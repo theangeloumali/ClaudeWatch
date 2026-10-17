@@ -8,6 +8,7 @@ import { BAR_BUTTON_CLASS, KBD_CLASS } from './hud-styles'
 import { OfficeSettingsPanel } from './OfficeSettings'
 import { officeSettings } from '../logic/office-settings'
 import { CameraTools } from './CameraTools'
+import { CompanyLensToggle } from './CompanyLensToggle'
 
 export interface BottomBarProps {
   isCompact?: boolean
@@ -383,6 +384,7 @@ function ViewControls({ props }: { props: BottomBarProps }) {
           Workstation
         </button>
       )}
+      <CompanyLensToggle isDisabled={!isShowing3D} />
     </div>
   )
 }

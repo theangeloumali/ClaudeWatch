@@ -18,6 +18,7 @@ import { CardProjector, type CardAnchors } from './CardProjector'
 import { NameCardLayer } from './NameCards'
 import { FrameGovernor, MetricsProbe } from './RenderLoop'
 import { BatchedScene } from './BatchedScene'
+import { CompanyLens } from './CompanyLens'
 import type { SceneEditTarget } from './ZonePickers'
 import { MultiFloorLayer } from './MultiFloorLayer'
 import { VenueLayer } from './VenueLayer'
@@ -286,6 +287,7 @@ function OfficeScene(props: OfficeSceneProps) {
             onEditTarget={props.onEditTarget}
             onFocusFloor={props.onFocusFloor}
           />
+          <CompanyLens floors={surfaces} palette={theme.palette} />
         </BatchedScene>
         {!props.isLayoutPreview && band !== 'building' && (
           <WorkstationScreens displays={visibleWorkstationDisplays(displays, selectedAgentKey)} />
