@@ -1,6 +1,5 @@
 import { useMemo, useRef } from 'react'
 import type { AgentView } from '../../../shared/office/types'
-import type { WorldVenue } from '../../../shared/office/world-document'
 import type { FloorGeometry } from '../scene-model'
 import type { OfficeTheme } from '../themes/types'
 import type { WallsMode } from '../logic/room-layout'
@@ -67,7 +66,6 @@ export function MultiFloorLayer({
   viewMode = 'office',
   focusedFloorId,
   focusedRoomId,
-  venues,
   spireStages
 }: {
   floors: readonly FloorGeometry[]
@@ -88,7 +86,6 @@ export function MultiFloorLayer({
   viewMode?: 'city' | 'office'
   focusedFloorId?: string | null
   focusedRoomId?: string | null
-  venues?: readonly WorldVenue[]
   spireStages?: ReadonlyMap<string, number>
 }) {
   const partition = useMemo(() => partitionPhysicalAgents(floors, agents), [floors, agents])
@@ -130,7 +127,6 @@ export function MultiFloorLayer({
     onFly,
     motions,
     floors,
-    venues,
     isOverview
   }
   return (

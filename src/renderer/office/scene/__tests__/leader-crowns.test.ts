@@ -160,8 +160,8 @@ describe('leader crowns', () => {
     expect(CITY_LAYER_BUDGET.crowns.draws.full).toBe(1)
   })
 
-  it('a crown over a roaming agent follows its live pose', () => {
-    const roamer = makeAgent({ agentKey: 'claude:a', x: 0, z: 0, venueId: 'venue:arcade' })
+  it('a crown over a gamer in its game corner follows its live pose', () => {
+    const roamer = makeAgent({ agentKey: 'claude:a', x: 0, z: 0, place: 'lounge' })
     const poses = createPoseStore()
     const layer = createLeaderCrownsLayer(palette)
     const frame = crownFrame({ crowned: ['claude:a'], agents: agentsOf(roamer), poses })
@@ -191,11 +191,30 @@ describe('leader crowns', () => {
       }
   })
 
-  it("a crown stays in Horizon's room over its roof, or its card when it roams", () => {
+  it('a crown goes over the roof of an agent at its desk, whatever venue the feed names', () => {
+    const places = createBuildingPlaces()
+    places.setRoof('home', { x: 3, y: 12, z: -2 })
+    // Agents no longer visit venues, so a stale venue id never takes the crown off the roof.
+    const seated = makeAgent({ agentKey: 'claude:a', x: 3, z: -2, venueId: 'venue:arcade' })
+    const layer = createLeaderCrownsLayer(palette)
+    layer.update(
+      crownFrame({
+        crowned: ['claude:a'],
+        agents: agentsOf(seated),
+        buildings: new Map([['claude:a', 'home']]),
+        places
+      })
+    )
+    const [crown] = crownsShown(layer)
+    expect(crown.centre.x).toBeCloseTo(3)
+    expect(Math.min(...crown.corners.map((corner) => corner.y))).toBeGreaterThan(12)
+  })
+
+  it("a crown stays in Horizon's room over its roof, or its card when its agent games", () => {
     const places = createBuildingPlaces()
     places.setRoof('home', { x: 3, y: 12, z: -2 })
     const seated = makeAgent({ agentKey: 'claude:a', x: 3, z: -2, elevation: 5.5 })
-    const roamer = makeAgent({ agentKey: 'claude:b', x: 9, z: 4, venueId: 'venue:arcade' })
+    const roamer = makeAgent({ agentKey: 'claude:b', x: 9, z: 4, place: 'lounge' })
     for (const zoom of ZOOMS) {
       const camera = cameraAt(ISO_START_AZIMUTH, zoom)
       const layer = createLeaderCrownsLayer(palette)
@@ -218,7 +237,7 @@ describe('leader crowns', () => {
       )
       expect(overRoof).toBeLessThanOrEqual(12 + MARK_RISE_M + headroom)
       expect(Math.min(...crowns[0].corners.map((corner) => corner.y))).toBeGreaterThan(12)
-      // Over a roaming card the crown is sized and lifted in pixels alone.
+      // Over a gamer's card the crown is sized and lifted in pixels alone.
       expect(overRoamer).toBeLessThanOrEqual(CARD_HEIGHT + headroom)
     }
   })

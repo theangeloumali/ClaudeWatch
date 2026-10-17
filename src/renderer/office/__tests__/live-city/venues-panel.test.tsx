@@ -3,8 +3,8 @@ import { expect, it, vi } from 'vitest'
 import { VenuesPanel } from '../../hud/VenuesPanel'
 import { makeAgent, makeFrame, makeSession } from '../fixtures'
 
-it('exposes actual venue visitors for one-action inspection, without claiming work', () => {
-  const onSelectAgent = vi.fn()
+it('lists the city venues as places to look at, with no agent visitors to inspect', () => {
+  const onSelectVenue = vi.fn()
   const session = makeSession({ key: 'one', name: 'Visitor one' })
   const frame = makeFrame({
     sessions: [session],
@@ -21,16 +21,11 @@ it('exposes actual venue visitors for one-action inspection, without claiming wo
       }
     ]
   })
-  render(
-    <VenuesPanel
-      frame={frame}
-      selectedVenueId="arcade"
-      onSelectVenue={vi.fn()}
-      onSelectAgent={onSelectAgent}
-    />
-  )
-  expect(screen.getByText(/Present: 1/)).toBeInTheDocument()
-  fireEvent.click(screen.getByRole('button', { name: 'Inspect Visitor one' }))
-  expect(onSelectAgent).toHaveBeenCalledWith(session.key)
-  expect(screen.getByText(/not a work report/)).toBeInTheDocument()
+  render(<VenuesPanel frame={frame} selectedVenueId="arcade" onSelectVenue={onSelectVenue} />)
+  const venue = screen.getByRole('button', { name: 'Arcade · arcade' })
+  expect(venue).toHaveAttribute('aria-pressed', 'true')
+  expect(screen.queryByRole('button', { name: /Inspect/ })).not.toBeInTheDocument()
+  expect(screen.queryByText(/Present|Last known|not a work report/)).not.toBeInTheDocument()
+  fireEvent.click(venue)
+  expect(onSelectVenue).toHaveBeenCalledWith('arcade')
 })

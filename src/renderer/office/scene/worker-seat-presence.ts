@@ -1,5 +1,4 @@
 import type { AgentView } from '../../../shared/office/types'
-import type { WorldVenue } from '../../../shared/office/world-document'
 import type { DeskSlot, FloorGeometry } from '../scene-model'
 import type { ThemeZoneGroup } from '../logic/office-themes'
 import { workstationSeat } from '../logic/workstation-framing'
@@ -18,13 +17,11 @@ export interface WorkerSeats {
 export function workerSeats({
   agent,
   floors,
-  zoneGroups,
-  venues
+  zoneGroups
 }: {
   agent: AgentView
   floors?: readonly FloorGeometry[]
   zoneGroups: readonly ThemeZoneGroup[]
-  venues?: readonly WorldVenue[]
 }): WorkerSeats {
   const home = floors?.find((floor) => floor.floorId === agent.floorId)
   const presence = floors?.find((floor) => floor.floorId === physicalFloorId(agent))
@@ -38,16 +35,6 @@ export function workerSeats({
   for (const company of companies)
     for (const seat of company.lounge?.seats ?? [])
       lounge.push({ ...seat, y: presence ? floorElevation(presence) : 0 })
-  // Only the selected lounge venue supplies chairs; arcade terminals and garage bays are standing.
-  const venue = venues?.find((venue) => venue.id === agent.venueId && venue.kind === 'lounge')
-  if (venue)
-    lounge.push(
-      ...venue.slots.map((slot) => ({
-        x: venue.footprint.x + slot.x,
-        z: venue.footprint.z + slot.z,
-        y: 0
-      }))
-    )
   return { workstation, workstationY: home ? floorElevation(home) : 0, lounge }
 }
 

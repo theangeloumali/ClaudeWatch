@@ -74,8 +74,7 @@ const CORNERS = [-1, 1].flatMap((x) =>
   [-1, 1].flatMap((y) => [-1, 1].map((z) => new Vector3(x * 0.5, (y * CROWN_HEIGHT) / 2, z * 0.52)))
 )
 
-const isAtDesk = (agent: AgentView): boolean =>
-  agent.venueId === undefined && agent.place === undefined
+const isAtDesk = (agent: AgentView): boolean => agent.place === undefined
 
 // Camera turn and zoom, poses, places, agents, buildings, the pin, then one slot per crown.
 const PRINT_SLOTS = 10 + CROWNS
