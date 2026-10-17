@@ -623,9 +623,11 @@ Research: `hud.md` §2, §5, §6, §7, §8.
 
 **Files:** add `obstacles` to `logic/card-culling.ts` `cullCards`. Split pick from place in `scene/CardProjector.tsx` and `scene/OfficeNames.tsx`.
 
+The top bar is already handled: office-health `96f18b2` starts the card safe area below it and pins the selected card (reproduced live after Fly to on a walking agent). This task covers the floating controls inside the safe area (Collapse Minimap, the inspector's handles) and `OfficeNames`.
+
 - [ ] RED tests:
   - "a card under a floating control is moved or culled";
-  - "a label never spends the desk cap under the header" (the HUD report's FOUND 3, reproduced first).
+  - "an office name under a floating control is moved or culled".
 - [ ] Commit `feat(cards): labels steer round the floating chrome`.
 
 ## Phase 6 — Company lens (@lena-lens; ITEM CW-CS-LENS)
