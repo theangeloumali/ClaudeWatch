@@ -266,13 +266,16 @@ function leadersOf(agents: readonly FreshAgent[], day: DayLedger, nowMs: number)
   }
 }
 
+// Code-unit order, as `<` gives it: unlike localeCompare it is the same on every machine.
+export const compareKeys = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0)
+
 // Largest first, ties to the smaller key whatever the roster order; a zero never leads.
 function ranked<Key extends string>(
   rows: readonly { key: Key; value: number }[]
 ): { key: Key; value: number }[] {
   return rows
     .filter((row) => row.value > 0)
-    .sort((a, b) => b.value - a.value || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))
+    .sort((a, b) => b.value - a.value || compareKeys(a.key, b.key))
 }
 
 const leaderOf = <Key extends string>(
