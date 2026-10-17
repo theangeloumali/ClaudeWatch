@@ -26,13 +26,17 @@ export const usage = (input: number): SessionUsage => ({
   contextLimit: null
 })
 
+// Started this morning, so every token a session spent counts toward today.
+const MORNING = NOW - 3_600_000
+
 export const live = (key: string, overrides: Partial<SessionRef> = {}): SessionRef =>
-  makeSession({ key, observation: FRESH, usage: null, ...overrides })
+  makeSession({ key, observation: FRESH, usage: null, startedAtMs: MORNING, ...overrides })
 
 export const stale = (key: string, overrides: Partial<SessionRef> = {}): SessionRef =>
   makeSession({
     key,
     usage: null,
+    startedAtMs: MORNING,
     observation: { ...FRESH, observedAtMs: NOW - 120_000 },
     ...overrides
   })
