@@ -16,8 +16,7 @@ const onPlate: Lot = {
   width: 1,
   depth: 1,
   maxHeight: 1,
-  seed: 7,
-  zoneId: null
+  seed: 7
 }
 const lots: Lot[] = [...distributedTown(townOf(floor, null), [floor]).plan.lots, onPlate]
 const isBeyond = (lot: Lot): boolean => !contains(floor, lot)

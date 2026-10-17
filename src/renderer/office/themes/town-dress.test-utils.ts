@@ -53,7 +53,6 @@ function zoneLot(
     depth: 8,
     maxHeight,
     seed,
-    zoneId: null,
     zone,
     facing: 'south',
     isLandmark

@@ -114,7 +114,6 @@ describe('what moves around the garrison', () => {
           depth: side,
           maxHeight: 10,
           seed,
-          zoneId: null,
           zone: 'civic',
           facing: 'south',
           isLandmark: false

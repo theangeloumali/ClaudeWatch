@@ -105,7 +105,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'residential',
         kind: 'building',
         maxHeight: 19,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -125,7 +124,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'market',
         kind: 'building',
         maxHeight: 9,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -145,7 +143,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'residential',
         kind: 'building',
         maxHeight: 24,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -165,7 +162,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'entertainment',
         kind: 'building',
         maxHeight: 9,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -185,7 +181,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'workshop',
         kind: 'building',
         maxHeight: 11,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -205,7 +200,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'residential',
         kind: 'building',
         maxHeight: 21,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -225,7 +219,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'civic',
         kind: 'building',
         maxHeight: 28,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -245,7 +238,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'market',
         kind: 'building',
         maxHeight: 8,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -265,7 +257,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'residential',
         kind: 'building',
         maxHeight: 24,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -285,7 +276,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'market',
         kind: 'building',
         maxHeight: 10,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -305,7 +295,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'residential',
         kind: 'building',
         maxHeight: 26,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -325,7 +314,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'entertainment',
         kind: 'building',
         maxHeight: 9,
-        zoneId: null,
         isFarRing: false,
         isLandmark: true
       },
@@ -345,7 +333,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'workshop',
         kind: 'building',
         maxHeight: 9,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -365,7 +352,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'residential',
         kind: 'building',
         maxHeight: 21,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -385,7 +371,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'civic',
         kind: 'building',
         maxHeight: 28,
-        zoneId: null,
         isFarRing: false,
         isLandmark: true
       },
@@ -405,7 +390,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'market',
         kind: 'building',
         maxHeight: 10,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -425,7 +409,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'residential',
         kind: 'building',
         maxHeight: 25,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -445,7 +428,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'market',
         kind: 'building',
         maxHeight: 8,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -465,7 +447,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'residential',
         kind: 'building',
         maxHeight: 22,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -485,7 +466,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'entertainment',
         kind: 'building',
         maxHeight: 10,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -505,7 +485,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'workshop',
         kind: 'building',
         maxHeight: 10,
-        zoneId: null,
         isFarRing: false,
         isLandmark: true
       },
@@ -525,7 +504,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'residential',
         kind: 'building',
         maxHeight: 22,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -545,7 +523,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'civic',
         kind: 'building',
         maxHeight: 28,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -565,7 +542,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'market',
         kind: 'building',
         maxHeight: 11,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -585,7 +561,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'residential',
         kind: 'building',
         maxHeight: 21,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -605,7 +580,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'market',
         kind: 'building',
         maxHeight: 8,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -625,7 +599,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'residential',
         kind: 'building',
         maxHeight: 23,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -645,7 +618,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'entertainment',
         kind: 'building',
         maxHeight: 8,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -665,7 +637,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'workshop',
         kind: 'building',
         maxHeight: 9,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -685,7 +656,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'residential',
         kind: 'building',
         maxHeight: 25,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -705,7 +675,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'civic',
         kind: 'building',
         maxHeight: 28,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -725,7 +694,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'market',
         kind: 'building',
         maxHeight: 9,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -745,7 +713,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'residential',
         kind: 'building',
         maxHeight: 23,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -765,7 +732,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'market',
         kind: 'building',
         maxHeight: 11,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -785,7 +751,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'residential',
         kind: 'building',
         maxHeight: 21,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -805,7 +770,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'entertainment',
         kind: 'building',
         maxHeight: 8,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -825,7 +789,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'workshop',
         kind: 'building',
         maxHeight: 12,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -845,7 +808,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'residential',
         kind: 'building',
         maxHeight: 21,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -865,7 +827,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'civic',
         kind: 'building',
         maxHeight: 28,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       }
@@ -1023,7 +984,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'residential',
         kind: 'building',
         maxHeight: 25,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -1043,7 +1003,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'market',
         kind: 'building',
         maxHeight: 10,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -1063,7 +1022,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'residential',
         kind: 'building',
         maxHeight: 15.395174417269793,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -1083,7 +1041,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'entertainment',
         kind: 'building',
         maxHeight: 8,
-        zoneId: null,
         isFarRing: false,
         isLandmark: true
       },
@@ -1103,7 +1060,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'workshop',
         kind: 'building',
         maxHeight: 12,
-        zoneId: null,
         isFarRing: false,
         isLandmark: true
       },
@@ -1123,7 +1079,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'residential',
         kind: 'building',
         maxHeight: 18.281544034172214,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -1143,7 +1098,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'civic',
         kind: 'building',
         maxHeight: 17.299999999999997,
-        zoneId: null,
         isFarRing: false,
         isLandmark: true
       },
@@ -1163,7 +1117,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'market',
         kind: 'building',
         maxHeight: 8,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -1183,7 +1136,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'residential',
         kind: 'building',
         maxHeight: 22,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -1203,7 +1155,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'market',
         kind: 'building',
         maxHeight: 11,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -1223,7 +1174,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'residential',
         kind: 'building',
         maxHeight: 17.65,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -1243,7 +1193,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'entertainment',
         kind: 'building',
         maxHeight: 8,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -1263,7 +1212,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'workshop',
         kind: 'building',
         maxHeight: 9,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -1283,7 +1231,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'residential',
         kind: 'building',
         maxHeight: 18,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -1303,7 +1250,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'civic',
         kind: 'building',
         maxHeight: 8,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -1323,7 +1269,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'market',
         kind: 'building',
         maxHeight: 11,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -1343,7 +1288,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'residential',
         kind: 'building',
         maxHeight: 18,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -1363,7 +1307,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'market',
         kind: 'building',
         maxHeight: 8,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -1383,7 +1326,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'residential',
         kind: 'building',
         maxHeight: 8,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -1403,7 +1345,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'entertainment',
         kind: 'building',
         maxHeight: 8,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -1423,7 +1364,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'workshop',
         kind: 'building',
         maxHeight: 12,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -1443,7 +1383,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'residential',
         kind: 'building',
         maxHeight: 24,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -1463,7 +1402,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'civic',
         kind: 'building',
         maxHeight: 8,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -1483,7 +1421,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'market',
         kind: 'building',
         maxHeight: 12,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -1503,7 +1440,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'residential',
         kind: 'building',
         maxHeight: 26,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -1523,7 +1459,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'market',
         kind: 'building',
         maxHeight: 10,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -1543,7 +1478,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'residential',
         kind: 'building',
         maxHeight: 17.65,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -1563,7 +1497,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'entertainment',
         kind: 'building',
         maxHeight: 8,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -1583,7 +1516,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'workshop',
         kind: 'building',
         maxHeight: 9,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -1603,7 +1535,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'residential',
         kind: 'building',
         maxHeight: 20,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -1623,7 +1554,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'civic',
         kind: 'building',
         maxHeight: 8,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -1643,7 +1573,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'market',
         kind: 'building',
         maxHeight: 12,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -1663,7 +1592,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'residential',
         kind: 'building',
         maxHeight: 18.281544034172214,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -1683,7 +1611,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'market',
         kind: 'building',
         maxHeight: 8,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -1703,7 +1630,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'residential',
         kind: 'building',
         maxHeight: 8,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -1723,7 +1649,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'entertainment',
         kind: 'building',
         maxHeight: 8,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -1743,7 +1668,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'workshop',
         kind: 'building',
         maxHeight: 9,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       },
@@ -1763,7 +1687,6 @@ export const BASELINE: Record<string, unknown> = {
         zone: 'residential',
         kind: 'building',
         maxHeight: 17.65,
-        zoneId: null,
         isFarRing: false,
         isLandmark: false
       }

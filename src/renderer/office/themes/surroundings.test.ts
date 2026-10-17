@@ -97,8 +97,7 @@ const lotAt = (id: string, x: number, z: number, seed: number): Lot => ({
   width: 4,
   depth: 4,
   maxHeight: 10,
-  seed,
-  zoneId: null
+  seed
 })
 
 describe('nothing may hide a desk', () => {

@@ -39,7 +39,6 @@ const clockTower = dressLot(
     depth: 7,
     maxHeight: 20,
     seed: 77,
-    zoneId: null,
     zone: 'civic',
     facing: 'east',
     isLandmark: true

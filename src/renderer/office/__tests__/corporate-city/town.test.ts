@@ -97,7 +97,6 @@ describe('Corporate City town assets', () => {
           depth: 4.2,
           maxHeight: 1.95,
           seed: 59,
-          zoneId: null,
           zone,
           facing,
           isLandmark: false

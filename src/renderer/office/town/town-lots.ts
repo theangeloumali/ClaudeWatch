@@ -19,8 +19,7 @@ interface LotSite extends Rect {
   door: Point
 }
 
-// A Lot (themes/surroundings.ts) with a place in the city. `zoneId` is the owning company, which
-// the city does not know: it is null here.
+// A Lot (themes/surroundings.ts) with a place in the city.
 export interface TownLot extends Lot, LotSite {
   isFarRing: boolean
   isLandmark: boolean

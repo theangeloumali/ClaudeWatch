@@ -114,7 +114,6 @@ export function distributedTown(town: CampusTown, protectedSites: readonly Distr
           : zone === 'residential'
             ? Math.min(heightLimit, 18 + (seed % 9))
             : Math.min(heightLimit, 8 + (seed % 5)),
-      zoneId: null,
       isFarRing: false,
       isLandmark: landmarks.has(site.id)
     }
