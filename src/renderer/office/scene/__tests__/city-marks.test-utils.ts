@@ -41,6 +41,8 @@ export const stale = (key: string, overrides: Partial<SessionRef> = {}): Session
     ...overrides
   })
 
+let signalsVersion = 0
+
 // One drawn frame of the city, from real signals and a real place store.
 export function markFrame(options: {
   sessions: readonly SessionRef[]
@@ -57,8 +59,10 @@ export function markFrame(options: {
   const frame = makeFrame({ sessions: [...options.sessions] })
   return {
     signals: citySignals(frame, createDayLedger(dayKey(NOW)), NOW),
+    // Every test frame is its own signals, so no sites scan carries over.
+    signalsVersion: (signalsVersion += 1),
     events: options.events ?? [],
-    topOf: (id) => places.place(id).topAt(nowMs, options.isPinned ?? false),
+    topOf: (id) => places.topAt(id, nowMs, options.isPinned ?? false),
     nowMs,
     isPinned: options.isPinned ?? false,
     zoom: options.zoom ?? 8,

@@ -3,43 +3,41 @@ import { CITY_EVENT_LIFE_MS, type CityEvent } from '../../office-live/city-event
 import type { BuildingPlaces } from '../logic/building-place'
 import { BOXES_PER_RIG, rigPose, type RigSite } from '../logic/construction-rig'
 import type { QualityLevel } from '../logic/quality'
-import type { FloorGeometry } from '../scene-model'
 import type { OfficeTheme } from '../themes/types'
-import { floorElevation } from './all-floor-model'
-import { createMarkMesh } from './city-marks'
+import type { BuildingStoreys } from './all-floor-model'
 import { hoistPose } from './city-particle-motion'
+import { createMarkMesh } from './mark-mesh'
 
 const RIGS = 4
 const LIFE_MS = CITY_EVENT_LIFE_MS.hoist
 
 export interface RigFrame {
   events: readonly CityEvent[]
-  floorsOf: (buildingId: string) => readonly FloorGeometry[] | undefined
-  places: Pick<BuildingPlaces, 'place'>
+  // Each building's ground and top storeys, worked out once per layout, not per hoist.
+  storeys: ReadonlyMap<string, BuildingStoreys>
+  places: Pick<BuildingPlaces, 'topAt'>
   nowMs: number
   isPinned: boolean
   level: QualityLevel
 }
 
+// The event log already drops a hoist past its life; one stamped ahead of now waits.
 const isLiveHoist = (event: CityEvent, nowMs: number): boolean =>
-  event.kind === 'hoist' && nowMs >= event.atMs && nowMs - event.atMs < LIFE_MS
+  event.kind === 'hoist' && nowMs >= event.atMs
 
 // A transient over a spire stage crossing: crane and scaffold in one draw, still while it stands.
 export function createConstructionRigLayer(theme: OfficeTheme) {
   const material = new MeshStandardMaterial({ roughness: 0.8, metalness: 0.15 })
   const marks = createMarkMesh(new BoxGeometry(1, 1, 1), material, RIGS * BOXES_PER_RIG)
-  marks.mesh.raycast = () => undefined
   const { lacquer, ink, brass } = theme.palette
   const roles = [lacquer, lacquer, lacquer, ink, ...Array<string>(8).fill(brass)].map(
     (role) => new Color(role)
   )
 
   const siteOf = (event: CityEvent, frame: RigFrame): RigSite | null => {
-    const floors = frame.floorsOf(event.buildingId)
-    const spire = frame.places.place(event.buildingId).topAt(frame.nowMs, frame.isPinned)
-    if (!floors?.length || !spire) return null
-    const ordered = [...floors].sort((a, b) => floorElevation(a) - floorElevation(b))
-    return { ground: ordered[0], top: ordered[ordered.length - 1], spire }
+    const storeys = frame.storeys.get(event.buildingId)
+    const spire = frame.places.topAt(event.buildingId, frame.nowMs, frame.isPinned)
+    return storeys && spire ? { ...storeys, spire } : null
   }
 
   const update = (frame: RigFrame): void => {

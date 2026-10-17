@@ -45,12 +45,11 @@ describe('marks on the live roof', () => {
     places.setRoof(HOME, ROOF)
     places.setStage(HOME, 0, 0)
     places.setStage(HOME, 4, 10_000)
-    const place = places.place(HOME)
     const view = camera()
     const signs = createCitySignsLayer(null)
     const host: SignHost = {
       key: HOME,
-      top: (nowMs, isPinned) => place.topAt(nowMs, isPinned),
+      top: (nowMs, isPinned) => places.topAt(HOME, nowMs, isPinned),
       look: { icon: 'edit', board: SIGN_BOARD.working }
     }
     const crowns = createLeaderCrownsLayer(theme.palette)
@@ -59,14 +58,14 @@ describe('marks on the live roof', () => {
     let previous = ROOF.y
     for (let step = 0; step <= 12; step += 1) {
       const nowMs = 10_000 + step * 100
-      const top = place.topAt(nowMs, false)?.y ?? Number.NaN
+      const top = places.topAt(HOME, nowMs, false)?.y ?? Number.NaN
       expect(top).toBeGreaterThanOrEqual(previous)
       previous = top
       signs.update({ hosts: [host], camera: view, nowMs, isPinned: false, isCameraMoved: true })
       crowns.update({
         crowned: ['claude:a'],
         agents: new Map([[leader.agentKey, leader]]),
-        buildingOf: () => HOME,
+        buildings: new Map([[leader.agentKey, HOME]]),
         places,
         poses: createPoseStore(),
         camera: view,
@@ -78,7 +77,7 @@ describe('marks on the live roof', () => {
       gaps.sign.add((heightOf(disc, 0) - top).toFixed(3))
       gaps.crown.add((heightOf(crowns.mesh, 0) - top).toFixed(3))
       // A hidden spire leaves the marks on the bare roof; a standing one tops out where they sit.
-      const share = spireShare(place, ROOF.y, nowMs, false)
+      const share = spireShare(places, HOME, nowMs, false)
       const spireTop = share > 0 ? ROOF.y + SPIRE_BASE_GAP_M + share * SPIRE_MAX_M : ROOF.y
       expect(spireTop).toBeCloseTo(top)
     }
@@ -119,7 +118,7 @@ describe('growth layer budgets', () => {
       crowns.update({
         crowned: leaders.map((agent) => agent.agentKey),
         agents: new Map(leaders.map((agent) => [agent.agentKey, agent])),
-        buildingOf: () => null,
+        buildings: new Map(),
         places,
         poses: createPoseStore(),
         camera: view,
@@ -128,7 +127,7 @@ describe('growth layer budgets', () => {
       })
       rig.update({
         events: hoists,
-        floorsOf: () => floors,
+        storeys: new Map([[HOME, { ground: floors[0], top: floors[0] }]]),
         places,
         nowMs: 1_500,
         isPinned: false,

@@ -2,6 +2,7 @@ import { CameraControlsImpl } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import type { WorldVenue } from '../../../shared/office/world-document'
+import { buildingPlaces } from '../logic/building-place'
 import { cityClock } from '../logic/city-clock'
 import { projectSigns } from '../logic/project-signs'
 import type { ThemePalette } from '../themes/types'
@@ -16,7 +17,7 @@ import { createSignAtlas } from './sign-atlas'
 const NO_VENUES: readonly WorldVenue[] = []
 
 // Outside every batch: textured and per-instance. Signs re-pose only when the camera turns or
-// zooms, or a roof under one moves.
+// zooms, a sign changes, or a roof under one moves.
 export function CitySigns({
   venues = NO_VENUES,
   palette
@@ -57,7 +58,8 @@ export function CitySigns({
       nowMs: cityClock.now(),
       isPinned: cityClock.isPinned(),
       // With no camera-controls nothing reports a move, so each frame compares the pose.
-      isCameraMoved: isCameraMoved.current || !hasControls
+      isCameraMoved: isCameraMoved.current || !hasControls,
+      places: buildingPlaces
     })
     isCameraMoved.current = false
   })

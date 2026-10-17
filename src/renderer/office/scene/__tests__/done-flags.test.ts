@@ -5,7 +5,7 @@ import { createCityEventLog } from '../../../office-live/city-events'
 import { buildingIdOf } from '../../logic/city-signals'
 import { CITY_LAYER_BUDGET, measureLayer } from '../../themes/city-layer-budget.test-utils'
 import { listThemes } from '../../themes/registry'
-import { markCeiling } from '../city-marks'
+import { MARK_RISE_M } from '../city-marks'
 import { createFlagLayer, type FlagLayer } from '../DoneFlags'
 import { HOME, layerScene, live, markFrame, NOW, placed, ROOF } from './city-marks.test-utils'
 
@@ -52,7 +52,7 @@ describe('done flags', () => {
     const [flag] = placed(layer.mesh)
     expect(flag.position.x).toBeCloseTo(ROOF.x)
     expect(flag.position.y).toBeCloseTo(ROOF.y)
-    expect(flag.position.y + raised).toBeLessThanOrEqual(markCeiling(ROOF) + 1e-6)
+    expect(flag.position.y + raised).toBeLessThanOrEqual(ROOF.y + MARK_RISE_M)
   })
 
   it('a done carried in the first hello is drawn fully raised', () => {

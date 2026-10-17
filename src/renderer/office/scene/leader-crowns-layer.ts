@@ -1,42 +1,36 @@
 import {
-  BoxGeometry,
-  BufferAttribute,
   Color,
-  DynamicDrawUsage,
-  Group,
-  InstancedMesh,
-  Matrix4,
   MeshStandardMaterial,
-  OrthographicCamera,
   Quaternion,
   Vector3,
   type BufferGeometry,
   type Camera
 } from 'three'
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import type { AgentView } from '../../../shared/office/types'
 import { livePose, type PoseStore } from '../../office-live/pose-store'
+import { box as figureBox, mergeParts } from '../citizens/figure-parts'
 import type { BuildingPlaces } from '../logic/building-place'
 import { box, type PartSpec } from '../themes/parts'
 import type { ThemePalette } from '../themes/types'
 import { CARD_HEIGHT } from './CardProjector'
-import { MARK_RISE_M } from './city-marks'
+import {
+  CARD_GAP_PX,
+  cameraAzimuth,
+  cameraZoom,
+  CROWN_MAX_PX,
+  markSizeM,
+  NAME_CARD_MAX_PX,
+  screenMetres,
+  type MarkSize
+} from './city-marks'
+import { createMarkMesh } from './mark-mesh'
 
 const CROWNS = 3
-const CROWN_M = 2.4
-// A readable size on screen at every zoom (N7).
-const MIN_PX = 14
-const MAX_PX = 32
+// A readable size on screen at every zoom (N7); Horizon keeps room for it however far out.
+const CROWN_SIZE: MarkSize = { metres: 2.4, pixels: [14, CROWN_MAX_PX] }
 const CROWN_HEIGHT = 0.6
-// The tallest name card NameCards draws (title, detail and the review button), and a gap.
-export const NAME_CARD_MAX_PX = 72
-const CARD_GAP_PX = 6
 const ROOF_LIFT_M = 0.6
-// The horizon clips past MARK_RISE_M, so far out the metre cap beats MIN_PX (zoom < ~0.74).
-const MAX_CROWN_M = (MARK_RISE_M - ROOF_LIFT_M) / CROWN_HEIGHT
-
-const crownSizeM = (zoom: number): number =>
-  Math.min(MAX_CROWN_M, MAX_PX / zoom, Math.max(MIN_PX / zoom, CROWN_M))
+const WHITE = new Color(1, 1, 1)
 
 // One unit across, its front toward +z: a band with corner posts and spikes, a gem front and back.
 export function crownParts({ gold, glow }: ThemePalette): PartSpec[] {
@@ -54,35 +48,25 @@ export function crownParts({ gold, glow }: ThemePalette): PartSpec[] {
 }
 
 // A merged geometry is its own draw (N1), which is what one instanced crown mesh wants.
-function crownGeometry(palette: ThemePalette): BufferGeometry {
-  const color = new Color()
-  const pieces = crownParts(palette).map((part) => {
-    const piece = new BoxGeometry(...part.size).translate(...part.at)
-    const { count } = piece.getAttribute('position')
-    const colors = new Float32Array(count * 3)
-    color.set(part.color)
-    for (let vertex = 0; vertex < count; vertex += 1) color.toArray(colors, vertex * 3)
-    return piece.setAttribute('color', new BufferAttribute(colors, 3))
-  })
-  const merged = mergeGeometries(pieces)
-  for (const piece of pieces) piece.dispose()
-  if (!merged) throw new Error('The crown parts do not merge')
-  return merged.translate(0, -CROWN_HEIGHT / 2, 0)
-}
+const crownGeometry = (palette: ThemePalette): BufferGeometry =>
+  mergeParts(
+    'crown',
+    crownParts(palette).map(({ color, size, at }) => figureBox(color, size, at))
+  ).translate(0, -CROWN_HEIGHT / 2, 0)
 
 export interface CrownFrame {
   // Lead agent keys, the day's top three.
   crowned: readonly string[]
   agents: ReadonlyMap<string, AgentView>
-  buildingOf: (agentKey: string) => string | null
-  places: Pick<BuildingPlaces, 'place'>
+  // Each agent's office, by agent key.
+  buildings: ReadonlyMap<string, string>
+  places: Pick<BuildingPlaces, 'topAt' | 'version' | 'isEasing'>
   poses: PoseStore
   camera: Camera
   nowMs: number
   isPinned: boolean
 }
 
-const hidden = new Matrix4().makeScale(0, 0, 0)
 const UP = new Vector3(0, 1, 0)
 // The crown's box corners about its centre, before scale and turn.
 const CORNERS = [-1, 1].flatMap((x) =>
@@ -92,77 +76,70 @@ const CORNERS = [-1, 1].flatMap((x) =>
 const isAtDesk = (agent: AgentView): boolean =>
   agent.venueId === undefined && agent.place === undefined
 
+// What a frame's crowns depend on; an unchanged print draws nothing new.
+function framePrint(frame: CrownFrame): unknown[] {
+  const { camera, places } = frame
+  return [
+    ...camera.quaternion.toArray(),
+    cameraZoom(camera),
+    frame.poses.version(),
+    places.version(),
+    frame.agents,
+    frame.buildings,
+    frame.isPinned,
+    ...frame.crowned.slice(0, CROWNS)
+  ]
+}
+
+const isSamePrint = (left: readonly unknown[], right: readonly unknown[]): boolean =>
+  left.length === right.length && left.every((value, index) => value === right[index])
+
 export function createLeaderCrownsLayer(palette: ThemePalette) {
   const material = new MeshStandardMaterial({ vertexColors: true, roughness: 0.6, metalness: 0.15 })
-  const mesh = new InstancedMesh(crownGeometry(palette), material, CROWNS)
-  mesh.instanceMatrix.setUsage(DynamicDrawUsage)
-  mesh.frustumCulled = false
-  mesh.raycast = () => undefined
-  const drawn = Array.from({ length: CROWNS }, () => hidden.clone())
-  for (let index = 0; index < CROWNS; index += 1) mesh.setMatrixAt(index, hidden)
-  const group = new Group()
-  group.add(mesh)
-  const [matrix, centre, scale, cameraUp, toCamera, corner] = [
-    new Matrix4(),
-    new Vector3(),
-    new Vector3(),
-    new Vector3(),
-    new Vector3(),
-    new Vector3()
-  ]
+  const marks = createMarkMesh(crownGeometry(palette), material, CROWNS)
+  const [cameraUp, corner] = [new Vector3(), new Vector3()]
   const turn = new Quaternion()
+  let drawnPrint: unknown[] = []
 
-  // Centre height that keeps the whole crown above its card on screen and its own roof, and
-  // within MARK_RISE_M of the roof (or the card top off it); far out the ceiling wins.
-  const pose = (agent: AgentView, frame: CrownFrame, zoom: number): Matrix4 => {
-    const size = crownSizeM(zoom)
+  // Each crown sits clear of its card on screen and of its own roof. Every crown shares the
+  // frame's size and turn, so its lowest corner on screen is worked out once.
+  const update = (frame: CrownFrame): void => {
+    const print = framePrint(frame)
+    if (isSamePrint(print, drawnPrint) && !frame.places.isEasing(frame.nowMs, frame.isPinned))
+      return
+    drawnPrint = print
+    const zoom = cameraZoom(frame.camera)
+    const size = markSizeM(CROWN_SIZE, zoom)
     const half = (size * CROWN_HEIGHT) / 2
-    const at = livePose(frame.poses, agent)
+    const azimuth = cameraAzimuth(frame.camera)
     cameraUp.copy(UP).applyQuaternion(frame.camera.quaternion)
-    frame.camera.getWorldDirection(toCamera).negate()
-    turn.setFromAxisAngle(UP, Math.atan2(toCamera.x, toCamera.z))
-    const lowest = Math.min(
-      ...CORNERS.map((point) =>
+    turn.setFromAxisAngle(UP, azimuth)
+    let lowest = Infinity
+    for (const point of CORNERS)
+      lowest = Math.min(
+        lowest,
         corner.copy(point).multiplyScalar(size).applyQuaternion(turn).dot(cameraUp)
       )
-    )
-    const clearance = (NAME_CARD_MAX_PX + CARD_GAP_PX) / zoom
-    const cardTop = at.elevation + CARD_HEIGHT
-    let y = cardTop + (clearance - lowest) / cameraUp.y
-    const buildingId = isAtDesk(agent) ? frame.buildingOf(agent.agentKey) : null
-    const roof = buildingId
-      ? frame.places.place(buildingId).topAt(frame.nowMs, frame.isPinned)
-      : null
-    if (roof) y = Math.max(y, roof.y + ROOF_LIFT_M + half)
-    y = Math.min(y, (roof?.y ?? cardTop) + MARK_RISE_M - half)
-    return matrix.compose(centre.set(at.x, y, at.z), turn, scale.setScalar(size))
-  }
-
-  // Writes only the crowns that moved, so a still city uploads nothing.
-  const update = (frame: CrownFrame): void => {
-    const zoom = frame.camera instanceof OrthographicCamera ? frame.camera.zoom : 1
-    let first = CROWNS
-    let last = -1
+    const overCard = (screenMetres(NAME_CARD_MAX_PX + CARD_GAP_PX, zoom) - lowest) / cameraUp.y
     for (let index = 0; index < CROWNS; index += 1) {
       const key = frame.crowned[index]
       const agent = key === undefined ? undefined : frame.agents.get(key)
-      const next = agent && agent.place !== 'leaving' ? pose(agent, frame, zoom) : hidden
-      if (drawn[index].equals(next)) continue
-      drawn[index].copy(next)
-      mesh.setMatrixAt(index, next)
-      first = Math.min(first, index)
-      last = index
+      if (!agent || agent.place === 'leaving') {
+        marks.hide(index)
+        continue
+      }
+      const at = livePose(frame.poses, agent)
+      const buildingId = isAtDesk(agent) ? frame.buildings.get(agent.agentKey) : undefined
+      const roof = buildingId ? frame.places.topAt(buildingId, frame.nowMs, frame.isPinned) : null
+      const y = Math.max(
+        at.elevation + CARD_HEIGHT + overCard,
+        roof ? roof.y + ROOF_LIFT_M + half : -Infinity
+      )
+      const pose = { x: at.x, y, z: at.z, scaleX: size, scaleY: size, scaleZ: size }
+      marks.put(index, { ...pose, rotationY: azimuth }, WHITE)
     }
-    if (last < 0) return
-    mesh.instanceMatrix.addUpdateRange(first * 16, (last - first + 1) * 16)
-    mesh.instanceMatrix.needsUpdate = true
+    marks.finish(CROWNS)
   }
 
-  const dispose = (): void => {
-    mesh.geometry.dispose()
-    material.dispose()
-    mesh.dispose()
-  }
-
-  return { group, mesh, update, dispose }
+  return { group: marks.mesh, mesh: marks.mesh, update, dispose: marks.dispose }
 }

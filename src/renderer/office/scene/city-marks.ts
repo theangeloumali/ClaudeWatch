@@ -1,24 +1,19 @@
-import {
-  DynamicDrawUsage,
-  InstancedBufferAttribute,
-  InstancedMesh,
-  Object3D,
-  type BufferAttribute,
-  type BufferGeometry,
-  type Color,
-  type Material
-} from 'three'
+import { OrthographicCamera, Vector3, type Camera } from 'three'
+import { clamp, type Range } from '../../../shared/range'
 import { cityEvents, type CityEvent } from '../../office-live/city-events'
-import { buildingPlace, type PlaceTop } from '../logic/building-place'
-import type { SceneBox, ZoomBand } from '../logic/camera-bands'
+import { buildingPlaces, type PlaceTop } from '../logic/building-place'
+import { MIN_POLAR, type SceneBox, type ZoomBand } from '../logic/camera-bands'
 import { cityClock } from '../logic/city-clock'
 import { citySignalStore } from '../logic/city-signal-store'
 import type { BuildingSignal, CitySignals } from '../logic/city-signals'
 import type { QualityLevel } from '../logic/quality'
+import { SPIRE_BASE_GAP_M, SPIRE_MAX_M } from '../logic/token-spires'
 
 // What every city mark reads in one drawn frame: the live signals, events and roofs.
 export interface CityMarkFrame {
   signals: CitySignals
+  // Bumps only when a signal changed, so one sites scan serves every frame until then.
+  signalsVersion: number
   events: readonly CityEvent[]
   topOf: (buildingId: string) => PlaceTop | null
   nowMs: number
@@ -33,8 +28,9 @@ export function readCityMarks(band: ZoomBand, zoom: number): CityMarkFrame {
   const isPinned = cityClock.isPinned()
   return {
     signals: citySignalStore.current(),
+    signalsVersion: citySignalStore.version(),
     events: cityEvents.active(),
-    topOf: (buildingId) => buildingPlace(buildingId).topAt(nowMs, isPinned),
+    topOf: (buildingId) => buildingPlaces.topAt(buildingId, nowMs, isPinned),
     nowMs,
     isPinned,
     zoom,
@@ -47,29 +43,48 @@ export const isMarkLevel = (level: QualityLevel): boolean => level !== 'light'
 
 // A crown stands at most this far over its top storey; a spec pins it for every theme.
 export const CROWN_RISE_MAX_M = 3
-// The tallest mark over a roof: the beacon column.
+// The tallest mark over a roof in metres: the beacon column.
 export const MARK_RISE_M = 12
+// The tallest screen-sized stack: a leader crown over the tallest name card and its gap.
+export const NAME_CARD_MAX_PX = 72
+export const CARD_GAP_PX = 6
+export const CROWN_MAX_PX = 32
+// A crown's corners lie within its size of its centre, so twice its size bounds its reach.
+const MARK_MAX_PX = NAME_CARD_MAX_PX + CARD_GAP_PX + 2 * CROWN_MAX_PX
 
-export const markCeiling = (top: PlaceTop): number => top.y + MARK_RISE_M
-
-// Horizon clips at its box, so it keeps room over the scene for a crown and its marks (N5).
+// Horizon clips at its box, so it keeps room over the scene for a crown, a spire and marks (N5).
 export const markClipBox = (box: SceneBox): SceneBox => ({
   ...box,
-  maxY: box.maxY + CROWN_RISE_MAX_M + MARK_RISE_M
+  maxY: box.maxY + CROWN_RISE_MAX_M + SPIRE_BASE_GAP_M + SPIRE_MAX_M + MARK_RISE_M
 })
 
 export const screenMetres = (pixels: number, zoom: number): number => pixels / Math.max(zoom, 0.1)
 
-// The buildings whose signal holds, in a stable order, at most `limit` of them.
-export function markSites(
-  signals: CitySignals,
-  holds: (signal: BuildingSignal) => boolean,
-  limit: number
-): string[] {
-  const sites: string[] = []
-  for (const [buildingId, signal] of signals.buildings) if (holds(signal)) sites.push(buildingId)
-  return sites.sort().slice(0, limit)
+// Screen-sized marks rise in pixels, so Horizon's room over the clip box grows as the camera pulls
+// out; a lower tilt stretches each screen pixel over more height (`upY` is the camera's up.y).
+export const markHeadroomM = (zoom: number, upY: number): number =>
+  screenMetres(MARK_MAX_PX, zoom) / Math.max(upY, Math.sin(MIN_POLAR))
+
+// A mark `metres` across, held between `pixels` on screen at every zoom (N7).
+export interface MarkSize {
+  metres: number
+  pixels: Range
 }
+
+export const markSizeM = ({ metres, pixels: [low, high] }: MarkSize, zoom: number): number =>
+  clamp(metres, [screenMetres(low, zoom), screenMetres(high, zoom)])
+
+export const cameraZoom = (camera: Camera): number =>
+  camera instanceof OrthographicCamera ? camera.zoom : 1
+
+const view = new Vector3()
+// The turn about +y that faces a mark toward the camera.
+export function cameraAzimuth(camera: Camera): number {
+  camera.getWorldDirection(view)
+  return Math.atan2(-view.x, -view.z)
+}
+
+export const easeOut = (share: number): number => 1 - (1 - share) * (1 - share)
 
 export interface MarkPose {
   x: number
@@ -82,90 +97,23 @@ export interface MarkPose {
   rotationY?: number
 }
 
-export interface MarkMesh {
-  mesh: InstancedMesh
-  // Writes an instance only where it changed, so a still mark uploads nothing.
-  put(index: number, pose: MarkPose, color: Color): void
-  // Ends the frame: one dirty range per buffer, and no draw while nothing is shown.
-  finish(count: number): void
-  dispose(): void
-}
+type SiteTest = (signal: BuildingSignal) => boolean
+const NO_SITES: readonly string[] = []
+const siteScans = new WeakMap<SiteTest, { version: number; limit: number; sites: string[] }>()
 
-interface DirtyRange {
-  low: number
-  high: number
-}
-
-const scratch = new Object3D()
-
-function writeChanged(
-  attribute: BufferAttribute,
-  values: ArrayLike<number>,
-  index: number,
-  range: DirtyRange
-): void {
-  const { array, itemSize } = attribute
-  const offset = index * itemSize
-  let isSame = true
-  for (let element = 0; element < itemSize && isSame; element++)
-    isSame = array[offset + element] === Math.fround(values[element])
-  if (isSame) return
-  for (let element = 0; element < itemSize; element++) array[offset + element] = values[element]
-  range.low = Math.min(range.low, index)
-  range.high = Math.max(range.high, index)
-}
-
-function flush(attribute: BufferAttribute, range: DirtyRange): void {
-  if (range.high < range.low) return
-  const size = attribute.itemSize
-  attribute.addUpdateRange(range.low * size, (range.high - range.low + 1) * size)
-  attribute.needsUpdate = true
-  range.low = Infinity
-  range.high = -1
-}
-
-// One instanced draw for a whole effect kind (N3), written in place each frame.
-export function createMarkMesh(
-  geometry: BufferGeometry,
-  material: Material,
-  capacity: number
-): MarkMesh {
-  const mesh = new InstancedMesh(geometry, material, capacity)
-  mesh.instanceMatrix.setUsage(DynamicDrawUsage)
-  const colors = new InstancedBufferAttribute(new Float32Array(capacity * 3), 3)
-  colors.setUsage(DynamicDrawUsage)
-  mesh.instanceColor = colors
-  // Instances roam the city; one stale bounding sphere would cull them all.
-  mesh.frustumCulled = false
-  mesh.count = 0
-  mesh.visible = false
-  const matrixRange: DirtyRange = { low: Infinity, high: -1 }
-  const colorRange: DirtyRange = { low: Infinity, high: -1 }
-  const rgb = [0, 0, 0]
-  return {
-    mesh,
-    put(index, pose, color) {
-      if (index >= capacity) return
-      scratch.position.set(pose.x, pose.y, pose.z)
-      scratch.rotation.set(pose.rotationX ?? 0, pose.rotationY ?? 0, 0)
-      scratch.scale.set(pose.scaleX, pose.scaleY, pose.scaleZ)
-      scratch.updateMatrix()
-      writeChanged(mesh.instanceMatrix, scratch.matrix.elements, index, matrixRange)
-      rgb[0] = color.r
-      rgb[1] = color.g
-      rgb[2] = color.b
-      writeChanged(colors, rgb, index, colorRange)
-    },
-    finish(count) {
-      mesh.count = Math.min(count, capacity)
-      mesh.visible = mesh.count > 0
-      flush(mesh.instanceMatrix, matrixRange)
-      flush(colors, colorRange)
-    },
-    dispose() {
-      mesh.geometry.dispose()
-      material.dispose()
-      mesh.dispose()
-    }
-  }
+// The buildings whose signal holds, in a stable order, at most `limit`; none at the desk.
+export function markSites(
+  frame: Pick<CityMarkFrame, 'signals' | 'signalsVersion' | 'band'>,
+  holds: SiteTest,
+  limit: number
+): readonly string[] {
+  if (frame.band === 'desk') return NO_SITES
+  const scan = siteScans.get(holds)
+  if (scan?.version === frame.signalsVersion && scan.limit === limit) return scan.sites
+  const sites: string[] = []
+  for (const [buildingId, signal] of frame.signals.buildings)
+    if (holds(signal)) sites.push(buildingId)
+  sites.sort().splice(limit)
+  siteScans.set(holds, { version: frame.signalsVersion, limit, sites })
+  return sites
 }

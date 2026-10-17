@@ -6,6 +6,7 @@ import { cityClock } from '../logic/city-clock'
 import { readQualityLevel } from '../quality-store'
 import type { FloorGeometry } from '../scene-model'
 import type { OfficeTheme } from '../themes/types'
+import { buildingKeyOf, groundAndTop, type BuildingStoreys } from './all-floor-model'
 import { createConstructionRigLayer } from './construction-rig-layer'
 
 // A crane hoists each new spire stage for 3 s. Outside every batch, so a quality step mid-hoist
@@ -19,21 +20,23 @@ export function ConstructionRig({
 }) {
   const layer = useMemo(() => createConstructionRigLayer(theme), [theme])
   useEffect(() => () => layer.dispose(), [layer])
-  const buildings = useMemo(
-    () => Map.groupBy(floors, (floor) => floor.buildingId ?? floor.floorId),
-    [floors]
-  )
-  useFrame(() => {
-    const nowMs = cityClock.now()
-    const isPinned = cityClock.isPinned()
+  const storeys = useMemo(() => {
+    const byBuilding = new Map<string, BuildingStoreys>()
+    for (const [buildingId, storeyList] of Map.groupBy(floors, buildingKeyOf)) {
+      const ends = groundAndTop(storeyList)
+      if (ends) byBuilding.set(buildingId, ends)
+    }
+    return byBuilding
+  }, [floors])
+  useFrame(() =>
     layer.update({
       events: cityEvents.active(),
-      floorsOf: (buildingId) => buildings.get(buildingId),
+      storeys,
       places: buildingPlaces,
-      nowMs,
-      isPinned,
+      nowMs: cityClock.now(),
+      isPinned: cityClock.isPinned(),
       level: readQualityLevel()
     })
-  })
+  )
   return <primitive object={layer.group} />
 }

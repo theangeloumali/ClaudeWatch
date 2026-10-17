@@ -7,18 +7,16 @@ import {
   InstancedMesh,
   Matrix4,
   MeshBasicMaterial,
-  OrthographicCamera,
   PlaneGeometry,
   Quaternion,
   Vector3,
-  type BufferAttribute,
   type BufferGeometry,
   type Camera,
   type Texture
 } from 'three'
 import type { WorldVenue } from '../../../shared/office/world-document'
 import { WORLD_DOCUMENT_LIMITS } from '../../../shared/office/world-document-limits'
-import { buildingPlace, type PlaceTop } from '../logic/building-place'
+import { buildingPlaces, type BuildingPlaces, type PlaceTop } from '../logic/building-place'
 import {
   SIGN_BOARD,
   signInk,
@@ -26,29 +24,22 @@ import {
   type ProjectSigns,
   type SignIcon
 } from '../logic/project-signs'
+import { topOf } from '../themes/parts'
 import type { ThemePalette } from '../themes/types'
 import { venueLandmark } from '../themes/venue-landmarks'
-import { MARK_RISE_M } from './city-marks'
+import { cameraZoom, markSizeM, type MarkSize } from './city-marks'
+import { cleanRange, flush, writeChanged, type DirtyRange } from './mark-mesh'
+import { HIDDEN_MATRIX } from './mesh-batches'
 import { cellOffset } from './sign-atlas'
 
 const CAPACITY = WORLD_DOCUMENT_LIMITS.buildings + 5
-const SIGN_M = 3
-// A readable size on screen at every zoom (N7): orthographic size follows zoom, not distance.
-const MIN_PX = 18
-const MAX_PX = 40
+// A readable size on screen at every zoom (N7); Horizon keeps room for it however far out.
+const SIGN_SIZE: MarkSize = { metres: 3, pixels: [18, 40] }
 const LIFT_M = 0.6
 export const SIGN_DISC_DEPTH = 0.12
 const FACE_SHARE = 0.72
 // translateZ ignores scale, so the face's offset is sized by hand.
 const FACE_GAP = 0.02
-
-// The horizon clips past MARK_RISE_M, so far out the metre cap beats MIN_PX (zoom < ~1.58).
-const MAX_SIGN_M = MARK_RISE_M - LIFT_M
-
-const signSizeM = (zoom: number): number =>
-  Math.min(MAX_SIGN_M, MAX_PX / zoom, Math.max(MIN_PX / zoom, SIGN_M))
-
-export const VENUE_BOARD = (palette: ThemePalette): string => palette.gold
 
 export interface SignHost {
   key: string
@@ -63,6 +54,8 @@ export interface SignFrame {
   nowMs: number
   isPinned: boolean
   isCameraMoved: boolean
+  // Unchanged with the same hosts, the same pose and a still place store: nothing to re-pose.
+  places?: Pick<BuildingPlaces, 'version' | 'isEasing'>
 }
 
 function faceMaterial(atlas: Texture | null): MeshBasicMaterial {
@@ -88,6 +81,7 @@ function faceMaterial(atlas: Texture | null): MeshBasicMaterial {
 function signMesh(geometry: BufferGeometry, material: MeshBasicMaterial): InstancedMesh {
   const mesh = new InstancedMesh(geometry, material, CAPACITY)
   mesh.instanceMatrix.setUsage(DynamicDrawUsage)
+  mesh.instanceColor = new InstancedBufferAttribute(new Float32Array(CAPACITY * 3), 3)
   mesh.frustumCulled = false
   // Signs take no pointer: a click goes through to the building.
   mesh.raycast = () => undefined
@@ -95,19 +89,6 @@ function signMesh(geometry: BufferGeometry, material: MeshBasicMaterial): Instan
   return mesh
 }
 
-interface DirtyRange {
-  first: number
-  last: number
-}
-
-function sendRange(attribute: BufferAttribute | null | undefined, range: DirtyRange): void {
-  if (!attribute || range.last < 0) return
-  const size = attribute.itemSize
-  attribute.addUpdateRange(range.first * size, (range.last - range.first + 1) * size)
-  attribute.needsUpdate = true
-}
-
-const hidden = new Matrix4().makeScale(0, 0, 0)
 const isSameTop = (a: PlaceTop | null, b: PlaceTop | null | undefined): boolean =>
   a?.x === b?.x && a?.y === b?.y && a?.z === b?.z
 
@@ -128,63 +109,90 @@ export function createCitySignsLayer(atlas: Texture | null) {
   const toward = new Vector3()
   const scale = new Vector3()
   const color = new Color()
+  const rgb = [0, 0, 0]
+  const ranges = {
+    disc: cleanRange(),
+    face: cleanRange(),
+    discColor: cleanRange(),
+    faceColor: cleanRange(),
+    cells: cleanRange()
+  }
+  let drawn: { hosts: readonly SignHost[] | null; placesVersion: number; isPinned: boolean } = {
+    hosts: null,
+    placesVersion: -1,
+    isPinned: false
+  }
+
+  const writeColor = (mesh: InstancedMesh, index: number, range: DirtyRange): void => {
+    if (!mesh.instanceColor) return
+    rgb[0] = color.r
+    rgb[1] = color.g
+    rgb[2] = color.b
+    writeChanged(mesh.instanceColor, rgb, index, range)
+  }
 
   const place = (index: number, top: PlaceTop | null): void => {
     if (!top) {
-      disc.setMatrixAt(index, hidden)
-      face.setMatrixAt(index, hidden)
+      writeChanged(disc.instanceMatrix, HIDDEN_MATRIX.elements, index, ranges.disc)
+      writeChanged(face.instanceMatrix, HIDDEN_MATRIX.elements, index, ranges.face)
       return
     }
-    const size = signSizeM(pose.zoom)
+    const size = markSizeM(SIGN_SIZE, pose.zoom)
     centre.set(top.x, top.y + LIFT_M + size / 2, top.z)
-    disc.setMatrixAt(index, matrix.compose(centre, pose.quaternion, scale.setScalar(size)))
+    matrix.compose(centre, pose.quaternion, scale.setScalar(size))
+    writeChanged(disc.instanceMatrix, matrix.elements, index, ranges.disc)
     toward.set(0, 0, 1).applyQuaternion(pose.quaternion)
     centre.addScaledVector(toward, size * (SIGN_DISC_DEPTH / 2 + FACE_GAP))
-    face.setMatrixAt(index, matrix.compose(centre, pose.quaternion, scale.set(size, size, 1)))
+    matrix.compose(centre, pose.quaternion, scale.set(size, size, 1))
+    writeChanged(face.instanceMatrix, matrix.elements, index, ranges.face)
   }
 
   const dress = (index: number, look: NonNullable<SignHost['look']>): void => {
-    disc.setColorAt(index, color.set(look.board))
-    face.setColorAt(index, color.set(signInk(look.board)))
-    const [u, v] = cellOffset(look.icon)
-    cells.setXY(index, u, v)
+    color.set(look.board)
+    writeColor(disc, index, ranges.discColor)
+    color.set(signInk(look.board))
+    writeColor(face, index, ranges.faceColor)
+    writeChanged(cells, cellOffset(look.icon), index, ranges.cells)
   }
 
-  const update = ({ hosts, camera, nowMs, isPinned, isCameraMoved }: SignFrame): void => {
+  const update = (frame: SignFrame): void => {
+    const { hosts, camera, nowMs, isPinned, isCameraMoved, places } = frame
     const count = Math.min(hosts.length, CAPACITY)
-    const zoom = camera instanceof OrthographicCamera ? camera.zoom : 1
+    const zoom = cameraZoom(camera)
     const isTurned =
       isCameraMoved && (zoom !== pose.zoom || !pose.quaternion.equals(camera.quaternion))
     if (isTurned) {
       pose.quaternion.copy(camera.quaternion)
       pose.zoom = zoom
     }
-    const moved: DirtyRange = { first: count, last: -1 }
-    const dressed: DirtyRange = { first: count, last: -1 }
-    const mark = (range: DirtyRange, index: number): void => {
-      range.first = Math.min(range.first, index)
-      range.last = Math.max(range.last, index)
-    }
+    const placesVersion = places?.version() ?? -1
+    const isStill =
+      places !== undefined &&
+      !isTurned &&
+      hosts === drawn.hosts &&
+      placesVersion === drawn.placesVersion &&
+      isPinned === drawn.isPinned &&
+      !places.isEasing(nowMs, isPinned)
+    if (isStill) return
+    drawn = { hosts, placesVersion, isPinned }
     for (let index = 0; index < count; index += 1) {
       const { look, top } = hosts[index]
       const lookKey = look ? `${look.icon}|${look.board}` : ''
       const isRedressed = index >= disc.count || looks[index] !== lookKey
       if (isRedressed && look) dress(index, look)
-      if (isRedressed) mark(dressed, index)
       looks[index] = lookKey
       const at = look ? top(nowMs, isPinned) : null
       if (!isTurned && !isRedressed && isSameTop(at, tops[index])) continue
       tops[index] = at
       place(index, at)
-      mark(moved, index)
     }
     disc.count = count
     face.count = count
-    sendRange(disc.instanceMatrix, moved)
-    sendRange(face.instanceMatrix, moved)
-    sendRange(disc.instanceColor, dressed)
-    sendRange(face.instanceColor, dressed)
-    sendRange(cells, dressed)
+    flush(disc.instanceMatrix, ranges.disc)
+    flush(face.instanceMatrix, ranges.face)
+    if (disc.instanceColor) flush(disc.instanceColor, ranges.discColor)
+    if (face.instanceColor) flush(face.instanceColor, ranges.faceColor)
+    flush(cells, ranges.cells)
   }
 
   const dispose = (): void => {
@@ -201,16 +209,15 @@ export function createCitySignsLayer(atlas: Texture | null) {
 
 export function venueSignHosts(venues: readonly WorldVenue[], palette: ThemePalette): SignHost[] {
   return venues.map((venue) => {
-    const parts = venueLandmark(venue, palette)
     const top = {
       x: venue.footprint.x,
-      y: Math.max(0, ...parts.map((part) => part.at[1] + part.size[1] / 2)),
+      y: Math.max(0, topOf(venueLandmark(venue, palette))),
       z: venue.footprint.z
     }
     return {
       key: venue.id,
       top: () => top,
-      look: { icon: venueSign(venue.kind).icon, board: VENUE_BOARD(palette) }
+      look: { icon: venueSign(venue.kind).icon, board: palette.gold }
     }
   })
 }
@@ -219,6 +226,6 @@ export function venueSignHosts(venues: readonly WorldVenue[], palette: ThemePale
 export const projectSignHosts = (signs: ProjectSigns): SignHost[] =>
   [...signs.all()].map(([buildingId, state]) => ({
     key: buildingId,
-    top: (nowMs, isPinned) => buildingPlace(buildingId).topAt(nowMs, isPinned),
+    top: (nowMs, isPinned) => buildingPlaces.topAt(buildingId, nowMs, isPinned),
     look: state && { icon: state.icon, board: SIGN_BOARD[state.tint] }
   }))

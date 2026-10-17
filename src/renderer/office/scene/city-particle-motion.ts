@@ -1,6 +1,7 @@
+import { clamp } from '../../../shared/range'
 import type { PlaceTop } from '../logic/building-place'
-import { hashOf } from '../themes/lot-math'
-import { markCeiling, screenMetres, type MarkPose } from './city-marks'
+import { SPIRE_MODULE_M } from '../logic/token-spires'
+import { easeOut, screenMetres, type MarkPose } from './city-marks'
 
 // Fireworks: three shells a burst, each rising then blooming (ClearSpent signal-bursts, sim/signals).
 const SHELLS = 3
@@ -33,7 +34,7 @@ const THIN_FROM = 0.75
 
 // Hoist: the crane sets the new stage's module down on the roof over most of the hoist.
 const MODULE_WIDTH_M = 1.4
-const MODULE_HEIGHT_M = 0.8
+const MODULE_HEIGHT_M = SPIRE_MODULE_M
 const HOIST_DROP_M = 3
 const HOIST_SET_SHARE = 0.8
 
@@ -43,9 +44,6 @@ const SPARK_DIRECTIONS = Array.from({ length: SPARKS }, (_, index) => {
   const ring = Math.sqrt(1 - y * y)
   return { x: Math.cos(index * GOLDEN_ANGLE) * ring, y, z: Math.sin(index * GOLDEN_ANGLE) * ring }
 })
-
-const clampShare = (share: number): number => Math.min(1, Math.max(0, share))
-const easeOut = (share: number): number => 1 - (1 - share) * (1 - share)
 
 interface ShellPart {
   shell: number
@@ -62,7 +60,7 @@ export function burstParts(
   isPinned: boolean
 ): ShellPart[] {
   const parts: ShellPart[] = []
-  const apexY = Math.min(top.y + APEX_M, markCeiling(top))
+  const apexY = top.y + APEX_M
   const size = screenMetres(SPARK_PX, zoom)
   const radius = Math.max(BLOOM_MIN_M, screenMetres(BLOOM_PX, zoom))
   for (let shell = 0; shell < SHELLS; shell++) {
@@ -101,24 +99,24 @@ export function burstParts(
 // One puff of a site's smoke, or null before its turn; `share` is how far it has risen.
 export function puffPose(options: {
   top: PlaceTop
-  buildingId: string
+  // The site's own draw for this puff, so neighbouring offices sway apart.
+  seed: number
   puff: number
   sinceMs: number
   nowMs: number
   zoom: number
   isPinned: boolean
 }): { pose: MarkPose; share: number } | null {
-  const { top, puff, zoom } = options
+  const { top, puff, zoom, seed } = options
   const bornMs = options.sinceMs + (puff * PUFF_MS) / PUFFS
   if (!options.isPinned && options.nowMs < bornMs) return null
   const share = options.isPinned
     ? (puff + 0.5) / PUFFS
     : ((options.nowMs - bornMs) % PUFF_MS) / PUFF_MS
-  const seed = (hashOf(`${options.buildingId}:${puff}`) % 1_000) / 1_000
   const thin = share > THIN_FROM ? (1 - share) / (1 - THIN_FROM) : 1
   const size = Math.max(PUFF_MIN_M, screenMetres(PUFF_PX, zoom)) * (0.6 + share) * thin
   const sway = Math.sin((share + seed) * Math.PI * 2) * SWAY_M
-  const y = Math.min(top.y + size / 2 + PUFF_RISE_M * easeOut(share), markCeiling(top))
+  const y = top.y + size / 2 + PUFF_RISE_M * easeOut(share)
   return {
     share,
     pose: {
@@ -136,10 +134,9 @@ export function puffPose(options: {
 
 // The module the crane sets down: from above the roof onto it, then held there.
 export function hoistPose(top: PlaceTop, ageMs: number, lifeMs: number): MarkPose {
-  const share = clampShare(ageMs / (lifeMs * HOIST_SET_SHARE))
+  const share = clamp(ageMs / (lifeMs * HOIST_SET_SHARE), [0, 1])
   const landedY = top.y + MODULE_HEIGHT_M / 2
-  const highest = Math.max(landedY, markCeiling(top) - MODULE_HEIGHT_M / 2)
-  const y = Math.min(landedY + HOIST_DROP_M * (1 - easeOut(share)), highest)
+  const y = landedY + HOIST_DROP_M * (1 - easeOut(share))
   return {
     x: top.x,
     y,

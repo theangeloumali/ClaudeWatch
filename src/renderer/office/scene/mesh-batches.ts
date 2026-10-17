@@ -228,7 +228,8 @@ const inverseRoot = new Matrix4()
 const placed = new Matrix4()
 const matrix = new Matrix4()
 const instance = new Matrix4()
-const hidden = new Matrix4().makeScale(0, 0, 0)
+// A zero-scale instance: drawn, but nothing shows.
+export const HIDDEN_MATRIX = new Matrix4().makeScale(0, 0, 0)
 
 // The root of the pass in progress: set by prepareRoot with inverseRoot.
 let passRoot: Object3D | null = null
@@ -262,7 +263,7 @@ function drawSource(batch: InstancedMesh, source: SourceMesh, index: number): nu
       source.mesh.getMatrixAt(part, instance)
       matrix.multiplyMatrices(placed, instance)
     } else matrix.copy(placed)
-    batch.setMatrixAt(index + part, isShown ? matrix : hidden)
+    batch.setMatrixAt(index + part, isShown ? matrix : HIDDEN_MATRIX)
   }
   source.drawnMatrix.copy(source.mesh.matrixWorld)
   source.drawnInstances = instanceVersionOf(source.mesh)
