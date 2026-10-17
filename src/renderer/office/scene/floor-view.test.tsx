@@ -7,7 +7,7 @@ import { toFloorGeometry } from '../../office-live/layout-geometry'
 import { groupZonesByTheme } from '../logic/office-themes'
 import { DESK_REACH } from '../logic/room-layout'
 import type { DeskSlot, FloorGeometry, LoungeGeometry } from '../scene-model'
-import { beanbagParts } from '../themes/game-corner'
+import { beanbagBodyPart } from '../themes/game-corner'
 import { GameCorner } from '../themes/GameCorner'
 import { Parts, type PartSpec } from '../themes/parts'
 import { themeForTeam } from '../themes/registry'
@@ -169,13 +169,11 @@ describe('furniture sized for the larger agents', () => {
     )
     for (const seat of seats) {
       expect(seat.scale).toBe(FURNITURE_SCALE)
-      expect(seat.props.parts).toEqual(
-        expect.arrayContaining(
-          beanbagParts(theme.palette, 0).map(({ at, size }) =>
-            expect.objectContaining({ at, size })
-          )
-        )
-      )
+      // One body per seat: the 512-worker overview stays inside its triangle ceiling.
+      const [body] = seat.props.parts as PartSpec[]
+      const { at, size } = beanbagBodyPart(theme.palette, 0)
+      expect(seat.props.parts).toHaveLength(1)
+      expect(body).toEqual(expect.objectContaining({ at, size }))
     }
   })
 

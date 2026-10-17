@@ -5,7 +5,7 @@ import { ROOM_DOOR_WIDTH, type WallsMode } from '../logic/room-layout'
 import { plateLocalFloor } from '../logic/zone-framing'
 import type { FloorGeometry, LoungeGeometry } from '../scene-model'
 import { getTheme } from '../themes/registry'
-import { beanbagParts } from '../themes/game-corner'
+import { beanbagBodyPart } from '../themes/game-corner'
 import { GameCorner } from '../themes/GameCorner'
 import { Parts } from '../themes/parts'
 import type { OfficeTheme } from '../themes/types'
@@ -114,7 +114,7 @@ export function FloorView({
                             rotation={[0, seat.heading, 0]}
                             scale={FURNITURE_SCALE}
                           >
-                            <Parts parts={beanbagParts(zoneTheme.palette, index)} />
+                            <Parts parts={[beanbagBodyPart(zoneTheme.palette, index)]} />
                           </group>
                         ))}
                       </group>
