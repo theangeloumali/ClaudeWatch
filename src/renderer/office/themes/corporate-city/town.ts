@@ -22,13 +22,5 @@ export const CORPORATE_TOWN: TownDress = {
   },
   citizens: CORPORATE_CITIZENS,
   vehicles: CORPORATE_VEHICLES,
-  garden: {
-    tree: 'city canopy tree',
-    lamp: 'cantilever streetlight',
-    seat: 'mineral timber bench',
-    feature: 'planted civic square',
-    corner: 'linear pocket garden',
-    plazaPair: 'square evergreen planter',
-    innerTree: 'garden tree'
-  }
+  garden: 'planted civic square'
 }

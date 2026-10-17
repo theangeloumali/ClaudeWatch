@@ -13,13 +13,5 @@ export const GARRISON_TOWN: TownDress = {
   roads: GARRISON_ROADS,
   citizens: GARRISON_CITIZENS,
   vehicles: GARRISON_VEHICLES,
-  garden: {
-    tree: 'planter-trough',
-    lamp: 'floodlight',
-    seat: 'bench-pair',
-    feature: 'parade-lawn',
-    corner: 'hydroponic-bed',
-    plazaPair: 'antenna-mast',
-    innerTree: 'garden tree'
-  }
+  garden: 'parade-lawn'
 }

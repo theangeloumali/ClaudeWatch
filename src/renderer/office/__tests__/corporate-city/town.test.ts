@@ -27,8 +27,6 @@ const COLORS = new Set([
   ...HUMAN_HAIR_COLORS,
   ...HUMAN_SKIN_TONES
 ])
-// The tree a theme with no tree design of its own names in its garden.
-const GARDEN_TREE = 'garden tree'
 const FOOTPRINTS = [
   { width: 8, depth: 5 },
   { width: 5, depth: 8 },
@@ -129,7 +127,7 @@ describe('Corporate City town assets', () => {
     }
   })
 
-  it('declares honest prop bounds, every garden role and light pedestrian surfaces', () => {
+  it('declares honest prop bounds, a garden design and light pedestrian surfaces', () => {
     expect(CORPORATE_TOWN.props.length).toBeGreaterThanOrEqual(8)
     for (const prop of CORPORATE_TOWN.props) {
       const bounds = boundsOfAll(prop.parts)
@@ -142,13 +140,7 @@ describe('Corporate City town assets', () => {
         expect(COLORS.has(part.color)).toBe(true)
       }
     }
-    for (const name of Object.values(CORPORATE_TOWN.garden ?? {})) {
-      expect(
-        name === GARDEN_TREE ||
-          [...CORPORATE_TOWN.props, ...CORPORATE_TOWN.designs].some((asset) => asset.name === name)
-      ).toBe(true)
-    }
-    expect(Object.keys(CORPORATE_TOWN.garden ?? {})).toHaveLength(7)
+    expect(CORPORATE_TOWN.designs.map((design) => design.name)).toContain(CORPORATE_TOWN.garden)
     expect(CORPORATE_TOWN.roads).toEqual({
       carriageway: CORPORATE_MATERIALS.road,
       sidewalk: CORPORATE_MATERIALS.sidewalk,

@@ -100,7 +100,7 @@ describe('the Orbital Garrison draw budget', () => {
 })
 
 describe('what moves around the garrison', () => {
-  // No city lot is dressed as a radar tower, so a row of civic lots built here exercises the mount.
+  // Civic lots of two sides, so the dish is checked on a narrow tower and on a broad one.
   it('mounts a dish on the pedestal of every radar tower a town draws', () => {
     for (const side of [8, 12]) {
       const civicLots = Array.from(

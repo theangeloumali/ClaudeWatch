@@ -151,7 +151,7 @@ describe('Samurai Empire world contract', () => {
     expect(SAMURAI_DESK_PARTS.length).toBeLessThan(70)
   })
 
-  it('covers all districts, garden roles, citizens, and vehicle roles', () => {
+  it('covers all districts, its garden, citizens, and vehicle roles', () => {
     for (const district of Object.keys(SAMURAI_TOWN.looks)) {
       expect(SAMURAI_DESIGNS.some((design) => design.zones.some((zone) => zone === district))).toBe(
         true
@@ -169,7 +169,7 @@ describe('Samurai Empire world contract', () => {
       'runabout'
     ])
     const names = [...SAMURAI_TOWN.designs, ...SAMURAI_TOWN.props].map((entry) => entry.name)
-    for (const role of Object.values(SAMURAI_TOWN.garden ?? {})) expect(names).toContain(role)
+    expect(names).toContain(SAMURAI_TOWN.garden)
   })
 
   it('bounds every district on narrow and broad lots without detail growing with height', () => {
