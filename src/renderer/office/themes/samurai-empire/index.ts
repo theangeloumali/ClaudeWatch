@@ -17,7 +17,6 @@ import {
   SamuraiRoomSign,
   SamuraiWalls
 } from './SamuraiRoom'
-import { SamuraiTower } from './SamuraiTower'
 import { SAMURAI_PALETTE, SAMURAI_SKINS } from './palette'
 import { samuraiPlayerGeometry } from './player-geometry'
 import { SAMURAI_TOWN } from './town'
@@ -45,6 +44,5 @@ export const samuraiEmpire: OfficeTheme = {
       Lounge: SamuraiLounge
     }
   },
-  world: { Tower: SamuraiTower },
   town: SAMURAI_TOWN
 }

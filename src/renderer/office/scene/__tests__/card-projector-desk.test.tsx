@@ -2,6 +2,7 @@ import { cleanup, render } from '@testing-library/react'
 import { OrthographicCamera } from 'three'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NameCard } from '../../logic/name-cards'
+import { HUD_SAFE_INSETS } from '../../logic/hud-layout'
 import { pinQuality } from '../../quality-store'
 import { CardProjector, OFFSCREEN, type CardAnchors } from '../CardProjector'
 
@@ -71,6 +72,7 @@ function project(cards: readonly NameCard[], zoom: number, selectedAgentKey: str
   }
   render(
     <CardProjector
+      visibleFloors={[]}
       cards={cards}
       stacks={[{ projectKey: 'p', zoneId: null, x: 0, z: 0, text: 'p · 5 agents' }]}
       anchors={anchors}
@@ -85,7 +87,13 @@ function project(cards: readonly NameCard[], zoom: number, selectedAgentKey: str
       .map(([key]) => key)
       .sort()
   const badge = layer.querySelector<HTMLElement>('[data-card-overflow]')
+  // translate(x, y) puts the card's bottom centre at (x, y).
+  const bottomOf = (key: string) =>
+    Number(
+      /translate\([^,]+px, ([-\d.]+)px\)/.exec(anchors.cards.get(key)?.style.transform ?? '')?.[1]
+    )
   return {
+    bottomOf,
     cards: shown(anchors.cards),
     dots: shown(anchors.dots),
     stacks: shown(anchors.stacks),
@@ -128,6 +136,19 @@ describe('desk-zoom name cards (clearspent-3, P9)', () => {
     )
     expect(outcome.cards).toEqual(['picked'])
     expect(outcome.dots).toEqual(['waiting'])
+  })
+
+  // At zoom 55 a robot 7 m north stands under the 72 px top bar with its card.
+  it('a card that would sit under the top bar shows as a dot', () => {
+    const outcome = project([cardAt('north', 0, -7)], 55)
+    expect(outcome.cards).toEqual([])
+    expect(outcome.dots).toEqual(['north'])
+  })
+
+  it('the selected card is pinned below the top bar, not hidden under it', () => {
+    const outcome = project([cardAt('picked', 0, -7)], 55, 'picked')
+    expect(outcome.cards).toEqual(['picked'])
+    expect(outcome.bottomOf('picked') - CARD_HEIGHT_PX).toBeGreaterThanOrEqual(HUD_SAFE_INSETS.top)
   })
 
   it('caps cards at 12 and says how many more there are', () => {

@@ -100,34 +100,34 @@ describe('the seeded preview runs the office sim', () => {
     const [{ frame: first }] = watch(0.1)
     expect(first.connected).toBe(true)
     expect(first.agents.length).toBeGreaterThan(first.sessions.length)
+    const rooms = first.floors.flatMap((floor) => floor.rooms)
     for (const agent of first.agents) {
-      const room = first.floors[0].rooms.find((candidate) => candidate.id === agent.roomId)
+      const room = rooms.find((candidate) => candidate.id === agent.roomId)
       const desk = room?.seats.find((candidate) => candidate.slotId === agent.slotId)
       expect(agent).toMatchObject({ x: desk?.x, z: desk?.z })
       expect(agent.place).toBeUndefined()
     }
   })
 
-  it('shows a finished agent seated in its lounge inside a minute, and back at its desk later', () => {
-    const seated = (frame: OfficeFrame): AgentView | undefined =>
-      frame.agents.find(
-        (agent) =>
-          agent.place === 'lounge' &&
-          isOn(
-            agent,
-            frame.floors[0].zones.flatMap((company) => company.lounge?.seats ?? [])
-          )
-      )
-    const frames = watch(150)
-    const firstSeated = frames.findIndex(({ frame }) => seated(frame))
-    expect(frames[firstSeated]?.atS).toBeLessThan(60)
+  // A city outing: a venue or a sidewalk loop, then home (Phase 5).
+  it('sends a finished agent out of its office inside a minute, and back to its desk later', () => {
+    const frames = watch(300)
+    const firstOut = frames.findIndex(({ frame }) =>
+      frame.agents.some((agent) => agent.place === 'lounge')
+    )
+    expect(frames[firstOut]?.atS).toBeLessThan(60)
 
-    const lounger = seated(frames[firstSeated].frame)
-    const isBack = (frame: OfficeFrame): boolean => {
-      const agent = frame.agents.find((candidate) => candidate.agentKey === lounger?.agentKey)
-      const room = frame.floors[0].rooms.find((candidate) => candidate.id === agent?.roomId)
-      return agent !== undefined && agent.place === undefined && isOn(agent, room?.seats ?? [])
+    const outing = frames[firstOut].frame.agents.find((agent) => agent.place === 'lounge')
+    // Home in the step it sets off again, an idle agent may never show at its desk unplaced.
+    const isAtDesk = (frame: OfficeFrame): boolean => {
+      const agent = frame.agents.find((candidate) => candidate.agentKey === outing?.agentKey)
+      const room = frame.floors
+        .flatMap((floor) => floor.rooms)
+        .find((candidate) => candidate.id === agent?.roomId)
+      return agent !== undefined && isOn(agent, room?.seats ?? [])
     }
-    expect(frames.slice(firstSeated).some(({ frame }) => isBack(frame))).toBe(true)
+    const awayAt = frames.findIndex((entry, index) => index > firstOut && !isAtDesk(entry.frame))
+    expect(awayAt).toBeGreaterThan(firstOut)
+    expect(frames.slice(awayAt).some(({ frame }) => isAtDesk(frame))).toBe(true)
   })
 })

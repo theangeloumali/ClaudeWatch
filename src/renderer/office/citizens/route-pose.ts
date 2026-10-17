@@ -35,6 +35,8 @@ export interface RoutePhase {
 }
 
 const ROUTE_EPSILON = 1e-8
+// A clock run for days has lost the digits ROUTE_EPSILON needs: the tolerance grows with it.
+const CLOCK_ROUNDING = 4 * Number.EPSILON
 
 export function turnToward(from: number, to: number, share: number): number {
   const gap = Math.atan2(Math.sin(to - from), Math.cos(to - from))
@@ -97,15 +99,20 @@ function loopPlace(
 export const loopMetres = (route: CitizenRoute, travelled: number, speed: number): number =>
   loopPlace(route, travelled, speed).metres
 
-function nextVertex(route: CitizenRoute, metres: number, isReturning: boolean): number {
+function nextVertex(
+  route: CitizenRoute,
+  metres: number,
+  isReturning: boolean,
+  tolerance = ROUTE_EPSILON
+): number {
   let at = 0
   let next = isReturning ? 0 : route.length
   for (let index = 1; index < route.points.length; index++) {
     const from = route.points[index - 1]
     const to = route.points[index]
     at += Math.hypot(to.x - from.x, to.z - from.z)
-    if (isReturning && at < metres - ROUTE_EPSILON) next = at
-    if (!isReturning && at > metres + ROUTE_EPSILON) return at
+    if (isReturning && at < metres - tolerance) next = at
+    if (!isReturning && at > metres + tolerance) return at
   }
   return next
 }
@@ -118,13 +125,14 @@ export function routePhase(route: CitizenRoute, walked: number, speed: number): 
   const duration = route.isLoop
     ? route.length / speed + stops.reduce((sum, stop) => sum + stop.sec, 0)
     : (route.length * 2) / speed
+  const epsilon = Math.max(ROUTE_EPSILON, Math.abs(walked) * CLOCK_ROUNDING)
   // Division can put an exact lap boundary just inside the previous lap.
-  const cycleStart = Math.floor((walked + ROUTE_EPSILON) / duration) * duration
+  const cycleStart = Math.floor((walked + epsilon) / duration) * duration
   const elapsed = Math.max(0, walked - cycleStart)
   if (!route.isLoop) {
-    const isReturning = elapsed + ROUTE_EPSILON >= route.length / speed
+    const isReturning = elapsed + epsilon >= route.length / speed
     const metres = isReturning ? route.length * 2 - elapsed * speed : elapsed * speed
-    const at = nextVertex(route, metres, isReturning)
+    const at = nextVertex(route, metres, isReturning, epsilon * speed)
     return {
       target: poseAlong(route, at, isReturning),
       untilSec: cycleStart + (isReturning ? route.length * 2 - at : at) / speed,
@@ -135,11 +143,11 @@ export function routePhase(route: CitizenRoute, walked: number, speed: number): 
   let nextStop = route.length
   for (const stop of stops) {
     const starts = stop.at / speed + waited
-    if (elapsed + ROUTE_EPSILON < starts) {
+    if (elapsed + epsilon < starts) {
       nextStop = stop.at
       break
     }
-    if (elapsed < starts + stop.sec - ROUTE_EPSILON)
+    if (elapsed < starts + stop.sec - epsilon)
       return {
         target: { ...poseAlong(route, stop.at, false), isIndoors: stop.isIndoors },
         untilSec: cycleStart + starts + stop.sec,
@@ -148,7 +156,7 @@ export function routePhase(route: CitizenRoute, walked: number, speed: number): 
     waited += stop.sec
   }
   const metres = (elapsed - waited) * speed
-  const at = Math.min(nextVertex(route, metres, false), nextStop)
+  const at = Math.min(nextVertex(route, metres, false, epsilon * speed), nextStop)
   return {
     target: poseAlong(route, at, false),
     untilSec: cycleStart + at / speed + waited,

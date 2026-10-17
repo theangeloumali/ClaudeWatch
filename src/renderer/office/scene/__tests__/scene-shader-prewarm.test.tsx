@@ -39,6 +39,7 @@ afterEach(() => {
 })
 
 const floor = makeFloor({ floorId: 'f1', label: 'Main', rooms: [makeRoom({ id: 'r1' })] })
+const floors = [floor]
 
 function scene(viewMode: 'city' | 'office') {
   return (
@@ -47,6 +48,8 @@ function scene(viewMode: 'city' | 'office') {
       floors={[{ floorId: 'f1', label: 'Main', attentionCount: 0 }]}
       sessions={[]}
       floor={floor}
+      visibleFloors={floors}
+      allFloors={floors}
       agents={[]}
       cards={[]}
       stacks={[]}

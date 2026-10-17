@@ -143,11 +143,11 @@ describe('the plate and its theme parts', () => {
 })
 
 describe('cardSafeArea', () => {
-  it('keeps name cards off the left rail, the right panel and the bottom bar', () => {
+  it('keeps name cards off the left rail, the right panel, the top bar and the bottom bar', () => {
     expect(cardSafeArea(VIEWPORT)).toEqual({
       left: HUD_SAFE_INSETS.left,
       right: VIEWPORT.width - HUD_SAFE_INSETS.right,
-      top: 0,
+      top: HUD_SAFE_INSETS.top,
       bottom: VIEWPORT.height - HUD_SAFE_INSETS.bottom
     })
   })

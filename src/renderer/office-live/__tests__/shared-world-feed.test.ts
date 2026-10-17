@@ -75,7 +75,6 @@ function pageOn(
   const feed = createLiveFeed(source, {
     storage,
     settings,
-    worldEditing: true,
     poses: createPoseStore(),
     visibility: { read: () => ({ isHidden: false, isFocused: true }), onChange: () => () => {} }
   })

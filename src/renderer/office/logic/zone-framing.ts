@@ -37,8 +37,8 @@ const OCCUPIED_PADDING_M = 1.5
 const FRAMED_HEIGHT_M = 2.6
 const MIN_FRAME_ZOOM = 4
 
-// Where name cards may sit: clear of the side rails and the bottom bar. Cards may rise to the
-// top edge; the camera already leaves headroom for them.
+// Where name cards may sit: clear of the side rails and the top and bottom bars. A robot walking
+// north out of a desk-zoom frame would otherwise carry its card under the top bar.
 export function cardSafeArea(
   viewport: Viewport,
   insets: Insets = HUD_SAFE_INSETS
@@ -54,7 +54,7 @@ export function cardSafeArea(
   return {
     left: hasRoomForRails ? insets.left : 0,
     right: viewport.width - (hasRoomForRails ? insets.right : 0),
-    top: 0,
+    top: insets.top,
     bottom: viewport.height - insets.bottom
   }
 }

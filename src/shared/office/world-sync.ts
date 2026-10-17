@@ -12,7 +12,7 @@ const WORLD_SAVE_REFUSALS = [
   'storage-write',
   'not-permitted'
 ] as const
-export type WorldSaveRefusal = (typeof WORLD_SAVE_REFUSALS)[number]
+type WorldSaveRefusal = (typeof WORLD_SAVE_REFUSALS)[number]
 
 // The host's answer when a page saves its city (health-13). A refusal carries what the host
 // holds, so the page can show that instead.

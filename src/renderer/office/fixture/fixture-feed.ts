@@ -126,12 +126,9 @@ function scriptedSource(tickMs: number): FeedSource {
   }
 }
 
-export function createFixtureFeed(
-  options: { tickMs?: number; worldEditing?: boolean } = {}
-): OfficeFeed {
+export function createFixtureFeed(options: { tickMs?: number } = {}): OfficeFeed {
   seedThemes()
   return createLiveFeed(scriptedSource(options.tickMs ?? FIXTURE_TICK_MS), {
-    storage: options.worldEditing ? browserStorage() : null,
-    worldEditing: options.worldEditing === true
+    storage: browserStorage()
   })
 }

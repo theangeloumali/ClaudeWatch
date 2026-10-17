@@ -35,7 +35,7 @@ export function sendPlayerToFloor(
     fromFloor?: FloorGeometry
     toFloor: FloorGeometry
     destination?: Point
-    allFloors?: readonly FloorGeometry[]
+    allFloors: readonly FloorGeometry[]
   }
 ): boolean {
   const { fromFloor, toFloor } = options
@@ -81,13 +81,13 @@ export function sendPlayerToFloor(
     } else
       route.push({ ...player.position, elevation: player.elevation ?? 0, physicalFloorId: null })
     const ground =
-      (options.allFloors ?? []).find(
+      options.allFloors.find(
         (floor) => floor.buildingId === toFloor.buildingId && (floor.elevation ?? 0) === 0
       ) ?? toFloor
     const entrance = ground.entrance ?? playerConnector(ground)
     if (fromFloor && fromFloor.entrance) {
       const exitGround =
-        (options.allFloors ?? []).find(
+        options.allFloors.find(
           (floor) => floor.buildingId === fromFloor.buildingId && (floor.elevation ?? 0) === 0
         ) ?? fromFloor
       route.push(...surfaceRoute(exitGround, playerConnector(exitGround), fromFloor.entrance), {
@@ -100,8 +100,8 @@ export function sendPlayerToFloor(
       from: route.at(-1) ?? player.position,
       to: ground.entrance ? entranceApproach(ground, entrance) : connector,
       blocks: [
-        ...(options.allFloors?.[0]?.streetBlocks ?? []),
-        ...(options.allFloors ?? [])
+        ...(options.allFloors[0]?.streetBlocks ?? []),
+        ...options.allFloors
           .filter((floor) => (floor.elevation ?? 0) === 0)
           .flatMap((floor) => floor.zones)
       ]

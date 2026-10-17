@@ -13,7 +13,10 @@ import { DISH_REACH_M } from './buildings'
 import { GarrisonAmbient, RadarDish, Shuttle } from './GarrisonAmbient'
 import { orbitalGarrison } from './index'
 import { FLOORS, officeGap } from './yard.test-utils'
-import { drawnTown } from '../../town/drawn-town.test-utils'
+import { drawnTown, townDressOf } from '../../town/drawn-town.test-utils'
+import { campusClaim, neededClaim } from '../../town/town-claim'
+import { dressLot } from '../../town/town-dress'
+import { townBlocks } from '../../town/town-plan'
 import { drawnTop, topOf } from '../../town/town-ambient'
 import { LIVE_FLOORS } from '../floors.test-utils'
 
@@ -100,9 +103,12 @@ describe('the Orbital Garrison draw budget', () => {
 })
 
 describe('what moves around the garrison', () => {
-  it('mounts a dish on the pedestal of every radar tower the town draws', () => {
+  // No city lot is dressed as a radar tower, so the planner's own lots exercise the dish mount.
+  it('mounts a dish on the pedestal of every radar tower a town draws', () => {
     for (const [, floor] of LIVE_FLOORS) {
-      const placed = drawnTown(orbitalGarrison.id, floor)
+      const placed = townBlocks(campusClaim(neededClaim(floor), null), 'full').lots.map((lot) =>
+        dressLot(lot, 0, townDressOf(orbitalGarrison.id))
+      )
       const towers = placed.filter((each) => each.design === 'radar-tower')
       const mounts = radarMounts(placed)
       expect(mounts.length).toBe(towers.length)
@@ -116,7 +122,7 @@ describe('what moves around the garrison', () => {
           .sort((a, b) => b.y - a.y)
         expect([mount.x, mount.y, mount.z]).toEqual([top.x, top.y, top.z])
         expect(mount.y).toBe(drawnTop(tower))
-        expect(mount.y + DISH_REACH_M * mount.scale).toBeLessThanOrEqual(tower.lot.maxHeight)
+        expect(mount.y + DISH_REACH_M * mount.scale).toBeLessThanOrEqual(tower.lot.maxHeight + 1e-9)
       })
     }
   })

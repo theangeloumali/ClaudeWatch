@@ -46,6 +46,7 @@ describe('city activity projection', () => {
           onFlyToZone={vi.fn()}
         />
         <CardProjector
+          visibleFloors={[]}
           cards={cards}
           stacks={stacks}
           band="floor"
@@ -80,6 +81,7 @@ describe('city activity projection', () => {
           onFlyToZone={vi.fn()}
         />
         <CardProjector
+          visibleFloors={[]}
           cards={[]}
           stacks={stacks}
           band="building"
@@ -121,6 +123,7 @@ describe('city activity projection', () => {
           onFlyToZone={vi.fn()}
         />
         <CardProjector
+          visibleFloors={[]}
           cards={cards}
           stacks={stacks}
           anchors={anchors}

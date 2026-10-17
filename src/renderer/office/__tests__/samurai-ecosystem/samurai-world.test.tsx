@@ -113,7 +113,6 @@ describe('Samurai Empire world contract', () => {
     expect(
       Object.values(samuraiEmpire.kit.floor).every((surface) => typeof surface === 'function')
     ).toBe(true)
-    expect(typeof samuraiEmpire.world.Tower).toBe('function')
   })
 
   it('keeps real-identity skin, adult face, and separate armored elbows and knees', () => {
@@ -217,15 +216,13 @@ describe('Samurai Empire world contract', () => {
     geometry.dispose()
   })
 
-  it('renders the floor, elevator, and landmark through shared merged unit parts', () => {
+  it('renders the floor and elevator through shared merged unit parts', () => {
     const { floor } = agentsOn(4, 20)
     const Slab = samuraiEmpire.kit.floor.Slab
     const Elevator = samuraiEmpire.kit.floor.Elevator
-    const Tower = samuraiEmpire.world.Tower
     const measured = mergedDraws([
       <Slab key="slab" floor={floor} />,
-      <Elevator key="elevator" floor={floor} />,
-      <Tower key="landmark" floors={[]} />
+      <Elevator key="elevator" floor={floor} />
     ])
     expect(measured.draws).toBeLessThanOrEqual(24)
     expect(measured.triangles).toBeLessThan(1500)

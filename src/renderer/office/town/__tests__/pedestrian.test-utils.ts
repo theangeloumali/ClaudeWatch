@@ -78,7 +78,7 @@ export const within = (rect: Rect, point: RoutePoint): boolean =>
 type Spot = 'kerb' | 'zebra' | 'junction' | 'mouth' | 'mid-block'
 export const isAsphalt = (spot: Spot): boolean => spot !== 'kerb' && spot !== 'zebra'
 
-// The asphalt the town paints, less promenades laid over it and its painted zebra crossings.
+// The asphalt the city paints, and its painted zebra crossings.
 export function roadSurface(plan: TownPlan): (point: RoutePoint) => Spot {
   const quads = groundQuads(plan, fallbackDress(EDO))
   const driven = plan.roads.filter((road) => road.class !== 'lane')
@@ -88,7 +88,6 @@ export function roadSurface(plan: TownPlan): (point: RoutePoint) => Spot {
   const footprints = quads
     .filter((quad) => quad.layer === 'sidewalk')
     .map((rect, index) => ({ rect, isAlongX: plan.roads[index].from.z === plan.roads[index].to.z }))
-  const promenades = quads.filter((quad) => quad.layer === 'promenade')
   const isStripe = (quad: Rect): boolean =>
     (Math.abs(quad.width - 3) < 1e-6 && Math.abs(quad.depth - 0.42) < 1e-6) ||
     (Math.abs(quad.depth - 3) < 1e-6 && Math.abs(quad.width - 0.42) < 1e-6)
@@ -103,7 +102,7 @@ export function roadSurface(plan: TownPlan): (point: RoutePoint) => Spot {
   }
   return (point) => {
     const under = carriageways.filter((road) => within(road.rect, point))
-    if (under.length === 0 || promenades.some((rect) => within(rect, point))) return 'kerb'
+    if (under.length === 0) return 'kerb'
     if ([...zebras.values()].some((rect) => within(rect, point))) return 'zebra'
     const isJunction = under.some((road) => road.isAlongX) && under.some((road) => !road.isAlongX)
     if (isJunction) return 'junction'

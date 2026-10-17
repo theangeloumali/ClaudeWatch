@@ -8,7 +8,10 @@ import { stepMovers } from '../../citizens/mover-step'
 import { routePhase, routePose, type RoutePoint } from '../../citizens/route-pose'
 import { NOSE_M, zebraTraffic } from '../../citizens/zebra-traffic'
 import { SceneBodies } from '../../scene/BodySpace'
+import { EDO } from '../../themes/palettes'
+import { fallbackDress } from '../fallback-dress'
 import { reversed } from '../road-net'
+import { groundQuads } from '../town-ground'
 import {
   isAsphalt,
   liveCity,
@@ -117,13 +120,31 @@ function vehicleLanes(scenario: Scenario) {
   return { samples, offLane, onDivider }
 }
 
+// Every vehicle route sample outside the painted carriageway, keyed by kind and spot.
+function vehiclesOffPaving(scenario: Scenario): string[] {
+  const paved = groundQuads(scenario.plan, fallbackDress(EDO)).filter(
+    (quad) => quad.layer === 'carriageway'
+  )
+  return scenario.trips
+    .filter((trip) => trip.kind !== 'citizen')
+    .flatMap((trip) =>
+      trip.route.points
+        .slice(1)
+        .flatMap((to, index) =>
+          [...samplesOf(trip.route.points[index], to), to]
+            .filter((point) => !paved.some((rect) => within(rect, point)))
+            .map((point) => `${trip.kind}@${point.x.toFixed(2)}:${point.z.toFixed(2)}`)
+        )
+    )
+}
+
 // MoverLayer's motion, replayed headless through the same step.
 function replay(scenario: Scenario, seconds: number, deltaSec: number) {
-  const { plan, trips, floor } = scenario
+  const { plan, trips } = scenario
   const spotOf = roadSurface(plan)
   const onAsphalt = (point: RoutePoint): boolean => isAsphalt(spotOf(point))
   const space = new SceneBodies()
-  const ground = citizenGround(floor, plan)
+  const ground = citizenGround(plan)
   const clock = moverClock({ trips, space, isOpen: ground.isOpen })
   const { waitsFor } = clock
   const traffic = zebraTraffic(trips, citySidewalks(plan))
@@ -243,6 +264,11 @@ describe.each([
     })
   })
 
+  it('keeps every vehicle on the painted carriageway, through corners and dead ends', () => {
+    const off = vehiclesOffPaving(build())
+    expect(off.length, [...new Set(off)].slice(0, 12).join(' ')).toBe(0)
+  })
+
   it('closes each transit and runabout loop on its lanes, never cutting a corner', () => {
     const diagonals = build()
       .trips.filter((trip) => trip.kind === 'transit' || trip.kind === 'runabout')
@@ -260,8 +286,8 @@ describe.each([
 // Citizen rows: RED until Phase 4 moves citizens onto the sidewalk network.
 describe('pedestrian carriageway on the live city', () => {
   it('shuts the citizens’ ground on unmarked asphalt and opens it on a zebra', () => {
-    const { plan, floor } = liveCity()
-    const ground = citizenGround(floor, plan)
+    const { plan } = liveCity()
+    const ground = citizenGround(plan)
     const spotOf = roadSurface(plan)
     const centreLines = plan.roads
       .filter((road) => road.class !== 'lane')

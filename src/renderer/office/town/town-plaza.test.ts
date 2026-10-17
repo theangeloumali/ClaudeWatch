@@ -4,15 +4,22 @@ import { LIVE_FLOORS } from '../themes/floors.test-utils'
 import { citizenTrips } from './citizen-trips'
 import { townOn } from './movers.test-utils'
 import { campusClaim, neededClaim } from './town-claim'
+import { MIN_BELT_M, ROAD_WIDTH_M } from './town-grid'
 import { campusGreen } from './town-green'
 import { townBlocks } from './town-plan'
-import { plazaSquare, plazaStands } from './town-plaza'
 import { edges, overlapping, roadStrip } from './town.test-utils'
+import { rectOf, type Rect } from '../themes/lot-math'
 
 const NEAR = 0.01
 // The avenue's half-width: its walkers and cars come through here.
 const WAY_THROUGH_M = 6
 const SIDEWALK_M = 1.5
+
+// The square in front of the gate the pieces stand round: across the belt, twice the avenue deep.
+function plazaSquare(claim: Rect): Rect {
+  const west = edges(claim).west
+  return rectOf(west, west + MIN_BELT_M, -ROAD_WIDTH_M.avenue, ROAD_WIDTH_M.avenue)
+}
 
 describe.each(LIVE_FLOORS)('the gate plaza: %s', (_name, floor) => {
   const plan = townBlocks(campusClaim(neededClaim(floor), null), 'full')
@@ -22,12 +29,6 @@ describe.each(LIVE_FLOORS)('the gate plaza: %s', (_name, floor) => {
   const east = pieces.filter((piece) => piece.x > (square.west + square.east) / 2)
   const row = (edge: typeof pieces): string[] =>
     edge.map((piece) => `${piece.role}@${piece.z.toFixed(2)}`).sort()
-
-  it('is the square between the claim edge and the belt, twice the avenue deep', () => {
-    expect(square.west).toBe(edges(plan.claim).west)
-    expect(square.east - square.west).toBe(13)
-    expect(square.south - square.north).toBe(24)
-  })
 
   it('carries the same pieces at the same pitch along its two long edges', () => {
     expect(west.length).toBeGreaterThanOrEqual(6)
@@ -77,19 +78,6 @@ describe.each(LIVE_FLOORS)('the gate plaza: %s', (_name, floor) => {
         expect(overlapping(piece, carriageway), `${piece.id} on ${road.id}`).toBe(false)
       }
     }
-  })
-
-  it('gives citizens at least four places to stand, all on the open walk by the pieces', () => {
-    const stands = plazaStands(plan.claim)
-    expect(new Set(stands.map(({ x, z }) => `${x}:${z}`)).size).toBeGreaterThanOrEqual(4)
-    for (const stand of stands)
-      expect(
-        plan.promenades.some(
-          (walk) =>
-            Math.abs(stand.x - walk.x) <= walk.width / 2 &&
-            Math.abs(stand.z - walk.z) <= walk.depth / 2
-        )
-      ).toBe(true)
   })
 })
 

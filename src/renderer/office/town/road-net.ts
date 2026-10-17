@@ -4,8 +4,6 @@ import { apart } from './town-graph'
 import type { TownPlan } from './town-plan'
 import type { RoadClass } from './town-roads'
 
-export type Traveller = 'citizen' | 'vehicle'
-
 // One straight stretch of a road's centre line.
 export interface Leg {
   from: Point
@@ -22,7 +20,7 @@ interface Way {
   width?: number
 }
 
-// The plan's road graph as one kind of traveller may use it.
+// The plan's road graph as a vehicle may drive it.
 export interface RoadNet {
   plan: TownPlan
   ways: Way[]
@@ -30,35 +28,20 @@ export interface RoadNet {
   waysAt: number[][]
 }
 
-// What a metre costs a citizen: cheap where it is seen, so that is where the town gathers.
-const WALK_COST: Record<RoadClass, number> = { avenue: 1, boulevard: 1, lane: 2, collector: 2.5 }
-const PARK_COST = 1
-
 // A vehicle never uses a footpath lane, and every road is the same to it.
-export function roadNet(plan: TownPlan, traveller: Traveller): RoadNet {
+export function roadNet(plan: TownPlan): RoadNet {
   const { nodes, edges } = plan.graph
-  const parks = plan.blocks.filter((block) => block.zone === 'park')
-  const isInPark = (point: Point): boolean =>
-    parks.some(
-      (park) =>
-        Math.abs(point.x - park.x) < park.width / 2 && Math.abs(point.z - park.z) < park.depth / 2
-    )
   const ways = edges
-    .filter((edge) => traveller === 'citizen' || edge.class !== 'lane')
-    .map((edge): Way => {
-      const middle = {
-        x: (nodes[edge.from].x + nodes[edge.to].x) / 2,
-        z: (nodes[edge.from].z + nodes[edge.to].z) / 2
-      }
-      const walkCost = isInPark(middle) ? PARK_COST : WALK_COST[edge.class]
-      return {
+    .filter((edge) => edge.class !== 'lane')
+    .map(
+      (edge): Way => ({
         from: edge.from,
         to: edge.to,
         class: edge.class,
         ...(edge.width === undefined ? {} : { width: edge.width }),
-        costPerMetre: traveller === 'citizen' ? walkCost : 1
-      }
-    })
+        costPerMetre: 1
+      })
+    )
   const waysAt: number[][] = nodes.map(() => [])
   ways.forEach((way, index) => {
     waysAt[way.from].push(index)
@@ -67,12 +50,27 @@ export function roadNet(plan: TownPlan, traveller: Traveller): RoadNet {
   return { plan, ways, waysAt }
 }
 
+// A vehicle meets a place no nearer a dead end than the longest vehicle's half length (transit's
+// nose), so it stops and turns back on the asphalt, not across the carriageway's end.
+const DEAD_END_SETBACK_M = 3
+
+// The stretch of a way a vehicle may stop on: all of it, less the setback at a dead end.
+function stopSpan(net: RoadNet, way: Way): [Point, Point] {
+  const { nodes } = net.plan.graph
+  const [a, b] = [nodes[way.from], nodes[way.to]]
+  const length = apart(a, b)
+  if (length === 0) return [a, b]
+  const share = (node: number): number =>
+    net.waysAt[node].length === 1 ? Math.min(DEAD_END_SETBACK_M, length / 2) / length : 0
+  const at = (t: number): Point => ({ x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t })
+  return [at(share(way.from)), at(1 - share(way.to))]
+}
+
 // The nearest point of the net to a place off it: where a door meets its road.
 function attach(net: RoadNet, point: Point): { way: number; at: Point } {
-  const { nodes } = net.plan.graph
   let best = { way: -1, at: point, gap: Infinity }
   net.ways.forEach((way, index) => {
-    const [a, b] = [nodes[way.from], nodes[way.to]]
+    const [a, b] = stopSpan(net, way)
     const at = {
       x: clamp(point.x, [Math.min(a.x, b.x), Math.max(a.x, b.x)]),
       z: clamp(point.z, [Math.min(a.z, b.z), Math.max(a.z, b.z)])

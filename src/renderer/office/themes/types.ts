@@ -123,12 +123,6 @@ export interface TowerFloor {
   agentCount?: number
   attentionCount: number
 }
-export interface TowerProps {
-  // Unused by the office since the one-floor model; the Tower is a landmark only.
-  onFocusFloor?: (floorId: string) => void
-  floors: readonly TowerFloor[]
-  plot?: Pick<Lot, 'width' | 'depth' | 'maxHeight'>
-}
 
 // Drawn once per floor, by the floor's default theme.
 // dead-code-allowed: plug-in contract type each theme's floor kit implements 2027-01-31
@@ -190,10 +184,6 @@ export interface OfficeTheme {
   }
   playerGeometry?: (palette: ThemePalette) => BufferGeometry
   kit: { floor: FloorKit; zone: ZoneKit }
-  // Floor-scoped: one horizon, from the floor's default theme.
-  world: {
-    Tower: ComponentType<TowerProps>
-  }
   // The theme's share of the zoned town, as data. Absent until the theme has drawn it.
   town?: TownDress
 }

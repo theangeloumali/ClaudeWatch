@@ -11,7 +11,6 @@ import { SamuraiFrame } from './SamuraiFrame'
 import { EdoRoomFloors, EdoSlab } from './EdoFloor'
 import { EdoWalls } from './EdoWalls'
 import { EdoDesk, EdoDoorway, EdoElevator, EdoRoomDressing, EdoRoomSign } from './EdoRoom'
-import { EdoTower } from './EdoDistrict'
 import { BRASS, EDO } from './palettes'
 import { BrassCompanyZone, BrassProjectOffice, EdoCompanyZone, EdoProjectOffice } from './ZoneKits'
 import type { OfficeTheme } from './types'
@@ -46,8 +45,7 @@ export const neoEdoSteam: OfficeTheme = {
       Lounge: EdoLounge,
       Ambient: EdoAmbient
     }
-  },
-  world: { Tower: EdoTower }
+  }
 }
 
 export const brassWorkshop: OfficeTheme = {
@@ -78,6 +76,5 @@ export const brassWorkshop: OfficeTheme = {
       Lounge: BrassLounge,
       Ambient: BrassAmbient
     }
-  },
-  world: { Tower: brass.BrassTower }
+  }
 }

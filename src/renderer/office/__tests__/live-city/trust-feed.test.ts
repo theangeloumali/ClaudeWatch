@@ -26,7 +26,7 @@ const session: SessionRef = {
   updatedAtMs: 4000
 }
 
-function createHarness(options: { worldEditing?: boolean } = {}) {
+function createHarness() {
   const listeners = new Set<(message: FeedMessage) => void>()
   const source: FeedSource = {
     ready: vi.fn().mockResolvedValue(undefined),
@@ -43,7 +43,7 @@ function createHarness(options: { worldEditing?: boolean } = {}) {
     start: vi.fn().mockResolvedValue({ success: true })
   }
   const frames: OfficeFrame[] = []
-  const feed = createLiveFeed(source, { storage: null, ...options })
+  const feed = createLiveFeed(source, { storage: null })
   const unsubscribe = feed.subscribe((frame) => frames.push(frame))
   return {
     source,
@@ -118,7 +118,7 @@ describe('live work evidence boundaries', () => {
   })
 
   it('initializes an editable world from actual accepted sessions without overwriting legacy storage', () => {
-    const harness = createHarness({ worldEditing: true })
+    const harness = createHarness()
     harness.hello()
     vi.advanceTimersByTime(100)
     expect(harness.feed.getWorldDocumentStore?.()?.get().document.rooms).toEqual(
@@ -130,7 +130,7 @@ describe('live work evidence boundaries', () => {
   })
 
   it('adds newly discovered editable targets after an initially empty hello', () => {
-    const harness = createHarness({ worldEditing: true })
+    const harness = createHarness()
     harness.emit({
       type: 'hello',
       v: 1,

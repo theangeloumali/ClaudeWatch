@@ -67,8 +67,8 @@ Finding ids below (`seating-1`, `P3` …) refer to those reports.
 - [x] Phase 4 — Citizens on the network: pedestrian ground, deadlock breaker that survives replans, zebra right-of-way, ambient loops
 - [x] Phase 5 — Roaming agents via the leisure system: idle or done roam the sidewalks, unknown stays seated, working returns; guarded move of arrivals onto the network
 - [x] Phase 6 — Render fixes: facade layer steps, cutaway hysteresis, desk-band card culling, context loss, canvas metrics
-- [ ] Phase 7 — Performance: static and dynamic batches, motion out of React, cached batch keys, memoised validation, shader prewarm, host-served world document
-- [ ] Phase 8 — Release and repo hygiene: one version line (1.4.1), honest Windows updater status, main-checkout mode noise, worktree cleanup
+- [x] Phase 7 — Performance: static and dynamic batches, motion out of React, cached batch keys, memoised validation, shader prewarm, host-served world document
+- [x] Phase 8 — Release and repo hygiene: one version line (1.4.1), honest Windows updater status, main-checkout mode noise, worktree cleanup
 - [ ] Phase 9 — Integration: full gate chain, live re-measure on real data, local install, STOP for Angelo's look
 - [ ] Phase 10 — After Angelo approves: simplify, review pair, Codex, dead code, checklist, MP4 demo, vault, push and stacked PR
 
@@ -826,9 +826,9 @@ Owns:
 
 Reachability is proven: `main.tsx:32` (live feed) and `main.tsx:38` (fixture feed) both pass `worldEditing: true`, so `distributedTown` always runs.
 
-- [ ] Run `npx knip --no-progress` after removing the legacy path; it must report nothing new.
-- [ ] Delete the legacy-only rows of town, citizen and theme tests; city rows stay. Give `samurai-ecosystem/citizen-collision.test.tsx` a city version that allows the give-way pair to overlap (Phase 4 FOUND).
-- [ ] Verify: `npx vitest run` exits 0. Commit `refactor(town): retire the unreachable legacy campus town`.
+- [x] Run `npx knip --no-progress` after removing the legacy path; it must report nothing new.
+- [x] Delete the legacy-only rows of town, citizen and theme tests; city rows stay. Give `samurai-ecosystem/citizen-collision.test.tsx` a city version that allows the give-way pair to overlap (Phase 4 FOUND).
+- [x] Verify: `npx vitest run` exits 0. Commit `refactor(town): retire the unreachable legacy campus town`.
 
 ### Task 8.2: Main-checkout noise and stale worktrees (health-10, health-11, A8)
 
@@ -854,7 +854,7 @@ Done in the main checkout. Nothing here is committed on this branch.
   - `npx vitest run`
   - `npx knip --no-progress`
   - `npm run build`
-- [ ] Live re-measure on real data:
+- [x] Live re-measure on real data:
   - Start `node out/office-web/server.mjs --port 47891` (view-only).
   - Re-run the auditors' scripts: the seating churn replay (`stillInside 0`), the citizens live capture (0% of citizen samples on the carriageway, was 59.6%), the flicker plane sweep (≈0 px), and the perf page probe (numbers above).
   - Record them in `docs/plans/claudewatch-office-health-2026-10-16.md` § Results.
@@ -1004,12 +1004,47 @@ Phases 1, 2, 3 and 6 run in parallel, as do Phases 4 and 5. Wall-clock with the 
 - Lead, `bb83977`: the Office root's clock ticks every 5 s out of focus and stops while hidden. Panel clocks keep the second while the window is watched from aside (`office-clock.test.tsx`, 5 tests).
 - Lead, `c3f94fb`: dropped the unread `speakingAgentKey` scene option; unexported `HOST_ARGUMENT` and `hasOwnRecords`.
 - Integration suite at `c3f94fb`: **5,269 passed, 0 failed**. Both `tsc` and eslint are clean.
-- Running: `fix/office-health-p7c-roster`. A roamer changing room no longer rebuilds the floor batch, and the building shells become one static batch if that measures better.
+- 7c, roster (merged `53637a6`): robots batch apart from the storeys (`batch-revision.ts` `crewBatchRevision`); a nested batch owns its subtree.
+  - Floor rebuilds from roster churn: 11 → 0 over 10 min of probing. Rebuild 11.7 → 1.2 ms; its upload spike 427–757 → 39–48 kB.
+  - Draws +2 (city 36 → 38, office 35 → 37). Frame time unchanged.
+  - Not built: one static batch for the building shells. It costs about 143 draws to save 0.07 ms a frame.
+  - The 51 ms orbit at building zoom did not reproduce under profiling (4.95 ms); that run caught a city relayout.
 
-### Phase 8 (in progress)
+### Phase 8 (merged `93638ed`)
 
 - `f855f25`: version 1.4.1; Windows reports a missing update feed instead of "up to date".
 - Main checkout: mode-only changes 90 → 0.
 - 35 merged agent worktrees removed (2.2 GB). The one with untracked `labs/` was archived first to `.claude/archive/worktree-wip-2026-10-16/`.
 - 6 merged phase worktrees removed. 5 stale feature worktrees: WIP exported as patches to `.claude/archive/worktree-wip-2026-10-16/`, then removed. `live-city-overview-fix` is kept: a live process has it as its working folder.
-- Running: Task 8.3 on `fix/office-health-p8-legacy-town`.
+- Task 8.3 (merged `93638ed`): the legacy campus town is retired. 92 files, +714 −1,671; 9 deleted, including `WorldView.tsx` and every theme's world tower, which removes the unbounded live-count sign-texture path.
+  - `worldEditing` is gone from both feeds; `TownPlan.officeSites` is required.
+  - Citizens no longer pick a lot whose door an office cut into (two-office city: 3 walked 3.5 m into a building).
+  - `77d7283`: a route clock run for days still moves on. The 537 s frozen walker no longer reproduces (worst 3.6 s over 600 s).
+  - Lead, `2c18f10`: the merged scene-revision row, after both branches changed it. `e77c19c`: the camera, cards and floor data always get the storeys; the single-plate branches go (FOUND 6).
+  - FOUND fixes running: the L-corner lane shortcut and `townOf`'s campus work (`fix/office-health-oh-found-town`); the slow walk home to work (`fix/office-health-oh-found-return`).
+  - Owner calls, raised at the Phase 9 STOP: the Town size setting does nothing in the city; city citizens are in plain sight 50–70% (campus 70%); the Garrison radar tower is never drawn in the city.
+
+### Phase 9 (integration at `0318a3b`)
+
+- Merged `fix/office-health-oh-found-town` (`09f25cc`) and `fix/office-health-oh-found-return` (`c6b87d7`).
+  - FOUND 1: an L-corner is paved through in one shared rule (`shared/office/street-paving.ts`), so paint, walkers' ground and lanes agree. Vehicle samples off the paint in the two-office city: 386 → 0. Trucks stop 3 m short of a dead end.
+  - FOUND 4: a claim no longer names lot owners. The campus planner still runs for the claim; its retirement is on `fix/office-health-campus-retire`.
+  - FOUND 7: an agent called back to work is at its desk 0.5 s after the call (was 105.5 s); it walks if the route fits 18 s, otherwise it fades and reappears at its desk.
+- Lead, found live and fixed:
+  - `e77c19c`: single-plate camera, card and floor-data branches removed (FOUND 6).
+  - `96f18b2`: name cards stay clear of the top bar; the selected card is pinned below it. Reproduced live: Fly to a walking agent left its card under the bar at 55 px (bar bottom 69). After: 0 cards under the bar or any panel over 4 workers.
+  - `0318a3b`: a recalled robot appears at its desk instead of streaking across town while it regrows; under reduced motion a fade is instant both ways.
+- Gates at `0318a3b`, each exit 0: both `tsc`, `eslint .`, `knip`, prettier on every changed file, `vitest run` (**5,176 passed, 0 failed**, 18 Windows-only skipped), `npm run build`.
+- Live re-measure, view-only servers on real data:
+
+  | Measure                                          | Before                               | After                                                                                |
+  | ------------------------------------------------ | ------------------------------------ | ------------------------------------------------------------------------------------ |
+  | Door churn replay (swap10, 120 s churn)          | stillInside 14, unseated 6, queued 5 | stillInside 0, unseated 0, queued 0, 0 wait cycles; slowest seat 26.1 s              |
+  | Citizen samples on a carriageway outside a zebra | 59.6%                                | 0 of 1,855 (134 on zebras); 0 vehicle–walker pairs under 1.2 m                       |
+  | Frozen-on-road events, 8-offset replay           | 107                                  | 0 at every offset; 0 vehicle holds by road walkers                                   |
+  | Agents, 10-min capture (590 samples, 26 agents)  | working agents at the door           | 0 working or unknown agents off their desks, 0 asphalt samples, longest return 1.0 s |
+  | Flicker plane sweep, project floor / city        | 1,408 / 406 px                       | 11 / 17 px                                                                           |
+  | Office GL upload per frame (p50, city)           | 1.1 MB                               | 10.4 kB focused, 15.4 kB blurred                                                     |
+  | React commits per second                         | 10.6                                 | 1.6 focused (1 s clock), 0.8 blurred                                                 |
+  | Draws (city / office)                            | 35 / 35                              | 38 / 37                                                                              |
+  | Page errors                                      | —                                    | 0 in every run                                                                       |

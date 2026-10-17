@@ -9,7 +9,6 @@ import { planTown } from '../../town/town-plan'
 import { TOWN_DISTRICTS } from '../../town/town-zones'
 import { LIVE_FLOORS } from '../floors.test-utils'
 import type { PartSpec } from '../parts'
-import { lotBase } from '../surroundings'
 import { orbitalGarrison } from './index'
 import { GARRISON_TOWN } from './town'
 
@@ -205,7 +204,8 @@ describe.each(LIVE_FLOORS)('dressed over a real plan: %s', (_name, floor) => {
   it('stands something on every lot and every plot of the green, under its limit', () => {
     expect(lots.length).toBeGreaterThan(150)
     for (const lot of lots) {
-      const base = lotBase(lot, floor)
+      // Every city lot stands on the ground at 0, as dressCityDistrict stands it.
+      const base = 0
       const placed = dressLot(lot, base, GARRISON_TOWN)
       expect(placed.parts.length).toBeGreaterThan(0)
       const top = Math.max(...placed.parts.map((part) => reachOf(part).top)) * placed.scale
@@ -220,7 +220,7 @@ describe.each(LIVE_FLOORS)('dressed over a real plan: %s', (_name, floor) => {
           lot.kind === 'building' &&
           design.zones.includes(lot.zone) &&
           lot.isLandmark === (design.isLandmark === true) &&
-          lot.maxHeight - lotBase(lot, floor) >= design.height.min
+          lot.maxHeight >= design.height.min
       )
       expect(fits.length, design.name).toBeGreaterThan(0)
     }

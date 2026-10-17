@@ -16,6 +16,7 @@ import { WorkstationScreens } from '../../scene/WorkstationScreens'
 import { buildWorkstationDisplays } from '../../logic/workstation-displays'
 import { makeFrame, makeSession } from '../fixtures'
 import { MoverLayer } from '../../citizens/MoverLayer'
+import { distributedTown } from '../../town/distributed-town'
 import { townOf } from '../../town/use-town-plan'
 import { playerGeometry } from '../../player/figure'
 
@@ -74,7 +75,7 @@ it.each(CASES)(
     const monitors = mergedDraws(createElement(WorkstationScreens, { displays }))
     expect(monitors.draws).toBe(count)
     expect(monitors.triangles).toBe(count * 2)
-    const town = townOf(floor, null, 'full')
+    const town = distributedTown(townOf(floor, null, 'full'), [floor])
     const movers = mergedDraws(
       createElement(MoverLayer, {
         floor,

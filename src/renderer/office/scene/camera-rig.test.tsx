@@ -1,7 +1,7 @@
 import { render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Ref } from 'react'
-import { CameraRig } from './CameraRig'
+import type { ComponentProps, Ref } from 'react'
+import { CameraRig as Rig } from './CameraRig'
 import { makeAgent, makeFloor, makeRoom, makeZone } from '../__tests__/fixtures'
 import { ISO_POLAR, MAX_POLAR, MIN_POLAR, MAX_INSPECTION_ZOOM } from '../logic/camera-bands'
 import { WORKSTATIONS } from '../themes/workstations'
@@ -127,6 +127,14 @@ function pointer(target: EventTarget, type: string, at: { x: number; y: number }
   const event = new MouseEvent(type, { bubbles: true, button: 0, clientX: at.x, clientY: at.y })
   Object.defineProperty(event, 'isPrimary', { value: true })
   target.dispatchEvent(event)
+}
+
+// Every shipped scene hands the rig its storeys; a row that names none draws its one floor.
+function CameraRig(
+  props: Omit<ComponentProps<typeof Rig>, 'visibleFloors'> &
+    Partial<Pick<ComponentProps<typeof Rig>, 'visibleFloors'>>
+) {
+  return <Rig {...props} visibleFloors={props.visibleFloors ?? [props.floor]} />
 }
 
 beforeEach(() => {

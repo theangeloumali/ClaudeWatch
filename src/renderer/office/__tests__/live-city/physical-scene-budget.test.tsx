@@ -1,4 +1,4 @@
-import { createElement } from 'react'
+import { createElement, isValidElement, type ReactNode } from 'react'
 import { Texture } from 'three'
 import { expect, it, vi } from 'vitest'
 import { World } from '../../../../office/sim/world'
@@ -10,6 +10,7 @@ import {
 import { resolveEffectiveWorld } from '../../../../office/sim/effective-world'
 import { toFloorGeometry } from '../../../office-live/layout-geometry'
 import { makeSession } from '../fixtures'
+import { BatchedScene } from '../../scene/BatchedScene'
 import { physicalZoneGroups, MultiFloorLayer } from '../../scene/MultiFloorLayer'
 import { mergedDraws } from '../../themes/scene.test-utils'
 import { getTheme } from '../../themes/registry'
@@ -77,21 +78,32 @@ it.each([20, 40, 60, 512])(
         physicalZoneGroups({ floor, assignments: EMPTY_THEME_ASSIGNMENTS, theme })
       ])
     )
-    const actual = mergedDraws(
-      createElement(MultiFloorLayer, {
-        floors,
-        agents,
-        floorTheme: theme,
-        groups,
-        wallsMode: 'cutaway',
-        isReducedMotion: true,
-        selectedAgentKey: null,
-        speakingAgentKey: null,
-        onSelect: () => undefined,
-        onFly: () => undefined,
-        onFlyToZone: () => undefined
-      })
-    )
+    const layer = MultiFloorLayer({
+      floors,
+      agents,
+      floorTheme: theme,
+      groups,
+      wallsMode: 'cutaway',
+      isReducedMotion: true,
+      selectedAgentKey: null,
+      speakingAgentKey: null,
+      onSelect: () => undefined,
+      onFly: () => undefined,
+      onFlyToZone: () => undefined
+    })
+    // Robots batch apart at runtime (perf-11); counting their batch again keeps an upper bound.
+    const crewBatch = [layer.props.children]
+      .flat(2)
+      .find(
+        (child) => isValidElement<{ children: ReactNode }>(child) && child.type === BatchedScene
+      )
+    if (!isValidElement<{ children: ReactNode }>(crewBatch)) throw new Error('No crew batch')
+    const layerDraws = mergedDraws(layer)
+    const crewDraws = mergedDraws(crewBatch.props.children)
+    const actual = {
+      draws: layerDraws.draws + crewDraws.draws,
+      triangles: layerDraws.triangles
+    }
     // Retain the existing full-town envelope as a conservative fixed-layer allowance.
     const ground = groundEnvelope(
       floors.filter((floor) => floor.elevation === 0),

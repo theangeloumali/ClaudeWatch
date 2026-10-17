@@ -81,8 +81,8 @@ function receiveHostWorld(storage: HostWorldStorage | null, snapshot: OfficeSnap
   if (parsed === null || parsed.success) storage.receive(parsed?.document ?? null)
 }
 
-// Storage is null, or throws, where site data is blocked, and anything else in it is not a
-// layout: the office then starts from a fresh one.
+// A layout saved before the world document, so an upgraded office keeps its desks. Storage is
+// null, or throws, where site data is blocked; anything else in it is not a layout.
 function loadLayout(storage: LayoutStorage | null): LayoutMap | undefined {
   try {
     const saved: unknown = JSON.parse(storage?.getItem(LAYOUT_KEY) ?? 'null')
@@ -92,20 +92,11 @@ function loadLayout(storage: LayoutStorage | null): LayoutMap | undefined {
   }
 }
 
-function saveLayout(storage: LayoutStorage | null, serialised: string): void {
-  try {
-    storage?.setItem(LAYOUT_KEY, serialised)
-  } catch {
-    // Not remembered; the feed listener that called this must keep running.
-  }
-}
-
 // Runs the office sim in the renderer on top of the bridge feed and emits a frame when it changes.
 export function createLiveFeed(
   source: FeedSource,
   options: {
     storage: LayoutStorage | null
-    worldEditing?: boolean
     now?: () => number
     // The owner's switches; the sim reads only the lounge trips.
     settings?: Pick<OfficeSettingsStore, 'get' | 'subscribe'>
@@ -125,8 +116,7 @@ export function createLiveFeed(
   const start = (): (() => void) => {
     const saved = loadLayout(options.storage)
     const saveWorld = source.saveWorld?.bind(source)
-    const hostStorage =
-      options.worldEditing && saveWorld ? hostWorldStorage(options.storage, saveWorld) : null
+    const hostStorage = saveWorld ? hostWorldStorage(options.storage, saveWorld) : null
     let resolvedKey = ''
     let resolvedLayout: LayoutMap | undefined
     const resolveLayout = (base: LayoutMap, sessions: readonly SessionRef[]): LayoutMap => {
@@ -142,26 +132,22 @@ export function createLiveFeed(
       now,
       saved,
       loungeTrips: settings.get().loungeTrips,
-      ...(options.worldEditing
-        ? {
-            resolveLayout,
-            getVenueTargets: () =>
-              (resolvedLayout?.effectiveVenues ?? []).map((venue) => ({
-                id: venue.id,
-                kind: venue.kind,
-                capacity: venue.capacity,
-                entrance: {
-                  x: venue.footprint.x + venue.entrance.x,
-                  z: venue.footprint.z + venue.entrance.z
-                },
-                slots: venue.slots.map((slot) => ({
-                  ...slot,
-                  x: slot.x + venue.footprint.x,
-                  z: slot.z + venue.footprint.z
-                }))
-              }))
-          }
-        : {})
+      resolveLayout,
+      getVenueTargets: () =>
+        (resolvedLayout?.effectiveVenues ?? []).map((venue) => ({
+          id: venue.id,
+          kind: venue.kind,
+          capacity: venue.capacity,
+          entrance: {
+            x: venue.footprint.x + venue.entrance.x,
+            z: venue.footprint.z + venue.entrance.z
+          },
+          slots: venue.slots.map((slot) => ({
+            ...slot,
+            x: slot.x + venue.footprint.x,
+            z: slot.z + venue.footprint.z
+          }))
+        }))
     })
     currentWorld = world
     // A running office follows the switch: the next step walks agents back, or lets them go.
@@ -176,7 +162,6 @@ export function createLiveFeed(
     const offVisibility = visibility.onChange(() => {
       lastTick = now()
     })
-    let savedLayout = ''
     let lastAgents = ''
     let lastFrameAtMs = Number.NEGATIVE_INFINITY
     let isDirty = true
@@ -187,7 +172,7 @@ export function createLiveFeed(
       const nextFloors = toFloorGeometry(
         world.layout(),
         snapshot?.sessions ?? lastKnownSnapshot?.sessions ?? [],
-        { keepEmptyHeadquarters: !options.worldEditing }
+        { keepEmptyHeadquarters: false }
       )
       const nextKey = JSON.stringify(nextFloors)
       if (nextKey !== floorsKey) {
@@ -211,7 +196,7 @@ export function createLiveFeed(
       feedReceivedAtMs = now()
       feedRevision = snapshot.rev
       if (message.type === 'hello') receiveHostWorld(hostStorage, snapshot)
-      if (options.worldEditing && !documentStore) {
+      if (!documentStore) {
         const initialLayout = buildLayout(snapshot.sessions, saved)
         documentStore = createWorldDocumentStore({
           storage: hostStorage ?? options.storage,
@@ -236,7 +221,7 @@ export function createLiveFeed(
       const layout = world.layout()
       // Most messages change no geometry: the scene keeps its world while the floors are the same.
       const nextFloors = toFloorGeometry(layout, snapshot?.sessions ?? [], {
-        keepEmptyHeadquarters: !options.worldEditing
+        keepEmptyHeadquarters: false
       })
       const nextFloorsKey = JSON.stringify(nextFloors)
       if (nextFloorsKey !== floorsKey) {
@@ -244,11 +229,6 @@ export function createLiveFeed(
         floorsKey = nextFloorsKey
       }
       isDirty = true
-      const serialised = JSON.stringify(layout)
-      if (serialised !== savedLayout) {
-        if (!options.worldEditing) saveLayout(options.storage, serialised)
-        savedLayout = serialised
-      }
     })
     let isStopped = false
     void source.ready().catch(() => {
@@ -284,7 +264,7 @@ export function createLiveFeed(
         accounts: lastKnownSnapshot?.accounts,
         feedReceivedAtMs,
         feedRevision,
-        worldRevision: options.worldEditing ? documentRevision : undefined,
+        worldRevision: documentRevision,
         venues: resolvedLayout?.effectiveVenues
       }
       for (const listener of listeners) listener(frame)

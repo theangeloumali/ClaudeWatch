@@ -29,7 +29,7 @@ export interface Trip {
 
 export interface TownInput {
   plan: TownPlan
-  // Lot id to the company that dresses it (`lotOwners`).
+  // Lot id to the company that dresses it; a lot that is absent takes the floor's theme.
   owners: ReadonlyMap<string, string>
   floorThemeId: string
   // A company zone's id to its theme.

@@ -3,9 +3,9 @@ import { QUALITY_LEVELS } from '../logic/quality'
 import { LIVE_FLOORS } from '../themes/floors.test-utils'
 import { campusClaim, neededClaim } from './town-claim'
 import { BLOCK_PITCH_M, BUILDING_CAP, MIN_BELT_M, OLD_TOWN_BLOCKS, RING_M } from './town-grid'
-import { lotOwners, planTown, townBlocks, townExtent } from './town-plan'
+import { planTown, townBlocks, townExtent } from './town-plan'
 import { zoneOfBlock } from './town-zones'
-import { LARGE_FLOOR, LONE_FLOOR, edges, gap, median, overlapping } from './town.test-utils'
+import { LARGE_FLOOR, edges, gap, median, overlapping } from './town.test-utils'
 
 const claimOf = (floor: (typeof LIVE_FLOORS)[number][1]) => campusClaim(neededClaim(floor), null)
 
@@ -89,30 +89,6 @@ describe.each(LIVE_FLOORS)('the town plan: %s', (_name, floor) => {
     const buildings = planTown(claim, detail).lots.filter((lot) => lot.kind === 'building')
     expect(buildings.length).toBeLessThanOrEqual(BUILDING_CAP[detail])
     expect(buildings.length).toBeGreaterThan(40)
-  })
-
-  it('gives each company the lots within 24 m of the claim that are nearest to it', () => {
-    const companies = floor.zones.filter((zone) => zone.kind === 'company')
-    const owners = lotOwners(plan, floor.zones)
-    const owned = plan.lots.filter((lot) => owners.has(lot.id))
-    expect(owned.length).toBeGreaterThan(0)
-    for (const lot of plan.lots) {
-      const isOldTown = lot.x < edges(claim).west
-      expect(owners.has(lot.id)).toBe(!lot.isFarRing && !isOldTown)
-      const owner = owners.get(lot.id)
-      if (owner === undefined) continue
-      const nearest = Math.min(...companies.map((zone) => gap(lot, zone)))
-      const candidates = companies.filter((zone) => gap(lot, zone) === nearest).map((z) => z.id)
-      // A tie goes to the company that sorts first.
-      expect(owner).toBe([...candidates].sort()[0])
-    }
-    expect(new Set(owners.values())).toEqual(new Set(companies.map((zone) => zone.id)))
-  })
-})
-
-describe('lotOwners', () => {
-  it('names no owner on a floor without a company: the floor theme dresses everything', () => {
-    expect(lotOwners(planTown(claimOf(LONE_FLOOR), 'full'), []).size).toBe(0)
   })
 })
 

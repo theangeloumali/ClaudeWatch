@@ -13,7 +13,6 @@ import {
   TRIANGLE_CEILING
 } from './live-budget.test-utils'
 import { registerTheme } from './registry'
-import { BUILDING_CAP } from '../town/town-grid'
 import type { OfficeTheme } from './types'
 
 // Full sim or scene builds: the 5 s default times out under multi-agent load (health-9).
@@ -57,10 +56,6 @@ function bare(theme: OfficeTheme): OfficeTheme {
   return stripped
 }
 
-// Two rows of trees every 6 m, with lamps, seats and hedges, round the largest campus these
-// floors make. Instanced: the pieces cost triangles, which are bounded below, not draws.
-const GARDEN_PIECE_CEILING = 240
-
 for (const theme of REAL_THEMES) {
   const unfilled = bare(theme)
   it(`${theme.id} adds at most ${ADDED_DRAWS_PER_THEME} draws for its surroundings, lounge and ambient life`, () => {
@@ -77,8 +72,6 @@ for (const theme of REAL_THEMES) {
     expect(empty.horizonDraws).toBe(1)
     expect(filled.horizonDraws).toBe(1)
     expect(filled.lotCount).toBeGreaterThan(40)
-    // The town's lots are capped by the plan; the garden's pieces cost triangles, not draws.
-    expect(filled.lotCount).toBeLessThanOrEqual(BUILDING_CAP.full + GARDEN_PIECE_CEILING)
     expect(filled.triangles).toBeLessThanOrEqual(TRIANGLE_CEILING)
     expect(filled.surroundingsDraws + loungeDraws).toBeLessThanOrEqual(ADDED_DRAWS_PER_THEME)
   })
@@ -112,12 +105,17 @@ it.each(BUSY_FLOORS)(
 )
 
 // What an agent may add once the floor's parts are merged: the textured door sign of its room.
+// The city grows with the offices round it, so its draws are left to the ceilings above.
 const DRAWS_PER_AGENT = 1
 
 it.each([
   ...REAL_THEMES.map((theme) => [theme.id, [theme.id]] as const),
   ['three themes', THREE_THEMES] as const
 ])('%s adds at most one draw per agent', (_name, themeIds) => {
-  const perAgent = (scaled(themeIds, 40, 4).draws - scaled(themeIds, 20, 4).draws) / 20
+  const officeDraws = (agents: number): number => {
+    const result = scaled(themeIds, agents, 4)
+    return result.draws - result.townDraws
+  }
+  const perAgent = (officeDraws(40) - officeDraws(20)) / 20
   expect(perAgent).toBeLessThanOrEqual(DRAWS_PER_AGENT)
 })

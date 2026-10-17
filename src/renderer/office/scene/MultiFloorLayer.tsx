@@ -11,6 +11,8 @@ import {
   type ThemeZoneGroup
 } from '../logic/office-themes'
 import { getTheme } from '../themes/registry'
+import { BatchedScene } from './BatchedScene'
+import { crewBatchRevision } from './batch-revision'
 import { FloorView } from './FloorView'
 import { RobotCrew, type RobotMotion } from './Robot'
 import { floorElevation, partitionPhysicalAgents } from './all-floor-model'
@@ -94,7 +96,22 @@ export function MultiFloorLayer({
     [floors]
   )
   const focused = floors.find((floor) => floor.floorId === focusedFloorId) ?? floors[0]
+  // Opening roofs keeps storeys in place; explicit drill-down still clips higher floors.
+  const isWithinDrillDown = (floor: FloorGeometry) =>
+    viewMode !== 'office' ||
+    (floor.buildingId ?? floor.floorId) !== (focused?.buildingId ?? focused?.floorId) ||
+    floorElevation(floor) <= floorElevation(focused ?? floor)
   const isOverview = agents.length > AUTHORED_WORKER_LIMIT
+  const crewRevision = useMemo(
+    () =>
+      crewBatchRevision({
+        agents,
+        selectedAgentKey,
+        themeId: floorTheme.id,
+        zoneGroups: allGroups
+      }),
+    [agents, selectedAgentKey, floorTheme.id, allGroups]
+  )
   const keys = new Set(agents.map((agent) => agent.agentKey))
   for (const key of motions.keys()) if (!keys.has(key)) motions.delete(key)
   const crewProps = {
@@ -126,45 +143,47 @@ export function MultiFloorLayer({
         />
       ))}
       {floors.map((floor) => {
-        // Opening roofs keeps storeys in place; explicit drill-down still clips higher floors.
-        const isWithinDrillDown =
-          viewMode !== 'office' ||
-          (floor.buildingId ?? floor.floorId) !== (focused?.buildingId ?? focused?.floorId) ||
-          floorElevation(floor) <= floorElevation(focused ?? floor)
         const isInteriorVisible =
-          isWithinDrillDown &&
+          isWithinDrillDown(floor) &&
           (!areRoofsVisible || (viewMode === 'office' && floor.floorId === focused?.floorId))
         return (
-          <group key={floor.floorId}>
-            <group visible={isInteriorVisible}>
-              <FloorView
-                openInteriors
-                isOverview={isOverview}
+          <group key={floor.floorId} visible={isInteriorVisible}>
+            <FloorView
+              openInteriors
+              isOverview={isOverview}
+              floor={floor}
+              floorTheme={getTheme(groups.get(floor.floorId)?.[0]?.themeId ?? floorTheme.id)}
+              zoneGroups={groups.get(floor.floorId) ?? []}
+              wallsMode={wallsMode}
+              isReducedMotion={isReducedMotion}
+              focusedRoomId={floor.floorId === focusedFloorId ? focusedRoomId : null}
+            />
+            {isInteriorVisible && (
+              <ZonePickers
                 floor={floor}
-                floorTheme={getTheme(groups.get(floor.floorId)?.[0]?.themeId ?? floorTheme.id)}
-                zoneGroups={groups.get(floor.floorId) ?? []}
-                wallsMode={wallsMode}
-                isReducedMotion={isReducedMotion}
-                focusedRoomId={floor.floorId === focusedFloorId ? focusedRoomId : null}
+                onFly={onFlyToZone}
+                onMiss={() => onSelect(null)}
+                onWalk={floorElevation(floor) === 0 ? onWalk : undefined}
+                onEditTarget={onEditTarget}
+                onFocusFloor={onFocusFloor}
               />
-              {isInteriorVisible && (
-                <ZonePickers
-                  floor={floor}
-                  onFly={onFlyToZone}
-                  onMiss={() => onSelect(null)}
-                  onWalk={floorElevation(floor) === 0 ? onWalk : undefined}
-                  onEditTarget={onEditTarget}
-                  onFocusFloor={onFocusFloor}
-                />
-              )}
-            </group>
-            <group visible={isWithinDrillDown}>
-              <RobotCrew {...crewProps} agents={partition.byFloor.get(floor.floorId) ?? []} />
-            </group>
+            )}
           </group>
         )
       })}
-      {partition.transit.length > 0 && <RobotCrew {...crewProps} agents={partition.transit} />}
+      {/* Robots batch apart: a roamer changing room rebuilds only them (perf-11). */}
+      <BatchedScene revision={crewRevision}>
+        {floors.map((floor) => (
+          <group
+            key={floor.floorId}
+            name={`crew:${floor.floorId}`}
+            visible={isWithinDrillDown(floor)}
+          >
+            <RobotCrew {...crewProps} agents={partition.byFloor.get(floor.floorId) ?? []} />
+          </group>
+        ))}
+        {partition.transit.length > 0 && <RobotCrew {...crewProps} agents={partition.transit} />}
+      </BatchedScene>
     </>
   )
 }
