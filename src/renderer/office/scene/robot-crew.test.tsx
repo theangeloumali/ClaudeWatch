@@ -53,3 +53,28 @@ it('re-renders only the robots whose agent changed on a step', () => {
   rerender(crew([{ ...idle }, { ...walker, x: 2.5 }]))
   expect(rendered).toEqual([])
 })
+
+it('mounts the presence of a robot whose agent is fading in at scale 0, and others whole', () => {
+  const crew = (agents: readonly AgentView[]) =>
+    createElement(RobotCrew, {
+      agents,
+      zoneGroups: [],
+      floorTheme: themeForTeam(),
+      selectedAgentKey: null,
+      speakingAgentKey: null,
+      isReducedMotion: false,
+      onSelect: vi.fn(),
+      onFly: vi.fn()
+    })
+  const { container, rerender } = render(
+    crew([makeAgent({ agentKey: 'arriving', fade: 0 }), makeAgent({ agentKey: 'seated', x: 2 })])
+  )
+  const presences = () =>
+    [...container.querySelectorAll(':scope > group > group')].map((group) =>
+      group.getAttribute('scale')
+    )
+  expect(presences()).toEqual(['0', '1'])
+  // Once mounted, the frame loop owns the scale: a cleared fade re-renders nothing back to 0.
+  rerender(crew([makeAgent({ agentKey: 'arriving' }), makeAgent({ agentKey: 'seated', x: 2 })]))
+  expect(presences()).toEqual(['0', '1'])
+})

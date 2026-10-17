@@ -62,6 +62,11 @@ export function presenceAfter(
   return target > presence ? Math.min(target, presence + step) : Math.max(target, presence - step)
 }
 
+// An arrival mounts while still fading in: it starts at nothing and grows, never pops then shrinks.
+export function presenceAtMount(agent: Pick<AgentView, 'fade'>): number {
+  return agent.fade === undefined ? 1 : 0
+}
+
 function phaseFor(key: string): number {
   let hash = 0
   for (const char of key) hash = (hash * 31 + char.charCodeAt(0)) >>> 0
@@ -90,6 +95,8 @@ export function Robot({
   agentRef.current = agent
   const phase = useMemo(() => phaseFor(agent.agentKey), [agent.agentKey])
   const travelDistanceRef = useRef(0)
+  // Read once: after mounting, the frame loop alone sets the presence scale.
+  const mountedPresence = useRef(presenceAtMount(agent)).current
 
   useLayoutEffect(() => {
     const root = rootRef.current
@@ -190,7 +197,7 @@ export function Robot({
 
   return (
     <group ref={rootRef} scale={agent.isSubagent ? SUBAGENT_SCALE : AGENT_SCALE}>
-      <group ref={presenceRef}>
+      <group ref={presenceRef} scale={mountedPresence}>
         <mesh
           position={[0, 0.012, 0]}
           rotation={[-Math.PI / 2, 0, 0]}
