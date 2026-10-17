@@ -1,40 +1,44 @@
-import { FURNITURE_SCALE } from '../../../shared/office/figure-scale'
+import { cornerReach, gameCorner } from '../../../office/sim/game-corner'
+import { LOUNGE_WIDTH } from '../../../office/sim/rooms'
+import { toLounge } from '../../office-live/layout-geometry'
 import type { LoungeGeometry } from '../scene-model'
 
-// The sim's contract: seats face the screen on the far edge, the door is mid-way along the
-// edge facing the rooms, and the front row stands 1.2 m from the far edge.
+// The sim's four ways a corner faces: seats look at the screen on the far edge.
 export const HEADINGS = [0, Math.PI, Math.PI / 2, -Math.PI / 2] as const
-const FRONT_ROW_M = 1.2
-const SEATS_PER_ROW = 4
+const OFFICES_M = 4
 
-// A game corner laid out as the sim lays one: rows of four, sized at furniture scale.
+// The sim's own corner, its seats facing `heading`, moved to `centre`. The synthetic floor is
+// one office against its back wall, with room for a corner only on the side ahead of it.
 export function gameCornerFixture(
   heading: number,
   seatCount: number,
   centre = { x: 20, z: -10 }
 ): LoungeGeometry {
-  const rows = Math.ceil(seatCount / SEATS_PER_ROW)
-  const across = 6 * FURNITURE_SCALE
-  const along = (3 + rows * 2) * FURNITURE_SCALE
-  const facing = { x: Math.sin(heading), z: Math.cos(heading) }
-  const side = { x: Math.cos(heading), z: -Math.sin(heading) }
-  // `ahead` runs from the door (-along / 2) to the far edge; `beside` across the corner.
-  const at = (ahead: number, beside: number) => ({
-    x: centre.x + facing.x * ahead + side.x * beside,
-    z: centre.z + facing.z * ahead + side.z * beside
+  const ahead = { x: Math.round(Math.sin(heading)), z: Math.round(Math.cos(heading)) }
+  const length = OFFICES_M + cornerReach(seatCount) + 3
+  const across = LOUNGE_WIDTH + 2.5
+  const sized = (along: number, beside: number) =>
+    ahead.x === 0 ? { width: beside, depth: along } : { width: along, depth: beside }
+  const back = { x: (-ahead.x * length) / 2, z: (-ahead.z * length) / 2 }
+  const layout = gameCorner({
+    floorId: 'floor-1',
+    footprint: { x: 0, z: 0, ...sized(length, across) },
+    rooms: [
+      {
+        x: back.x + (ahead.x * OFFICES_M) / 2,
+        z: back.z + (ahead.z * OFFICES_M) / 2,
+        ...sized(OFFICES_M, across)
+      }
+    ],
+    entrance: back,
+    deskCount: seatCount
   })
-  const isAlongZ = Math.abs(facing.z) > Math.abs(facing.x)
-  return {
-    id: 'floor-1:games',
-    ...centre,
-    width: isAlongZ ? across : along,
-    depth: isAlongZ ? along : across,
-    door: at(-along / 2, 0),
-    seats: Array.from({ length: seatCount }, (_, index) => {
-      const row = Math.floor(index / SEATS_PER_ROW)
-      const ahead = along / 2 - FRONT_ROW_M - row * 2 * FURNITURE_SCALE
-      const beside = -across / 2 + (1.125 + (index % SEATS_PER_ROW) * 1.25) * FURNITURE_SCALE
-      return { slotId: `lounge_seat_${index}`, ...at(ahead, beside), heading }
-    })
-  }
+  if (!layout) throw new Error(`No game corner faces ${heading} rad`)
+  const lounge = toLounge(layout)
+  const moved = <Point extends { x: number; z: number }>(point: Point): Point => ({
+    ...point,
+    x: point.x + centre.x - lounge.x,
+    z: point.z + centre.z - lounge.z
+  })
+  return { ...moved(lounge), door: moved(lounge.door), seats: lounge.seats.map(moved) }
 }

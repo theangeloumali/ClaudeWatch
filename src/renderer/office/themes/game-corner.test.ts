@@ -1,31 +1,34 @@
 import { describe, expect, it } from 'vitest'
 import type { LoungeGeometry } from '../scene-model'
-import { loungeAsDrawn } from '../scene/FloorView'
-import { gameCornerParts, planGameCorner } from './game-corner'
+import { gameCornerParts } from './game-corner'
 import { gameCornerFixture, HEADINGS } from './game-corner.test-utils'
-import { overlaps } from './lot-math'
+import { loungeAsDrawn } from './lounge-layout'
+import { gapBetween, type Rect } from './lot-math'
 import { BRASS } from './palettes'
-import type { PartSpec } from './parts'
+import { topOf as partsTop, type PartSpec } from './parts'
 import { listThemes } from './registry'
 
 const SEAT_TOP_M = 0.3
+const CABINET_TOP_M = 1.3
 const EPSILON = 1e-6
 
-const topOf = (part: PartSpec): number => part.at[1] + part.size[1] / 2
+const topOf = (part: PartSpec): number => partsTop([part])
 const bottomOf = (part: PartSpec): number => part.at[1] - part.size[1] / 2
-
-function gap(part: PartSpec, x: number, z: number): number {
-  const dx = Math.max(0, Math.abs(x - part.at[0]) - part.size[0] / 2)
-  const dz = Math.max(0, Math.abs(z - part.at[2]) - part.size[2] / 2)
-  return Math.hypot(dx, dz)
-}
+const footprintOf = (part: PartSpec): Rect => ({
+  x: part.at[0],
+  z: part.at[2],
+  width: part.size[0],
+  depth: part.size[2]
+})
 
 // Points an agent's body passes: its seat, and the straight walk there from the door.
-function walked(corner: LoungeGeometry): { x: number; z: number }[] {
+function walked(corner: LoungeGeometry): Rect[] {
   return corner.seats.flatMap((seat) =>
     Array.from({ length: 41 }, (_, step) => ({
       x: corner.door.x + ((seat.x - corner.door.x) * step) / 40,
-      z: corner.door.z + ((seat.z - corner.door.z) * step) / 40
+      z: corner.door.z + ((seat.z - corner.door.z) * step) / 40,
+      width: 0,
+      depth: 0
     }))
   )
 }
@@ -38,6 +41,29 @@ function facingOf(corner: LoungeGeometry) {
   const beside = (x: number, z: number) => x * ahead.z - z * ahead.x
   const isAlongZ = Math.abs(ahead.z) > 0.5
   return { along, beside, thinAxis: isAlongZ ? 2 : 0, wideAxis: isAlongZ ? 0 : 2 }
+}
+
+// The widest glowing part: the wall screen's panel.
+function panelOf(corner: LoungeGeometry, parts: readonly PartSpec[]): PartSpec {
+  const { wideAxis } = facingOf(corner)
+  return parts
+    .filter((part) => part.glow)
+    .reduce((wide, part) => (part.size[wideAxis] > wide.size[wideAxis] ? part : wide))
+}
+
+// Tall parts that touch stand as one piece; every piece but the screen's is a cabinet.
+function cabinetsOf(corner: LoungeGeometry, parts: readonly PartSpec[]): PartSpec[][] {
+  let pieces: PartSpec[][] = []
+  for (const part of parts.filter((tall) => topOf(tall) > CABINET_TOP_M)) {
+    const isTouching = (piece: PartSpec[]) =>
+      piece.some((other) => gapBetween(footprintOf(part), footprintOf(other)) < EPSILON)
+    pieces = [
+      ...pieces.filter((piece) => !isTouching(piece)),
+      [part, ...pieces.filter(isTouching).flat()]
+    ]
+  }
+  const panel = panelOf(corner, parts)
+  return pieces.filter((piece) => !piece.includes(panel))
 }
 
 const CASES = HEADINGS.flatMap((heading) =>
@@ -66,7 +92,7 @@ describe.each(CASES)('the game corner with $name', ({ corner }) => {
     const standing = parts.filter((part) => topOf(part) > SEAT_TOP_M)
     expect(standing.length).toBeGreaterThan(0)
     for (const point of walked(corner))
-      for (const part of standing) expect(gap(part, point.x, point.z)).toBeGreaterThan(0.4)
+      for (const part of standing) expect(gapBetween(footprintOf(part), point)).toBeGreaterThan(0.4)
   })
 
   it('keeps every part inside the corner', () => {
@@ -85,10 +111,7 @@ describe.each(CASES)('the game corner with $name', ({ corner }) => {
     const frontRow = Math.max(...corner.seats.map((seat) => along(seat.x, seat.z)))
     const seatsMid =
       corner.seats.reduce((sum, seat) => sum + beside(seat.x, seat.z), 0) / corner.seats.length
-    const lit = parts.filter((part) => part.glow)
-    const panel = lit.reduce((wide, part) =>
-      part.size[wideAxis] > wide.size[wideAxis] ? part : wide
-    )
+    const panel = panelOf(corner, parts)
     expect(panel.size[wideAxis]).toBeGreaterThanOrEqual(1.8)
     expect(panel.size[thinAxis]).toBeLessThan(0.1)
     expect(along(panel.at[0], panel.at[2]) - frontRow).toBeGreaterThan(0.5)
@@ -107,21 +130,10 @@ describe.each(CASES)('the game corner with $name', ({ corner }) => {
     expect(along(frame.at[0], frame.at[2])).toBeGreaterThan(along(panel.at[0], panel.at[2]))
   })
 
-  it('stands two arcade cabinets apart from the screen, each tall with a glowing screen', () => {
-    const plan = planGameCorner(corner)
-    expect(plan.cabinets).toHaveLength(2)
-    const [first, second] = plan.cabinets
-    expect(overlaps(first, second)).toBe(false)
-    for (const cabinet of plan.cabinets) {
-      expect(overlaps(cabinet, plan.screen)).toBe(false)
-      const within = parts.filter(
-        (part) =>
-          Math.abs(part.at[0] - cabinet.x) <= cabinet.width / 2 + EPSILON &&
-          Math.abs(part.at[2] - cabinet.z) <= cabinet.depth / 2 + EPSILON
-      )
-      expect(within.some((part) => topOf(part) > 1.3)).toBe(true)
-      expect(within.some((part) => part.glow)).toBe(true)
-    }
+  it('stands two tall arcade cabinets clear of the screen and each other, each one glowing', () => {
+    const cabinets = cabinetsOf(corner, parts)
+    expect(cabinets).toHaveLength(2)
+    for (const cabinet of cabinets) expect(cabinet.some((part) => part.glow)).toBe(true)
   })
 
   it('draws the same corner on every start', () => {
@@ -139,7 +151,20 @@ it('leaves the arcade cabinets out of a corner too narrow to walk past them', ()
     door: { x: 0, z: -1.3 },
     seats: [{ slotId: 'lounge_seat_0', x: 0, z: 0.1, heading: 0 }]
   }
-  expect(planGameCorner(narrow).cabinets).toEqual([])
+  expect(cabinetsOf(narrow, gameCornerParts(narrow, BRASS))).toEqual([])
+})
+
+it('moves both arcade cabinets off a far wall the screen spans', () => {
+  const slim: LoungeGeometry = {
+    id: 'floor-1:games',
+    x: 0,
+    z: 0,
+    width: 3.4,
+    depth: 9,
+    door: { x: 0, z: -4.5 },
+    seats: [{ slotId: 'games_seat_0', x: 0, z: 2.5, heading: 0 }]
+  }
+  expect(cabinetsOf(slim, gameCornerParts(slim, BRASS))).toHaveLength(2)
 })
 
 it('paints every part from the theme palette, in every theme', () => {

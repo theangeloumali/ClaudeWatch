@@ -1,5 +1,7 @@
+import { clamp } from '../../../shared/range'
 import type { LoungeGeometry } from '../scene-model'
-import { firstClear, spotAt, type Footprint } from './lounge-layout'
+import { isWalkable, spotAt, WALL_GAP_M, type Footprint } from './lounge-layout'
+import { grow, overlaps } from './lot-math'
 import { box, lit, type PartSpec } from './parts'
 import type { ThemePalette } from './types'
 
@@ -15,15 +17,7 @@ interface Cabinet extends Footprint {
   facing: Facing
 }
 
-export interface GameCornerPlan {
-  screen: Footprint
-  cabinets: Cabinet[]
-}
-
-const WALL_GAP_M = 0.15
 const SCREEN = { bottom: 0.55, height: 1.15, depth: 0.08, minWidth: 2, maxWidth: 4.2 }
-// The frame, and the panel in front of it, measured in from the far edge.
-const SCREEN_REACH_M = WALL_GAP_M + SCREEN.depth + 0.02
 const CABINET = { width: 0.7, depth: 0.6 }
 const CABINET_COUNT = 2
 const RUG_INSET_M = 0.2
@@ -48,11 +42,16 @@ function placed(parts: readonly PartSpec[], origin: { x: number; z: number }, fa
   )
 }
 
+// Each seat's parts, modelled facing +z about the seat: one transform for both views.
+function atSeats(lounge: LoungeGeometry, partsAt: (index: number) => PartSpec[]): PartSpec[] {
+  return lounge.seats.flatMap((seat, index) => placed(partsAt(index), seat, facingOf(seat.heading)))
+}
+
 // Where a seated agent's pelvis rests, before furniture scale.
 export const BEANBAG_SEAT_M = 0.24
 
 // The bag's body alone: what the overview draws, where a back or cushion would not read.
-export function beanbagBodyPart(palette: ThemePalette, index: number): PartSpec {
+function beanbagBodyPart(palette: ThemePalette, index: number): PartSpec {
   return box([0, 0.08, 0], [0.64, 0.16, 0.64], palette[BAG_COLOURS[index % BAG_COLOURS.length]])
 }
 
@@ -103,17 +102,18 @@ function screenSite(lounge: LoungeGeometry, ahead: Facing) {
     ahead.x === 0 ? [lounge.width, lounge.depth] : [lounge.depth, lounge.width]
   const lateral = lounge.seats.map(beside)
   const span = lateral.length ? Math.max(...lateral) - Math.min(...lateral) : 0
-  const width = Math.min(Math.max(span + 0.8, SCREEN.minWidth), SCREEN.maxWidth, lateralSize - 0.6)
+  const width = Math.min(clamp(span + 0.8, [SCREEN.minWidth, SCREEN.maxWidth]), lateralSize - 0.6)
   const seatsMid = lateral.length
     ? lateral.reduce((sum, x) => sum + x, 0) / lateral.length
     : beside(lounge)
   const slack = lateralSize / 2 - width / 2
-  const offset = Math.min(slack, Math.max(-slack, seatsMid - beside(lounge)))
+  const offset = clamp(seatsMid - beside(lounge), [-slack, slack])
   const origin = {
     x: lounge.x + (ahead.x * aheadSize) / 2 + side.x * offset,
     z: lounge.z + (ahead.z * aheadSize) / 2 + side.z * offset
   }
-  const reach = SCREEN_REACH_M - WALL_GAP_M
+  // The frame, and the panel in front of it, past the gap at the far edge.
+  const reach = SCREEN.depth + 0.02
   const footprint: Footprint = {
     x: origin.x - ahead.x * (WALL_GAP_M + reach / 2),
     z: origin.z - ahead.z * (WALL_GAP_M + reach / 2),
@@ -149,43 +149,41 @@ function cabinetSpots(lounge: LoungeGeometry, ahead: Facing): Cabinet[] {
 function layOut(lounge: LoungeGeometry) {
   const ahead = facingOf(lounge.seats[0]?.heading ?? 0)
   const site = screenSite(lounge, ahead)
-  const spots = cabinetSpots(lounge, ahead)
+  // One pass: a spot passed over stays covered, so each walk is checked once at most.
   const cabinets: Cabinet[] = []
-  while (cabinets.length < CABINET_COUNT) {
-    const cabinet = firstClear(lounge, spots, [site.footprint, ...cabinets])
-    if (!cabinet) break
-    cabinets.push(cabinet)
+  for (const spot of cabinetSpots(lounge, ahead)) {
+    if (cabinets.length === CABINET_COUNT) break
+    const isFree = ![site.footprint, ...cabinets].some((other) => overlaps(spot, other))
+    if (isFree && isWalkable(lounge, spot)) cabinets.push(spot)
   }
   return { ahead, site, cabinets }
-}
-
-export function planGameCorner(lounge: LoungeGeometry): GameCornerPlan {
-  const { site, cabinets } = layOut(lounge)
-  return { screen: site.footprint, cabinets }
 }
 
 // A rug, a beanbag at every seat, a wall screen beyond them, and arcade cabinets out of the way.
 export function gameCornerParts(lounge: LoungeGeometry, palette: ThemePalette): PartSpec[] {
   const { ahead, site, cabinets } = layOut(lounge)
-  const rug = { width: lounge.width - RUG_INSET_M * 2, depth: lounge.depth - RUG_INSET_M * 2 }
+  const rug = grow(lounge, -RUG_INSET_M)
   return [
-    box([lounge.x, 0.015, lounge.z], [rug.width, 0.03, rug.depth], palette.ink),
+    box([rug.x, 0.015, rug.z], [rug.width, 0.03, rug.depth], palette.ink),
     ...[-1, 1].flatMap((side) => [
       box(
-        [lounge.x, 0.035, lounge.z + side * (rug.depth / 2 - TRIM_M / 2)],
+        [rug.x, 0.035, rug.z + side * (rug.depth / 2 - TRIM_M / 2)],
         [rug.width, 0.01, TRIM_M],
         palette.gold
       ),
       box(
-        [lounge.x + side * (rug.width / 2 - TRIM_M / 2), 0.035, lounge.z],
+        [rug.x + side * (rug.width / 2 - TRIM_M / 2), 0.035, rug.z],
         [TRIM_M, 0.01, rug.depth],
         palette.gold
       )
     ]),
-    ...lounge.seats.flatMap((seat, index) =>
-      placed(beanbagParts(palette, index), seat, facingOf(seat.heading))
-    ),
+    ...atSeats(lounge, (index) => beanbagParts(palette, index)),
     ...placed(screenParts(site.width, palette), site.origin, reverse(ahead)),
     ...cabinets.flatMap((cabinet) => placed(arcadeCabinetParts(palette), cabinet, cabinet.facing))
   ]
+}
+
+// The overview's corner: one bag body at every seat, and nothing else.
+export function overviewCornerParts(lounge: LoungeGeometry, palette: ThemePalette): PartSpec[] {
+  return atSeats(lounge, (index) => [beanbagBodyPart(palette, index)])
 }

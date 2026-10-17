@@ -3,11 +3,9 @@ import { FURNITURE_SCALE, GUEST_FURNITURE_SCALE } from '../../../shared/office/f
 import type { ThemeZoneGroup } from '../logic/office-themes'
 import { ROOM_DOOR_WIDTH, type WallsMode } from '../logic/room-layout'
 import { plateLocalFloor } from '../logic/zone-framing'
-import type { FloorGeometry, LoungeGeometry } from '../scene-model'
+import type { FloorGeometry } from '../scene-model'
 import { getTheme } from '../themes/registry'
-import { beanbagBodyPart } from '../themes/game-corner'
 import { GameCorner } from '../themes/GameCorner'
-import { Parts } from '../themes/parts'
 import type { OfficeTheme } from '../themes/types'
 import { floorConnector, floorElevation } from './all-floor-model'
 import { CutawaySlab } from './CutawaySlab'
@@ -28,22 +26,6 @@ function scaledAbout(
       <group position={[-point.x, 0, -point.z]}>{furniture}</group>
     </group>
   )
-}
-
-// The sim's lounge shrunk about its centre to the size its theme draws. Drawn in a group scaled
-// back up about that centre, every stool lands on one of the sim's seats.
-export function loungeAsDrawn(lounge: LoungeGeometry): LoungeGeometry {
-  const shrunk = (point: { x: number; z: number }) => ({
-    x: lounge.x + (point.x - lounge.x) / FURNITURE_SCALE,
-    z: lounge.z + (point.z - lounge.z) / FURNITURE_SCALE
-  })
-  return {
-    ...lounge,
-    width: lounge.width / FURNITURE_SCALE,
-    depth: lounge.depth / FURNITURE_SCALE,
-    door: shrunk(lounge.door),
-    seats: lounge.seats.map((seat) => ({ ...seat, ...shrunk(seat) }))
-  }
 }
 
 // One slab and one lift from the floor's theme; every zone is drawn by the theme it resolved to.
@@ -104,31 +86,16 @@ export function FloorView({
                 <group key={company.id}>
                   {!isOpenCeiling && !isOverview && <kit.CompanyZone zone={company} />}
                   {company.lounge &&
-                    (isOverview ? (
-                      <group name="overview-lounge">
-                        {company.lounge.seats.map((seat, index) => (
-                          <group
-                            key={seat.slotId}
-                            name="lounge-seat"
-                            position={[seat.x, 0, seat.z]}
-                            rotation={[0, seat.heading, 0]}
-                            scale={FURNITURE_SCALE}
-                          >
-                            <Parts parts={[beanbagBodyPart(zoneTheme.palette, index)]} />
-                          </group>
-                        ))}
-                      </group>
-                    ) : (
-                      scaledAbout(
-                        company.lounge,
-                        FURNITURE_SCALE,
-                        company.lounge.id,
-                        <GameCorner
-                          lounge={loungeAsDrawn(company.lounge)}
-                          palette={zoneTheme.palette}
-                        />
-                      )
-                    ))}
+                    scaledAbout(
+                      company.lounge,
+                      FURNITURE_SCALE,
+                      company.lounge.id,
+                      <GameCorner
+                        lounge={company.lounge}
+                        palette={zoneTheme.palette}
+                        detail={isOverview ? 'overview' : 'full'}
+                      />
+                    )}
                 </group>
               ))}
               {!isOpenCeiling &&

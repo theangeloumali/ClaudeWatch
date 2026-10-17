@@ -47,6 +47,10 @@ export interface RobotMotion {
   travelDistance: number
 }
 
+// Whole unless the sim is fading the agent, in or out.
+const presenceTarget = (agent: Pick<AgentView, 'fade'>): number =>
+  agent.fade === undefined ? 1 : 0
+
 // Batched robot parts share opaque materials, so a departing robot fades by shrinking away over
 // the sim's fade; reduced motion skips the animation and the robot simply goes (seating-4).
 export function presenceAfter(
@@ -55,7 +59,7 @@ export function presenceAfter(
   delta: number,
   isReducedMotion: boolean
 ): number {
-  const target = agent.fade === undefined ? 1 : 0
+  const target = presenceTarget(agent)
   if (isReducedMotion) return target
   const step = (delta * 1000) / DEPARTURE_FADE_MS
   return target > presence ? Math.min(target, presence + step) : Math.max(target, presence - step)
@@ -63,7 +67,7 @@ export function presenceAfter(
 
 // An arrival mounts while still fading in: it starts at nothing and grows, never pops then shrinks.
 export function presenceAtMount(agent: Pick<AgentView, 'fade'>): number {
-  return agent.fade === undefined ? 1 : 0
+  return presenceTarget(agent)
 }
 
 function phaseFor(key: string): number {

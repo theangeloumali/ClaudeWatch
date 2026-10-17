@@ -7,11 +7,12 @@ import { toFloorGeometry } from '../../office-live/layout-geometry'
 import { groupZonesByTheme } from '../logic/office-themes'
 import { DESK_REACH } from '../logic/room-layout'
 import type { DeskSlot, FloorGeometry, LoungeGeometry } from '../scene-model'
-import { beanbagBodyPart } from '../themes/game-corner'
+import { gameCornerParts } from '../themes/game-corner'
 import { GameCorner } from '../themes/GameCorner'
 import { Parts, type PartSpec } from '../themes/parts'
 import { themeForTeam } from '../themes/registry'
-import { FloorView, loungeAsDrawn } from './FloorView'
+import { loungeAsDrawn } from '../themes/lounge-layout'
+import { FloorView } from './FloorView'
 
 // The views are called as plain functions here, so their one hook is stood in for.
 vi.mock('react', async (original) => ({
@@ -131,7 +132,9 @@ describe('furniture sized for the larger agents', () => {
   it('draws the game corner with a beanbag on every sim lounge seat', () => {
     const simLounge = layout.floors[0].zones[0].lounge!
     const lounge = locate(view, GameCorner)!
-    const drawn = lounge.props.lounge as LoungeGeometry
+    // The floor's own lounge, unchanged between renders, so the corner's parts are built once.
+    expect(lounge.props.lounge).toBe(floor.zones[0].lounge)
+    const drawn = loungeAsDrawn(lounge.props.lounge as LoungeGeometry)
     expect(lounge.scale).toBe(FURNITURE_SCALE)
     expect(locate(view, theme.kit.zone.Lounge)).toBeUndefined()
     // Five agents: the corner is handed the 6 x 7 m lounge of eight seats the sim lays out.
@@ -151,7 +154,7 @@ describe('furniture sized for the larger agents', () => {
     expect(corner.z).toBeCloseTo(simLounge.z - simLounge.depth / 2, 9)
   })
 
-  it('seats overview agents on beanbags at the sim lounge seats', () => {
+  it('seats overview agents on beanbags at the sim lounge seats, in one group about the lounge', () => {
     const simLounge = layout.floors[0].zones[0].lounge!
     const overview = FloorView({
       floor,
@@ -161,20 +164,28 @@ describe('furniture sized for the larger agents', () => {
       isReducedMotion: true,
       isOverview: true
     })
-    const seats = locateAll(overview, Parts, { at: [0, 0, 0], scale: 1 }).filter((found) =>
-      (found.props.parts as PartSpec[]).every((part) => part.at[1] + part.size[1] / 2 <= 0.3)
+    const corner = locate(overview, GameCorner)!
+    expect(corner.scale).toBe(FURNITURE_SCALE)
+    const drawn = locateAll(
+      GameCorner(corner.props as Parameters<typeof GameCorner>[0]),
+      Parts,
+      corner
     )
-    expect(seats.map((seat) => [seat.at[0], seat.at[2]])).toEqual(
-      simLounge.slots.map((slot) => [slot.x, slot.z])
-    )
-    for (const seat of seats) {
-      expect(seat.scale).toBe(FURNITURE_SCALE)
-      // One body per seat: the 512-worker overview stays inside its triangle ceiling.
-      const [body] = seat.props.parts as PartSpec[]
-      const { at, size } = beanbagBodyPart(theme.palette, 0)
-      expect(seat.props.parts).toHaveLength(1)
-      expect(body).toEqual(expect.objectContaining({ at, size }))
+    expect(drawn).toHaveLength(1)
+    const bags = drawn[0].props.parts as PartSpec[]
+    expect(bags).toHaveLength(simLounge.slots.length)
+    for (const [index, bag] of bags.entries()) {
+      const landed = drawnAt(drawn[0], { x: bag.at[0], z: bag.at[2] })
+      expect(landed.x).toBeCloseTo(simLounge.slots[index].x, 9)
+      expect(landed.z).toBeCloseTo(simLounge.slots[index].z, 9)
     }
+    // One body per seat, the one the full corner draws there: the 512-worker overview stays
+    // inside its triangle ceiling.
+    const full = gameCornerParts(
+      loungeAsDrawn(corner.props.lounge as LoungeGeometry),
+      theme.palette
+    )
+    expect(full).toEqual(expect.arrayContaining(bags))
   })
 
   it('shrinks a known lounge about its centre to the size its theme draws', () => {
