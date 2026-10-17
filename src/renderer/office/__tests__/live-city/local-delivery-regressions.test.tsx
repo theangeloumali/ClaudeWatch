@@ -333,7 +333,8 @@ describe('global roof cutaway', () => {
         .sort()
     ).toEqual(actors.map((actor) => actor.agentKey).sort())
     for (const mount of screen.getAllByTestId('delivery-floor')) {
-      const crew = mount.parentElement?.parentElement
+      // Crews batch apart from their floors (perf-11), in a group named for the storey.
+      const crew = view.container.querySelector(`[name="crew:${mount.dataset.floorId}"]`)
       if (!crew) throw new Error('Floor crew group is missing')
       expect(
         [...crew.querySelectorAll<HTMLElement>('[data-agent-key]')]

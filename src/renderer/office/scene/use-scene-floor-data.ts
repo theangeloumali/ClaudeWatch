@@ -6,7 +6,8 @@ import { useThemeAssignments } from '../logic/office-themes'
 import { buildOfficeLabels } from '../logic/office-labels'
 import { buildWorkstationDisplays } from '../logic/workstation-displays'
 import { getTheme } from '../themes/registry'
-import { floorElevation, groundEnvelope, physicalFloorId } from './all-floor-model'
+import { floorElevation, groundEnvelope } from './all-floor-model'
+import { crewBatchRevision, zoneThemesKey } from './batch-revision'
 import { physicalZoneGroups } from './MultiFloorLayer'
 import { AUTHORED_WORKER_LIMIT } from './scene-density'
 
@@ -101,27 +102,25 @@ export function useSceneFloorData(options: {
       options.theme.id
     ]
   )
-  const rosterKey = options.agents
-    .map(
-      (agent) =>
-        `${agent.agentKey}|${agent.provider}|${agent.isSubagent}|${agent.roomId}|${physicalFloorId(agent)}`
-    )
-    .join(' ')
-  // A selection or a reply only adds a ring or a puff, drawn on its own (perf-3). In overview
-  // the selected worker swaps its model (Robot.tsx), so there it still rebuilds.
-  const modelSwapKey =
-    options.agents.length > AUTHORED_WORKER_LIMIT ? options.selectedAgentKey : null
+  // Overview draws the floors with less detail.
+  const isOverview = options.agents.length > AUTHORED_WORKER_LIMIT
+  // Storeys batch their robots apart (MultiFloorLayer); a single floor's share its batch.
+  const crewKey = options.visibleFloors
+    ? null
+    : crewBatchRevision({
+        agents: options.agents,
+        selectedAgentKey: options.selectedAgentKey,
+        themeId: options.theme.id,
+        zoneGroups
+      })
   const revision = useMemo(
     () =>
       JSON.stringify([
         options.theme.id,
         surfaces,
-        zoneGroups.map((group) => [
-          group.themeId,
-          [...group.companies, ...group.projects, ...group.rooms].map(({ id }) => id)
-        ]),
-        rosterKey,
-        modelSwapKey,
+        zoneThemesKey(zoneGroups),
+        isOverview,
+        crewKey,
         options.areRoofsVisible ?? true,
         options.viewMode,
         options.focusedFloorId,
@@ -131,8 +130,8 @@ export function useSceneFloorData(options: {
       options.theme.id,
       surfaces,
       zoneGroups,
-      rosterKey,
-      modelSwapKey,
+      isOverview,
+      crewKey,
       options.areRoofsVisible,
       options.viewMode,
       options.focusedFloorId,
