@@ -4,7 +4,10 @@ import { STEAM } from '../office-palette'
 // Canvas-drawn textures: no font or image fetches, so they work under the app CSP and offline.
 const FONT_STACK = '-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif'
 const MAX_SIGN_CHARS = 24
+// Each sign is about 213 kB on the GPU, and a count line makes a new text per value.
+const MAX_SIGNS = 64
 
+// Least recently asked for first: a Map keeps insertion order, and a hit re-inserts.
 const signCache = new Map<string, CanvasTexture>()
 let blobShadow: CanvasTexture | null = null
 
@@ -27,7 +30,11 @@ function toTexture(canvas: HTMLCanvasElement): CanvasTexture {
 // A brass plaque with a rivet in each corner.
 export function signTexture(text: string): CanvasTexture {
   const cached = signCache.get(text)
-  if (cached) return cached
+  if (cached) {
+    signCache.delete(text)
+    signCache.set(text, cached)
+    return cached
+  }
   const [canvas, context] = makeCanvas(512, 104)
   context.fillStyle = STEAM.brass
   context.beginPath()
@@ -54,6 +61,12 @@ export function signTexture(text: string): CanvasTexture {
   context.fillText(label, 256, 54, 440)
   const texture = toTexture(canvas)
   signCache.set(text, texture)
+  // A sign still on screen is not lost: its material uploads it again on its next draw.
+  for (const [oldest, evicted] of signCache) {
+    if (signCache.size <= MAX_SIGNS) break
+    signCache.delete(oldest)
+    evicted.dispose()
+  }
   return texture
 }
 
