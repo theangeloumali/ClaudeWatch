@@ -38,13 +38,31 @@ function useStructuralFrame(frame: OfficeFrame | null): OfficeFrame | null {
   return frame
 }
 
-// The city's signals come from the real frame: they carry keys and numbers, never names.
+// Local midnight after `atMs`, when today's spend starts over.
+function nextMidnightMs(atMs: number): number {
+  const midnight = new Date(atMs)
+  midnight.setHours(24, 0, 0, 0)
+  return midnight.getTime()
+}
+
+// The city's signals come from the real frame: they carry keys and numbers, never names. They
+// change with a frame, when evidence turns fresh or stale, and at midnight; never on a tick.
 export function useCitySignalFeed(
   frame: OfficeFrame | null,
-  nowMs: number,
   store: CitySignalStore = citySignalStore
 ): void {
-  useEffect(() => store.update(frame, nowMs), [frame, nowMs, store])
+  const [wakes, setWakes] = useState(0)
+  useEffect(() => {
+    if (!frame) return
+    const nowMs = Date.now()
+    store.update(frame, nowMs)
+    const wakeAtMs = Math.min(
+      nextActivityChangeAtMs(frame, nowMs) ?? Infinity,
+      nextMidnightMs(nowMs)
+    )
+    const timer = setTimeout(() => setWakes(wakes + 1), wakeAtMs - nowMs)
+    return () => clearTimeout(timer)
+  }, [frame, store, wakes])
 }
 
 // The page's one role book while names are hidden, else null. One book, so the HUD, the scene

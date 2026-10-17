@@ -133,7 +133,7 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
   const isShowingList = state.isListView || !is3DAvailable
   useFeedSubscription(feed, dispatch)
 
-  useCitySignalFeed(state.frame, nowMs)
+  useCitySignalFeed(state.frame)
   const roles = useNameRoles()
   const frame = useVisibleFrame(state.frame, roles)
   const offices = useMemo(
