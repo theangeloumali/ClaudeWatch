@@ -28,7 +28,12 @@ import { loungesByRoom } from './lounge'
 import type { PathCache } from './navigation'
 import { MovementRecovery, remainingRouteMetres } from './movement-recovery'
 import { placements, type Placement } from './placements'
-import { FloorRoutes, floorElevation, floorEntrance } from './world-floor-routes'
+import {
+  FloorRoutes,
+  floorElevation,
+  floorEntrance,
+  type FloorWaypoint
+} from './world-floor-routes'
 import { VenueBookings, type WorldVenue } from './world-venues'
 import { homeRoute, reconcileLeisure } from './world-leisure'
 import { isAwayForLeisure, seatAtDesk, walksHome } from './world-recall'
@@ -585,9 +590,7 @@ export class World {
       next.path = []
       this.startFade(key)
     }
-    for (const [connector, occupant] of this.connectorOccupants)
-      if (occupant === key && !next.path.some((point) => point.connectorId === connector))
-        this.connectorOccupants.delete(connector)
+    this.releaseConnectors(key, next.path)
     const target = next.path.at(-1)
     // Brief direct steps can still circle a wall corner; recover from lack of waypoint progress.
     // A sidewalk leg keeps its route: the street detour would cross a carriageway.
@@ -617,10 +620,18 @@ export class World {
     return returnToDesk(agent, desk.heading, [])
   }
 
+  // Frees each lift the agent holds that its route no longer rides; a fade or removal frees all.
+  private releaseConnectors(key: string, route: readonly FloorWaypoint[] = []): void {
+    for (const [connector, occupant] of this.connectorOccupants)
+      if (occupant === key && !route.some((point) => point.connectorId === connector))
+        this.connectorOccupants.delete(connector)
+  }
+
   private startFade(key: string): void {
     this.fading.set(key, 0)
     this.passages.clear(key)
     this.recovery.clear(key)
+    this.releaseConnectors(key)
   }
 
   private fadeOut(key: string, agent: AgentRecord): void {
@@ -643,6 +654,7 @@ export class World {
     this.passages.clear(key)
     this.fading.delete(key)
     this.members.delete(key)
+    this.releaseConnectors(key)
   }
 
   step(dtMs: number): AgentView[] {
