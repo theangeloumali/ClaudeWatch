@@ -8,6 +8,7 @@ import {
 } from '../../../shared/office/sidewalks'
 import type { WorldPoint } from '../../../shared/office/world-document-types'
 import type { WalkGround } from '../player/walk-ground'
+import { lotsWithDoors } from '../town/town-lots'
 import type { TownPlan } from '../town/town-plan'
 
 export interface CitySidewalks {
@@ -26,8 +27,7 @@ export function citySidewalks(plan: TownPlan): CitySidewalks {
   if (known) return known
   const crossings = crosswalks(plan.roads)
   const network = sidewalkNetwork(plan.roads, crossings)
-  for (const lot of [...plan.lots].sort((a, b) => a.id.localeCompare(b.id)))
-    attachDoor(network, lot.door)
+  for (const lot of lotsWithDoors(plan.lots)) attachDoor(network, lot.door)
   const sidewalks = { network, crossings, loops: ambientLoops(network) }
   built.set(plan, sidewalks)
   return sidewalks

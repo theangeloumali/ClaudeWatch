@@ -1,5 +1,6 @@
 // Saved from 74490a8 by running GUARDED_CITIES through useTownPlan; regenerate only on purpose.
-// Since then only isLandmark moved: one landmark per landmark district, its largest lot.
+// Since then only isLandmark moved, one landmark per landmark district, its largest lot; and a
+// lot whose street an office cut short has no door.
 export const BASELINE: Record<string, unknown> = {
   'two-office': {
     roads: [
@@ -633,7 +634,7 @@ export const BASELINE: Record<string, unknown> = {
         seed: 2419680036,
         blockId: 'city-lot:0:-1:0:frontage:0:depth:1',
         frontage: 'avenue',
-        door: { x: 24, z: -8.25 },
+        door: null,
         zone: 'workshop',
         kind: 'building',
         maxHeight: 9,
@@ -709,7 +710,7 @@ export const BASELINE: Record<string, unknown> = {
         seed: 597077717,
         blockId: 'city-lot:0:-1:1:frontage:0:depth:1',
         frontage: 'avenue',
-        door: { x: 36.5, z: -8.25 },
+        door: null,
         zone: 'residential',
         kind: 'building',
         maxHeight: 23,
@@ -1341,7 +1342,7 @@ export const BASELINE: Record<string, unknown> = {
         seed: 82285203,
         blockId: 'city-lot:0:0:1:frontage:1:depth:0',
         frontage: 'avenue',
-        door: { x: 37.25, z: 8.25 },
+        door: null,
         zone: 'entertainment',
         kind: 'building',
         maxHeight: 8,
@@ -1398,7 +1399,7 @@ export const BASELINE: Record<string, unknown> = {
         seed: 1381635505,
         blockId: 'city-lot:0:-1:2:frontage:1:depth:1',
         frontage: 'avenue',
-        door: { x: 69.375, z: -8.25 },
+        door: null,
         zone: 'civic',
         kind: 'building',
         maxHeight: 8,
@@ -1493,7 +1494,7 @@ export const BASELINE: Record<string, unknown> = {
         seed: 1172145190,
         blockId: 'city-lot:0:0:1:frontage:2:depth:0',
         frontage: 'avenue',
-        door: { x: 53.75, z: 8.25 },
+        door: null,
         zone: 'entertainment',
         kind: 'building',
         maxHeight: 8,
@@ -1550,7 +1551,7 @@ export const BASELINE: Record<string, unknown> = {
         seed: 1559484242,
         blockId: 'city-lot:0:-1:2:frontage:0:depth:1',
         frontage: 'avenue',
-        door: { x: 51.125, z: -8.25 },
+        door: null,
         zone: 'civic',
         kind: 'building',
         maxHeight: 8,
@@ -1626,7 +1627,7 @@ export const BASELINE: Record<string, unknown> = {
         seed: 2147403917,
         blockId: 'city-lot:0:0:1:frontage:3:depth:0',
         frontage: 'avenue',
-        door: { x: 70.25, z: 8.25 },
+        door: null,
         zone: 'residential',
         kind: 'building',
         maxHeight: 8,

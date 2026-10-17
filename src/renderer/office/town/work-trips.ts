@@ -65,7 +65,7 @@ export function workStops(plan: TownPlan, role: VehicleRole, door: RoutePoint): 
   const away =
     role === 'freight'
       ? nearest(
-          plan.lots.filter((lot) => lot.zone === 'workshop').map((lot) => lot.door),
+          plan.lots.flatMap((lot) => (lot.zone === 'workshop' && lot.door ? [lot.door] : [])),
           door
         )
       : railway &&

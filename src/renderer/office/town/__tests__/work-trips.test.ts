@@ -12,6 +12,7 @@ import { buildingIdOf } from '../../logic/city-signals'
 import { SceneBodies } from '../../scene/BodySpace'
 import { workCity } from '../movers.test-utils'
 import { roadNet, roadPath } from '../road-net'
+import { lotsWithDoors } from '../town-lots'
 import { officeDoor } from '../work-trips'
 
 const T0 = 1_760_000_000_000
@@ -60,7 +61,7 @@ describe('work trips', () => {
     expect(apart(trip.route.points.at(-1) ?? before, before)).toBeLessThan(1e-6)
     const door = officeDoor(city.plan, HOME)
     if (!door) throw new Error('no office door')
-    const workshop = city.plan.lots
+    const workshop = lotsWithDoors(city.plan.lots)
       .filter((lot) => lot.zone === 'workshop')
       .sort((a, b) => apart(a.door, door) - apart(b.door, door))[0]
     // Where the road net meets each door: the office kerb and the workshop's.
