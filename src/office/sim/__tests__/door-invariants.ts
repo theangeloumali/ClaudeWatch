@@ -10,9 +10,9 @@ export const TICK_MS = 100
 // Ghosting (verifier E6) breaks the clearance check, teleporting (E7) the step check.
 const CLEARANCE_SLACK_METRES = 0.02
 const MAX_STEP_METRES = 0.14 + 1e-6
-// A walker that gains no half metre in this long is jammed: leavers fade at once, so no
-// doorway wait is this long any more.
-const BLOCKED_LIMIT_MS = 16_500
+// A walker that gains no half metre in this long is jammed: a passage yield stands aside
+// 8 s at most, and the stall timer lets a walker stand 12 s.
+const BLOCKED_LIMIT_MS = 9_000
 const PROGRESS_METRES = 0.5
 
 const footprint = (view: AgentView): BodyFootprint => ({
@@ -23,6 +23,16 @@ const footprint = (view: AgentView): BodyFootprint => ({
   connectorId: view.connectorId,
   radius: view.isSubagent ? SUBAGENT_BODY_RADIUS : WORKER_BODY_RADIUS
 })
+
+const pairOf = (first: string, second: string): string => [first, second].sort().join('\n')
+
+function isOverlapping(first: BodyFootprint, second: BodyFootprint): boolean {
+  const gap = Math.hypot(first.x - second.x, first.z - second.z)
+  return (
+    bodiesShareElevation(first, second) &&
+    gap < first.radius + second.radius - CLEARANCE_SLACK_METRES
+  )
+}
 
 export interface Violation {
   atMs: number
@@ -38,6 +48,8 @@ export class DoorInvariants {
   private anchors = new Map<string, { x: number; z: number; sinceMs: number }>()
   // First seen faded, so fading in: like the sim, not a body until it is seated.
   private arriving = new Set<string>()
+  // A relayout carried a seated agent onto a leaver fading where it stood: that pair may overlap.
+  private carried = new Set<string>()
 
   constructor(private readonly isResting: (view: AgentView) => boolean) {}
 
@@ -48,6 +60,7 @@ export class DoorInvariants {
     for (const view of views)
       if (view.fade !== undefined && !this.previous.has(view.agentKey))
         this.arriving.add(view.agentKey)
+    this.recordCarries(views)
     this.checkClearance(views, atMs)
     for (const view of views) {
       const before = this.previous.get(view.agentKey)
@@ -66,18 +79,26 @@ export class DoorInvariants {
     return { overlap: this.overlap, jump: this.jump, blocked: this.blocked }
   }
 
+  private recordCarries(views: readonly AgentView[]): void {
+    const leavers = views.filter((view) => view.place === 'leaving').map(footprint)
+    for (const view of views) {
+      const before = this.previous.get(view.agentKey)
+      const step = before ? Math.hypot(view.x - before.x, view.z - before.z) : 0
+      if (step <= MAX_STEP_METRES || !this.isResting(view)) continue
+      for (const leaver of leavers)
+        if (isOverlapping(footprint(view), leaver))
+          this.carried.add(pairOf(view.agentKey, leaver.id))
+    }
+  }
+
   private checkClearance(views: readonly AgentView[], atMs: number): void {
     if (this.overlap) return
-    // A leaver stays carved out: a relayout slides a seated desk onto one fading where it stood.
-    const bodies = views
-      .filter((view) => !this.arriving.has(view.agentKey) && view.place !== 'leaving')
-      .map(footprint)
+    const bodies = views.filter((view) => !this.arriving.has(view.agentKey)).map(footprint)
     for (let first = 0; first < bodies.length; first++)
       for (let second = first + 1; second < bodies.length; second++) {
         const [a, b] = [bodies[first], bodies[second]]
-        if (!bodiesShareElevation(a, b)) continue
+        if (!isOverlapping(a, b) || this.carried.has(pairOf(a.id, b.id))) continue
         const gap = Math.hypot(a.x - b.x, a.z - b.z)
-        if (gap >= a.radius + b.radius - CLEARANCE_SLACK_METRES) continue
         this.overlap = { atMs, detail: `${a.id} and ${b.id} are ${gap.toFixed(3)} m apart` }
         return
       }
