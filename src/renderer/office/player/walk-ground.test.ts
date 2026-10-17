@@ -10,6 +10,7 @@ import {
 import { boundsOfZone } from '../logic/zone-framing'
 import { GROUND_Y, sceneExtent } from '../themes/surroundings'
 import { distributedTown } from '../town/distributed-town'
+import { lotsWithDoors } from '../town/town-lots'
 import { townOf } from '../town/use-town-plan'
 import type { ZoneGeometry } from '../scene-model'
 import { doorstep, groundHeight, nearestOpen, walkGround, walkPath } from './walk-ground'
@@ -150,7 +151,7 @@ describe('walkPath', () => {
     for (const point of pointsAlong(path)) expect(ground.isOpen(point)).toBe(true)
   })
 
-  const far = [...plan.lots]
+  const far = lotsWithDoors(plan.lots)
     .filter((lot) => lot.kind === 'building')
     .sort((a, b) => Math.hypot(b.x, b.z) - Math.hypot(a.x, a.z))[0]
 

@@ -96,8 +96,8 @@ export function MoverLayer(props: MoverLayerProps) {
   const ringGeometry = useMemo(() => new RingGeometry(1.2, 1.6, 20).rotateX(-Math.PI / 2), [])
   useEffect(() => () => ringGeometry.dispose(), [ringGeometry])
   const ringsRef = useRef<InstancedMesh | null>(null)
-  // -1 until the rings are first written: a new mesh starts every ring at the origin.
-  const ringsShown = useRef(-1)
+  // The ring instances lit last frame; null until a new mesh's first write.
+  const ringsShown = useRef<readonly number[] | null>(null)
 
   const place = (deltaSec: number): void => {
     const { moved, headings } = clock
@@ -146,17 +146,23 @@ export function MoverLayer(props: MoverLayerProps) {
     })
     const rings = ringsRef.current
     const working = fleet.inFlight()
-    if (!rings || (working.length === 0 && ringsShown.current === 0)) return
-    vehicleSlots.forEach((index, instance) => {
-      const pose = posed[index]
+    const shown = ringsShown.current
+    if (!rings || (working.length === 0 && shown?.length === 0)) return
+    const lit = working.map((slot) => vehicleSlots.indexOf(slot))
+    // Only the rings lit now or last frame change; a new mesh has every one to clear.
+    const changed = shown === null ? vehicleSlots.keys() : new Set([...shown, ...lit])
+    rings.instanceMatrix.clearUpdateRanges()
+    for (const instance of changed) {
+      const pose = posed[vehicleSlots[instance]]
       scratch.position.set(pose.x, groundHeight(floor, pose) + RING_LIFT_M, pose.z)
       scratch.rotation.y = 0
-      scratch.scale.setScalar(working.includes(index) && !pose.isIndoors ? 1 : 0)
+      scratch.scale.setScalar(lit.includes(instance) && !pose.isIndoors ? 1 : 0)
       scratch.updateMatrix()
       rings.setMatrixAt(instance, scratch.matrix)
-    })
+      if (shown !== null) rings.instanceMatrix.addUpdateRange(instance * 16, 16)
+    }
     rings.instanceMatrix.needsUpdate = true
-    ringsShown.current = working.length
+    ringsShown.current = lit
   }
 
   // Placed on every commit: under reduced motion this is where they stay, where their loops start.
@@ -196,7 +202,7 @@ export function MoverLayer(props: MoverLayerProps) {
           name="work-trip-rings"
           ref={(mesh) => {
             ringsRef.current = mesh
-            ringsShown.current = -1
+            ringsShown.current = null
           }}
           args={[ringGeometry, undefined, vehicleSlots.length]}
           frustumCulled={false}

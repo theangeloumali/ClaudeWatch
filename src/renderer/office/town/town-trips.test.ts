@@ -3,6 +3,7 @@ import { CITY_MAIN_CORRIDOR_METRES } from '../../../shared/office/city-block-lay
 import { QUALITY_LEVELS } from '../logic/quality'
 import { hashOf } from '../themes/lot-math'
 import { MOVER_FLOORS, isOn, isWithin, lapOf, townOn } from './movers.test-utils'
+import { lotsWithDoors } from './town-lots'
 import { MOVER_COUNTS, destinationOf, townTrips, type Trip } from './town-trips'
 import { roadStrip } from './town.test-utils'
 import { liveCity } from './__tests__/pedestrian.test-utils'
@@ -126,7 +127,7 @@ describe.each(MOVER_FLOORS)('townTrips on %s', (_name, floor) => {
         Math.floor((route.stops?.[0].at ?? 0) / 0.25)
       ]
       const nearest = Math.min(
-        ...town.plan.lots
+        ...lotsWithDoors(town.plan.lots)
           .filter((lot) => lot.zone === 'market')
           .map((lot) => Math.hypot(lot.door.x - market.x, lot.door.z - market.z))
       )

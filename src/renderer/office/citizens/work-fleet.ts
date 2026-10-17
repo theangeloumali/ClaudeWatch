@@ -1,14 +1,13 @@
 import type { WorkTripRequest } from '../../office-live/work-trip-store'
-import { roadNet, type RoadNet } from '../town/road-net'
+import { roadNet } from '../town/road-net'
 import type { VehicleRole } from '../town/town-dress'
 import type { TownPlan } from '../town/town-plan'
 import type { Trip } from '../town/town-trips'
-import { zebraPasses } from '../town/vehicle-trips'
 import { officeDoor, workRoute, workStops, type WorkStop } from '../town/work-trips'
 import { citySidewalks } from './city-sidewalks'
 import type { MoverClock } from './mover-clock'
 import { loopMetres, routePose, type RoutePoint } from './route-pose'
-import { zebraTraffic, type ZebraTraffic } from './zebra-traffic'
+import { tripPasses, zebraTraffic, type ZebraTraffic } from './zebra-traffic'
 
 // A trip still under way when the town is laid out again: carried to the next fleet.
 export interface WorkCarry {
@@ -44,6 +43,9 @@ interface WorkFleetOptions {
   carried: readonly WorkCarry[]
 }
 
+// Read every drawn frame: an idle fleet hands back this one list.
+const NOT_IN_FLIGHT: readonly number[] = []
+
 const lapOf = (trip: Trip): number =>
   trip.route.length / trip.speed + (trip.route.stops ?? []).reduce((sum, stop) => sum + stop.sec, 0)
 
@@ -55,7 +57,6 @@ export function createWorkFleet({ plan, trips, clock, carried }: WorkFleetOption
   const passes = [...ambient.passes]
   const traffic = { ...ambient, passes }
   const flights = new Map<number, Flight>()
-  let net: RoadNet | null = null
 
   const poseOf = (slot: number): RoutePoint => {
     const { route, speed } = live[slot]
@@ -79,13 +80,12 @@ export function createWorkFleet({ plan, trips, clock, carried }: WorkFleetOption
     stops: readonly WorkStop[],
     home: RoutePoint
   ) => {
-    net ??= roadNet(plan)
-    const route = workRoute(net, from, stops, home)
+    const route = workRoute(roadNet(plan), from, stops, home)
     if (!route) return false
     const trip = { ...trips[slot], route, startSec: 0 }
     flights.set(slot, { role, ambientMoved: clock.moved[slot], stops, lapSec: lapOf(trip) })
     live[slot] = trip
-    passes[slot] = zebraPasses(route, sidewalks.crossings, sidewalks.network.zebras)
+    passes[slot] = tripPasses(trip, sidewalks)
     clock.moved[slot] = 0
     return true
   }
@@ -116,7 +116,7 @@ export function createWorkFleet({ plan, trips, clock, carried }: WorkFleetOption
       for (const [slot, flight] of flights)
         if (clock.moved[slot] >= flight.lapSec) giveBack(slot, flight)
     },
-    inFlight: () => [...flights.keys()],
+    inFlight: () => (flights.size === 0 ? NOT_IN_FLIGHT : [...flights.keys()]),
     release() {
       const carries = [...flights].map(([slot, flight]): WorkCarry => {
         const { route, speed } = live[slot]

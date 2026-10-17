@@ -12,6 +12,7 @@ import { buildingIdOf } from '../../logic/city-signals'
 import { SceneBodies } from '../../scene/BodySpace'
 import { workCity } from '../movers.test-utils'
 import { roadNet, roadPath } from '../road-net'
+import { lotsWithDoors } from '../town-lots'
 import { officeDoor } from '../work-trips'
 
 const T0 = 1_760_000_000_000
@@ -60,7 +61,7 @@ describe('work trips', () => {
     expect(apart(trip.route.points.at(-1) ?? before, before)).toBeLessThan(1e-6)
     const door = officeDoor(city.plan, HOME)
     if (!door) throw new Error('no office door')
-    const workshop = city.plan.lots
+    const workshop = lotsWithDoors(city.plan.lots)
       .filter((lot) => lot.zone === 'workshop')
       .sort((a, b) => apart(a.door, door) - apart(b.door, door))[0]
     // Where the road net meets each door: the office kerb and the workshop's.
@@ -102,6 +103,16 @@ describe('work trips', () => {
     // Half a second later the city is still inside its 2 s gap: a sample, not a queue.
     expect(store.take([first, dispatch('run', T0 + 500)])).toEqual([])
     expect(store.take([dispatch('edit', T0 + 2_000)])).toHaveLength(1)
+  })
+
+  // Both are read every drawn frame; an idle city hands back one shared empty list.
+  it('an idle fleet and an idle store allocate nothing per frame', () => {
+    const fleet = createWorkFleet({ ...workCity(), carried: [] })
+    expect(fleet.inFlight()).toHaveLength(0)
+    expect(fleet.inFlight()).toBe(fleet.inFlight())
+    const store = createWorkTripStore()
+    expect(store.take([dispatch('read')])).toHaveLength(0)
+    expect(store.take([])).toBe(store.take([dispatch('read', T0 + 5_000)]))
   })
 
   it('work trips never add a mover kind', () => {

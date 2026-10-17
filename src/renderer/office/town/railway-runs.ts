@@ -30,8 +30,10 @@ export interface TrainRun {
   at(seconds: number): TrainState
 }
 
-// Cars laid end to end behind the head, one slot each in their kind's mesh.
-function coupled(kinds: readonly CarKind[], step: 1 | -1, slots: Map<CarKind, number>): TrainCar[] {
+// Cars laid end to end behind the head, one slot each in their kind's mesh. A kind runs in one
+// train only, so its slots count from 0 here.
+function coupled(kinds: readonly CarKind[], step: 1 | -1): TrainCar[] {
+  const slots = new Map<CarKind, number>()
   let cursor = 0
   return kinds.map((kind) => {
     const length = CAR_LENGTH[kind]
@@ -68,7 +70,6 @@ function metresAlong(route: CitizenRoute, point: RoutePoint): number {
 // A commuter calling at every station clockwise, its head past mid-platform, and at full a
 // freight running the other way round the outer track without stopping. Pure.
 export function trainRuns(railway: RailwayPlan, level: QualityLevel): TrainRun[] {
-  const slots = new Map<CarKind, number>()
   const commuterCars = Array.from({ length: COMMUTER_CARS[level] }, (): CarKind => 'commuter')
   if (commuterCars.length === 0) return []
   const { inner, outer } = railway.lanes
@@ -83,7 +84,7 @@ export function trainRuns(railway: RailwayPlan, level: QualityLevel): TrainRun[]
   const runs: TrainRun[] = [
     {
       lane: inner,
-      cars: coupled(commuterCars, -1, slots),
+      cars: coupled(commuterCars, -1),
       at: (seconds) => trainAt(table, seconds)
     }
   ]
@@ -93,7 +94,7 @@ export function trainRuns(railway: RailwayPlan, level: QualityLevel): TrainRun[]
   const start = metresAlong(outer, south.centre) - trainLength(freightCars) / 2
   runs.push({
     lane: outer,
-    cars: coupled(freightCars, 1, slots),
+    cars: coupled(freightCars, 1),
     at: (seconds) => ({
       at: start - TRAIN_SPEEDS.freight * seconds,
       speed: TRAIN_SPEEDS.freight,
