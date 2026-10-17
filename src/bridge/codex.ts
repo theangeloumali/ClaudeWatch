@@ -492,27 +492,23 @@ export async function collectCodex(
       if (now - rollout.mtimeMs >= OPEN_TOOL_HOLD_MS) break
       await showHosted({ rollout })
     }
-    // Totals are finalized only after every retained parent has been shown.
-    applyCodexSubagentTotals(sessions, memory.childTotals)
-    children = codexChildTotals(sessions, memory.childTotals)
     for (const id of known.keys()) if (!live.has(id)) known.delete(id)
     forgetExited(processes, folders, placeholders)
-    for (const [path, { session }] of tails) {
-      if (liveTails.has(path)) continue
+    // The newest usage read for each rollout this tick, by path.
+    const newestUsage = new Map<string, SessionUsage | null>()
+    const departedRoots: SessionRef[] = []
+    for (const [path, tail] of tails) {
+      if (liveTails.has(path)) {
+        newestUsage.set(path, tail.usage)
+        continue
+      }
       tails.delete(path)
+      if (tail.session) departedRoots.push(tail.session)
       try {
-        // Its last turn may have been written after the last look that found its process.
-        const usage = session && parseCodexUsage(await io.readTail(path))
-        const total =
-          usage &&
-          codexTotalOf({
-            ...session,
-            usage: {
-              ...usage,
-              subagents: session?.usage?.subagents ?? usage.subagents,
-              spawned: session?.usage?.spawned ?? usage.spawned
-            }
-          })
+        // Its last turn may have been written after the last look that found it.
+        const usage = parseCodexUsage(await io.readTail(path))
+        newestUsage.set(path, usage)
+        const total = usage && tail.session && codexTotalOf({ ...tail.session, usage })
         if (total) departed.push(total)
       } catch (error) {
         if (isMissing(error)) continue
@@ -520,6 +516,16 @@ export async function collectCodex(
         health.detail = 'rollout read failed'
       }
     }
+    // A child's total takes its last turn before its parent can be pruned, shown or not.
+    for (const counted of memory.childTotals.values())
+      for (const [childId, child] of counted) {
+        const usage = newestUsage.get(child.path)
+        if (usage) counted.set(childId, { ...child, counts: usage.own })
+      }
+    departed.push(...codexChildTotals(departedRoots, memory.childTotals))
+    // Totals are finalized only after every retained parent has been shown.
+    applyCodexSubagentTotals(sessions, memory.childTotals)
+    children = codexChildTotals(sessions, memory.childTotals)
   } catch {
     health.ok = false
     health.detail = 'discovery failed'
