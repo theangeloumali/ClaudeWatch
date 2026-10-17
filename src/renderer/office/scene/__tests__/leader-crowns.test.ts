@@ -1,5 +1,5 @@
 import { Box3, InstancedMesh, Matrix4, OrthographicCamera, Vector3 } from 'three'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createPoseStore } from '../../../office-live/pose-store'
 import type {
   AgentObservation,
@@ -255,6 +255,23 @@ describe('leader crowns', () => {
     layer.update({ ...frame, agents: agentsOf({ ...leader, place: 'leaving' }) })
     expect(crownsShown(layer)).toHaveLength(0)
     expect(measureLayer(layer.mesh).uploadBytes).toBe(16 * 4)
+  })
+
+  it('a still frame builds no print arrays, and a changed leader still redraws', () => {
+    const [first, second] = ['claude:a', 'claude:b'].map((agentKey, index) =>
+      makeAgent({ agentKey, x: index * 8 })
+    )
+    const layer = createLeaderCrownsLayer(palette)
+    const crowned = ['claude:a']
+    const frame = crownFrame({ crowned, agents: agentsOf(first, second) })
+    layer.update(frame)
+    const toArray = vi.spyOn(frame.camera.quaternion, 'toArray')
+    const slice = vi.spyOn(crowned, 'slice')
+    layer.update(frame)
+    expect([toArray.mock.calls.length, slice.mock.calls.length]).toEqual([0, 0])
+    const [before] = crownsShown(layer)
+    layer.update({ ...frame, crowned: ['claude:b'] })
+    expect(crownsShown(layer)[0].centre.x).not.toBeCloseTo(before.centre.x)
   })
 
   it('no crown part shares a plane with another of a different colour', () => {
