@@ -136,22 +136,7 @@ export function createLiveFeed(
       now,
       saved,
       loungeTrips: settings.get().loungeTrips,
-      resolveLayout,
-      getVenueTargets: () =>
-        (resolvedLayout?.effectiveVenues ?? []).map((venue) => ({
-          id: venue.id,
-          kind: venue.kind,
-          capacity: venue.capacity,
-          entrance: {
-            x: venue.footprint.x + venue.entrance.x,
-            z: venue.footprint.z + venue.entrance.z
-          },
-          slots: venue.slots.map((slot) => ({
-            ...slot,
-            x: slot.x + venue.footprint.x,
-            z: slot.z + venue.footprint.z
-          }))
-        }))
+      resolveLayout
     })
     currentWorld = world
     // A running office follows the switch: the next step walks agents back, or lets them go.

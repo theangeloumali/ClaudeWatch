@@ -3,7 +3,6 @@ import type { WorldDocumentStore } from '../../office-live/world-document-store'
 import type { WorldBuilding, WorldDocument, WorldRoom } from '../../../shared/office/world-document'
 import { arrangeWorldDocument } from '../../../shared/office/world-document-placement'
 import { singleFloorWorldDocument } from '../../../shared/office/world-document-single-floor'
-import { buildLayout } from '../../../office/sim/layout'
 import type { OfficeFrame } from '../scene-model'
 import type { SceneEditTarget } from '../scene/ZonePickers'
 import {
@@ -164,8 +163,7 @@ export function WorldEditor({
     store.cancel()
     onPreview(null)
     try {
-      const baseline = buildLayout([...frame.sessions], undefined)
-      setDraft(arrangeWorldDocument(singleFloorWorldDocument(draft, baseline)))
+      setDraft(arrangeWorldDocument(singleFloorWorldDocument(draft)))
       setNotice('Single-floor city draft ready. Preview it, then Save locally to apply.')
     } catch (error) {
       setNotice(

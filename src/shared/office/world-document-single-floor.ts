@@ -1,5 +1,4 @@
 import { cornerReach, cornerSeats } from '../../office/sim/game-corner'
-import type { LayoutMap } from '../../office/sim/layout'
 import { WORLD_DOCUMENT_LIMITS } from './world-document-limits'
 import type { WorldDocument, WorldRoom } from './world-document-types'
 
@@ -9,11 +8,7 @@ const ROOM_EDGE_METRES = 2
 const ENTRY_HALL_METRES = 4
 
 // dry-new: footprint packing moves buildings; consolidation must preserve desks while packing rooms.
-// dead-code-allowed: WorldEditor.tsx still passes the baseline; the lead drops it at integration 2026-10-24
-export function singleFloorWorldDocument(
-  document: WorldDocument,
-  _layout: LayoutMap
-): WorldDocument {
+export function singleFloorWorldDocument(document: WorldDocument): WorldDocument {
   const consolidated = structuredClone(document)
   for (const building of consolidated.buildings) {
     const rooms = consolidated.rooms.filter((room) => room.buildingId === building.id)

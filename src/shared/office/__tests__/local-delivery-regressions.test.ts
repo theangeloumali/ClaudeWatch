@@ -179,7 +179,7 @@ describe('explicit single-floor rebuilding', () => {
   it('repacks only room origins and storey assignments while preserving identity and local geometry', () => {
     const { layout, sessions, saved } = legacyWorld()
     const before = structuredClone(saved)
-    const rebuilt = arrangeWorldDocument(singleFloorWorldDocument(saved, layout))
+    const rebuilt = arrangeWorldDocument(singleFloorWorldDocument(saved))
     expect(rebuilt.buildings.every((building) => building.floors === 1)).toBe(true)
     expect(rebuilt.rooms.every((room) => room.floorNumber === 1)).toBe(true)
     expect(rebuilt.rooms).toEqual(
@@ -215,10 +215,10 @@ describe('explicit single-floor rebuilding', () => {
   })
 
   it('previews without persistence, saves the explicit rebuild and undoes to the exact saved legacy geometry', async () => {
-    const { layout, saved, bytes, options } = legacyWorld()
+    const { saved, bytes, options } = legacyWorld()
     const store = createWorldDocumentStore(options)
     const beforeBytes = bytes.get(WORLD_DOCUMENT_STORAGE_KEY)
-    const rebuilt = arrangeWorldDocument(singleFloorWorldDocument(saved, layout))
+    const rebuilt = arrangeWorldDocument(singleFloorWorldDocument(saved))
     try {
       expect(store.preview(rebuilt).success).toBe(true)
       expect(store.get().document).toEqual(saved)

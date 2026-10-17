@@ -139,19 +139,16 @@ export function createWorldDocument(
     )
   )
   return arrangeWorldDocument(
-    singleFloorWorldDocument(
-      {
-        version: 2,
-        revision: 0,
-        buildings,
-        rooms: includedProjects.flatMap((source, index) =>
-          source.rooms.map((room) => defaultRoom({ source, building: buildings[index], room }))
-        ),
-        venues: defaultWorldVenues(buildings, pitch),
-        allocation: allocationFromLayout(layout)
-      },
-      layout
-    ),
+    singleFloorWorldDocument({
+      version: 2,
+      revision: 0,
+      buildings,
+      rooms: includedProjects.flatMap((source, index) =>
+        source.rooms.map((room) => defaultRoom({ source, building: buildings[index], room }))
+      ),
+      venues: defaultWorldVenues(buildings, pitch),
+      allocation: allocationFromLayout(layout)
+    }),
     'streets'
   )
 }

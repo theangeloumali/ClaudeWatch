@@ -73,8 +73,6 @@ export class World {
       saved?: LayoutMap
       loungeTrips?: boolean
       resolveLayout?: (baseLayout: LayoutMap, sessions: readonly SessionRef[]) => LayoutMap
-      // dead-code-allowed: live-feed.ts still passes venues; the lead drops both at integration 2026-10-24
-      getVenueTargets?: () => readonly unknown[]
       now?: () => number
     } = {}
   ) {
