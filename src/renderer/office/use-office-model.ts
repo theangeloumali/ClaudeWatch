@@ -4,6 +4,7 @@ import { buildTokenLedger } from '../deck/tokens'
 import { structuralKey } from '../office-live/pose-store'
 import { buildAgentFacts, type AgentFacts } from './hud/agent-facts'
 import { buildAttentionQueue } from './logic/attention-queue'
+import { citySignalStore, type CitySignalStore } from './logic/city-signal-store'
 import { bayForAgent, summariseFloors } from './logic/floor-model'
 import { useOfficeSettings } from './logic/office-settings'
 import { createRoleBook, maskFrame } from './logic/role-names'
@@ -35,6 +36,15 @@ function useStructuralFrame(frame: OfficeFrame | null): OfficeFrame | null {
     return previous.frame
   kept.current = { frame, agentsKey }
   return frame
+}
+
+// The city's signals come from the real frame: they carry keys and numbers, never names.
+export function useCitySignalFeed(
+  frame: OfficeFrame | null,
+  nowMs: number,
+  store: CitySignalStore = citySignalStore
+): void {
+  useEffect(() => store.update(frame, nowMs), [frame, nowMs, store])
 }
 
 // The frame the HUD and scene draw. With names hidden, roles replace every name here, before

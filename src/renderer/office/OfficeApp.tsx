@@ -48,7 +48,7 @@ import {
   useFocusTerminal
 } from './use-office-effects'
 import { useOfficeFeatures } from './use-office-features'
-import { selectionOf, useOfficeLists, useVisibleFrame } from './use-office-model'
+import { selectionOf, useCitySignalFeed, useOfficeLists, useVisibleFrame } from './use-office-model'
 import { canCreateWebGL2 } from './webgl-support'
 import { PlayerCharacterPicker } from './player/PlayerCharacterPicker'
 import { choosePlayerCharacter, usePlayerCharacter } from './player/character-choice'
@@ -119,6 +119,7 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
   const isShowingList = state.isListView || !is3DAvailable
   useFeedSubscription(feed, dispatch)
 
+  useCitySignalFeed(state.frame, nowMs)
   const frame = useVisibleFrame(state.frame)
   const offices = useMemo(
     () => (frame ? buildOperationsModel({ frame, nowMs }) : []),
