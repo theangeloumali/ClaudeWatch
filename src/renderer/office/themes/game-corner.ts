@@ -1,5 +1,6 @@
 import type { LoungeGeometry } from '../scene-model'
-import { firstClear, spotAt, type Footprint } from './lounge-layout'
+import { isWalkable, spotAt, type Footprint } from './lounge-layout'
+import { overlaps } from './lot-math'
 import { box, lit, type PartSpec } from './parts'
 import type { ThemePalette } from './types'
 
@@ -144,12 +145,12 @@ function cabinetSpots(lounge: LoungeGeometry, ahead: Facing): Cabinet[] {
 function layOut(lounge: LoungeGeometry) {
   const ahead = facingOf(lounge.seats[0]?.heading ?? 0)
   const site = screenSite(lounge, ahead)
-  const spots = cabinetSpots(lounge, ahead)
+  // One pass: a spot passed over stays covered, so each walk is checked once at most.
   const cabinets: Cabinet[] = []
-  while (cabinets.length < CABINET_COUNT) {
-    const cabinet = firstClear(lounge, spots, [site.footprint, ...cabinets])
-    if (!cabinet) break
-    cabinets.push(cabinet)
+  for (const spot of cabinetSpots(lounge, ahead)) {
+    if (cabinets.length === CABINET_COUNT) break
+    const isFree = ![site.footprint, ...cabinets].some((other) => overlaps(spot, other))
+    if (isFree && isWalkable(lounge, spot)) cabinets.push(spot)
   }
   return { ahead, site, cabinets }
 }

@@ -7,11 +7,13 @@ export type Footprint = Rect
 // Kept free around a seat and around the straight walk from the door to it.
 const BODY_CLEAR_M = 0.55
 const WALK_STEPS = 24
+const WALK_SHARES = Array.from({ length: WALK_STEPS + 1 }, (_, step) => step / WALK_STEPS)
 const WALL_GAP_M = 0.15
 
-function isWalkable(lounge: LoungeGeometry, spot: Footprint): boolean {
+// No agent sits on the spot or walks through it.
+export function isWalkable(lounge: LoungeGeometry, spot: Footprint): boolean {
   return lounge.seats.every((seat) =>
-    Array.from({ length: WALK_STEPS + 1 }, (_, step) => step / WALK_STEPS).every(
+    WALK_SHARES.every(
       (share) =>
         gapBetween(spot, {
           x: lounge.door.x + (seat.x - lounge.door.x) * share,
