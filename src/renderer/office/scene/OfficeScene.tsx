@@ -26,6 +26,8 @@ import type { WorldVenue } from '../../../shared/office/world-document'
 import { floorEnvelope, groundEnvelope } from './all-floor-model'
 import { useSceneFloorData } from './use-scene-floor-data'
 import { MoverLayer } from '../citizens/MoverLayer'
+import { railwayReach } from '../town/railway-plan'
+import { RailwayLayer } from './RailwayStructures'
 import { PlayerLayer } from '../player/PlayerLayer'
 import { PlayerLabels, PlayerLabelProjector } from '../player/PlayerLabels'
 import { sendPlayer, type Player } from '../player/walking'
@@ -205,7 +207,8 @@ function OfficeScene(props: OfficeSceneProps) {
   )
   const sceneBox = useMemo(
     () => ({
-      ...reach,
+      // The railway ring stands outside the city: Horizon's planes must reach it (N5).
+      ...(settings.town ? railwayReach(reach, town.plan) : reach),
       minY: 0,
       maxY: Math.max(
         MAX_LOT_HEIGHT_M,
@@ -213,7 +216,7 @@ function OfficeScene(props: OfficeSceneProps) {
         ...town.plan.lots.map((lot) => lot.maxHeight)
       )
     }),
-    [reach, surfaces, town.plan.lots]
+    [reach, surfaces, town.plan, settings.town]
   )
   const liveSessionKeys = useMemo(
     () => new Set(props.sessions.map((session) => session.key)),
@@ -308,6 +311,7 @@ function OfficeScene(props: OfficeSceneProps) {
             )}
           </>
         )}
+        {settings.town && <RailwayLayer plan={town.plan} palette={theme.palette} />}
         {!props.isLayoutPreview && settings.citizens && settings.town && (
           <MoverLayer
             floor={townFloor}
