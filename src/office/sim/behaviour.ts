@@ -21,6 +21,8 @@ export interface AgentRecord {
   loungeSeatId: string | null
   destinationVenueId?: string
   leisureArrivedAtMs?: number
+  // Its walk leads home from a leisure outing, not to a desk it was just given.
+  isReturningFromLeisure?: boolean
 }
 type Destination = Pick<
   AgentView,
@@ -31,6 +33,7 @@ const urgent = (attention: AgentAttention) =>
 
 // How long a finished agent stays at its desk before it walks to its company's lounge.
 export const LOUNGE_DELAY_MS = 20_000
+export const WALK_METRES_PER_SECOND = 1.4
 
 export function createAgent(
   session: SessionRef,
@@ -89,7 +92,12 @@ export function goToLounge(
   path: FloorWaypoint[]
 ): AgentRecord {
   const walking = walk(agent, seat.heading, path)
-  return { ...walking, view: { ...agent.view, place: 'lounge' }, loungeSeatId: seat.id }
+  return {
+    ...walking,
+    view: { ...agent.view, place: 'lounge' },
+    loungeSeatId: seat.id,
+    isReturningFromLeisure: undefined
+  }
 }
 
 function withoutPlace(agent: AgentRecord): AgentRecord {
@@ -108,7 +116,7 @@ export function returnToDesk(
   heading: number,
   path: FloorWaypoint[]
 ): AgentRecord {
-  return walk(withoutPlace(agent), heading, path)
+  return { ...walk(withoutPlace(agent), heading, path), isReturningFromLeisure: true }
 }
 
 export function updateAgent(
@@ -165,7 +173,7 @@ export function tickAgent(
     finishedForMs: agent.finishedForMs === null ? null : agent.finishedForMs + dtMs
   }
   if (next.state === 'arriving' || next.state === 'leaving') {
-    let distance = (dtMs / 1000) * 1.4
+    let distance = (dtMs / 1000) * WALK_METRES_PER_SECOND
     while (next.path.length) {
       const target = next.path[0],
         dx = target.x - next.view.x,
