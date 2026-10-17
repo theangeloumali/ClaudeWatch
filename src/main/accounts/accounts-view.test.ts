@@ -142,6 +142,21 @@ describe('what the Office is given', () => {
     expect(decorated.accounts).toEqual([])
     expect(decorated.sessions[0].accountKey).toBeNull()
     expect(decorated.sessions[0].accountConfidence).toBeUndefined()
+    expect(decorated).not.toHaveProperty('projectsToday')
+  })
+
+  it('carries today’s tokens per project across every account, numbers only', () => {
+    const state = ledger(record(ADA), record(GRACE))
+    spend(state, ADA, '2026-10-11', 300, 'inferred', 'p_b')
+    spend(state, GRACE, '2026-10-11', 200, 'inferred', 'p_b')
+    spend(state, null, '2026-10-11', 50, 'unattributed', 'p_a')
+    spend(state, ADA, '2026-10-10', 9_000, 'inferred', 'p_a')
+    spend(state, ADA, '2026-10-10', 9_000, 'inferred', 'p_c')
+    const snapshot = { rev: 1, generatedAtMs: NOW, sources: [], sessions: [] }
+    expect(decorateSnapshot(state, snapshot, NOW).projectsToday).toEqual([
+      { projectKey: 'p_a', tokens: 50 },
+      { projectKey: 'p_b', tokens: 500 }
+    ])
   })
 })
 

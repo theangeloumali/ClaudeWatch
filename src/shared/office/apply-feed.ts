@@ -11,14 +11,14 @@ export function applyFeed(
   // seq is the revision a patch produces; a duplicate or late one changes nothing.
   if (message.seq <= current.rev) return current
   const sources = message.sources ?? current.sources
-  if (message.upserts.length === 0 && message.removed.length === 0) {
-    return { ...current, rev: message.seq, sources }
-  }
+  const projectsToday = message.projectsToday ?? current.projectsToday
+  const folded = { ...current, rev: message.seq, sources, projectsToday }
+  if (message.upserts.length === 0 && message.removed.length === 0) return folded
 
   // A Map keeps existing keys in place and appends new ones, so floor order is stable.
   const byKey = new Map(current.sessions.map((session) => [session.key, session]))
   for (const key of message.removed) byKey.delete(key)
   for (const session of message.upserts) byKey.set(session.key, session)
 
-  return { ...current, rev: message.seq, sessions: [...byKey.values()], sources }
+  return { ...folded, sessions: [...byKey.values()] }
 }

@@ -25,7 +25,7 @@ export function worldRoomTarget(
     ? `session:${room.sessionKey}`
     : `team:${room.companyKey}:${room.projectKey ?? ''}`
 }
-function worldBuildingId(companyKey: string, projectKey: string): string {
+export function worldBuildingId(companyKey: string, projectKey: string): string {
   return `building:${encodeURIComponent(companyKey)}:${encodeURIComponent(projectKey)}`
 }
 

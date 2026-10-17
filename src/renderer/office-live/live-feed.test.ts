@@ -143,6 +143,22 @@ describe('createLiveFeed', () => {
     expect(frames.at(-1)?.accounts).toEqual(accounts)
   })
 
+  it('carries today’s totals per project to the frame, and keeps them across a patch without them', () => {
+    const frames: OfficeFrame[] = []
+    createLiveFeed(source, { storage: store }).subscribe((frame) => frames.push(frame))
+    const projectsToday = [{ projectKey: 'p_app', tokens: 2_000_000 }]
+    listener?.({
+      type: 'hello',
+      v: 1,
+      snapshot: { rev: 1, generatedAtMs: 1, sessions: [], sources: [], projectsToday }
+    })
+    vi.advanceTimersByTime(200)
+    expect(frames.at(-1)?.projectsToday).toEqual(projectsToday)
+    listener?.({ type: 'patch', v: 1, seq: 2, upserts: [session('claude:a')], removed: [] })
+    vi.advanceTimersByTime(200)
+    expect(frames.at(-1)?.projectsToday).toEqual(projectsToday)
+  })
+
   it('emits only when the frame changed, not on every tick', () => {
     const frames: OfficeFrame[] = []
     createLiveFeed(source, { storage: store }).subscribe((frame) => frames.push(frame))

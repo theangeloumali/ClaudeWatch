@@ -1,4 +1,4 @@
-import { addCounts, zeroCounts } from '../../shared/office/token-counts'
+import { addCounts, sumCounts, zeroCounts } from '../../shared/office/token-counts'
 import type {
   AccountsState,
   AccountSummary,
@@ -9,6 +9,7 @@ import type {
   AccountConfidence,
   AccountRef,
   OfficeSnapshot,
+  ProjectTokens,
   SessionRef
 } from '../../shared/office/types'
 import { limitScopeName, officeLabel, planName } from './display-names'
@@ -59,15 +60,30 @@ export function decorateSession(state: LedgerState | null, session: SessionRef):
   return { ...session, accountKey, accountConfidence: accountKey ? known : 'unattributed' }
 }
 
+// Today's tokens per project, whichever account spent them; in key order, so totals compare.
+function projectsToday(state: LedgerState, now: number): ProjectTokens[] {
+  const today = dayKey(now)
+  const totals = new Map<string, number>()
+  for (const bucket of state.buckets.values()) {
+    if (bucket.day !== today) continue
+    totals.set(bucket.projectKey, (totals.get(bucket.projectKey) ?? 0) + sumCounts(bucket.counts))
+  }
+  return [...totals]
+    .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+    .map(([projectKey, tokens]) => ({ projectKey, tokens }))
+}
+
 export function decorateSnapshot(
   state: LedgerState | null,
-  snapshot: OfficeSnapshot
+  snapshot: OfficeSnapshot,
+  now = Date.now()
 ): OfficeSnapshot {
-  return {
+  const decorated = {
     ...snapshot,
     sessions: snapshot.sessions.map((session) => decorateSession(state, session)),
     accounts: state ? officeAccounts(state) : []
   }
+  return state ? { ...decorated, projectsToday: projectsToday(state, now) } : decorated
 }
 
 const zeroWindows = (): UsageWindows => ({

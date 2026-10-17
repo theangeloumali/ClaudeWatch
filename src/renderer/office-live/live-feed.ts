@@ -262,6 +262,7 @@ export function createLiveFeed(
         connected: snapshot !== null,
         sources: lastKnownSnapshot?.sources ?? [],
         accounts: lastKnownSnapshot?.accounts,
+        projectsToday: lastKnownSnapshot?.projectsToday,
         feedReceivedAtMs,
         feedRevision,
         worldRevision: documentRevision,
