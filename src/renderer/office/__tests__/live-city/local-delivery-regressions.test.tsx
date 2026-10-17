@@ -569,14 +569,15 @@ describe('authored recovered streetscape', () => {
     }))
     expect(projected).toEqual(shared)
     expect(projected).toEqual(effective.streetBlocks)
-    expect(projected).toHaveLength(47)
+    // Generated buildings keep room for a game corner, so the offices leave 44 lots, not 47.
+    expect(projected).toHaveLength(44)
     expect(distributedTown(town.plan, protectedSites).plan.lots).toEqual(town.plan.lots)
   })
   it.each(AUTHORED_THEME_IDS)(
     '%s fits actual rotated parts inside recovered parcels',
     (themeId) => {
       const placed = dressedCity(themeId)
-      expect(placed).toHaveLength(47)
+      expect(placed).toHaveLength(44)
       for (const building of placed) {
         expect(building.parts.length).toBeGreaterThan(0)
         for (const part of building.parts) {
