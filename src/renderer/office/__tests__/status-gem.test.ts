@@ -19,4 +19,9 @@ describe('gemFor', () => {
     const labels = Object.values(GEM_SPECS).map((spec) => spec.label)
     expect(new Set(labels).size).toBe(labels.length)
   })
+
+  // The bridge sets 'limited' only from rate-limit evidence, so the words say which limit.
+  it('names a rate-limited session as rate limited', () => {
+    expect(GEM_SPECS.limited.label).toBe('Rate limited')
+  })
 })

@@ -101,7 +101,7 @@ describe('the skyline keeps offices in sight (A4)', () => {
     const floors = toFloorGeometry(resolveEffectiveWorld(base, document, sessions), sessions)
     const ground = floors.filter((floor) => floorElevation(floor) === 0)
     const venues = document.venues.map((venue) => venue.footprint)
-    const town = distributedTown(townOf(groundEnvelope(ground, floors[0]), null, 'full'), [
+    const town = distributedTown(townOf(groundEnvelope(ground, floors[0]), null), [
       ...ground,
       ...venues
     ])

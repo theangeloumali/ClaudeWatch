@@ -33,7 +33,7 @@ const STATE_SPECS: Record<AgentState, StateSpec> = {
     labelClassName: 'text-accent-hot'
   },
   limited: {
-    label: 'Limited',
+    label: 'Rate limited',
     Icon: Hourglass,
     iconClassName: '',
     labelClassName: 'text-text-secondary'
