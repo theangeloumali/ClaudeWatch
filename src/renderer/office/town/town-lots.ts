@@ -1,5 +1,6 @@
 import type { Point } from '../../../office/sim/path'
 import type { RoadClass } from '../../../shared/office/town-roads'
+import { compareKeys } from '../logic/city-signals'
 import type { WallSide } from '../logic/room-layout'
 import type { Rect } from '../themes/lot-math'
 import type { Lot } from '../themes/surroundings'
@@ -29,8 +30,8 @@ export interface TownLot extends Lot, LotSite {
 // A lot a trip may start or end at.
 export type DooredLot = TownLot & { door: Point }
 
-// The lots with a door, in id order so a draw never depends on the plan's order.
+// The lots with a door, in id order so a draw never depends on the plan's order or the locale.
 export const lotsWithDoors = (lots: readonly TownLot[]): DooredLot[] =>
   lots
     .filter((lot): lot is DooredLot => lot.door !== null)
-    .sort((first, second) => first.id.localeCompare(second.id))
+    .sort((first, second) => compareKeys(first.id, second.id))
