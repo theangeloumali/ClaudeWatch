@@ -7,6 +7,9 @@ import { toFloorGeometry } from '../../office-live/layout-geometry'
 import { groupZonesByTheme } from '../logic/office-themes'
 import { DESK_REACH } from '../logic/room-layout'
 import type { DeskSlot, FloorGeometry, LoungeGeometry } from '../scene-model'
+import { beanbagParts } from '../themes/game-corner'
+import { GameCorner } from '../themes/GameCorner'
+import { Parts, type PartSpec } from '../themes/parts'
 import { themeForTeam } from '../themes/registry'
 import { FloorView, loungeAsDrawn } from './FloorView'
 
@@ -125,12 +128,13 @@ describe('furniture sized for the larger agents', () => {
     }
   })
 
-  it('draws every lounge stool on a sim lounge seat', () => {
+  it('draws the game corner with a beanbag on every sim lounge seat', () => {
     const simLounge = layout.floors[0].zones[0].lounge!
-    const lounge = locate(view, theme.kit.zone.Lounge)!
+    const lounge = locate(view, GameCorner)!
     const drawn = lounge.props.lounge as LoungeGeometry
     expect(lounge.scale).toBe(FURNITURE_SCALE)
-    // Five agents: the theme is handed the 6 x 7 m lounge of eight stools it has always drawn.
+    expect(locate(view, theme.kit.zone.Lounge)).toBeUndefined()
+    // Five agents: the corner is handed the 6 x 7 m lounge of eight seats the sim lays out.
     expect([drawn.width, drawn.depth]).toEqual([expect.closeTo(6, 9), expect.closeTo(7, 9)])
     expect(drawn.seats).toHaveLength(8)
     expect(simLounge.slots).toHaveLength(8)
@@ -145,6 +149,34 @@ describe('furniture sized for the larger agents', () => {
     })
     expect(corner.x).toBeCloseTo(simLounge.x - simLounge.width / 2, 9)
     expect(corner.z).toBeCloseTo(simLounge.z - simLounge.depth / 2, 9)
+  })
+
+  it('seats overview agents on beanbags at the sim lounge seats', () => {
+    const simLounge = layout.floors[0].zones[0].lounge!
+    const overview = FloorView({
+      floor,
+      floorTheme: theme,
+      zoneGroups: groupZonesByTheme(floor, () => theme.id),
+      wallsMode: 'cutaway',
+      isReducedMotion: true,
+      isOverview: true
+    })
+    const seats = locateAll(overview, Parts, { at: [0, 0, 0], scale: 1 }).filter((found) =>
+      (found.props.parts as PartSpec[]).every((part) => part.at[1] + part.size[1] / 2 <= 0.3)
+    )
+    expect(seats.map((seat) => [seat.at[0], seat.at[2]])).toEqual(
+      simLounge.slots.map((slot) => [slot.x, slot.z])
+    )
+    for (const seat of seats) {
+      expect(seat.scale).toBe(FURNITURE_SCALE)
+      expect(seat.props.parts).toEqual(
+        expect.arrayContaining(
+          beanbagParts(theme.palette, 0).map(({ at, size }) =>
+            expect.objectContaining({ at, size })
+          )
+        )
+      )
+    }
   })
 
   it('shrinks a known lounge about its centre to the size its theme draws', () => {

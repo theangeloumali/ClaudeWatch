@@ -1,12 +1,11 @@
-import { createElement } from 'react'
+import { createElement, isValidElement, type ReactNode } from 'react'
 import { expect, it, vi } from 'vitest'
 import { Group } from 'three'
 import { makeSession } from '../__tests__/fixtures'
 import { layoutFloor } from '../fixture/fixture-layout'
-import { groupZonesByTheme } from '../logic/office-themes'
+import type { WorldVenue } from '../../../shared/office/world-document'
 import type { FloorGeometry, LoungeGeometry } from '../scene-model'
-import { FloorView } from '../scene/FloorView'
-import { registerTheme } from './registry'
+import { VenueLayer } from '../scene/VenueLayer'
 import { everyElement, mergedDraws, type SceneElement } from './scene.test-utils'
 import type { OfficeTheme } from './types'
 import { frameCallbacks } from './frame-capture.test-utils'
@@ -117,23 +116,39 @@ function moverPoses(
   return { first: poseAt(0.7), second: poseAt(2.3), invalidate }
 }
 
+// A floor lounge handed to the city as a lounge venue, which is where theme lounges draw now.
+function venueOf(lounge: LoungeGeometry): WorldVenue {
+  return {
+    id: lounge.id,
+    kind: 'lounge',
+    footprint: { x: lounge.x, z: lounge.z, width: lounge.width, depth: lounge.depth },
+    entrance: { x: lounge.door.x - lounge.x, z: lounge.door.z - lounge.z },
+    slots: lounge.seats.map((seat) => ({
+      id: seat.slotId,
+      x: seat.x - lounge.x,
+      z: seat.z - lounge.z,
+      heading: seat.heading
+    })),
+    capacity: lounge.seats.length
+  }
+}
+
 function fillDraws(theme: OfficeTheme, floor: FloorGeometry) {
   const bare: OfficeTheme = {
     ...theme,
     id: `test-bare-${theme.id}`,
     kit: { ...theme.kit, zone: { ...theme.kit.zone, Lounge: undefined } }
   }
-  registerTheme(bare)
-  const kitDraws = (drawn: OfficeTheme): number =>
-    mergedDraws(
-      createElement(FloorView, {
-        floor,
-        floorTheme: drawn,
-        zoneGroups: groupZonesByTheme(floor, () => drawn.id),
-        wallsMode: 'cutaway',
-        isReducedMotion: true
-      })
-    ).untextured
+  const venues = floor.zones.flatMap((zone) => (zone.lounge ? [venueOf(zone.lounge)] : []))
+  expect(venues.length).toBeGreaterThan(0)
+  // VenueLayer is one BatchedScene; its children merge as that batch does.
+  const batchOf = (drawn: OfficeTheme): ReactNode => {
+    const layer = VenueLayer({ venues, palette: drawn.palette, theme: drawn })
+    if (!isValidElement<{ children?: ReactNode }>(layer)) throw new Error('No venue batch')
+    return layer.props.children
+  }
+  expect(named(everyElement(batchOf(theme)), 'lounge-seat').length).toBeGreaterThan(0)
+  const kitDraws = (drawn: OfficeTheme): number => mergedDraws(batchOf(drawn)).untextured
   const ambient = mergedDraws(ambientOn(theme, floor, true)).draws
   return { ambient, lounge: kitDraws(theme) - kitDraws(bare) }
 }
@@ -158,7 +173,7 @@ export function describeLoungeAndAmbient(
     expect([Lounge, Ambient].every((part) => part !== undefined)).toBe(true)
   })
 
-  it('seats every lounging agent and leaves the seats and the way in clear', () => {
+  it('puts a seat at every lounge slot and leaves the seats and the way in clear', () => {
     const lounges = floor.zones.flatMap((zone) => (zone.lounge ? [zone.lounge] : []))
     expect(lounges.length).toBeGreaterThan(0)
     for (const lounge of lounges) expectLoungeIsClear(theme, lounge)

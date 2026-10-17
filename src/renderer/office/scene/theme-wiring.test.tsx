@@ -2,6 +2,7 @@ import { isValidElement, type ReactNode } from 'react'
 import { expect, it, vi } from 'vitest'
 import { Robot, RobotCrew } from './Robot'
 import { FloorView } from './FloorView'
+import { GameCorner } from '../themes/GameCorner'
 import { groupZonesByTheme } from '../logic/office-themes'
 import { getTheme, registerTheme, themeForTeam } from '../themes/registry'
 import { makeAgent, makeFloor, makeRoom, makeZone } from '../__tests__/fixtures'
@@ -91,12 +92,14 @@ it('renders every floor surface through the theme kit', () => {
       isReducedMotion: true
     })
   )
-  // Ambient is drawn by the town's TownAmbient, outside the floor.
-  const { Ambient, ...floorParts } = theme.kit.zone
-  expect(Ambient).toBeDefined()
+  // Ambient is drawn by the town's TownAmbient, and Lounge by city venues, outside the floor.
+  const { Ambient, Lounge, ...floorParts } = theme.kit.zone
+  expect([Ambient, Lounge].every((part) => part !== undefined)).toBe(true)
   for (const Component of [...Object.values(theme.kit.floor), ...Object.values(floorParts)]) {
     expect(nodes.some((node) => node.type === Component)).toBe(true)
   }
+  expect(nodes.some((node) => node.type === Lounge)).toBe(false)
+  expect(nodes.some((node) => node.type === GameCorner)).toBe(true)
 })
 
 function companyZone(companyKey: string, projectKey: string, roomId: string) {
@@ -172,7 +175,7 @@ it('draws each zone with its own theme, and the slab and lift once with the floo
   }
 })
 
-it("draws a company's lounge with that company's theme, and nothing where there is none", () => {
+it("draws a game corner in its company's theme colours, and nothing where there is none", () => {
   const withLounge = (zone: (typeof mixedFloor.zones)[0]) => ({
     ...zone,
     lounge: makeLounge(zone.id)
@@ -205,14 +208,17 @@ it("draws a company's lounge with that company's theme, and nothing where there 
       isReducedMotion: true
     })
   )
-  const loungesBy = (component: unknown) =>
-    nodes
-      .filter((node) => node.type === component)
-      .map((node) => (node.props.lounge as LoungeGeometry).id)
-  // c_c has no lounge; c_d has one, but its theme has no Lounge part.
-  expect(loungesBy(edo.kit.zone.Lounge)).toEqual(['c_a:lounge'])
-  expect(loungesBy(brass.kit.zone.Lounge)).toEqual(['c_b:lounge'])
-  expect(nodes.filter((node) => 'lounge' in node.props)).toHaveLength(2)
+  // c_c has no corner; c_d has one even though its theme has no Lounge part.
+  const corners = nodes
+    .filter((node) => node.type === GameCorner)
+    .map((node) => [(node.props.lounge as LoungeGeometry).id, node.props.palette])
+  expect(corners).toEqual([
+    ['c_a:lounge', edo.palette],
+    ['c_b:lounge', brass.palette],
+    ['c_d:lounge', loungeless.palette]
+  ])
+  expect(nodes.some((node) => node.type === edo.kit.zone.Lounge)).toBe(false)
+  expect(nodes.some((node) => node.type === Lounge)).toBe(false)
 })
 
 it('gives each robot the theme and roster place of its own room', () => {

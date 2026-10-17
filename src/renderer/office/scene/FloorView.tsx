@@ -5,7 +5,9 @@ import { ROOM_DOOR_WIDTH, type WallsMode } from '../logic/room-layout'
 import { plateLocalFloor } from '../logic/zone-framing'
 import type { FloorGeometry, LoungeGeometry } from '../scene-model'
 import { getTheme } from '../themes/registry'
-import { box, Parts } from '../themes/parts'
+import { beanbagParts } from '../themes/game-corner'
+import { GameCorner } from '../themes/GameCorner'
+import { Parts } from '../themes/parts'
 import type { OfficeTheme } from '../themes/types'
 import { floorConnector, floorElevation } from './all-floor-model'
 import { CutawaySlab } from './CutawaySlab'
@@ -101,11 +103,10 @@ export function FloorView({
               {zoneGroup.companies.map((company) => (
                 <group key={company.id}>
                   {!isOpenCeiling && !isOverview && <kit.CompanyZone zone={company} />}
-                  {kit.Lounge &&
-                    company.lounge &&
+                  {company.lounge &&
                     (isOverview ? (
                       <group name="overview-lounge">
-                        {company.lounge.seats.map((seat) => (
+                        {company.lounge.seats.map((seat, index) => (
                           <group
                             key={seat.slotId}
                             name="lounge-seat"
@@ -113,13 +114,7 @@ export function FloorView({
                             rotation={[0, seat.heading, 0]}
                             scale={FURNITURE_SCALE}
                           >
-                            <Parts
-                              parts={[
-                                box([0, 0.3, 0], [0.48, 0.08, 0.48], zoneTheme.palette.wood),
-                                box([0, 0.15, 0], [0.16, 0.3, 0.16], zoneTheme.palette.lacquer),
-                                box([0, 0.55, -0.22], [0.48, 0.5, 0.08], zoneTheme.palette.paper)
-                              ]}
-                            />
+                            <Parts parts={beanbagParts(zoneTheme.palette, index)} />
                           </group>
                         ))}
                       </group>
@@ -128,7 +123,10 @@ export function FloorView({
                         company.lounge,
                         FURNITURE_SCALE,
                         company.lounge.id,
-                        <kit.Lounge lounge={loungeAsDrawn(company.lounge)} />
+                        <GameCorner
+                          lounge={loungeAsDrawn(company.lounge)}
+                          palette={zoneTheme.palette}
+                        />
                       )
                     ))}
                 </group>
