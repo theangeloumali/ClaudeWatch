@@ -110,7 +110,11 @@ export function opencodeState(
     return {
       activity: toolActivity(category),
       attention: 'none',
-      currentTool: { name: part.tool, category }
+      currentTool: {
+        name: part.tool,
+        category,
+        ...(typeof part.id === 'string' && { callId: part.id })
+      }
     }
   }
   return THINKING

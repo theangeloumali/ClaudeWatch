@@ -24,7 +24,12 @@ import { sessionFromRegistry, sessionFromTeammate } from './claude'
 import { claudeProcessKey, discoverClaudeProcesses } from './claude-processes'
 import { CLAUDE_SESSION_ID as SESSION_ID } from './claude-transcripts'
 import { resolveProject } from './project-root'
-import { pruneTranscripts, readTranscript, transcriptPath } from './transcript-tail'
+import {
+  dropExpiredLimit,
+  pruneTranscripts,
+  readTranscript,
+  transcriptPath
+} from './transcript-tail'
 import { listAgentFiles, liveSubagents } from './subagents'
 import { identityOf, type ProcessRow, readProcessTable } from './process-table'
 import { type Teammate, type TeammateProcess, teammateProcesses, TeammateSource } from './teammates'
@@ -118,8 +123,8 @@ export async function collectClaude(
         ? await transcriptPath(root, entry.cwd, entry.sessionId, io)
         : candidate.path
     const transcript = path
-      ? await readTranscript(path, io)
-      : { tool: null, error: false, mtimeMs: 0 }
+      ? dropExpiredLimit(await readTranscript(path, io), now)
+      : { tool: null, error: false, limit: null, mtimeMs: 0 }
     const agentFiles = path ? await listAgentFiles(path, io) : []
     const agents = await liveSubagents(agentFiles, io, now)
     // A team that cannot be read costs the lead its teammates, never the lead itself.

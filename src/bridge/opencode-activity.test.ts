@@ -54,6 +54,21 @@ it.each([
   })
 })
 
+it('two consecutive edit calls carry different callIds', () => {
+  const edit = (id: string, status: string) => ({ ...tool('edit', status), id })
+  expect(opencodeState(working, [edit('prt_first', 'running')], NOW).currentTool).toEqual({
+    name: 'edit',
+    category: 'edit',
+    callId: 'prt_first'
+  })
+  const next = [edit('prt_second', 'running'), edit('prt_first', 'completed')]
+  expect(opencodeState(working, next, NOW).currentTool).toEqual({
+    name: 'edit',
+    category: 'edit',
+    callId: 'prt_second'
+  })
+})
+
 it.each([
   ['a reasoning part', [{ type: 'reasoning' }, { type: 'step-start' }]],
   ['streaming text', [{ type: 'text' }, { type: 'reasoning' }]],

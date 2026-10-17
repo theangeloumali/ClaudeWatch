@@ -132,8 +132,13 @@ function workingSession2(db: DatabaseSync, directory: string, atMs: number): voi
       time: { created: atMs + 100 },
       content: [
         { type: 'reasoning', text: 'SECRET_PROMPT' },
-        { type: 'tool', name: 'shell', state: { status: 'completed', input: 'SECRET_PROMPT' } },
-        { type: 'tool', name: 'read', state: { status: 'running' } }
+        {
+          type: 'tool',
+          id: 'call_shell',
+          name: 'shell',
+          state: { status: 'completed', input: 'SECRET_PROMPT' }
+        },
+        { type: 'tool', id: 'call_read', name: 'read', state: { status: 'running' } }
       ]
     }
   })
@@ -173,9 +178,9 @@ it('asks an OpenCode 2 database the same questions, and finds a message’s part
     }
   ])
   expect(rows.parts).toEqual([
-    { type: 'tool', tool: 'read', status: 'running' },
-    { type: 'tool', tool: 'shell', status: 'completed' },
-    { type: 'reasoning', tool: null, status: null }
+    { id: 'call_read', type: 'tool', tool: 'read', status: 'running' },
+    { id: 'call_shell', type: 'tool', tool: 'shell', status: 'completed' },
+    { id: null, type: 'reasoning', tool: null, status: null }
   ])
   expect(JSON.stringify(rows)).not.toContain('SECRET_PROMPT')
 })
