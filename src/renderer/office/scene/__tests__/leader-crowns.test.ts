@@ -156,7 +156,7 @@ describe('leader crowns', () => {
     const shown = crownsShown(layer)
     expect(shown).toHaveLength(3)
     expect(shown.map((crown) => Math.round(crown.centre.x))).toEqual([0, 4, 8])
-    expect(measureLayer(layer.group).draws).toBe(1)
+    expect(measureLayer(layer.mesh).draws).toBe(1)
     expect(CITY_LAYER_BUDGET.crowns.draws.full).toBe(1)
   })
 
@@ -249,12 +249,12 @@ describe('leader crowns', () => {
     const layer = createLeaderCrownsLayer(palette)
     const frame = crownFrame({ crowned: ['claude:a'], agents: agentsOf(leader) })
     layer.update(frame)
-    measureLayer(layer.group)
+    measureLayer(layer.mesh)
     layer.update(frame)
-    expect(measureLayer(layer.group).uploadBytes).toBe(0)
+    expect(measureLayer(layer.mesh).uploadBytes).toBe(0)
     layer.update({ ...frame, agents: agentsOf({ ...leader, place: 'leaving' }) })
     expect(crownsShown(layer)).toHaveLength(0)
-    expect(measureLayer(layer.group).uploadBytes).toBe(16 * 4)
+    expect(measureLayer(layer.mesh).uploadBytes).toBe(16 * 4)
   })
 
   it('no crown part shares a plane with another of a different colour', () => {

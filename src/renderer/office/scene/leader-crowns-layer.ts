@@ -141,5 +141,5 @@ export function createLeaderCrownsLayer(palette: ThemePalette) {
     marks.finish(CROWNS)
   }
 
-  return { group: marks.mesh, mesh: marks.mesh, update, dispose: marks.dispose }
+  return { mesh: marks.mesh, update, dispose: marks.dispose }
 }
