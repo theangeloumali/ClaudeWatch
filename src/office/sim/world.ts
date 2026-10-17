@@ -157,7 +157,10 @@ export class World {
     const active = new Set(desired.map((p) => p.session.key))
     // Every leaver fades where it stands: walking out is what jammed the street door.
     for (const [key, agent] of this.agents)
-      if (!active.has(key) && agent.state !== 'leaving') this.fadeOut(key, leaveAgent(agent))
+      if (!active.has(key) && agent.state !== 'leaving') {
+        this.agents.set(key, leaveAgent(agent))
+        this.startFade(key)
+      }
     const oldRooms = new Map(
       oldMap.floors.flatMap((floor) =>
         floor.rooms.map((room) => [`${floor.id}\n${room.id}`, room] as const)
@@ -289,6 +292,7 @@ export class World {
       routes: this.routes,
       lounges: this.lounges,
       clearPassage: (key) => this.passages.clear(key),
+      isFading: (key) => this.fading.has(key),
       callHome: (agent) => this.callHome(agent)
     })
   }
@@ -385,13 +389,7 @@ export class World {
     this.recovery.clear(key)
   }
 
-  private fadeOut(key: string, agent: AgentRecord): void {
-    this.agents.set(key, agent)
-    this.startFade(key)
-  }
-
-  // Fully faded, it is no body until its desk takes it, so two swapped desks never wait on each
-  // other; one another body stands on keeps it faded until the next tick.
+  // Fully faded it is no body, so swapped desks never wait on each other; a taken desk waits.
   private seatRecalled(key: string, agent: AgentRecord, crowd: TickCrowd): void {
     crowd.remove(key)
     this.arrivals.add(key)
@@ -416,8 +414,7 @@ export class World {
     this.accumulatedMs += Number.isFinite(dtMs) ? clamp(dtMs, [0, 1000]) : 0
     while (this.accumulatedMs >= TICK_MS) {
       if (!this.options.now) this.nowMs += TICK_MS
-      const steppable = this.steppable
-      this.cycleLeaders = waitCycleLeaders(this.waitEdges, (id) => steppable.has(id))
+      this.cycleLeaders = waitCycleLeaders(this.waitEdges, (id) => this.steppable.has(id))
       this.waitEdges = new Map()
       this.steppable = new Set()
       const ordered = [...this.agents].sort(([first], [second]) => first.localeCompare(second))

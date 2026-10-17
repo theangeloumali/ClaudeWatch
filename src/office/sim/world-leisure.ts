@@ -19,6 +19,8 @@ interface LeisureContext {
   routes: FloorRoutes
   lounges: ReadonlyMap<string, LoungeLayout>
   clearPassage: (key: string) => void
+  // A fader never walks, so it takes no seat.
+  isFading: (key: string) => boolean
   // Walks it to its desk, or fades it there when no indoor route reaches it; undefined when the
   // map has no desk for it.
   callHome: (agent: AgentRecord) => AgentRecord | undefined
@@ -93,7 +95,9 @@ export function reconcileLeisure(leisureContext: LeisureContext): void {
   }
   // A 'none' agent outside the lounge has no finished time, so it never wants a seat.
   const loungeAgents = [...context.agents.values()].filter(
-    (agent) => agent.view.place === 'lounge' || modes.get(agent.view.agentKey) !== 'none'
+    (agent) =>
+      !context.isFading(agent.view.agentKey) &&
+      (agent.view.place === 'lounge' || modes.get(agent.view.agentKey) !== 'none')
   )
   if (!loungeAgents.some((agent) => agent.view.place === 'lounge' || wantsLounge(agent))) return
   for (const [key, seat] of loungeSeats(

@@ -33,6 +33,12 @@ describe('recall: reappearing at its desk', () => {
     expect(seatAtDesk(away, layout.floors, [body(desk.x)])).toBeNull()
   })
 
+  // Called home from the lounge while faded, it must not show gaming at its desk (Minor 5).
+  it('is no longer away once seated at its desk', () => {
+    const lounging = { ...away, view: { ...away.view, place: 'lounge' as const } }
+    expect(seatAtDesk(lounging, layout.floors, [])?.view).not.toHaveProperty('place')
+  })
+
   it('sits down working at its desk once the desk is clear', () => {
     const seated = seatAtDesk(away, layout.floors, [body(desk.x + 2)])
     expect(seated && { x: seated.view.x, z: seated.view.z, state: seated.state }).toEqual({
