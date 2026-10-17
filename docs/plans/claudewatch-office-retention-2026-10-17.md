@@ -127,3 +127,28 @@ This reverses his 2026-10-16 answer that idle agents "can roam the city".
 | 6 close             | 2 h         | 6 h      |
 | 7 merge             | 0.5 h       | 1 h      |
 | **Total**           | **13.5 h**  | **48 h** |
+
+## Results
+
+| Measure (view-only server, real sessions)            | Before (`bffdf19e`, 3 min)         | After (`3986ef23` + chunk, 10 min)                                                                            |
+| ---------------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Agents within 1.6 m of a building entrance for ≥ 3 s | 4 (12–16 s each)                   | 0                                                                                                             |
+| Agent samples outside their building                 | 475                                | 0                                                                                                             |
+| Agent samples in a game corner                       | 0 (lounges only in first projects) | 1,908                                                                                                         |
+| Office floors with a game corner                     | —                                  | 4 of 4                                                                                                        |
+| Working agents walking, not seated                   | 101 samples (stuck in doorways)    | 44 samples, all walks back from the corner when work arrived (desk distance falling ~10.7 → 0.7 m over ~11 s) |
+
+- Gates on the integrated tree: both `tsc`, `eslint .`, `knip` and prettier are clean, and vitest passed 5,439 tests.
+- Draw and triangle checks:
+  - the corner costs at most 1 draw per theme at full;
+  - the 512-worker overview drew 589,874 triangles against a 600,000 ceiling, using one beanbag body per seat.
+- The page chunk is 475,307 bytes against the framework sync's 480,000-byte limit. The shared office model now ships in the simulation chunk.
+
+### Rulings
+
+- **Kept as a fade, not an explicit direction:** the sim's `fade` stays 0 → 1 for both arrival and departure, and the robot reads the direction from whether it mounted faded. Cost if wrong: an arrival spends 500 ms invisible before it grows in.
+- **Not a tagged "no route" result:** an empty route still means fade. Cost if wrong: a seat walled off by an edit looks like a move to another floor, so the agent pops instead of walking.
+- **The corner is computed on every build, not stored in the world document, and validation doesn't require one.** A floor with no room keeps its idle agents at their desks. Cost if wrong: a crowded saved building silently has no corner. On today's real city, 4 of 4 floors have one.
+- **The baseline company lounge in `projects.ts` stays**, because legacy (non-city) worlds and their specs use it. Cost if wrong: dead geometry in production builds.
+- **No deeper split of the bundle.** Themes import from scene, town, logic and citizens, so a themes chunk would be circular with the page chunk. Cost if wrong: about 4.7 KB of growth breaks the sync again.
+- **Generated buildings leave room for the corner (Ruling 8 of the sim builder).** The generated city leaves 44 filler lots, not 47. Cost if wrong: three fewer filler lots on a freshly generated city.
