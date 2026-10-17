@@ -158,7 +158,8 @@ describe('Corporate City town assets', () => {
     for (const figure of [...CORPORATE_TOWN.citizens, ...CORPORATE_TOWN.vehicles]) {
       const isVehicle = CORPORATE_TOWN.vehicles.some((vehicle) => vehicle === figure)
       const parts = figure.parts()
-      expect(parts.length, figure.name).toBeLessThanOrEqual(isVehicle ? 16 : 10)
+      // Vehicles are the extruded car kit: body, wheels and rims, lamps, cabin and pillars.
+      expect(parts.length, figure.name).toBeLessThanOrEqual(isVehicle ? 24 : 10)
       const triangles = parts.reduce(
         (count, { geometry }) =>
           count + (geometry.index?.count ?? geometry.getAttribute('position').count) / 3,

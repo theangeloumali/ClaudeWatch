@@ -1,4 +1,9 @@
+import { makeFloor } from '../__tests__/fixtures'
+import { citizenGround } from '../citizens/city-sidewalks'
+import { moverClock } from '../citizens/mover-clock'
 import { routePose, type CitizenPose } from '../citizens/route-pose'
+import { buildingIdOf } from '../logic/city-signals'
+import { SceneBodies } from '../scene/BodySpace'
 import { buildFixtureFrame } from '../fixture/fixture-feed'
 import type { QualityLevel } from '../logic/quality'
 import type { FloorGeometry } from '../scene-model'
@@ -6,7 +11,7 @@ import type { Rect } from '../themes/lot-math'
 import { DEFAULT_THEME_ID } from '../themes/registry'
 import { distributedTown } from './distributed-town'
 import type { TownSize } from './town-grid'
-import type { TownInput, Trip } from './town-trips'
+import { townTrips, type TownInput, type Trip } from './town-trips'
 import { LARGE_FLOOR } from './town.test-utils'
 import { townOf } from './use-town-plan'
 
@@ -55,4 +60,20 @@ export function isOn(rect: Rect, point: { x: number; z: number }): boolean {
     Math.abs(point.x - rect.x) <= rect.width / 2 + EDGE_EPSILON_M &&
     Math.abs(point.z - rect.z) <= rect.depth / 2 + EDGE_EPSILON_M
   )
+}
+
+// A 2 × n city of offices with building ids, its full fleet and a fresh clock: work-trip ground.
+export function workCity(offices = 4) {
+  const floors = Array.from({ length: offices }, (_unused, index) =>
+    makeFloor({
+      floorId: `f${index}`,
+      buildingId: buildingIdOf('c_test', `p_${index}`),
+      x: (index % 2) * 64 + 32,
+      z: Math.floor(index / 2) * 56 + 28
+    })
+  )
+  const { plan } = distributedTown(townOf(floors[0], null), floors)
+  const trips = townTrips({ plan, floorThemeId: 'corporate-city', detail: 'full' })
+  const clock = moverClock({ trips, space: new SceneBodies(), isOpen: citizenGround(plan).isOpen })
+  return { floor: floors[0], plan, trips, clock }
 }
