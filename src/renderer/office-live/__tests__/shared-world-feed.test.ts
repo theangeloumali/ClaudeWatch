@@ -137,6 +137,22 @@ describe('one saved city per host (health-13)', () => {
     expect(open().store().get().document).toEqual(city)
   })
 
+  it.each([
+    ['not JSON', '{"version":2,'],
+    ['not a city', JSON.stringify({ version: 2, revision: 3, buildings: 'none' })]
+  ])(
+    'a corrupt legacy city (%s) is never uploaded, and the page starts from the host’s city',
+    (_label, legacy) => {
+      const save = vi.fn((document: unknown) => world.save(document))
+      const storage = memoryStorage()
+      storage.setItem(WORLD_DOCUMENT_STORAGE_KEY, legacy)
+      const page = open({ storage, save })
+      expect(save).not.toHaveBeenCalled()
+      expect(page.store().get()).toMatchObject({ error: null })
+      expect(page.store().get().document).toEqual(open().store().get().document)
+    }
+  )
+
   it('a host-backed page writes nothing to localStorage and clears the old key', async () => {
     const app = open()
     const { document, revision } = app.store().get()

@@ -1,6 +1,7 @@
 import type { WorldDocument } from '../../shared/office/world-document'
 import type { WorldSaveRefusal, WorldSaveReply } from '../../shared/office/world-sync'
 import {
+  readStoredWorld,
   WORLD_DOCUMENT_STORAGE_KEY,
   type WorldDocumentStorage,
   type WorldStorageEvent
@@ -12,7 +13,7 @@ export interface HostWorldStorage extends WorldDocumentStorage {
 }
 
 // A page's own copy, from before its host kept the city; read once, then removed.
-type LegacyWorldStorage = Pick<WorldDocumentStorage, 'getItem'> & {
+type LegacyWorldStorage = Pick<WorldDocumentStorage, 'getItem' | 'setItem'> & {
   removeItem?(key: string): void
 }
 
@@ -87,10 +88,8 @@ export function hostWorldStorage(
   }
 }
 
+// A corrupt or foreign copy is dropped here, so it never reaches the host.
 function readLegacy(legacy: LegacyWorldStorage | null): string | null {
-  try {
-    return legacy?.getItem(WORLD_DOCUMENT_STORAGE_KEY) ?? null
-  } catch {
-    return null
-  }
+  const stored = readStoredWorld(legacy)
+  return stored.success && stored.document ? JSON.stringify(stored.document) : null
 }
