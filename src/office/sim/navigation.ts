@@ -3,8 +3,12 @@ import type { FloorLayout, ZoneLayout } from './layout'
 import type { BodyFootprint } from '../../shared/office/body-footprints'
 import { bodiesShareElevation } from '../../shared/office/body-sweep'
 
+// The walk grid's cell, and the margin `around` keeps between two bodies.
+export const NAV_CELL_METRES = 0.25
+export const ROUTE_MARGIN_METRES = 0.05
+
 export function officeGrid(floor: FloorLayout): NavGrid {
-  const cellSize = 0.25
+  const cellSize = NAV_CELL_METRES
   const origin = { x: floor.x - floor.width / 2, z: floor.z - floor.depth / 2 }
   const blocked = new Set<string>()
   const wall = (zone: ZoneLayout) => {
@@ -100,7 +104,7 @@ export class PathCache {
     for (const obstacle of options.obstacles) {
       if (obstacle.id === options.body.id) continue
       if (!bodiesShareElevation(options.body, obstacle)) continue
-      const radius = options.body.radius + obstacle.radius + 0.05
+      const radius = options.body.radius + obstacle.radius + ROUTE_MARGIN_METRES
       const left = Math.max(0, Math.floor((obstacle.x - radius - origin.x) / cellSize))
       const right = Math.min(width - 1, Math.ceil((obstacle.x + radius - origin.x) / cellSize))
       const top = Math.max(0, Math.floor((obstacle.z - radius - origin.z) / cellSize))

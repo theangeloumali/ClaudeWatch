@@ -1,14 +1,21 @@
+import { WORKER_BODY_RADIUS } from '../../shared/office/body-footprints'
 import { clamp } from '../../shared/range'
 import { contains, footprintEdges, overlaps } from '../../shared/office/world-document-geometry'
 import type { WorldFootprint } from '../../shared/office/world-document-types'
 import type { LoungeLayout, Slot } from './layout'
 import type { Point } from './path'
-import { LOUNGE_SEATS_PER_ROW, LOUNGE_WIDTH, loungeDepth, loungeMetres } from './rooms'
+import { NAV_CELL_METRES, ROUTE_MARGIN_METRES } from './navigation'
+import { LOUNGE_SEATS_PER_ROW, LOUNGE_WIDTH, loungeMetres } from './rooms'
 
 const MAX_SEATS = 8
 const WALL_METRES = 1
 const ROOM_METRES = 1
 const ENTRANCE_METRES = 2
+// The renderer's contract: the front row sits this far from the screen on the far edge.
+const SCREEN_METRES = 1.2
+// Rows far enough apart for the router to walk a worker, the largest body, between two seated
+// ones: a body and its margin each side, and half a grid cell for its column to fall in.
+const ROW_STEP_METRES = 2 * (2 * WORKER_BODY_RADIUS + ROUTE_MARGIN_METRES + NAV_CELL_METRES / 2)
 
 // Tried in this order; seats face `outward`, away from the offices, at the screen on the far edge.
 const SIDES = [
@@ -21,6 +28,10 @@ type Side = (typeof SIDES)[number]
 
 // A seat for every desk on the floor, up to a full corner of eight.
 export const cornerSeats = (deskCount: number): number => clamp(deskCount, [1, MAX_SEATS])
+
+// Each row takes a row step, the last its aisle on the door side; the front row its screen too.
+export const cornerDepth = (seats: number): number =>
+  SCREEN_METRES + Math.ceil(seats / LOUNGE_SEATS_PER_ROW) * ROW_STEP_METRES
 
 interface CornerFloor {
   floorId: string
@@ -37,7 +48,7 @@ export function gameCorner(floor: CornerFloor): LoungeLayout | undefined {
   const seats = cornerSeats(floor.deskCount)
   const envelope = enclose(floor.rooms)
   for (const side of SIDES) {
-    const area = besideOffices(side, envelope, floor.footprint, loungeDepth(seats))
+    const area = besideOffices(side, envelope, floor.footprint, cornerDepth(seats))
     if (fits(area, floor)) return layOut(area, side, seats, floor.floorId)
   }
   return undefined
@@ -86,17 +97,16 @@ function besideOffices(
   }
 }
 
-// Front row first, nearest the screen; each row centred across the corner.
+// Front row first, by the screen; each further row a step back toward the door, all centred.
 function layOut(area: WorldFootprint, side: Side, seats: number, floorId: string): LoungeLayout {
   const { outward, heading } = side
   const across = { x: -outward.z, z: outward.x }
   const reach = outward.x !== 0 ? area.width : area.depth
   const door = { x: area.x - (outward.x * reach) / 2, z: area.z - (outward.z * reach) / 2 }
-  const rows = Math.ceil(seats / LOUNGE_SEATS_PER_ROW)
   const slots: Slot[] = Array.from({ length: seats }, (_, index) => {
     const row = Math.floor(index / LOUNGE_SEATS_PER_ROW)
     const inRow = Math.min(LOUNGE_SEATS_PER_ROW, seats - row * LOUNGE_SEATS_PER_ROW)
-    const out = loungeMetres(2 + (rows - 1 - row) * 2)
+    const out = reach - SCREEN_METRES - row * ROW_STEP_METRES
     const along = loungeMetres(1.25) * ((index % LOUNGE_SEATS_PER_ROW) - (inRow - 1) / 2)
     return {
       id: `games_seat_${index}`,

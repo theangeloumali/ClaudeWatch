@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentView, SessionRef } from '../../../shared/office/types'
 import { LOUNGE_DELAY_MS } from '../behaviour'
+import type { LoungeLayout } from '../layout'
+import { NAV_CELL_METRES } from '../navigation'
 import { CityWorld, observed } from './city-harness'
 
 // Full sim runs: the 5 s default times out under load (health-9).
@@ -8,6 +10,24 @@ vi.setConfig({ testTimeout: 120_000 })
 
 // Past the lounge delay and a walk across any generated floor.
 const SETTLE_MS = LOUNGE_DELAY_MS + 30_000
+// Eight gamers setting off at once: the last, held behind a seated row, sat after 37.7 s.
+const FULL_CORNER_MS = LOUNGE_DELAY_MS + 45_000
+// The front row's distance from the screen, less half a grid cell for the walk along it.
+const SCREEN_STRIP_METRES = 1.2 - NAV_CELL_METRES / 2
+
+// How far a point stands in from the corner's screen edge, and how far off its centre line.
+function screenSide(corner: LoungeLayout, point: { x: number; z: number }) {
+  const facing = { x: Math.sin(corner.slots[0].heading), z: Math.cos(corner.slots[0].heading) }
+  const isAcrossX = Math.abs(facing.x) > 0.5
+  const reach = isAcrossX ? corner.width : corner.depth
+  const far = { x: corner.door.x + facing.x * reach, z: corner.door.z + facing.z * reach }
+  return {
+    toScreen: (far.x - point.x) * facing.x + (far.z - point.z) * facing.z,
+    isAlongScreen:
+      Math.abs((point.x - corner.x) * -facing.z + (point.z - corner.z) * facing.x) <=
+      (isAcrossX ? corner.depth : corner.width) / 2
+  }
+}
 
 const working = (key: string, project: string, nowMs: number): SessionRef => ({
   ...observed(key, project, nowMs),
@@ -45,9 +65,21 @@ describe('game corner: idle agents play on their own floor', () => {
     const idle = Array.from({ length: 9 }, (_, index) => `claude:idle-${index}`)
     const city = new CityWorld((nowMs) => idle.map((key) => observed(key, 'p_a', nowMs)))
     let views: AgentView[] = []
-    city.run(SETTLE_MS, (frame) => {
+    // Nobody walking to a seat cuts through the strip before the screen, or behind it.
+    let closestToScreen = Infinity
+    city.run(FULL_CORNER_MS, (frame) => {
       views = frame
+      const corner = city.world.layout().floors.find((floor) => floor.id === frame[0].floorId)
+        ?.zones[0].lounge
+      if (!corner) return
+      for (const view of frame) {
+        if (view.place !== 'lounge') continue
+        if (corner.slots.some((seat) => seat.x === view.x && seat.z === view.z)) continue
+        const { toScreen, isAlongScreen } = screenSide(corner, view)
+        if (isAlongScreen) closestToScreen = Math.min(closestToScreen, toScreen)
+      }
     })
+    expect(closestToScreen).toBeGreaterThanOrEqual(SCREEN_STRIP_METRES)
     const floor = city.world.layout().floors.find((candidate) => candidate.id === views[0].floorId)!
     const seats = floor.zones[0].lounge!.slots
     const gamers = views.filter((view) =>
