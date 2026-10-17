@@ -3,7 +3,13 @@ import { BoxGeometry, Color, InstancedMesh, MeshStandardMaterial, Object3D } fro
 import type { ThemePalette } from '../themes/types'
 import { RailwayTrains } from './RailwayTrains'
 import type { TownPlan } from '../town/town-plan'
-import { RAILWAY, railwayPlan, type RailwayPlan, type RailwaySpan } from '../town/railway-plan'
+import {
+  RAILWAY,
+  railwayPlan,
+  shownRailway,
+  type RailwayPlan,
+  type RailwaySpan
+} from '../town/railway-plan'
 import {
   railwayStations,
   stationBoxes,
@@ -131,6 +137,10 @@ export function RailwayStructures({
   palette: ThemePalette
 }) {
   const mesh = useMemo(() => viaductMesh(railway, palette), [railway, palette])
+  useEffect(() => {
+    shownRailway.set(railway)
+    return () => shownRailway.set(null)
+  }, [railway])
   useEffect(
     () => () => {
       mesh.geometry.dispose()

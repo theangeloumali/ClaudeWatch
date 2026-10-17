@@ -123,3 +123,14 @@ export function railwayReach(reach: Rect, plan: TownPlan): Rect {
     Math.max(reach.z + reach.depth / 2, bounds.z + bounds.depth / 2)
   )
 }
+
+let shown: RailwayPlan | null = null
+
+// The ring the scene draws now, for the HUD's mini-map: a module store like `officePoses`,
+// since the HUD has no town plan of its own.
+export const shownRailway = {
+  current: (): RailwayPlan | null => shown,
+  set(railway: RailwayPlan | null): void {
+    shown = railway
+  }
+}
