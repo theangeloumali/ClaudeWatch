@@ -3,7 +3,7 @@ import { isJsonObject } from '../../../shared/json-object'
 import { browserStorage } from '../../office-live/browser-storage'
 import { TOWN_SIZES, type TownSize } from '../town/town-grid'
 
-// Each feature of the living world the owner can switch off. Local to this page's origin.
+// Each switch the owner can flip. Local to this page's origin.
 interface OfficeSwitches {
   town: boolean
   citizens: boolean
@@ -11,6 +11,8 @@ interface OfficeSwitches {
   ambient: boolean
   loungeTrips: boolean
   player: boolean
+  // Roles stand in for company, project and session names, for recording the Office.
+  hideNames: boolean
 }
 
 export interface OfficeSettings extends OfficeSwitches {
@@ -26,6 +28,7 @@ export const DEFAULT_OFFICE_SETTINGS: OfficeSettings = {
   ambient: true,
   loungeTrips: true,
   player: true,
+  hideNames: false,
   townSize: 'city'
 }
 
@@ -37,7 +40,8 @@ const SETTING_KEYS: readonly OfficeSettingKey[] = [
   'vehicles',
   'ambient',
   'loungeTrips',
-  'player'
+  'player',
+  'hideNames'
 ]
 
 const isSettingKey = (key: string): key is OfficeSettingKey =>
