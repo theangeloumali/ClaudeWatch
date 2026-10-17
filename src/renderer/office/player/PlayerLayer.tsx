@@ -8,14 +8,13 @@ import { placeBody, PLAYER_BODY_RADIUS } from '../../../shared/office/body-footp
 import type { SceneBodies } from '../scene/BodySpace'
 import { ISO_POLAR, ISO_START_AZIMUTH } from '../logic/camera-bands'
 import { hudSafeInsets, type InspectorLayout } from '../logic/hud-layout'
-import { projectToScreen, screenAxes } from '../logic/zone-framing'
 import type { FloorGeometry } from '../scene-model'
 import { BEFORE_CONTROLS } from '../scene/use-camera-gestures'
 import { isStillClick, trackPress } from '../scene/ZonePickers'
 import type { Rect } from '../themes/lot-math'
 import { GROUND_Y } from '../themes/surroundings'
 import type { OfficeTheme, ThemePalette } from '../themes/types'
-import { followStep } from './camera-follow'
+import { followBody } from './camera-follow'
 import { playerGeometry } from './figure'
 import { groundHeight, walkGround, walkPath } from './walk-ground'
 import { sendPlayerToFloor } from './player-floor-routes'
@@ -243,19 +242,10 @@ export function PlayerLayer(props: PlayerLayerProps) {
 
     if (isFollowingRef.current && controls) {
       controls.getTarget(target, false)
-      const zoom = state.camera.zoom
-      const step = followStep({
-        onScreen: projectToScreen(
-          {
-            x: player.position.x,
-            y: playerHeight(),
-            z: player.position.z
-          },
-          { target: [target.x, target.y, target.z], zoom, azimuth, polar },
-          state.size
-        ),
+      const ride = followBody({
+        body: { x: player.position.x, y: playerHeight(), z: player.position.z },
+        view: { target: [target.x, target.y, target.z], zoom: state.camera.zoom, azimuth, polar },
         viewport: state.size,
-        zoom,
         deltaSec: frameSec,
         isReducedMotion,
         isCameraManuallyOwned: latestRef.current.isCameraManuallyOwned,
@@ -264,17 +254,9 @@ export function PlayerLayer(props: PlayerLayerProps) {
           latestRef.current.inspectorLayout
         )
       })
-      if (step.right !== 0 || step.down !== 0) {
-        const axes = screenAxes(azimuth, polar)
-        void controls.moveTo(
-          target.x + axes.right[0] * step.right - axes.up[0] * step.down,
-          target.y + axes.right[1] * step.right - axes.up[1] * step.down,
-          target.z + axes.right[2] * step.right - axes.up[2] * step.down,
-          false
-        )
-      }
+      if (ride.target) void controls.moveTo(...ride.target, false)
       // Standing still, the sweep ends once the player is back in view.
-      if (step.isSettled && !hasMoved) isFollowingRef.current = false
+      if (ride.isSettled && !hasMoved) isFollowingRef.current = false
     }
     // Only movement asks for the next frame: a standing player with a settled camera asks for none.
     wasMovingRef.current = hasMoved || isFollowingRef.current
