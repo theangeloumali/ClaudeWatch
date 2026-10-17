@@ -4,7 +4,7 @@ import { placementOf } from './project-root'
 import type { RegistryEntry } from './registry'
 import type { TranscriptState } from './transcript-tail'
 
-const NO_TOOL: TranscriptState = { tool: null, error: false }
+const NO_TOOL: TranscriptState = { tool: null, error: false, limit: null }
 import { toolActivity } from './tool-category'
 
 export function sessionFromRegistry(
@@ -43,9 +43,11 @@ export function sessionFromRegistry(
       ? /permission|approval/i.test(entry.waitingFor)
         ? 'permission'
         : 'question'
-      : entry.status !== 'idle' && transcript.error
-        ? 'error'
-        : 'none',
+      : transcript.limit
+        ? 'limited'
+        : entry.status !== 'idle' && transcript.error
+          ? 'error'
+          : 'none',
     currentTool: transcript.tool,
     subagents,
     startedAtMs,

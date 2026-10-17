@@ -3,16 +3,40 @@ import type { CurrentTool } from '../shared/office/types'
 import { type BridgeIo, isLabel, isMissing, jsonObject, object } from './io'
 import { toolCategory } from './tool-category'
 
+interface UsageLimit {
+  resetsAtMs: number | null
+}
+
 export interface TranscriptState {
   tool: CurrentTool | null
   error: boolean
+  // Set while the latest reply is a usage or rate limit.
+  limit: UsageLimit | null
+}
+
+// The CLI writes a limit as a synthetic API-error reply; any real reply after it proceeded.
+function limitAfter(reply: Record<string, unknown>, held: UsageLimit | null): UsageLimit | null {
+  if (reply.isApiErrorMessage !== true) return null
+  if (reply.error !== 'rate_limit') return held
+  const resetsAt = object(reply.quotaLimits)?.resetsAt
+  return {
+    resetsAtMs: typeof resetsAt === 'number' && Number.isFinite(resetsAt) ? resetsAt * 1000 : null
+  }
+}
+
+// A limit past its reset no longer holds the session back.
+export function dropExpiredLimit<State extends TranscriptState>(state: State, now: number): State {
+  const resetsAtMs = state.limit?.resetsAtMs
+  return resetsAtMs != null && now >= resetsAtMs ? { ...state, limit: null } : state
 }
 
 export function parseTranscript(text: string): TranscriptState {
   const tools: { id: string; name: string }[] = []
   const results = new Map<string, boolean>()
+  let limit: UsageLimit | null = null
   for (const line of text.split('\n')) {
     const record = jsonObject(line)
+    if (record?.type === 'assistant') limit = limitAfter(record, limit)
     const content = object(record?.message)?.content
     if (!Array.isArray(content)) continue
     for (const value of content) {
@@ -40,7 +64,8 @@ export function parseTranscript(text: string): TranscriptState {
     tool: current
       ? { name: current.name, category: toolCategory(current.name), callId: current.id }
       : null,
-    error: !!latest && results.get(latest.id) === true
+    error: !!latest && results.get(latest.id) === true,
+    limit
   }
 }
 
