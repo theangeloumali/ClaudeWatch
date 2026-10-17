@@ -1,3 +1,4 @@
+import { FACADE_LAYER_STEP_M } from '../scene/building-window-parts'
 import { clamp } from '../../../shared/range'
 import type { Plot } from './lot-kit'
 import type { LotDesign } from './lot-parts'
@@ -136,7 +137,12 @@ function bathhouse(plot: Plot): PartSpec[] {
     box([0, hall * 0.3, d / 2 + 0.05], [1.6, hall * 0.5, 0.06], paper),
     lit(box([-w / 2 + 0.5, hall * 0.6, d / 2 + 0.16], [0.25, 0.35, 0.25], glow)),
     ...roof(hall, w, d),
-    box([stack.x, stack.top / 2, stack.z], [0.7, stack.top, 0.7], lacquer),
+    // flicker-1: the chimney stops a layer step inside its cap, which steam leaves from.
+    box(
+      [stack.x, (stack.top - FACADE_LAYER_STEP_M) / 2, stack.z],
+      [0.7, stack.top - FACADE_LAYER_STEP_M, 0.7],
+      lacquer
+    ),
     box([stack.x, stack.top - 0.08, stack.z], [0.9, 0.16, 0.9], ink)
   ]
 }

@@ -36,7 +36,12 @@ export function industrialWing(volume: PartSpec): PartSpec[] {
         material.equipment
       )
     ),
-    box([across, height + rise / 2 - 0.013, along], [width, 0.026, depth], material.graphite),
+    // The cap overhangs and rises past the volume so no face of the two shares a plane.
+    box(
+      [across, height + rise / 2 - 0.009, along],
+      [width + 0.012, 0.026, depth + 0.012],
+      material.graphite
+    ),
     box(
       [across, base + rise * 0.16, front + 0.014],
       [width * 0.19, rise * 0.26, 0.018],
@@ -45,7 +50,7 @@ export function industrialWing(volume: PartSpec): PartSpec[] {
     lit(
       box(
         [across, base + rise * 0.19, front + 0.015],
-        [width * 0.7, rise * 0.17, 0.016],
+        [width * 0.7, rise * 0.17, 0.014],
         material.amber
       )
     ),
@@ -61,7 +66,7 @@ export function relayTower(plot: ZonePlot): PartSpec[] {
   return fitParts(plot, [
     industrialPad(),
     ...industrialWing(box([-0.1, 0.47, -0.12], [0.52, 0.86, 0.6], material.graphite)),
-    ...industrialWing(box([0.25, 0.3, -0.08], [0.22, 0.52, 0.52], material.facade)),
+    ...industrialWing(box([0.25, 0.3, -0.085], [0.22, 0.52, 0.52], material.facade)),
     box([-0.41, 0.48, -0.12], [0.07, 0.88, 0.59], material.equipment),
     lit(box([-0.31, 0.63, 0.204], [0.095, 0.39, 0.026], material.cyan)),
     lit(box([0.25, 0.49, 0.209], [0.19, 0.08, 0.026], material.pink)),

@@ -1,3 +1,4 @@
+import { FACADE_LAYER_STEP_M } from '../../scene/building-window-parts'
 import { useMemo } from 'react'
 import type { LoungeGeometry } from '../../scene-model'
 import { box, lit, Parts, SIDES, type PartSpec } from '../parts'
@@ -8,7 +9,7 @@ import { COURT } from './palette'
 const SEAT: PartSpec[] = [
   box([0, 0.15, -0.1], [0.46, 0.3, 0.4], COURT.violet),
   box([0, 0.31, -0.1], [0.5, 0.03, 0.44], COURT.gold),
-  box([0, 0.42, -0.33], [0.5, 0.5, 0.06], COURT.ink),
+  box([0, 0.42, -0.33], [0.5 - 2 * FACADE_LAYER_STEP_M, 0.5, 0.06], COURT.ink),
   box([0, 0.69, -0.33], [0.56, 0.05, 0.08], COURT.gold)
 ]
 

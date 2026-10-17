@@ -52,7 +52,7 @@ function repairArcade(plot: ZonePlot): PartSpec[] {
         )
       ]),
       box([0, 0.96, 0.035], [0.98, 0.08, 0.76], material.indigo),
-      box([0, 0.9, 0.3], [0.98, 0.025, 0.1], material.mineral),
+      box([0, 0.9, 0.305], [0.98, 0.025, 0.09], material.mineral),
       box([0.29, 0.2, 0.03], [0.12, 0.1, 0.14], material.metal)
     ],
     plot
@@ -110,7 +110,9 @@ function elevatedWalkway(plot: ZonePlot): PartSpec[] {
       ]),
       box([0, 0.485, 0.21], [0.9, 0.06, 0.24], material.indigo),
       box([0, 0.61, 0.32], [0.9, 0.022, 0.025], material.mineral),
-      ...[-0.2, 0.2].map((across) => box([across, 0.55, 0.32], [0.02, 0.13, 0.02], material.metal)),
+      ...[-0.2, 0.2].map((across) =>
+        box([across, 0.55, 0.318], [0.02, 0.13, 0.02], material.metal)
+      ),
       box([0, 0.725, -0.23], [0.65, 0.045, 0.14], material.mineral)
     ],
     plot

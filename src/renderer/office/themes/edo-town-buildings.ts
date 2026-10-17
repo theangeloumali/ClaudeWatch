@@ -1,3 +1,4 @@
+import { FACADE_LAYER_STEP_M } from '../scene/building-window-parts'
 import type { ZoneDesign, ZonePlot } from '../town/town-dress'
 import { EDO_BUILDINGS } from './EdoSurroundings'
 import { legacyBuilding, legacyTownDesign, townBuilding } from './edo-town-legacy'
@@ -193,7 +194,12 @@ function foundry(plot: ZonePlot): PartSpec[] {
 function smithy(plot: ZonePlot): PartSpec[] {
   return [
     ...merchantStalls({ ...plot, height: plot.height * 0.8 }),
-    box([0, plot.height * 0.24, plot.depth * 0.26], [0.75, plot.height * 0.14, 0.4], EDO.ink),
+    // Its depth scales with the lot, so its front never meets the stall front at 0.3 of it.
+    box(
+      [0, plot.height * 0.24, plot.depth * 0.26],
+      [0.75, plot.height * 0.14, plot.depth * 0.1],
+      EDO.ink
+    ),
     cylinder(
       [-plot.width * 0.28, plot.height * 0.42, -plot.depth * 0.26],
       [0.4, plot.height * 0.84, 0.4],
@@ -213,7 +219,7 @@ function pondBridge(plot: ZonePlot): PartSpec[] {
     ...[-1, 1].flatMap((side) => [
       box(
         [side * plot.width * 0.14, plot.height * 0.23, 0],
-        [0.12, plot.height * 0.1, plot.depth * 0.9],
+        [0.12 - 2 * FACADE_LAYER_STEP_M, plot.height * 0.1, plot.depth * 0.9],
         plot.accent
       ),
       ...[-1, 1].map((end) =>

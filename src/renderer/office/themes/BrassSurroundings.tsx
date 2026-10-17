@@ -1,3 +1,4 @@
+import { FACADE_LAYER_STEP_M } from '../scene/building-window-parts'
 import type { Plot } from './lot-kit'
 import type { LotDesign } from './lot-parts'
 import { BRASS } from './palettes'
@@ -108,7 +109,8 @@ function foundry(plot: Plot): PartSpec[] {
   const bay = w / 3
   return [
     box([0, hall / 2, 0], [w, hall, d], wood),
-    ...corners(w, d, hall),
+    // flicker-1: the posts stand a layer step proud of the hall roof.
+    ...corners(w, d, hall + FACADE_LAYER_STEP_M),
     windows(hall * 0.7, w, d, hall * 0.2),
     ...[-1, 0, 1].map((step) =>
       box([step * bay, hall + 0.25, 0], [bay - 0.12, 0.5, d + 0.2], iron)

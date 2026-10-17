@@ -1,3 +1,4 @@
+import { FACADE_LAYER_STEP_M } from '../../scene/building-window-parts'
 import type { Vector } from '../primitives'
 import { box, turned, type PartSpec, lit, SIDES } from '../parts'
 import { GARRISON } from './palette'
@@ -55,7 +56,7 @@ const EXTRAS: Record<FrameKind, (livery: FrameLivery) => PartSpec[]> = {
   // A slab shield on the left forearm, a rifle slung on the pack and a comms mast.
   trooper: ({ trim }) => [
     box([-0.58, 1.15, 0.06], [0.05, 0.72, 0.42], trim),
-    box([-0.612, 1.22, 0.06], [0.02, 0.12, 0.42], GARRISON.orange),
+    box([-0.612, 1.22, 0.06], [0.02, 0.12, 0.42 + 2 * FACADE_LAYER_STEP_M], GARRISON.orange),
     box([0.28, 1.55, -0.38], [0.09, 0.9, 0.11], GARRISON.hull),
     rod([-0.1, 2.1, -0.06], [0.025, 0.28, 0.025], trim)
   ],

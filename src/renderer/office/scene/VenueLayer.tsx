@@ -4,6 +4,9 @@ import type { OfficeTheme, ThemePalette } from '../themes/types'
 import { FURNITURE_SCALE } from '../../../shared/office/figure-scale'
 import { loungeAsDrawn } from './FloorView'
 import { getTheme } from '../themes/registry'
+import { Parts } from '../themes/parts'
+import { venueLandmark, VENUE_SLAB_M } from '../themes/venue-landmarks'
+import { FACADE_LAYER_STEP_M } from './building-window-parts'
 import { BatchedScene } from './BatchedScene'
 import { isStillClick, trackPress } from './ZonePickers'
 
@@ -24,11 +27,15 @@ export function VenueLayer({
     () => JSON.stringify([venues, palette, theme?.id, areRoofsVisible]),
     [venues, palette, theme?.id, areRoofsVisible]
   )
+  const landmarks = useMemo(
+    () => venues.map((venue) => venueLandmark(venue, palette)),
+    [venues, palette]
+  )
   const Lounge = (theme ?? getTheme('corporate-city')).kit.zone.Lounge
   // Nothing in a venue moves or toggles between revisions, its lounge included (perf-1).
   return (
     <BatchedScene revision={revision} isStatic>
-      {venues.map((venue) => (
+      {venues.map((venue, index) => (
         <group
           key={venue.id}
           position={[venue.footprint.x, 0, venue.footprint.z]}
@@ -40,8 +47,8 @@ export function VenueLayer({
           }}
         >
           <mesh
-            position={[0, 0.08, 0]}
-            scale={[venue.footprint.width, 0.16, venue.footprint.depth]}
+            position={[0, VENUE_SLAB_M / 2, 0]}
+            scale={[venue.footprint.width, VENUE_SLAB_M, venue.footprint.depth]}
           >
             <boxGeometry args={[1, 1, 1]} />
             <meshStandardMaterial color={palette.stone} />
@@ -68,8 +75,9 @@ export function VenueLayer({
                   id: venue.id,
                   x: 0,
                   z: 0,
-                  width: venue.footprint.width,
-                  depth: venue.footprint.depth,
+                  // flicker-1: the lounge floor stops a step inside the slab's sides.
+                  width: venue.footprint.width - 2 * FACADE_LAYER_STEP_M,
+                  depth: venue.footprint.depth - 2 * FACADE_LAYER_STEP_M,
                   door: venue.entrance,
                   seats: venue.slots.map((slot) => ({ ...slot, slotId: slot.id }))
                 })}
@@ -109,6 +117,7 @@ export function VenueLayer({
                 )}
               </group>
             ))}
+          <Parts parts={landmarks[index]} />
         </group>
       ))}
     </BatchedScene>
