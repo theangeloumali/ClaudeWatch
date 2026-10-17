@@ -2,7 +2,7 @@ import { expect, it } from 'vitest'
 import { isWithin, lapOf } from '../movers.test-utils'
 import { twoOfficeCity } from './pedestrian.test-utils'
 
-// Where an office cuts a lot's street short, that lot's door lands on no kerb (two-office city).
+// Where an office cuts a lot's street short, that lot has no door (two-office city).
 it('never walks a citizen into an office to reach a lot whose street was cut short', () => {
   const { plan, trips } = twoOfficeCity()
   const citizens = trips.filter((trip) => trip.kind === 'citizen')
