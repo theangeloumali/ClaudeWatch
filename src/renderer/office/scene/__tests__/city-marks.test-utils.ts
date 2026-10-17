@@ -61,6 +61,7 @@ export function markFrame(options: {
     signals: citySignals(frame, createDayLedger(dayKey(NOW)), NOW),
     // Every test frame is its own signals, so no sites scan carries over.
     signalsVersion: (signalsVersion += 1),
+    placesVersion: places.version(),
     events: options.events ?? [],
     topOf: (id) => places.topAt(id, nowMs, options.isPinned ?? false),
     nowMs,
