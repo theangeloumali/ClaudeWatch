@@ -55,6 +55,10 @@ export interface InspectorLayout {
   arePanelsHidden?: boolean
 }
 
+// Phones keep their bottom sheet, so panels hide on wide and medium layouts only.
+export const canHidePanels = (viewportWidth: number): boolean =>
+  viewportWidth >= HUD_COLUMNS_BREAKPOINT
+
 export function inspectorSheetHeight(viewportHeight: number, isSheetOpen?: boolean): number {
   const maximum =
     isSheetOpen === undefined
@@ -83,7 +87,7 @@ export function hudSafeInsets(
   hasInspector: boolean,
   layout?: InspectorLayout
 ): typeof HUD_SAFE_INSETS {
-  if (layout?.arePanelsHidden && layout.viewportWidth >= HUD_COLUMNS_BREAKPOINT) {
+  if (layout?.arePanelsHidden && canHidePanels(layout.viewportWidth)) {
     return {
       left: 0,
       right: 0,

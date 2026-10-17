@@ -5,19 +5,22 @@ import type { WorldDocument } from '../../../shared/office/world-document'
 import { buildLayout } from '../../../office/sim/layout'
 import { resolveEffectiveWorld } from '../../../office/sim/effective-world'
 import { toFloorGeometry } from '../../office-live/layout-geometry'
-import { maskFloors, maskFrame, type RoleBook } from '../logic/role-names'
+import { maskFloors, type RoleBook } from '../logic/role-names'
 import { WorldEditor } from './WorldEditor'
 import { WorldTargetMenu } from './WorldTargetMenu'
 
 export function useWorldEditing({
   feed,
   frame,
+  visibleFrame,
   roles,
   onSelectAgent
 }: {
   feed: OfficeFeed
   // The real frame: a rebuilt city is saved from it, so it never saves a role.
   frame: OfficeFrame | null
+  // The frame on screen, already masked while names are hidden; the target menu reads it.
+  visibleFrame: OfficeFrame | null
   // Set while names are hidden: the dialog, its menu and the preview show roles.
   roles: RoleBook | null
   onSelectAgent: (key: string) => void
@@ -70,9 +73,9 @@ export function useWorldEditing({
             }}
           />
         )}
-        {menuTarget && frame && worldStore && (
+        {menuTarget && visibleFrame && worldStore && (
           <WorldTargetMenu
-            frame={roles ? maskFrame(frame, roles) : frame}
+            frame={visibleFrame}
             target={menuTarget}
             onClose={() => setMenuTarget(null)}
             onSelectAgent={onSelectAgent}

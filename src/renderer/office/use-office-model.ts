@@ -26,25 +26,47 @@ const isSameApartFromAgents = (a: OfficeFrame, b: OfficeFrame): boolean =>
     (field) => field === 'agents' || Object.is(Reflect.get(a, field), Reflect.get(b, field))
   )
 
+// The live feed already keyed the agents for its revision; a feed without one is keyed here.
+const structureOf = (frame: OfficeFrame): number | string =>
+  frame.structureRevision ?? structuralKey(frame.agents)
+
 // The frame as of its last structural change: a frame that only moved agents keeps it (perf-2).
 function useStructuralFrame(frame: OfficeFrame | null): OfficeFrame | null {
-  const kept = useRef<{ frame: OfficeFrame; agentsKey: string } | null>(null)
+  const kept = useRef<{ frame: OfficeFrame; structure: number | string } | null>(null)
   if (!frame) return null
-  const agentsKey = structuralKey(frame.agents)
+  const structure = structureOf(frame)
   const previous = kept.current
-  if (previous?.agentsKey === agentsKey && isSameApartFromAgents(previous.frame, frame))
+  if (previous?.structure === structure && isSameApartFromAgents(previous.frame, frame))
     return previous.frame
-  kept.current = { frame, agentsKey }
+  kept.current = { frame, structure }
   return frame
 }
 
-// The city's signals come from the real frame: they carry keys and numbers, never names.
+// Local midnight after `atMs`, when today's spend starts over.
+function nextMidnightMs(atMs: number): number {
+  const midnight = new Date(atMs)
+  midnight.setHours(24, 0, 0, 0)
+  return midnight.getTime()
+}
+
+// The city's signals come from the real frame: they carry keys and numbers, never names. They
+// change with a frame, when evidence turns fresh or stale, and at midnight; never on a tick.
 export function useCitySignalFeed(
   frame: OfficeFrame | null,
-  nowMs: number,
   store: CitySignalStore = citySignalStore
 ): void {
-  useEffect(() => store.update(frame, nowMs), [frame, nowMs, store])
+  const [wakes, setWakes] = useState(0)
+  useEffect(() => {
+    if (!frame) return
+    const nowMs = Date.now()
+    store.update(frame, nowMs)
+    const wakeAtMs = Math.min(
+      nextActivityChangeAtMs(frame, nowMs) ?? Infinity,
+      nextMidnightMs(nowMs)
+    )
+    const timer = setTimeout(() => setWakes(wakes + 1), wakeAtMs - nowMs)
+    return () => clearTimeout(timer)
+  }, [frame, store, wakes])
 }
 
 // The page's one role book while names are hidden, else null. One book, so the HUD, the scene

@@ -1,4 +1,4 @@
-import { memo } from 'react'
+import { memo, useSyncExternalStore } from 'react'
 import type { SessionRef } from '../../../shared/office/types'
 import { PLATE_TITLE_CLASS } from '../../components/deck/deck-styles'
 import { Plate } from '../../components/deck/Plate'
@@ -6,9 +6,8 @@ import { formatTokens } from '../../deck/tokens'
 import { citySignalStore, type CitySignalStore } from '../logic/city-signal-store'
 import { buildingIdOf, type LeaderRow, type Leaders } from '../logic/city-signals'
 import type { OfficeCompanyRow } from '../logic/zone-model'
+import { FlyRow } from './FlyRow'
 
-const LEADER_ROW_CLASS =
-  'flex min-h-11 w-full min-w-0 touch-manipulation flex-col justify-center gap-0.5 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-surface-hover'
 const STARTED = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' })
 
 interface Board {
@@ -71,8 +70,8 @@ function boardsOf(leaders: Leaders, sessions: readonly SessionRef[], companies: 
 
 function BoardRow({ board, onFlyToZone }: { board: Board; onFlyToZone: (id: string) => void }) {
   const { leader } = board
-  const body = (
-    <>
+  return (
+    <FlyRow zoneId={leader?.zoneId} onFlyToZone={onFlyToZone} className="gap-0.5 py-1">
       <span className="flex min-w-0 items-baseline justify-between gap-2 text-xs text-text-secondary">
         <span>{board.title}</span>
         <span className="shrink-0 tabular-nums text-accent">{leader?.value}</span>
@@ -84,20 +83,11 @@ function BoardRow({ board, onFlyToZone }: { board: Board; onFlyToZone: (id: stri
       ) : (
         <span className="text-body text-text-tertiary">No agents yet</span>
       )}
-    </>
-  )
-  const zoneId = leader?.zoneId
-  if (!zoneId) return <div className={LEADER_ROW_CLASS}>{body}</div>
-  return (
-    <button type="button" className={LEADER_ROW_CLASS} onClick={() => onFlyToZone(zoneId)}>
-      {body}
-    </button>
+    </FlyRow>
   )
 }
 
 interface LeadersCardProps {
-  // Bumps only when a leader or its value changes, so the card follows it, not the clock.
-  version: number
   sessions: readonly SessionRef[] | undefined
   companies: Offices
   onFlyToZone: (zoneId: string) => void
@@ -105,8 +95,10 @@ interface LeadersCardProps {
 }
 
 // The four races of the city, read at a glance; a row flies to its office as the Offices panel does.
+// It follows the store's version, so the Office's clock never re-renders it.
 export const LeadersCard = memo(function LeadersCard(props: LeadersCardProps) {
   const { sessions = [], companies, onFlyToZone, store = citySignalStore } = props
+  useSyncExternalStore(store.subscribe, store.version)
   const boards = boardsOf(store.current().leaders, sessions, companies)
   return (
     <nav aria-label="Leaders">

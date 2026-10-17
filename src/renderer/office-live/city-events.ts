@@ -11,10 +11,12 @@ import {
   type BuildingId,
   buildingIdOf,
   createDayLedger,
+  createDayLedgerStore,
   type DayLedger,
-  observeDay,
+  type DayLedgerStore,
   projectTokensToday
 } from '../office/logic/city-signals'
+import { pageDay } from '../office/logic/city-signal-store'
 import { milestoneStep, stageFor } from '../office/logic/token-spires'
 
 export type CityEventKind = 'milestone' | 'hoist' | 'dispatch' | 'done'
@@ -70,8 +72,9 @@ const isFresh = (session: SessionRef, atMs: number): boolean =>
 const buildingOf = (session: SessionRef): BuildingId =>
   buildingIdOf(session.companyKey, session.projectKey)
 
-// A hello is a baseline, never an edge: only a patch between two known states fires.
-export function createCityEventLog(): CityEventLog {
+// A hello is a baseline, never an edge: only a patch between two known states fires. The day is
+// the one the spires count, so a hoist rises with its spire.
+export function createCityEventLog(ledger: DayLedgerStore = createDayLedgerStore()): CityEventLog {
   let seen = new Map<string, SessionSeen>()
   let totals = new Map<BuildingId, number>()
   let day: DayLedger = createDayLedger('')
@@ -88,23 +91,26 @@ export function createCityEventLog(): CityEventLog {
   const forget = (nowMs: number): void => {
     for (const [id, atMs] of fired) if (nowMs - atMs >= FIRED_MEMORY_MS) fired.delete(id)
   }
+  // Edges first: most patches have none, and freshness is the dearer test.
   const sessionEdges = (session: SessionRef, atMs: number): void => {
     const previous = seen.get(session.key)
-    if (!previous || !isFresh(session, atMs)) return
-    const base = { buildingId: buildingOf(session), sessionKey: session.key, atMs }
+    if (!previous) return
     const now = seenOf(session)
-    if (now.attention === 'done' && previous.attention !== 'done')
-      fire({ ...base, id: `${session.key}:done:${session.updatedAtMs}`, kind: 'done' })
-    if (now.callId !== undefined && now.callId !== previous.callId && session.currentTool)
+    const isDone = now.attention === 'done' && previous.attention !== 'done'
+    const tool = now.callId !== undefined && now.callId !== previous.callId && session.currentTool
+    const step = milestoneStep(now.tokens)
+    const isMilestone = previous.tokens !== null && step > milestoneStep(previous.tokens)
+    if (!(isDone || tool || isMilestone) || !isFresh(session, atMs)) return
+    const base = { buildingId: buildingOf(session), sessionKey: session.key, atMs }
+    if (isDone) fire({ ...base, id: `${session.key}:done:${session.updatedAtMs}`, kind: 'done' })
+    if (tool)
       fire({
         ...base,
         id: `${session.key}:dispatch:${now.callId}`,
         kind: 'dispatch',
-        category: session.currentTool.category
+        category: tool.category
       })
-    const step = milestoneStep(now.tokens)
-    if (previous.tokens !== null && step > milestoneStep(previous.tokens))
-      fire({ ...base, id: `${session.key}:milestone:${step}`, kind: 'milestone' })
+    if (isMilestone) fire({ ...base, id: `${session.key}:milestone:${step}`, kind: 'milestone' })
   }
   const hoists = (
     sessions: readonly SessionRef[],
@@ -135,7 +141,7 @@ export function createCityEventLog(): CityEventLog {
         totals = new Map()
         return
       }
-      day = observeDay(day, sessions, atMs)
+      day = ledger.observe(sessions, atMs)
       const next = buildingTotals(sessions, { projectsToday, day, nowMs: atMs })
       if (type === 'patch') {
         for (const session of sessions) sessionEdges(session, atMs)
@@ -185,4 +191,4 @@ function leadCrew(
 }
 
 // The page's log: a module store like `officePoses`, fed once per feed message.
-export const cityEvents = createCityEventLog()
+export const cityEvents = createCityEventLog(pageDay)

@@ -14,7 +14,7 @@ import { INITIAL_OFFICE_STATE, officeReducer } from '../../logic/office-reducer'
 import { workstationFraming, workstationSeat } from '../../logic/workstation-framing'
 import { frameBounds, projectToScreen, screenAxes } from '../../logic/zone-framing'
 import { anchorTruck } from '../../logic/zoom-anchor'
-import { followStep as playerFollowStep } from '../../player/camera-follow'
+import { followSweep } from '../../player/camera-follow'
 import { WORKSTATIONS, workstationPlacement } from '../../themes/workstations'
 import { makeAgent, makeFloor, makeFrame, makeRoom } from '../fixtures'
 
@@ -197,7 +197,7 @@ describe('Workstation is a command, not a lock', () => {
 
   it('never brings a walking player back into a manually owned camera', () => {
     expect(
-      playerFollowStep({
+      followSweep({
         onScreen: { x: 5000, y: 5000 },
         viewport,
         zoom: 90,

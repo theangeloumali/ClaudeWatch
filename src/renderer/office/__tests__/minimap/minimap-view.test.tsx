@@ -10,7 +10,7 @@ import { Minimap } from '../../hud/Minimap'
 import { OfficeApp } from '../../OfficeApp'
 import type { OfficeFeed } from '../../scene-model'
 import type OfficeScene from '../../scene/OfficeScene'
-import { LEAD_KEY, makeMinimapFrame } from './minimap-fixtures'
+import { LEAD_KEY, makeMinimapFrame, MEMBER_KEY } from './minimap-fixtures'
 
 type SceneProps = ComponentProps<typeof OfficeScene>
 
@@ -186,5 +186,42 @@ describe('the live layer', () => {
     expect(dot?.getAttribute('cy')).toBe('-45')
     expect(footprint?.getAttribute('points')).not.toBe(footprintBefore)
     expect(commits).not.toHaveBeenCalled()
+  })
+
+  it('writes only the dots whose pose changed', () => {
+    vi.useFakeTimers()
+    officeView.write(VIEW)
+    officePoses.write(LEAD_KEY, { x: 101, z: -40, heading: 0, elevation: 0 })
+    officePoses.write(MEMBER_KEY, { x: 103, z: -41, heading: 0, elevation: 0 })
+    render(<Minimap {...minimapProps()} />)
+    act(() => void vi.advanceTimersByTime(300))
+    const still = document.querySelector<SVGElement>(`circle[data-agent-key="${MEMBER_KEY}"]`)
+    const writes = vi.spyOn(still!, 'setAttribute')
+    officePoses.write(LEAD_KEY, { x: 108, z: -46, heading: 0, elevation: 0 })
+    act(() => void vi.advanceTimersByTime(300))
+    expect(document.querySelector(`circle[data-agent-key="${LEAD_KEY}"]`)).toHaveAttribute(
+      'cx',
+      '108'
+    )
+    expect(writes).not.toHaveBeenCalled()
+  })
+
+  it('stands still while the page is hidden, and catches up when it shows', () => {
+    vi.useFakeTimers()
+    officeView.write(VIEW)
+    let isHidden = false
+    vi.spyOn(document, 'hidden', 'get').mockImplementation(() => isHidden)
+    render(<Minimap {...minimapProps()} />)
+    isHidden = true
+    act(() => void document.dispatchEvent(new Event('visibilitychange')))
+    const ticks = vi.getTimerCount()
+    officePoses.write(LEAD_KEY, { x: 109, z: -47, heading: 0, elevation: 0 })
+    act(() => void vi.advanceTimersByTime(1_000))
+    const dot = document.querySelector(`circle[data-agent-key="${LEAD_KEY}"]`)
+    expect(dot).not.toHaveAttribute('cx', '109')
+    expect(ticks).toBe(0)
+    isHidden = false
+    act(() => void document.dispatchEvent(new Event('visibilitychange')))
+    expect(dot).toHaveAttribute('cx', '109')
   })
 })

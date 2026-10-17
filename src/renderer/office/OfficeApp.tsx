@@ -18,9 +18,8 @@ import { canRespond } from './logic/interactions'
 import { INITIAL_OFFICE_STATE, officeReducer } from './logic/office-reducer'
 import { buildThemeRows, countThemeChoices, useThemeAssignments } from './logic/office-themes'
 import { findZone } from './logic/zone-model'
-import { HUD_COLUMNS_BREAKPOINT, HUD_GRID_STYLE } from './logic/hud-layout'
+import { canHidePanels, HUD_GRID_STYLE } from './logic/hud-layout'
 import { buildOperationsModel } from './logic/operations-model'
-import { citySignalStore } from './logic/city-signal-store'
 import { createFrameMetrics } from './frame-metrics'
 import { AgentActions } from './hud/AgentActions'
 import { PlayerControls } from './hud/PlayerControls'
@@ -126,14 +125,13 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
   const [navigationHeight, setNavigationHeight] = useState(0)
   const nowMs = useOfficeNow(OFFICE_BLURRED_TICK_MS)
 
-  // Phones keep their bottom sheet, so the panels hide on wide and medium layouts only.
-  const canHidePanels = inspectorController.layout.viewportWidth >= HUD_COLUMNS_BREAKPOINT
-  const arePanelsHidden = state.arePanelsHidden && canHidePanels
+  const isPanelHideAllowed = canHidePanels(inspectorController.layout.viewportWidth)
+  const arePanelsHidden = state.arePanelsHidden && isPanelHideAllowed
   const is3DAvailable = hasWebGL && !hasSceneFailed
   const isShowingList = state.isListView || !is3DAvailable
   useFeedSubscription(feed, dispatch)
 
-  useCitySignalFeed(state.frame, nowMs)
+  useCitySignalFeed(state.frame)
   const roles = useNameRoles()
   const frame = useVisibleFrame(state.frame, roles)
   const offices = useMemo(
@@ -244,7 +242,13 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
     dispatch({ type: 'zone-flown', zoneId: roomId })
   }
   // The editor works on real names, so a rebuilt city never saves a role.
-  const editing = useWorldEditing({ feed, frame: state.frame, roles, onSelectAgent: selectAgent })
+  const editing = useWorldEditing({
+    feed,
+    frame: state.frame,
+    visibleFrame: frame,
+    roles,
+    onSelectAgent: selectAgent
+  })
   const { previewFloors, worldStore } = editing
   const flyToAgent = useCallback(
     (agentKey: string) => dispatch({ type: 'agent-flown', agentKey }),
@@ -403,7 +407,6 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
               )}
               {!isShowingList && (
                 <CompanyCards
-                  version={citySignalStore.version()}
                   companies={companies}
                   palette={theme.palette}
                   onFlyToZone={goToZone}
@@ -439,12 +442,7 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
                   <summary className={`${BUTTON_QUIET_COMPACT_CLASS} min-[1100px]:hidden`}>
                     Leaders
                   </summary>
-                  <LeadersCard
-                    version={citySignalStore.version()}
-                    sessions={sessions}
-                    companies={companies}
-                    onFlyToZone={goToZone}
-                  />
+                  <LeadersCard sessions={sessions} companies={companies} onFlyToZone={goToZone} />
                 </details>
               )}
               <div className="max-[1099px]:hidden">
@@ -675,7 +673,9 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
             viewMode={state.viewMode}
             onView={(view) => dispatch({ type: 'view-set', view })}
             arePanelsHidden={arePanelsHidden}
-            onTogglePanels={canHidePanels ? () => dispatch({ type: 'panels-toggled' }) : undefined}
+            onTogglePanels={
+              isPanelHideAllowed ? () => dispatch({ type: 'panels-toggled' }) : undefined
+            }
           />
         </div>
       </div>

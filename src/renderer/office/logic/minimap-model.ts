@@ -4,6 +4,7 @@ import { floorEnvelope, physicalFloorId } from '../scene/all-floor-model'
 import { shownRailway } from '../town/railway-plan'
 import { railwayStations } from '../town/railway-stations'
 import type { FloorGeometry, OfficeFrame } from '../scene-model'
+import type { MapPoint } from './office-view'
 import { boundsOfZone, type Bounds } from './zone-framing'
 
 interface MinimapPlayer {
@@ -39,11 +40,6 @@ interface MinimapWorker extends MinimapPlayer {
   isSelected: boolean
 }
 
-interface MapPoint {
-  x: number
-  z: number
-}
-
 // The ring the scene draws, as a dashed line with its stations; city view only.
 interface MinimapRailway {
   ring: readonly MapPoint[]
@@ -58,6 +54,10 @@ export interface MinimapModel {
   workers: MinimapWorker[]
   player: MinimapPlayer | null
 }
+
+// Where `value` sits between `low` and `high`, as a CSS percentage on the map.
+export const percentAlong = (value: number, low: number, high: number): string =>
+  `${((value - low) / (high - low)) * 100}%`
 
 // dry-new: camera framing projects isometrically; this composes a north-up, world-metre map.
 export function buildMinimapModel(input: MinimapInput): MinimapModel {

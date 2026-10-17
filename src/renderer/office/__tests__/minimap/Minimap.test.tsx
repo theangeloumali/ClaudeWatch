@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { officePoses } from '../../../office-live/pose-store'
 import { Minimap, type MinimapProps } from '../../hud/Minimap'
 import { makeFrame } from '../fixtures'
 import {
@@ -191,6 +192,16 @@ describe('Minimap navigation', () => {
     expect(requestFrame).not.toHaveBeenCalled()
     expect(scheduleInterval).not.toHaveBeenCalled()
     expect(scheduleTimeout).not.toHaveBeenCalled()
+  })
+
+  it('a re-render with nothing new reuses the map model', () => {
+    const { props, rerender } = renderMinimap()
+    const reads = vi.spyOn(officePoses, 'read')
+    rerender(<Minimap {...props} onChooseRoom={vi.fn()} />)
+    expect(reads).not.toHaveBeenCalled()
+    officePoses.write(LEAD_KEY, { x: 107, z: -45, heading: 0, elevation: 0 })
+    rerender(<Minimap {...props} />)
+    expect(reads).toHaveBeenCalled()
   })
 
   it('handles empty geometry without serializing non-finite SVG coordinates', () => {

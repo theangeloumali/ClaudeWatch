@@ -1,8 +1,8 @@
-import { renderHook } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { act, renderHook } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentObservation, SessionRef, SessionUsage } from '../../../shared/office/types'
 import { buildingIdOf } from '../logic/city-signals'
-import { createCitySignalStore } from '../logic/city-signal-store'
+import { createCitySignalStore, useSpireStages } from '../logic/city-signal-store'
 import { useCitySignalFeed } from '../use-office-model'
 import { makeFrame, makeSession } from './fixtures'
 
@@ -64,6 +64,27 @@ describe('city signal store', () => {
     expect(heard).toBe(2)
   })
 
+  it("today's tokens rising alone move the HUD's version, never the scene's", () => {
+    const store = createCitySignalStore()
+    const spent = (tokens: number) =>
+      makeFrame({ sessions: [live('claude:a')], projectsToday: [{ projectKey: 'p_1', tokens }] })
+    store.update(spent(1_200_000), NOW)
+    const [version, sceneVersion] = [store.version(), store.sceneVersion()]
+    store.update(spent(1_300_000), NOW + 500)
+    expect(store.version()).toBe(version + 1)
+    expect(store.sceneVersion()).toBe(sceneVersion)
+    store.update(spent(2_100_000), NOW + 1_000)
+    expect(store.sceneVersion()).toBe(sceneVersion + 1)
+  })
+
+  it('the scene version moves when a building changes state', () => {
+    const store = createCitySignalStore()
+    store.update(makeFrame({ sessions: [live('claude:a')] }), NOW)
+    const sceneVersion = store.sceneVersion()
+    store.update(makeFrame({ sessions: [live('claude:a', { attention: 'permission' })] }), NOW)
+    expect(store.sceneVersion()).toBe(sceneVersion + 1)
+  })
+
   it('holds no signals before the first frame', () => {
     const store = createCitySignalStore()
     expect(store.current().buildings.size).toBe(0)
@@ -72,16 +93,91 @@ describe('city signal store', () => {
   })
 })
 
+describe('useSpireStages', () => {
+  it('keeps the same Map until a stage changes', () => {
+    const store = createCitySignalStore()
+    const frame = (tokens: number, overrides: Partial<SessionRef> = {}) =>
+      makeFrame({
+        sessions: [live('claude:a', overrides)],
+        projectsToday: [{ projectKey: 'p_1', tokens }]
+      })
+    store.update(frame(1_200_000), NOW)
+    const { result, rerender } = renderHook(() => useSpireStages(store))
+    const first = result.current
+    expect([...first]).toEqual([[HOME, 1]])
+    act(() => store.update(frame(1_300_000, { attention: 'permission' }), NOW))
+    rerender()
+    expect(result.current).toBe(first)
+    act(() => store.update(frame(2_100_000), NOW))
+    expect([...result.current]).toEqual([[HOME, 2]])
+  })
+})
+
 describe('the Office root feeds the city signals', () => {
+  afterEach(() => void vi.useRealTimers())
+
+  // Counts what the feed asks of the store; the store itself is real.
+  const countingStore = () => {
+    const store = createCitySignalStore()
+    const counted = { ...store, updates: 0 }
+    counted.update = (frame, nowMs) => {
+      counted.updates += 1
+      store.update(frame, nowMs)
+    }
+    return counted
+  }
+
   it('a new frame reaches the store, and a re-render with the same frame bumps nothing', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(NOW)
     const store = createCitySignalStore()
     const asking = makeFrame({ sessions: [live('claude:a', { attention: 'permission' })] })
-    const { rerender } = renderHook(({ frame, nowMs }) => useCitySignalFeed(frame, nowMs, store), {
-      initialProps: { frame: asking, nowMs: NOW }
+    const { rerender } = renderHook(({ frame }) => useCitySignalFeed(frame, store), {
+      initialProps: { frame: asking }
     })
     expect(store.current().buildings.get(HOME)?.needsYou).toBe(true)
     const version = store.version()
-    rerender({ frame: asking, nowMs: NOW })
+    rerender({ frame: asking })
     expect(store.version()).toBe(version)
+  })
+
+  it('an idle frame does not recompute the signals each second', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(NOW)
+    const store = countingStore()
+    const idle = makeFrame({ sessions: [live('claude:a')] })
+    const { rerender } = renderHook(() => useCitySignalFeed(idle, store))
+    for (let second = 1; second <= 5; second++) {
+      act(() => void vi.advanceTimersByTime(1_000))
+      rerender()
+    }
+    expect(store.updates).toBe(1)
+  })
+
+  it('a building turns stale on time with no new frame', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(NOW)
+    const store = createCitySignalStore()
+    renderHook(() => useCitySignalFeed(makeFrame({ sessions: [live('claude:a')] }), store))
+    expect(store.current().buildings.get(HOME)?.hasEvidence).toBe(true)
+    act(() => void vi.advanceTimersByTime(FRESH.staleAfterMs))
+    expect(store.current().buildings.get(HOME)?.hasEvidence).toBe(false)
+  })
+
+  it("at local midnight today's spend starts over with no new frame", () => {
+    const beforeMidnight = new Date(2026, 9, 17, 23, 59, 30).getTime()
+    vi.useFakeTimers()
+    vi.setSystemTime(beforeMidnight)
+    const store = createCitySignalStore()
+    const lasting = { ...FRESH, observedAtMs: beforeMidnight, staleAfterMs: 3_600_000 }
+    const session = live('claude:a', {
+      observation: lasting,
+      startedAtMs: beforeMidnight - 60_000,
+      usage: usage(1_500_000)
+    })
+    renderHook(() => useCitySignalFeed(makeFrame({ sessions: [session] }), store))
+    expect(store.current().buildings.get(HOME)?.spireStage).toBe(1)
+    act(() => void vi.advanceTimersByTime(30_000))
+    expect(store.current().buildings.get(HOME)?.spireStage).toBe(0)
   })
 })

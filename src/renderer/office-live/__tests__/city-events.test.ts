@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentObservation, SessionRef, SessionUsage } from '../../../shared/office/types'
-import { makeSession } from '../../office/__tests__/fixtures'
-import { buildingIdOf } from '../../office/logic/city-signals'
+import { makeFrame, makeSession } from '../../office/__tests__/fixtures'
+import { buildingIdOf, createDayLedgerStore } from '../../office/logic/city-signals'
+import { createCitySignalStore } from '../../office/logic/city-signal-store'
 import { CITY_EVENT_LIFE_MS, type CityEvent, cityEvents, createCityEventLog } from '../city-events'
 
 const T0 = new Date(2026, 9, 17, 12).getTime()
@@ -199,5 +200,36 @@ describe('cityEvents', () => {
 
   it('the page has one shared log', () => {
     expect(cityEvents.active(T0)).toEqual([])
+  })
+})
+
+// A hidden window sends no frames, so the store first counts a session long after the log did.
+describe('one day for hoists and spires', () => {
+  const YESTERDAY = T0 - 24 * 60 * MINUTE
+  const spent = (atMs: number, tokens: number): SessionRef =>
+    at(atMs, { startedAtMs: YESTERDAY, usage: usage(tokens) })
+  const hoists = (log: ReturnType<typeof createCityEventLog>): CityEvent[] =>
+    log.active(T0 + 2).filter((event) => event.kind === 'hoist')
+
+  it('a hoist fires exactly when the building’s spire stage rises', () => {
+    const ledger = createDayLedgerStore()
+    const log = createCityEventLog(ledger)
+    const store = createCitySignalStore(ledger)
+    log.observe('hello', [spent(T0, 900_000)], T0)
+    log.observe('patch', [spent(T0 + 1, 1_950_000)], T0 + 1)
+    store.update(makeFrame({ sessions: [spent(T0 + 1, 1_950_000)] }), T0 + 1)
+    expect(hoists(log)).toHaveLength(1)
+    expect(store.current().buildings.get(HOME)?.spireStage).toBe(1)
+  })
+
+  it('a hello re-seeds the shared day and fires nothing', () => {
+    const ledger = createDayLedgerStore()
+    const log = createCityEventLog(ledger)
+    const store = createCitySignalStore(ledger)
+    log.observe('hello', [spent(T0, 900_000)], T0)
+    log.observe('hello', [spent(T0 + 1, 1_950_000)], T0 + 1)
+    store.update(makeFrame({ sessions: [spent(T0 + 1, 1_950_000)] }), T0 + 1)
+    expect(hoists(log)).toEqual([])
+    expect(store.current().buildings.get(HOME)?.spireStage).toBe(1)
   })
 })

@@ -110,6 +110,8 @@ export interface OfficeFrame {
   projectsToday?: readonly ProjectTokens[]
   feedReceivedAtMs?: number
   feedRevision?: number
+  // Moves when the agents change in anything but their poses; absent from feeds that keep none.
+  structureRevision?: number
   worldRevision?: number
   venues?: readonly WorldVenue[]
 }

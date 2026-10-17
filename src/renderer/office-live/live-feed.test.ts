@@ -207,6 +207,27 @@ describe('createLiveFeed', () => {
     expect(frames).toHaveLength(settled)
   })
 
+  it('a frame’s structure revision moves only when the agents’ structure does', () => {
+    const frames: OfficeFrame[] = []
+    createLiveFeed(source, { storage: store }).subscribe((frame) => frames.push(frame))
+    listener?.({
+      type: 'hello',
+      v: 1,
+      snapshot: { rev: 1, generatedAtMs: 1, sessions: [session('claude:a')], sources: [] }
+    })
+    vi.advanceTimersByTime(300_000)
+    const settled = frames.at(-1)!
+    expect(settled.structureRevision).toEqual(expect.any(Number))
+    const quiet = { ...session('claude:a'), updatedAtMs: 2 }
+    listener?.({ type: 'patch', v: 1, seq: 2, upserts: [quiet], removed: [] })
+    vi.advanceTimersByTime(200)
+    expect(frames.at(-1)).not.toBe(settled)
+    expect(frames.at(-1)?.structureRevision).toBe(settled.structureRevision)
+    listener?.({ type: 'patch', v: 1, seq: 3, upserts: [session('claude:b')], removed: [] })
+    vi.advanceTimersByTime(200)
+    expect(frames.at(-1)?.structureRevision).toBeGreaterThan(settled.structureRevision ?? 0)
+  })
+
   it('hands the scene the same floors until the floor itself changes', () => {
     const frames: OfficeFrame[] = []
     createLiveFeed(source, { storage: store }).subscribe((frame) => frames.push(frame))

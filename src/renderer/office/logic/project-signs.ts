@@ -68,36 +68,35 @@ export const signInk = (board: string): string =>
   contrastRatio(SIGN_INK, board) >= ICON_CONTRAST ? SIGN_INK : SIGN_PAPER
 
 export interface ProjectSigns {
-  sign(buildingId: BuildingId): SignState | null
   all(): ReadonlyMap<BuildingId, SignState | null>
   // Bumps only when a sign's icon or tint changed.
   version(): number
 }
 
+const isSameSign = (a: SignState | null, b: SignState | null): boolean =>
+  a?.icon === b?.icon && a?.tint === b?.tint
+
+// Rebuilt only when the scene's signals moved: today's tokens alone never redraw a sign.
 export function createProjectSigns(
-  signals: Pick<CitySignalStore, 'current' | 'version'>
+  signals: Pick<CitySignalStore, 'current' | 'sceneVersion'>
 ): ProjectSigns {
   let readVersion: number | null = null
   let signs: ReadonlyMap<BuildingId, SignState | null> = new Map()
-  let print = '[]'
   let version = 0
   const refresh = (): void => {
-    if (signals.version() === readVersion) return
-    readVersion = signals.version()
+    if (signals.sceneVersion() === readVersion) return
+    readVersion = signals.sceneVersion()
     const next = new Map(
       [...signals.current().buildings].map(([id, signal]) => [id, signFor(signal)])
     )
-    const nextPrint = JSON.stringify([...next])
-    if (nextPrint === print) return
-    print = nextPrint
+    const isSame =
+      next.size === signs.size &&
+      [...next].every(([id, sign]) => signs.has(id) && isSameSign(sign, signs.get(id) ?? null))
+    if (isSame) return
     signs = next
     version += 1
   }
   return {
-    sign: (buildingId) => {
-      refresh()
-      return signs.get(buildingId) ?? null
-    },
     all: () => {
       refresh()
       return signs
