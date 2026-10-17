@@ -26,6 +26,7 @@ import { placements, type Placement } from './placements'
 import { FloorRoutes, floorElevation } from './world-floor-routes'
 import { reconcileLeisure } from './world-leisure'
 import { seatAtDesk } from './world-recall'
+import { TickCrowd } from './tick-crowd'
 import {
   recoverWorkerRoute,
   resumeUnseatedWorker,
@@ -270,12 +271,6 @@ export class World {
     return agent
   }
 
-  private bodies(): BodyFootprint[] {
-    return [...this.agents.values()]
-      .map((agent) => agentBody(agent.view))
-      .concat(this.bodyObstacles)
-  }
-
   // Sends waiting agents to a free lounge seat, sitters to a seat the map moved, and sitters
   // whose seat is gone back to their desks.
   private seatLounges(): void {
@@ -303,16 +298,11 @@ export class World {
     this.bodyObstacles = bodies.map((body) => ({ ...body }))
   }
 
-  private moveAgent(agent: AgentRecord): AgentRecord {
+  // Steps one agent and brings its entry in this tick's crowd up to date.
+  private moveAgent(agent: AgentRecord, crowd: TickCrowd): AgentRecord {
     agent = resumeUnseatedWorker(agent, this.routes, this.map.floors)
-    if (agent.path.length === 0) return tickAgent(agent, TICK_MS)
-    const obstacles = this.bodies()
-    const walkers = [...this.agents.values()].flatMap((walker) => {
-      const to = walker.path.find(
-        (point) => Math.hypot(point.x - walker.view.x, point.z - walker.view.z) > 1e-8
-      )
-      return to ? [{ body: agentBody(walker.view), to }] : []
-    })
+    if (agent.path.length === 0) return crowd.updated(tickAgent(agent, TICK_MS))
+    const { bodies: obstacles, walkers } = crowd
     let hasYielded = false
     const next = tickAgent(agent, TICK_MS, (from, to) => {
       const navigation = workerNavigation({ routes: this.routes, from })
@@ -370,7 +360,7 @@ export class World {
       }
       this.recovery.retried(key)
     }
-    return next
+    return crowd.updated(next)
   }
 
   // Work calls it home: it walks when its desk is on its floor, else fades to reappear there.
@@ -397,14 +387,15 @@ export class World {
   }
 
   // A desk another body stands on keeps it faded until the next tick.
-  private seatRecalled(key: string, agent: AgentRecord): void {
-    const seated = seatAtDesk(agent, this.map.floors, this.bodies())
+  private seatRecalled(key: string, agent: AgentRecord, crowd: TickCrowd): void {
+    const seated = seatAtDesk(agent, this.map.floors, crowd.bodies)
     if (!seated) return
-    this.agents.set(key, seated)
+    this.agents.set(key, crowd.updated(seated))
     this.fading.delete(key)
   }
 
-  private remove(key: string): void {
+  private remove(key: string, crowd: TickCrowd): void {
+    crowd.remove(key)
     this.agents.delete(key)
     this.recovery.clear(key)
     this.passages.clear(key)
@@ -422,12 +413,13 @@ export class World {
       this.steppable = new Set()
       const ordered = [...this.agents].sort(([first], [second]) => first.localeCompare(second))
       const offset = this.movementTick++ % Math.max(1, ordered.length)
+      const crowd = new TickCrowd([...this.agents.values()], this.bodyObstacles)
       for (const [key, agent] of [...ordered.slice(offset), ...ordered.slice(0, offset)]) {
         const fadedMs = this.fading.get(key)
-        if (fadedMs === undefined) this.agents.set(key, this.moveAgent(agent))
+        if (fadedMs === undefined) this.agents.set(key, this.moveAgent(agent, crowd))
         else if (fadedMs + TICK_MS < DEPARTURE_FADE_MS) this.fading.set(key, fadedMs + TICK_MS)
-        else if (agent.state === 'leaving') this.remove(key)
-        else this.seatRecalled(key, agent)
+        else if (agent.state === 'leaving') this.remove(key, crowd)
+        else this.seatRecalled(key, agent, crowd)
       }
       this.seatLounges()
       this.accumulatedMs -= TICK_MS
