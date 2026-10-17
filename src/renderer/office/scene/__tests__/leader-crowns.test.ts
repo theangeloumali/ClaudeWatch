@@ -18,6 +18,7 @@ import {
 import { createCitySignalStore } from '../../logic/city-signal-store'
 import { CITY_LAYER_BUDGET, measureLayer } from '../../themes/city-layer-budget.test-utils'
 import { listThemes, themeForTeam } from '../../themes/registry'
+import { MARK_RISE_M } from '../city-marks'
 import { CARD_HEIGHT } from '../CardProjector'
 import { coplanarConflicts, partBoxes } from './coplanar.test-utils'
 import {
@@ -30,6 +31,10 @@ import {
 const NOW = new Date(2026, 9, 17, 12).getTime()
 const VIEW = { width: 1280, height: 800 }
 const ZOOMS = [0.5, 2, BAND_ZOOM.building, 20, BAND_ZOOM.floor, BAND_ZOOM.desk, MAX_INSPECTION_ZOOM]
+// Where 12 m of headroom holds a crown above a full card; further out the ceiling wins.
+const CARD_ZOOMS = new Set([20, BAND_ZOOM.floor, BAND_ZOOM.desk, MAX_INSPECTION_ZOOM])
+// Below 14 px ÷ 19 m (zoom ≈ 0.74) a 0.6-tall crown would clear MARK_RISE_M, so metres cap it.
+const CAPPED_ZOOMS = new Set([0.5])
 const palette = themeForTeam().palette
 
 function cameraAt(azimuth: number, zoom: number): OrthographicCamera {
@@ -75,11 +80,11 @@ interface ShownCrown {
 }
 
 function crownsShown(layer: ReturnType<typeof createLeaderCrownsLayer>): ShownCrown[] {
-  const bounds = new Box3()
-  for (const part of crownParts(palette))
-    bounds.union(
-      new Box3().setFromCenterAndSize(new Vector3(...part.at), new Vector3(...part.size))
-    )
+  // The drawn geometry, centred on the crown's middle, not the parts' unshifted spec.
+  const { geometry } = layer.mesh
+  geometry.computeBoundingBox()
+  const bounds = geometry.boundingBox
+  if (!bounds) throw new Error('a crown geometry has bounds')
   const local = [bounds.min.x, bounds.max.x].flatMap((x) =>
     [bounds.min.y, bounds.max.y].flatMap((y) =>
       [bounds.min.z, bounds.max.z].map((z) => new Vector3(x, y, z))
@@ -175,12 +180,42 @@ describe('leader crowns', () => {
         layer.update(crownFrame({ crowned: ['claude:a'], agents: agentsOf(leader), camera }))
         const [crown] = crownsShown(layer)
         const { width, bottom } = screenRect(crown, camera)
-        expect(width).toBeGreaterThanOrEqual(14 - 1e-3)
+        if (!CAPPED_ZOOMS.has(zoom)) expect(width).toBeGreaterThanOrEqual(14 - 1e-3)
         expect(width).toBeLessThanOrEqual(32 + 1e-3)
         const card = new Vector3(3, 5.5 + CARD_HEIGHT, -2).project(camera)
         const cardTop = ((1 - card.y) / 2) * VIEW.height - NAME_CARD_MAX_PX
-        expect(bottom).toBeLessThan(cardTop)
+        if (CARD_ZOOMS.has(zoom)) expect(bottom).toBeLessThan(cardTop)
       }
+  })
+
+  it('a crown never rises more than MARK_RISE_M over its roof, or its card when it roams', () => {
+    const places = createBuildingPlaces()
+    places.setRoof('home', { x: 3, y: 12, z: -2 })
+    const seated = makeAgent({ agentKey: 'claude:a', x: 3, z: -2, elevation: 5.5 })
+    const roamer = makeAgent({ agentKey: 'claude:b', x: 9, z: 4, venueId: 'venue:arcade' })
+    for (const zoom of ZOOMS) {
+      const camera = cameraAt(ISO_START_AZIMUTH, zoom)
+      const layer = createLeaderCrownsLayer(palette)
+      layer.update(
+        crownFrame({
+          crowned: ['claude:a', 'claude:b'],
+          agents: agentsOf(seated, roamer),
+          buildingOf: (key) => (key === 'claude:a' ? 'home' : null),
+          places,
+          camera
+        })
+      )
+      const crowns = crownsShown(layer)
+      const [overRoof, overRoamer] = crowns.map((crown) =>
+        Math.max(...crown.corners.map((corner) => corner.y))
+      )
+      expect(overRoof).toBeLessThanOrEqual(12 + MARK_RISE_M + 1e-6)
+      expect(Math.min(...crowns[0].corners.map((corner) => corner.y))).toBeGreaterThan(12)
+      expect(overRoamer).toBeLessThanOrEqual(CARD_HEIGHT + MARK_RISE_M + 1e-6)
+      // Out here the caps bind: card clearance would lift the crown past its ceiling.
+      if (!CARD_ZOOMS.has(zoom)) expect(overRoamer).toBeCloseTo(CARD_HEIGHT + MARK_RISE_M)
+      if (CAPPED_ZOOMS.has(zoom)) expect(screenRect(crowns[1], camera).width).toBeLessThan(14)
+    }
   })
 
   it('nobody wears a crown before a token is spent today, and a zero never wins one', () => {

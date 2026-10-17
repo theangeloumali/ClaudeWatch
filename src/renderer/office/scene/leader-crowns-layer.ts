@@ -20,6 +20,7 @@ import type { BuildingPlaces } from '../logic/building-place'
 import { box, type PartSpec } from '../themes/parts'
 import type { ThemePalette } from '../themes/types'
 import { CARD_HEIGHT } from './CardProjector'
+import { MARK_RISE_M } from './city-marks'
 
 const CROWNS = 3
 const CROWN_M = 2.4
@@ -31,9 +32,11 @@ const CROWN_HEIGHT = 0.6
 export const NAME_CARD_MAX_PX = 72
 const CARD_GAP_PX = 6
 const ROOF_LIFT_M = 0.6
+// The horizon clips past MARK_RISE_M, so far out the metre cap beats MIN_PX (zoom < ~0.74).
+const MAX_CROWN_M = (MARK_RISE_M - ROOF_LIFT_M) / CROWN_HEIGHT
 
 const crownSizeM = (zoom: number): number =>
-  Math.min(MAX_PX / zoom, Math.max(MIN_PX / zoom, CROWN_M))
+  Math.min(MAX_CROWN_M, MAX_PX / zoom, Math.max(MIN_PX / zoom, CROWN_M))
 
 // One unit across, its front toward +z: a band with corner posts and spikes, a gem front and back.
 export function crownParts({ gold, glow }: ThemePalette): PartSpec[] {
@@ -109,9 +112,11 @@ export function createLeaderCrownsLayer(palette: ThemePalette) {
   ]
   const turn = new Quaternion()
 
-  // Centre height that keeps the whole crown above its card on screen, and above its own roof.
+  // Centre height that keeps the whole crown above its card on screen and its own roof, and
+  // within MARK_RISE_M of the roof (or the card top off it); far out the ceiling wins.
   const pose = (agent: AgentView, frame: CrownFrame, zoom: number): Matrix4 => {
     const size = crownSizeM(zoom)
+    const half = (size * CROWN_HEIGHT) / 2
     const at = livePose(frame.poses, agent)
     cameraUp.copy(UP).applyQuaternion(frame.camera.quaternion)
     frame.camera.getWorldDirection(toCamera).negate()
@@ -122,12 +127,14 @@ export function createLeaderCrownsLayer(palette: ThemePalette) {
       )
     )
     const clearance = (NAME_CARD_MAX_PX + CARD_GAP_PX) / zoom
-    let y = at.elevation + CARD_HEIGHT + (clearance - lowest) / cameraUp.y
+    const cardTop = at.elevation + CARD_HEIGHT
+    let y = cardTop + (clearance - lowest) / cameraUp.y
     const buildingId = isAtDesk(agent) ? frame.buildingOf(agent.agentKey) : null
     const roof = buildingId
       ? frame.places.place(buildingId).topAt(frame.nowMs, frame.isPinned)
       : null
-    if (roof) y = Math.max(y, roof.y + ROOF_LIFT_M + (size * CROWN_HEIGHT) / 2)
+    if (roof) y = Math.max(y, roof.y + ROOF_LIFT_M + half)
+    y = Math.min(y, (roof?.y ?? cardTop) + MARK_RISE_M - half)
     return matrix.compose(centre.set(at.x, y, at.z), turn, scale.setScalar(size))
   }
 
