@@ -3,11 +3,9 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { Object3D, RingGeometry, type InstancedMesh } from 'three'
 import { cityEvents } from '../../office-live/city-events'
 import { workTripStore } from '../../office-live/work-trip-store'
-import { cityClock } from '../logic/city-clock'
-import { levelInUse } from '../logic/quality'
 import { groundHeight } from '../player/walk-ground'
 import type { Player } from '../player/walking'
-import { useQualityChoice } from '../quality-store'
+import { useQualityLevel } from '../quality-store'
 import type { FloorGeometry } from '../scene-model'
 import { getTheme } from '../themes/registry'
 import type { OfficeTheme } from '../themes/types'
@@ -51,8 +49,7 @@ export function MoverLayer(props: MoverLayerProps) {
   const { hasVehicles } = props
   const bodies = useMemo(() => props.bodies ?? new SceneBodies(), [props.bodies])
   const ground = useMemo(() => citizenGround(plan), [plan])
-  const { pin, chosen } = useQualityChoice()
-  const detail = levelInUse(pin, chosen)
+  const detail = useQualityLevel()
   const trips = useMemo(() => {
     return townTrips({ plan, floorThemeId: floorTheme.id, detail, hasVehicles })
   }, [plan, floorTheme.id, detail, hasVehicles])
@@ -176,8 +173,7 @@ export function MoverLayer(props: MoverLayerProps) {
   }, [clock, bodies, trips, ground])
   useFrame((_state, deltaSec) => {
     if (isReducedMotion) return
-    const nowMs = cityClock.now()
-    for (const request of workTripStore.take(cityEvents.active(nowMs))) fleet.dispatch(request)
+    for (const request of workTripStore.take(cityEvents.active())) fleet.dispatch(request)
     place(Math.min(deltaSec, MAX_STEP_SEC))
   })
 

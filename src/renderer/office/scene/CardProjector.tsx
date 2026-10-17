@@ -17,8 +17,8 @@ import { livePose, officePoses } from '../../office-live/pose-store'
 import type { FloorGeometry } from '../scene-model'
 import { agentElevation, floorElevation } from './all-floor-model'
 import { findZone } from '../logic/zone-model'
-import { levelInUse, type QualityLevel } from '../logic/quality'
-import { useQualityChoice } from '../quality-store'
+import type { QualityLevel } from '../logic/quality'
+import { useQualityLevel } from '../quality-store'
 import { readCanvasObstacles } from './canvas-obstacles'
 
 // Over an agent's head (scene/Robot.tsx draws agents 1.65 m tall).
@@ -95,8 +95,7 @@ export function CardProjector({
 }: CardProjectorProps) {
   const point = useMemo(() => new Vector3(), [])
   const measurementRevision = useRef(0)
-  const { pin, chosen } = useQualityChoice()
-  const deskCardCap = DESK_CARD_CAP[levelInUse(pin, chosen)]
+  const deskCardCap = DESK_CARD_CAP[useQualityLevel()]
   const overflow = useRef<HTMLElement | null>(null)
   useEffect(() => () => overflow.current?.remove(), [])
   const heights = useMemo(

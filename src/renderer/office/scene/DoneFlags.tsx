@@ -1,6 +1,7 @@
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo } from 'react'
 import { Color, DoubleSide, MeshLambertMaterial, Vector3, type BufferGeometry } from 'three'
+import { useQualityLevel } from '../quality-store'
 import { CITY_EVENT_LIFE_MS } from '../../office-live/city-events'
 import { box, citizenGeometry, tube } from '../citizens/figure-parts'
 import type { ZoomBand } from '../logic/camera-bands'
@@ -14,7 +15,6 @@ import {
   markSites,
   readCityMarks,
   screenMetres,
-  useMarkLevel,
   type CityMarkFrame,
   type MarkMesh
 } from './city-marks'
@@ -107,5 +107,5 @@ function FlagMesh({ palette, band }: DoneFlagsProps) {
 }
 
 export function DoneFlags(props: DoneFlagsProps) {
-  return isMarkLevel(useMarkLevel()) ? <FlagMesh {...props} /> : null
+  return isMarkLevel(useQualityLevel()) ? <FlagMesh {...props} /> : null
 }

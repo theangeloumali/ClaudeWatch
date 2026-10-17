@@ -141,7 +141,7 @@ export function useAttentionAnnouncement(
     const previous = previousRef.current
     previousRef.current = queue
     const added = newAttentionItems(previous ?? [], queue)
-    const live = events.active(Date.now())
+    const live = events.active()
     const fresh = live.filter((event) => !wordedRef.current.has(event.id))
     wordedRef.current = new Set(live.map((event) => event.id))
     const isBaseline = previous === null

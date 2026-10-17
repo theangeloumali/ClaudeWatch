@@ -11,8 +11,8 @@ import {
   type FrameGovernor as Governor,
   type FramePace
 } from '../logic/frame-governor'
-import { levelForMachine, levelInUse } from '../logic/quality'
-import { chooseQuality, machineHints, useQualityChoice, watchQuality } from '../quality-store'
+import { levelForMachine } from '../logic/quality'
+import { chooseQuality, machineHints, useQualityLevel, watchQuality } from '../quality-store'
 
 const SMOOTHING = 0.1
 const INPUT_EVENTS = ['pointerdown', 'wheel', 'keydown'] as const
@@ -182,8 +182,7 @@ function countBufferUploads(
 // stopped drawing and its stats went stale.
 export function MetricsProbe({ metrics }: { metrics: FrameMetrics }) {
   const renderer = useThree((state) => state.gl)
-  const { pin, chosen } = useQualityChoice()
-  const quality = levelInUse(pin, chosen)
+  const quality = useQualityLevel()
   const written = useMemo(() => new Map<string, string>(), [])
   const lastSampleMs = useRef(Number.NEGATIVE_INFINITY)
   const uploadedBytes = useRef(0)

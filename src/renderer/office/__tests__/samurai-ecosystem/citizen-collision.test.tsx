@@ -40,7 +40,8 @@ vi.mock('@react-three/fiber', () => ({
 }))
 vi.mock('@react-three/drei', () => ({ CameraControlsImpl: class {} }))
 vi.mock('../../quality-store', () => ({
-  useQualityChoice: () => ({ pin: 'full', chosen: 'full' })
+  useQualityChoice: () => ({ pin: 'full', chosen: 'full' }),
+  useQualityLevel: () => 'full'
 }))
 
 beforeEach(() => {

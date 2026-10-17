@@ -14,8 +14,7 @@ import type { SceneBox, ZoomBand } from '../logic/camera-bands'
 import { cityClock } from '../logic/city-clock'
 import { citySignalStore } from '../logic/city-signal-store'
 import type { BuildingSignal, CitySignals } from '../logic/city-signals'
-import { levelInUse, type QualityLevel } from '../logic/quality'
-import { useQualityChoice } from '../quality-store'
+import type { QualityLevel } from '../logic/quality'
 
 // What every city mark reads in one drawn frame: the live signals, events and roofs.
 export interface CityMarkFrame {
@@ -29,13 +28,12 @@ export interface CityMarkFrame {
   band: ZoomBand
 }
 
-// Reduced motion pins the city clock, so events still live and end on the wall clock.
 export function readCityMarks(band: ZoomBand, zoom: number): CityMarkFrame {
   const nowMs = cityClock.now()
   const isPinned = cityClock.isPinned()
   return {
     signals: citySignalStore.current(),
-    events: cityEvents.active(isPinned ? Date.now() : nowMs),
+    events: cityEvents.active(),
     topOf: (buildingId) => buildingPlace(buildingId).topAt(nowMs, isPinned),
     nowMs,
     isPinned,
@@ -46,11 +44,6 @@ export function readCityMarks(band: ZoomBand, zoom: number): CityMarkFrame {
 
 // Effects go first when the machine struggles; the state still shows on cards and gems.
 export const isMarkLevel = (level: QualityLevel): boolean => level !== 'light'
-
-export function useMarkLevel(): QualityLevel {
-  const { pin, chosen } = useQualityChoice()
-  return levelInUse(pin, chosen)
-}
 
 // A crown stands at most this far over its top storey; a spec pins it for every theme.
 export const CROWN_RISE_MAX_M = 3

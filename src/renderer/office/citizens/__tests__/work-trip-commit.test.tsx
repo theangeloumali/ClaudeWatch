@@ -22,7 +22,8 @@ vi.mock('@react-three/fiber', () => ({
   useFrame: (callback: FrameCallback) => void frames.callbacks.push(callback)
 }))
 vi.mock('../../quality-store', () => ({
-  useQualityChoice: () => ({ pin: 'full', chosen: 'full' })
+  useQualityChoice: () => ({ pin: 'full', chosen: 'full' }),
+  useQualityLevel: () => 'full'
 }))
 vi.mock('../../../office-live/city-events', () => ({
   cityEvents: { active: () => live.events, version: () => live.events.length }

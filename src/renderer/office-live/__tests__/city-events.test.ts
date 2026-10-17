@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentObservation, SessionRef, SessionUsage } from '../../../shared/office/types'
 import { makeSession } from '../../office/__tests__/fixtures'
 import { buildingIdOf } from '../../office/logic/city-signals'
@@ -30,6 +30,8 @@ const at = (atMs: number, overrides: Partial<SessionRef> = {}): SessionRef =>
     startedAtMs: T0 - 60_000,
     ...overrides
   })
+
+afterEach(() => void vi.useRealTimers())
 
 describe('cityEvents', () => {
   it('a hello or resync re-seeds and fires nothing', () => {
@@ -181,6 +183,18 @@ describe('cityEvents', () => {
     log.observe('patch', [at(T0 + 1, { attention: 'done' })], T0 + 1)
     expect(log.active(T0 + CITY_EVENT_LIFE_MS.done)).toHaveLength(1)
     expect(log.active(T0 + 1 + CITY_EVENT_LIFE_MS.done)).toEqual([])
+  })
+
+  // Reduced motion stills the city clock; an event must still end, so it ages on the wall.
+  it('read with no time, an event ages on the wall clock', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(T0 + 1)
+    const log = createCityEventLog()
+    log.observe('hello', [at(T0, { attention: 'none' })], T0)
+    log.observe('patch', [at(T0 + 1, { attention: 'done' })], T0 + 1)
+    expect(log.active()).toHaveLength(1)
+    vi.setSystemTime(T0 + 1 + CITY_EVENT_LIFE_MS.done)
+    expect(log.active()).toEqual([])
   })
 
   it('the page has one shared log', () => {

@@ -23,7 +23,8 @@ vi.mock('react', async (original) => ({
 }))
 vi.mock('@react-three/fiber', () => ({ useFrame: () => {} }))
 vi.mock('../quality-store', () => ({
-  useQualityChoice: () => ({ pin: level.inUse, chosen: level.inUse })
+  useQualityChoice: () => ({ pin: level.inUse, chosen: level.inUse }),
+  useQualityLevel: () => level.inUse
 }))
 
 const edo = getTheme('neo-edo-steam')

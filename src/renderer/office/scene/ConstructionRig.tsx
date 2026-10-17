@@ -3,8 +3,7 @@ import { useEffect, useMemo } from 'react'
 import { cityEvents } from '../../office-live/city-events'
 import { buildingPlaces } from '../logic/building-place'
 import { cityClock } from '../logic/city-clock'
-import { levelInUse } from '../logic/quality'
-import { readQuality } from '../quality-store'
+import { readQualityLevel } from '../quality-store'
 import type { FloorGeometry } from '../scene-model'
 import type { OfficeTheme } from '../themes/types'
 import { createConstructionRigLayer } from './construction-rig-layer'
@@ -27,15 +26,13 @@ export function ConstructionRig({
   useFrame(() => {
     const nowMs = cityClock.now()
     const isPinned = cityClock.isPinned()
-    const { pin, chosen } = readQuality()
     layer.update({
-      // Reduced motion stills the city clock; events still age and end on the wall clock.
-      events: cityEvents.active(isPinned ? Date.now() : nowMs),
+      events: cityEvents.active(),
       floorsOf: (buildingId) => buildings.get(buildingId),
       places: buildingPlaces,
       nowMs,
       isPinned,
-      level: levelInUse(pin, chosen)
+      level: readQualityLevel()
     })
   })
   return <primitive object={layer.group} />

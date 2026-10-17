@@ -10,7 +10,8 @@ import { DoneFlags } from '../DoneFlags'
 const harness = vi.hoisted(() => ({ level: 'full', frames: 0 }))
 vi.mock('@react-three/fiber', () => ({ useFrame: () => void (harness.frames += 1) }))
 vi.mock('../../quality-store', () => ({
-  useQualityChoice: () => ({ pin: harness.level, chosen: 'full' })
+  useQualityChoice: () => ({ pin: harness.level, chosen: 'full' }),
+  useQualityLevel: () => harness.level
 }))
 
 const palette = listThemes()[0].palette

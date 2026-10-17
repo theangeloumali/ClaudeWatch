@@ -1,6 +1,7 @@
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo } from 'react'
 import { BoxGeometry, Color, MeshLambertMaterial } from 'three'
+import { useQualityLevel } from '../quality-store'
 import { CITY_EVENT_LIFE_MS, type CityEvent } from '../../office-live/city-events'
 import type { ZoomBand } from '../logic/camera-bands'
 import type { BuildingSignal } from '../logic/city-signals'
@@ -10,7 +11,6 @@ import {
   isMarkLevel,
   markSites,
   readCityMarks,
-  useMarkLevel,
   type CityMarkFrame,
   type MarkMesh
 } from './city-marks'
@@ -123,5 +123,5 @@ function ParticleMesh({ palette, band }: CityParticlesProps) {
 }
 
 export function CityParticles(props: CityParticlesProps) {
-  return isMarkLevel(useMarkLevel()) ? <ParticleMesh {...props} /> : null
+  return isMarkLevel(useQualityLevel()) ? <ParticleMesh {...props} /> : null
 }

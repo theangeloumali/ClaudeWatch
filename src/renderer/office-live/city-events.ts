@@ -36,7 +36,7 @@ export interface CityEventLog {
     atMs: number,
     projectsToday?: readonly ProjectTokens[]
   ): void
-  active(nowMs: number): readonly CityEvent[]
+  active(nowMs?: number): readonly CityEvent[]
   // Counts fired events, so a frame loop can tell when a new one landed.
   version(): number
 }
@@ -144,9 +144,9 @@ export function createCityEventLog(): CityEventLog {
       seen = new Map(sessions.map((session) => [session.key, seenOf(session)]))
       totals = next
     },
-    // Read every drawn frame: it allocates only when an event has just ended. Pass wall time:
-    // under reduced motion the city clock stands still, and nothing would ever end.
-    active(nowMs) {
+    // Read every drawn frame: it allocates only when an event has just ended. Wall time by
+    // default: under reduced motion the city clock stands still, and nothing would ever end.
+    active(nowMs = Date.now()) {
       const isLive = (event: CityEvent): boolean =>
         nowMs - event.atMs < CITY_EVENT_LIFE_MS[event.kind]
       if (!live.every(isLive)) live = live.filter(isLive)

@@ -1,6 +1,7 @@
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo } from 'react'
 import { Color, CylinderGeometry, DoubleSide, MeshBasicMaterial } from 'three'
+import { useQualityLevel } from '../quality-store'
 import type { ZoomBand } from '../logic/camera-bands'
 import type { BuildingSignal } from '../logic/city-signals'
 import { STATE_COLOR } from '../office-palette'
@@ -14,7 +15,6 @@ import {
   markSites,
   readCityMarks,
   screenMetres,
-  useMarkLevel,
   type CityMarkFrame,
   type MarkMesh
 } from './city-marks'
@@ -119,5 +119,5 @@ function BeaconMesh({ floors, palette, band }: CityBeaconsProps) {
 }
 
 export function CityBeacons(props: CityBeaconsProps) {
-  return isMarkLevel(useMarkLevel()) ? <BeaconMesh {...props} /> : null
+  return isMarkLevel(useQualityLevel()) ? <BeaconMesh {...props} /> : null
 }

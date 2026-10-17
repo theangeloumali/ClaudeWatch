@@ -3,8 +3,8 @@ import { useEffect, useMemo } from 'react'
 import { Color, Group, InstancedMesh, MeshStandardMaterial, Object3D } from 'three'
 import { box, mergeParts, type FigurePart } from '../citizens/figure-parts'
 import { cityClock } from '../logic/city-clock'
-import { levelInUse, type QualityLevel } from '../logic/quality'
-import { useQualityChoice } from '../quality-store'
+import type { QualityLevel } from '../logic/quality'
+import { useQualityLevel } from '../quality-store'
 import type { ThemePalette } from '../themes/types'
 import { RAILWAY, type RailwayPlan } from '../town/railway-plan'
 import { CAR_LENGTH, laneAt, trainRuns, type CarKind } from '../town/railway-runs'
@@ -124,8 +124,7 @@ export function RailwayTrains({
   railway: RailwayPlan
   palette: ThemePalette
 }) {
-  const { pin, chosen } = useQualityChoice()
-  const level = levelInUse(pin, chosen)
+  const level = useQualityLevel()
   const trains = useMemo(() => trainSet(railway, level, palette), [railway, level, palette])
   useEffect(() => () => trains.dispose(), [trains])
   useFrame(() => trains.pose(cityClock.now()))
