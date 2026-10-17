@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { ACTIVITY_UNAVAILABLE_LABEL, PLAYING_GAMES_LABEL } from '../logic/activity-summary'
 import { buildNameCards, buildProjectStacks, MAX_NAME_CARDS } from '../logic/name-cards'
 import { makeAgent, makeFloor, makeFrame, makeRoom, makeSession, makeZone } from './fixtures'
 
@@ -52,6 +53,50 @@ describe('buildNameCards', () => {
     const office = cards.find((card) => card.agentKey === 'a')
     expect(office?.x).toBeCloseTo(1)
     expect(office?.z).toBeGreaterThan(2)
+  })
+
+  describe('an agent in its game corner', () => {
+    const gamer = (overrides: Parameters<typeof makeAgent>[0] = {}) =>
+      makeAgent({ agentKey: 'a', roomId: 'r1', activity: 'idle', place: 'lounge', ...overrides })
+    const cardOf = (agent: ReturnType<typeof makeAgent>, sources = frame.sources) =>
+      buildNameCards(
+        makeFrame({
+          floors: [floor],
+          sources,
+          sessions: [
+            makeSession({ key: 'a', activity: agent.activity, attention: agent.attention })
+          ],
+          agents: [agent]
+        }),
+        'f1',
+        null
+      ).find((card) => card.agentKey === 'a')
+
+    it.each(['done', 'none'] as const)(
+      'reads Playing games when idle with attention %s',
+      (attention) => {
+        expect(cardOf(gamer({ attention }))).toMatchObject({
+          detail: PLAYING_GAMES_LABEL,
+          isAvailable: true
+        })
+        expect(PLAYING_GAMES_LABEL).toBe('Playing games')
+      }
+    )
+
+    it('shows what it needs instead when it needs you', () => {
+      expect(cardOf(gamer({ attention: 'permission' }))?.detail).not.toBe(PLAYING_GAMES_LABEL)
+    })
+
+    it('never claims games at a desk, or while its activity cannot be seen', () => {
+      expect(cardOf(gamer({ place: undefined, attention: 'done' }))?.detail).not.toBe(
+        PLAYING_GAMES_LABEL
+      )
+      const down = [{ id: 'claude', ok: false, detail: 'down', checkedAtMs: 0, staleAfterMs: 1 }]
+      expect(cardOf(gamer({ attention: 'done' }), down)).toMatchObject({
+        detail: ACTIVITY_UNAVAILABLE_LABEL,
+        isAvailable: false
+      })
+    })
   })
 
   it('keeps the card over an agent that is in the lounge, where there is no desk', () => {

@@ -173,7 +173,7 @@ it('labels stale and disconnected evidence without interpreting world placement 
   })
   const { rerender } = render(<LiveWork frame={frame} agentKey="claude:lead" feed={feed} />)
   expect(screen.getByRole('region', { name: 'Live work' })).toHaveTextContent('Stale')
-  expect(screen.getByText(/visual placement only/)).toBeInTheDocument()
+  expect(screen.getByText(/visual placement only/)).toHaveTextContent(/^Game corner — /)
   rerender(<LiveWork frame={{ ...frame, connected: false }} agentKey="claude:lead" feed={feed} />)
   expect(screen.getByRole('region', { name: 'Live work' })).toHaveTextContent('Disconnected')
 })

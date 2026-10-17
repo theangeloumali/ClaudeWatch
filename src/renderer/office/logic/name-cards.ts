@@ -11,6 +11,7 @@ import {
   isActivityAvailable,
   isAgentActivityAvailable,
   LEAVING_LABEL,
+  PLAYING_GAMES_LABEL,
   summariseActivity
 } from './activity-summary'
 
@@ -63,6 +64,12 @@ function statusFor(agent: AgentView): CardStatus {
   }
 }
 
+// Resting in the game corner; an agent that needs you or has failed shows that instead.
+const isGaming = (agent: AgentView): boolean =>
+  agent.place === 'lounge' &&
+  agent.activity === 'idle' &&
+  (agent.attention === 'none' || agent.attention === 'done')
+
 function priority(card: NameCard, selectedAgentKey: string | null): number {
   if (card.agentKey === selectedAgentKey) return 0
   if (card.status === 'permission' || card.status === 'waiting') return 1
@@ -93,12 +100,11 @@ export function buildNameCards(
       const isLeaving = agent.place === 'leaving'
       const isAvailable =
         !isLeaving && session !== undefined && isAgentActivityAvailable(frame, agent)
-      const detail = (toolName?: string): string =>
-        isLeaving
-          ? LEAVING_LABEL
-          : isAvailable
-            ? agentActivityDetail(agent, toolName)
-            : ACTIVITY_UNAVAILABLE_LABEL
+      const detail = (toolName?: string): string => {
+        if (isLeaving) return LEAVING_LABEL
+        if (!isAvailable) return ACTIVITY_UNAVAILABLE_LABEL
+        return isGaming(agent) ? PLAYING_GAMES_LABEL : agentActivityDetail(agent, toolName)
+      }
       const meta = {
         projectKey: session?.projectKey ?? null,
         updatedAtMs: session?.updatedAtMs ?? 0,

@@ -21,6 +21,8 @@ export const ACTIVITY_SUMMARY_LABELS = {
 export const ACTIVITY_UNAVAILABLE_LABEL = 'Activity unavailable'
 // A worker on its way out, as the sim reports it (seating-5).
 export const LEAVING_LABEL = 'Leaving'
+// An idle agent seated in its office's game corner.
+export const PLAYING_GAMES_LABEL = 'Playing games'
 
 export function isActivityAvailable(
   frame: Pick<OfficeFrame, 'connected' | 'sources'>,
