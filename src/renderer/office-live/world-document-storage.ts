@@ -3,6 +3,7 @@ import {
   WORLD_DOCUMENT_LIMITS,
   type WorldDocument
 } from '../../shared/office/world-document'
+import type { WorldSaveRefusal } from '../../shared/office/world-sync'
 
 export const WORLD_DOCUMENT_STORAGE_KEY = 'claudewatch.office.world.v2'
 const WORLD_DOCUMENT_LOCK_NAME = 'claudewatch.office.world.v2.writer'
@@ -16,6 +17,8 @@ export interface WorldDocumentStorage {
   getItem(key: string): string | null
   setItem(key: string, serialized: string): void
   subscribe?(listener: (event: WorldStorageEvent) => void): () => void
+  // For a storage that writes onward (the host's city): whether the last write landed there.
+  confirm?(): Promise<WorldSaveRefusal | null>
 }
 export interface WorldDocumentLock {
   runExclusive<T>(operation: () => T | Promise<T>): Promise<T>

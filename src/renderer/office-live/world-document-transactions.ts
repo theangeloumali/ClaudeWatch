@@ -8,6 +8,7 @@ import {
   type WorldDocument,
   type WorldValidationError
 } from '../../shared/office/world-document'
+import type { WorldSaveRefusal } from '../../shared/office/world-sync'
 import {
   readStoredWorld,
   WORLD_DOCUMENT_STORAGE_KEY,
@@ -18,6 +19,7 @@ import {
 
 export type WorldSaveFailure =
   | WorldStorageFailure
+  | WorldSaveRefusal
   | 'lock-unavailable'
   | 'lock-failed'
   | 'conflict'
@@ -69,8 +71,11 @@ export async function saveWorldTransaction(
   // Snapshot before awaiting the lock so a caller cannot alter the queued transaction.
   const parsed = parseWorldDocument(request.draft)
   if (!parsed.success) return failed('invalid-draft', request.expectedRevision, parsed.errors)
+  let outcome: WorldSaveResult
+  // The city before this save: what a refusal goes back to when the storage holds none.
+  let before: WorldDocument | null = null
   try {
-    return await options.lock.runExclusive((): WorldSaveResult => {
+    outcome = await options.lock.runExclusive((): WorldSaveResult => {
       if (request.isDisposed()) return failed('disposed')
       const latest = readStoredWorld(storage)
       if (!latest.success) return failed(latest.reason)
@@ -120,10 +125,32 @@ export async function saveWorldTransaction(
       } catch {
         return failed('storage-readback', revision)
       }
+      before = previous
       request.publish(encoded.document, previous)
       return { success: true, document: encoded.document, revision: encoded.document.revision }
     })
   } catch {
     return failed('lock-failed')
+  }
+  return outcome.success ? await landed(storage, outcome, before) : outcome
+}
+
+// A write the storage passes on can still be refused there; the refusal is the outcome, with
+// the city the storage went back to.
+async function landed(
+  storage: WorldDocumentStorage,
+  outcome: WorldSaveResult,
+  before: WorldDocument | null
+): Promise<WorldSaveResult> {
+  const refusal = await storage.confirm?.()
+  if (!refusal) return outcome
+  const held = readStoredWorld(storage)
+  const document = (held.success ? held.document : null) ?? before
+  return {
+    success: false,
+    reason: refusal,
+    revision: document?.revision ?? 0,
+    errors: [],
+    ...(document ? { document } : {})
   }
 }

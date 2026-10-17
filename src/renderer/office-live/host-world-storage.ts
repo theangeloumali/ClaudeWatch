@@ -1,5 +1,5 @@
 import type { WorldDocument } from '../../shared/office/world-document'
-import type { WorldSaveReply } from '../../shared/office/world-sync'
+import type { WorldSaveRefusal, WorldSaveReply } from '../../shared/office/world-sync'
 import {
   WORLD_DOCUMENT_STORAGE_KEY,
   type WorldDocumentStorage,
@@ -19,6 +19,8 @@ export function hostWorldStorage(
 ): HostWorldStorage {
   const listeners = new Set<(event: WorldStorageEvent) => void>()
   let held = readCache(cache)
+  // How the last save this page made ended at the host.
+  let landing: Promise<WorldSaveRefusal | null> = Promise.resolve(null)
   // What the host last said it holds; undefined until its first hello.
   let hostHeld: string | null | undefined
 
@@ -39,17 +41,20 @@ export function hostWorldStorage(
       listener({ key: WORLD_DOCUMENT_STORAGE_KEY, newValue: serialized, isAuthoritative: true })
   }
   // A refused save goes back to the host's city, or to what this page held before it.
-  const upload = (serialized: string, before: string | null): void => {
-    void save(JSON.parse(serialized)).then(
+  const upload = (serialized: string, before: string | null): Promise<WorldSaveRefusal | null> =>
+    save(JSON.parse(serialized)).then(
       (reply) => {
         const kept = reply.document ? JSON.stringify(reply.document) : null
         if (reply.success) hostHeld = kept
         else adopt(kept ?? before)
+        return reply.success ? null : reply.reason
       },
-      // Unreachable host: the next hello brings what it holds.
-      () => undefined
+      // Unreachable host: it holds no such city, and the next hello brings what it does hold.
+      () => {
+        adopt(before)
+        return 'storage-write'
+      }
     )
-  }
 
   return {
     getItem: (key) => (key === WORLD_DOCUMENT_STORAGE_KEY ? held : (cache?.getItem(key) ?? null)),
@@ -57,9 +62,10 @@ export function hostWorldStorage(
       if (key === WORLD_DOCUMENT_STORAGE_KEY) {
         const before = held
         hold(serialized)
-        upload(serialized, before)
+        landing = upload(serialized, before)
       } else cache?.setItem(key, serialized)
     },
+    confirm: () => landing,
     subscribe(listener) {
       listeners.add(listener)
       return () => listeners.delete(listener)
@@ -68,7 +74,7 @@ export function hostWorldStorage(
       hostHeld = document ? JSON.stringify(document) : null
       if (hostHeld) adopt(hostHeld)
       // A city this page kept before its host held one becomes the host's first.
-      else if (held) upload(held, held)
+      else if (held) void upload(held, held)
     }
   }
 }
