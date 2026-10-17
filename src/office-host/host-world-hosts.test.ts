@@ -82,12 +82,15 @@ describe('two host processes on one saved city', () => {
       pages
     )
     web.save(city(1, 'From the browser'))
-    await vi.waitFor(() =>
-      expect(pages).toHaveBeenCalledWith({
-        type: 'hello',
-        v: 1,
-        snapshot: { ...snapshot, world: city(1, 'From the browser') }
-      })
+    await vi.waitFor(
+      () =>
+        expect(pages).toHaveBeenCalledWith({
+          type: 'hello',
+          v: 1,
+          snapshot: { ...snapshot, world: city(1, 'From the browser') }
+        }),
+      // The other host's save arrives by a file watch, which a loaded suite delays past 1 s.
+      { timeout: 5_000 }
     )
     stop()
   })
