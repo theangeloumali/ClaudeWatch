@@ -2,14 +2,15 @@ import { Box3, Mesh, Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import { citizenGeometry } from '../citizens/figure-parts'
 import { getTheme } from '../themes/registry'
+import { cityStreetWidth } from '../../../shared/office/city-block-layout'
 import { fallbackVehicle } from './fallback-vehicles'
 import type { VehicleRole } from './town-dress'
-import { KEEP_RIGHT_M } from './trip-paths'
+import { SIDEWALK_M } from './town-grid'
 
 const { palette } = getTheme('neo-edo-steam')
 const ROLES: readonly VehicleRole[] = ['transit', 'freight', 'runabout']
-// The road each role spends its time on: its lane's middle is this far from the centre line.
-const LANE_OF = { transit: 'boulevard', freight: 'collector', runabout: 'avenue' } as const
+// The middle of a lane on the city's narrowest street, from its centre line (trip-paths).
+const NARROWEST_LANE_M = (cityStreetWidth(1) / 2 - SIDEWALK_M.collector) / 2
 
 function sizeOf(role: VehicleRole): { box: Box3; size: Vector3 } {
   const geometry = citizenGeometry(fallbackVehicle(role, palette))
@@ -26,7 +27,7 @@ describe('fallbackVehicle', () => {
     expect(box.min.y).toBeLessThan(0.05)
     expect(size.z).toBeGreaterThan(size.x)
     // Half its width fits between the centre line and the middle of its lane.
-    expect(size.x / 2).toBeLessThan(KEEP_RIGHT_M.vehicle[LANE_OF[role]])
+    expect(size.x / 2).toBeLessThan(NARROWEST_LANE_M)
   })
 
   it('draws the cart about 1.2 m tall and the coach about 2.4 m, the wagon between', () => {

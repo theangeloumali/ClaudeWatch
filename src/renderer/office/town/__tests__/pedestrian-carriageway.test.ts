@@ -119,11 +119,11 @@ function vehicleLanes(scenario: Scenario) {
 
 // MoverLayer's motion, replayed headless through the same step.
 function replay(scenario: Scenario, seconds: number, deltaSec: number) {
-  const { plan, trips, floor } = scenario
+  const { plan, trips } = scenario
   const spotOf = roadSurface(plan)
   const onAsphalt = (point: RoutePoint): boolean => isAsphalt(spotOf(point))
   const space = new SceneBodies()
-  const ground = citizenGround(floor, plan)
+  const ground = citizenGround(plan)
   const clock = moverClock({ trips, space, isOpen: ground.isOpen })
   const { waitsFor } = clock
   const traffic = zebraTraffic(trips, citySidewalks(plan))
@@ -260,8 +260,8 @@ describe.each([
 // Citizen rows: RED until Phase 4 moves citizens onto the sidewalk network.
 describe('pedestrian carriageway on the live city', () => {
   it('shuts the citizens’ ground on unmarked asphalt and opens it on a zebra', () => {
-    const { plan, floor } = liveCity()
-    const ground = citizenGround(floor, plan)
+    const { plan } = liveCity()
+    const ground = citizenGround(plan)
     const spotOf = roadSurface(plan)
     const centreLines = plan.roads
       .filter((road) => road.class !== 'lane')

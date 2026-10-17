@@ -1,9 +1,9 @@
 import type { PlacedLot } from '../themes/lot-kit'
+import { dressCityDistrict } from '../themes/city-district-parts'
 import { getTheme } from '../themes/registry'
 import type { FloorGeometry } from '../scene-model'
-import { GROUND_Y } from '../themes/surroundings'
-import { dressLot, type TownDress } from './town-dress'
-import { townLandmark } from './TownView'
+import { distributedTown } from './distributed-town'
+import type { TownDress } from './town-dress'
 import { townOf } from './use-town-plan'
 
 export function townDressOf(themeId: string): TownDress {
@@ -12,11 +12,8 @@ export function townDressOf(themeId: string): TownDress {
   return dress
 }
 
-// Every lot of a first start's town at full detail, as TownView draws it in one theme.
+// Every lot of a first start's city at full detail, as TownView draws it in one theme.
 export function drawnTown(themeId: string, floor: FloorGeometry): PlacedLot[] {
-  const { plan } = townOf(floor, null, 'full')
-  const landmark = townLandmark(plan)
-  return plan.lots
-    .filter((lot) => lot !== landmark)
-    .map((lot) => dressLot(lot, GROUND_Y, townDressOf(themeId)))
+  const { plan } = distributedTown(townOf(floor, null, 'full'), [floor])
+  return plan.lots.map((lot) => dressCityDistrict(lot, townDressOf(themeId)))
 }

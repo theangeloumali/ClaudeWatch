@@ -3,7 +3,7 @@ import { LIVE_FLOORS } from '../themes/floors.test-utils'
 import type { Rect } from '../themes/lot-math'
 import { campusClaim, neededClaim } from './town-claim'
 import type { TownLot } from './town-lots'
-import { townBlocks, type TownPlan } from './town-plan'
+import { townBlocks, type CampusPlan } from './town-plan'
 import { BUILDING_CAP, LOT_PITCH_M } from './town-grid'
 import { LARGE_FLOOR, LONE_FLOOR, PAIR_FLOOR, edges, widened } from './town.test-utils'
 
@@ -12,8 +12,8 @@ const OLD_TOWN_EAST_M = -24
 // A 24 m building hides 34 m of ground: past that, a lot's limit cannot depend on the claim.
 const HEIGHT_REACH_M = 36
 
-const byId = (plan: TownPlan) => new Map(plan.lots.map((lot) => [lot.id, lot]))
-const oldTown = (plan: TownPlan): TownLot[] => plan.lots.filter((lot) => lot.x < OLD_TOWN_EAST_M)
+const byId = (plan: CampusPlan) => new Map(plan.lots.map((lot) => [lot.id, lot]))
+const oldTown = (plan: CampusPlan): TownLot[] => plan.lots.filter((lot) => lot.x < OLD_TOWN_EAST_M)
 const spareEast = (floor: Rect, claim: Rect): number =>
   edges(claim).east - edges(neededClaim(floor)).east
 
@@ -88,7 +88,7 @@ describe.each(LIVE_FLOORS)(
   (_name, floor) => {
     const first = campusClaim(neededClaim(floor), null)
     const start = townBlocks(first, 'full')
-    const plans: TownPlan[] = []
+    const plans: CampusPlan[] = []
     let claim = first
     for (const metres of [
       ...Array.from({ length: 40 }, (_, step) => step + 1),

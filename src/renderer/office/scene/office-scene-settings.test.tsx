@@ -7,6 +7,7 @@ import { createPlayer } from '../player/walking'
 import { pinQuality } from '../quality-store'
 import { themeForTeam } from '../themes/registry'
 import { sceneExtent } from '../themes/surroundings'
+import { distributedTown } from '../town/distributed-town'
 import { townOf } from '../town/use-town-plan'
 import OfficeScene from './OfficeScene'
 
@@ -33,7 +34,6 @@ vi.mock('./Robot', () => ({
     <i data-layer="agents" data-count={agents.length} />
   )
 }))
-vi.mock('./WorldView', () => ({ TowerView: () => <i data-layer="tower" /> }))
 vi.mock('../town/TownGround', () => ({ TownGround: () => <i data-layer="roads" /> }))
 vi.mock('../town/TownView', async (original) => ({
   ...(await original<typeof import('../town/TownView')>()),
@@ -89,6 +89,8 @@ const floor = makeFloor({
   rooms: [makeRoom({ id: 'r1', sessionKey: session.key })]
 })
 const agents = [makeAgent({ agentKey: session.key })]
+// One list for every render, as the feed keeps its floors while their geometry stands.
+const floors = [floor]
 
 beforeEach(() => {
   localStorage.clear()
@@ -104,6 +106,8 @@ function mount(off: readonly OfficeSettingKey[] = []) {
       floors={[{ floorId: 'f1', label: 'Main', attentionCount: 0 }]}
       sessions={[session]}
       floor={floor}
+      visibleFloors={floors}
+      allFloors={floors}
       agents={agents}
       cards={[]}
       stacks={[]}
@@ -129,7 +133,7 @@ function mount(off: readonly OfficeSettingKey[] = []) {
   return { layer, layers }
 }
 
-const TOWN = ['roads', 'town', 'tower', 'ambient']
+const TOWN = ['roads', 'town', 'ambient']
 
 it('renders real agents on all three usable storeys in the same canvas', () => {
   const allFloors = [0, 5.5, 11].map((elevation, index) => ({
@@ -157,7 +161,8 @@ it('renders real agents on all three usable storeys in the same canvas', () => {
       sessions={[]}
       floor={allFloors[0]}
       agents={allAgents}
-      {...{ visibleFloors: allFloors }}
+      visibleFloors={allFloors}
+      allFloors={allFloors}
       cards={[]}
       stacks={[]}
       selectedAgentKey={null}
@@ -179,10 +184,10 @@ it('renders real agents on all three usable storeys in the same canvas', () => {
   for (const layer of ['camera', 'governor', 'citizens', 'metrics']) {
     expect(container.querySelectorAll(`[data-layer="${layer}"]`)).toHaveLength(1)
   }
-  expect(container.querySelectorAll('[data-layer="tower"]')).toHaveLength(0)
 })
 const ALWAYS = ['ground', 'floor', 'agents', 'pickers', 'cards', 'camera', 'governor', 'metrics']
-const { plan, green } = townOf(floor, null, 'full', 'city')
+// The city the scene lays round its one floor.
+const { plan } = distributedTown(townOf(floor, null, 'full', 'city'), [floor])
 
 it('mounts the whole living world while every switch is on', () => {
   const { layer, layers } = mount()
@@ -209,19 +214,9 @@ it('frames the whole town, to its last road, while the town is on', () => {
   expect(JSON.parse(layer('player')?.dataset.extent ?? '{}')).toEqual(plan.extent)
 })
 
-it('frames and walks the smaller town once the owner picks a village', () => {
-  officeSettings.setTownSize('village')
+it('closes the town’s lots to the player, and hands the citizens the plan', () => {
   const { layer } = mount()
-  const village = townOf(floor, null, 'full', 'village').plan
-  expect(JSON.parse(layer('camera')?.dataset.scene ?? '{}')).toMatchObject(village.extent)
-  expect(JSON.parse(layer('player')?.dataset.extent ?? '{}')).toEqual(village.extent)
-  expect(village.extent.width).toBeLessThan(plan.extent.width)
-})
-
-it('closes the town’s lots and the belt’s plots to the player, and hands the citizens the plan', () => {
-  const { layer } = mount()
-  const solidCount = String(plan.lots.length + green.length)
-  expect(layer('player')?.dataset.solids).toBe(solidCount)
+  expect(layer('player')?.dataset.solids).toBe(String(plan.lots.length))
   expect(layer('citizens')?.dataset.solids).toBe(String(plan.lots.length))
 })
 
@@ -229,18 +224,7 @@ it('mounts no ambient mover when ambient motion is off, and keeps the buildings'
   const { layer, layers } = mount(['ambient'])
   expect(layers()).not.toContain('ambient')
   expect(Number(layer('town')?.dataset.lots)).toBeGreaterThan(0)
-  expect(layers()).toEqual(expect.arrayContaining(['roads', 'town', 'tower']))
-})
-
-it('draws less of the town at a lighter detail level, by the plan’s own thinning', () => {
-  officeSettings.setTownSize('city')
-  pinQuality('light')
-  const { layer } = mount()
-  const full = townOf(floor, null, 'full', 'city').plan
-  expect(Number(layer('town')?.dataset.lots)).toBe(
-    townOf(floor, null, 'light', 'city').plan.lots.length
-  )
-  expect(Number(layer('town')?.dataset.lots)).toBeLessThan(full.lots.length)
+  expect(layers()).toEqual(expect.arrayContaining(['roads', 'town']))
 })
 
 it('does not mount the citizens layer when citizens are off', () => {

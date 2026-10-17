@@ -113,9 +113,15 @@ describe('Codex from the bridge feed to the Office', () => {
       })
     }
     const feed = startFeed(sessions)
-    expect(feed.frame().agents).toEqual(agents)
+    const rooms = feed.frame().floors.flatMap((floor) => floor.rooms)
+    expect(feed.frame().agents.map((agent) => agent.provider)).toEqual(['claude', 'codex'])
+    for (const agent of feed.frame().agents) {
+      const room = rooms.find((candidate) => candidate.id === agent.roomId)
+      const desk = room?.seats.find((candidate) => candidate.slotId === agent.slotId)
+      expect(agent).toMatchObject({ x: desk?.x, z: desk?.z })
+    }
     expect(feed.frame().sessions).toEqual(sessions)
-    expect(feed.frame().floors[0].rooms.filter((room) => room.sessionKey)).toHaveLength(2)
+    expect(rooms.filter((room) => room.sessionKey)).toHaveLength(2)
     feed.stop()
   })
 
@@ -143,8 +149,9 @@ describe('Codex from the bridge feed to the Office', () => {
       vi.advanceTimersByTime(1500)
       const frame = feed.frame()
       expect(frame.agents).toHaveLength(2)
-      expect(frame.floors[0].rooms.filter((room) => room.sessionKey)).toHaveLength(2)
-      const card = buildNameCards(frame, 'hq', null).find(
+      const rooms = frame.floors.flatMap((floor) => floor.rooms)
+      expect(rooms.filter((room) => room.sessionKey)).toHaveLength(2)
+      const card = buildNameCards(frame, null, null).find(
         (entry) => entry.agentKey === sessions[1].key
       )
       expect(card).toMatchObject({

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { LIVE_FLOORS } from '../themes/floors.test-utils'
 import { campusClaim, neededClaim } from './town-claim'
-import { gatePlaza, roadGraph, type RoadEdge, type RoadGraph } from './town-graph'
+import { roadGraph, type RoadEdge, type RoadGraph } from './town-graph'
 import { LOT_PITCH_M, ROAD_WIDTH_M } from './town-grid'
 import { townRoads } from './town-roads'
 import { edges, fromEdges, fullExtent, overlapping } from './town.test-utils'
@@ -54,15 +54,6 @@ describe.each(LIVE_FLOORS)('roadGraph: %s', (_name, floor) => {
         expect(placeOf.has(`${x}:${z}`)).toBe(true)
       }
     expect(crossings).toBeGreaterThan(50)
-  })
-
-  it('has the plaza in front of the gate, joined to the avenue and to the boulevard', () => {
-    expect(gatePlaza(claim)).toEqual({ x: edge.west + ROAD_WIDTH_M.boulevard / 2, z: 0 })
-    const plaza = placeOf.get(`${gatePlaza(claim).x}:0`)
-    const classes = graph.edges
-      .filter((each) => each.from === plaza || each.to === plaza)
-      .map((each) => each.class)
-    expect(new Set(classes)).toEqual(new Set(['avenue', 'boulevard']))
   })
 
   it('joins only neighbours on one straight road, and measures the stretch', () => {

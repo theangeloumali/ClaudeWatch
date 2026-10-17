@@ -58,12 +58,17 @@ it('keeps the selected full office name readable in safe headroom, independent o
   expect(anchors.size).toBe(0)
 })
 
-it('hides office labels at city scale rather than competing with project summaries', () => {
-  const element = document.createElement('div')
-  const anchors = new Map([['p1', element]])
+it('keeps office names at city scale and hides the rooms not selected', () => {
+  const office = document.createElement('div')
+  const room = document.createElement('div')
+  const anchors = new Map([
+    ['p1', office],
+    ['r1', room]
+  ])
+  const roomLabel: OfficeLabel = { ...label, id: 'r1', kind: 'room', isSelected: false }
   render(
     <OfficeNameProjector
-      labels={[label]}
+      labels={[label, roomLabel]}
       anchors={anchors}
       cardAnchors={{ cards: new Map(), dots: new Map(), stacks: new Map() }}
       band="building"
@@ -71,5 +76,6 @@ it('hides office labels at city scale rather than competing with project summari
     />
   )
   frame.callback?.({ camera: new OrthographicCamera(), size: { width: 900, height: 700 } })
-  expect(element.style.transform).toBe(OFFSCREEN)
+  expect(office.style.transform).not.toBe(OFFSCREEN)
+  expect(room.style.transform).toBe(OFFSCREEN)
 })

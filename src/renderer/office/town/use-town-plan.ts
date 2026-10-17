@@ -10,7 +10,7 @@ import type { Rect } from '../themes/lot-math'
 import { campusClaim, heldClaim, neededClaim } from './town-claim'
 import type { TownSize } from './town-grid'
 import { campusGreen, type GreenPlot } from './town-green'
-import { lotOwners, townBlocks, type TownPlan } from './town-plan'
+import { lotOwners, townBlocks, type CampusPlan, type TownPlan } from './town-plan'
 import { distributedTown } from './distributed-town'
 import type { WorldFootprint } from '../../../shared/office/world-document'
 
@@ -24,13 +24,18 @@ export interface Town {
   green: GreenPlot[]
 }
 
+// The campus town the city is laid over: it holds the claim from floor to floor.
+export interface CampusTown extends Omit<Town, 'plan'> {
+  plan: CampusPlan
+}
+
 // The whole town for a floor. `held` is the claim of the floor before, or null on a first start.
 export function townOf(
   floor: FloorGeometry,
   held: Rect | null,
   level: QualityLevel,
   size: TownSize = 'city'
-): Town {
+): CampusTown {
   const plan = townBlocks(campusClaim(neededClaim(floor), held), level, size)
   return { plan, owners: lotOwners(plan, floor.zones), green: campusGreen(floor, plan) }
 }
@@ -63,12 +68,12 @@ function claimKey(claim: Rect): string {
 // start to start through storage, so a desk column coming and going moves no building.
 export function useTownPlan(
   floor: FloorGeometry,
-  options?: {
-    protectedSites?: readonly WorldFootprint[]
+  options: {
+    protectedSites: readonly WorldFootprint[]
     preview?: { floor: FloorGeometry; protectedSites: readonly WorldFootprint[] }
   }
 ): Town {
-  const { protectedSites, preview } = options ?? {}
+  const { protectedSites, preview } = options
   const { pin, chosen } = useQualityChoice()
   const level = levelInUse(pin, chosen)
   const { townSize } = useOfficeSettings()
@@ -82,7 +87,7 @@ export function useTownPlan(
     }
     const next = townOf(floor, heldRef.current, level, townSize)
     heldRef.current = next.plan.claim
-    return protectedSites ? distributedTown(next, protectedSites) : next
+    return distributedTown(next, protectedSites)
   }, [floor, level, townSize, protectedSites])
   const key = claimKey(town.plan.claim)
   useEffect(() => {

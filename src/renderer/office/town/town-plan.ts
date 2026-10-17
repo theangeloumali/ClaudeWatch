@@ -25,11 +25,10 @@ interface TownBlock extends Rect {
   zone: TownDistrict
 }
 
-export interface TownPlan {
+// The campus planner's town: the claim it holds, which the city is laid over (distributedTown).
+export interface CampusPlan {
   size: TownSize
   claim: Rect
-  // Distributed offices have individual plots, not a shared headquarters gate plaza.
-  officeSites?: readonly Rect[]
   // The claim less the belt: it always contains the plate, and moves only when the claim does.
   envelope: Rect
   extent: Rect
@@ -41,6 +40,11 @@ export interface TownPlan {
   // Strips where a citizen must be seen: protected like offices by the height rule.
   promenades: Rect[]
   graph: RoadGraph
+}
+
+// The city every scene draws: each office on a plot of its own.
+export interface TownPlan extends CampusPlan {
+  officeSites: readonly Rect[]
 }
 
 // How far the town is drawn: the old town to the west, a ring on the other three sides. The
@@ -81,7 +85,7 @@ function blocksOf(claim: Rect, extent: Rect): TownBlock[] {
 
 // The whole town for a claim, from nothing. Pure: the same claim, level and size give the same
 // plan.
-export function planTown(claim: Rect, detail: QualityLevel, size: TownSize = 'city'): TownPlan {
+export function planTown(claim: Rect, detail: QualityLevel, size: TownSize = 'city'): CampusPlan {
   const extent = townExtent(claim, detail, size)
   const roads = townRoads(claim, extent)
   const sites = lotSites(claim, extent)
@@ -101,10 +105,10 @@ export function planTown(claim: Rect, detail: QualityLevel, size: TownSize = 'ci
 
 // A claim steps rarely, and a floor change that does not step it must not rebuild the town.
 const MAX_REMEMBERED_PLANS = 16
-const remembered = new Map<string, TownPlan>()
+const remembered = new Map<string, CampusPlan>()
 
 // `planTown`, remembered by claim, level and size, so the same claim hands back the same plan.
-export function townBlocks(claim: Rect, detail: QualityLevel, size: TownSize = 'city'): TownPlan {
+export function townBlocks(claim: Rect, detail: QualityLevel, size: TownSize = 'city'): CampusPlan {
   const { minX, maxX, minZ, maxZ } = boundsOfZone(claim)
   const key = `${minX}:${maxX}:${minZ}:${maxZ}:${detail}:${size}`
   const plan = remembered.get(key) ?? planTown(claim, detail, size)
@@ -132,7 +136,7 @@ export function nearestCompany(rect: Rect, zones: readonly ZoneGeometry[]): Zone
 // Which company dresses a lot: the nearest one, for lots within 24 m of the claim and outside
 // the old town. A lot that is absent takes the floor's theme.
 export function lotOwners(
-  plan: TownPlan,
+  plan: CampusPlan,
   companies: readonly ZoneGeometry[]
 ): ReadonlyMap<string, string> {
   const owners = new Map<string, string>()

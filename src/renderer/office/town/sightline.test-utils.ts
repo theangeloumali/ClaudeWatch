@@ -50,14 +50,3 @@ export function plainSightShare(
   if (points.length === 0) return 1
   return points.filter((point) => !isHidden(point, boxes, azimuth)).length / points.length
 }
-
-// Lots as the boxes they may grow to: each at its height limit.
-export function boxesOf(lots: readonly (Rect & { maxHeight: number })[]): SightBox[] {
-  return lots.map(({ x, z, width, depth, maxHeight }) => ({
-    x,
-    z,
-    width,
-    depth,
-    height: maxHeight
-  }))
-}

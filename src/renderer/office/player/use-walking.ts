@@ -15,11 +15,12 @@ export function useWalking({
 }: {
   floor: FloorGeometry | undefined
   dispatch: Dispatch<OfficeAction>
+  // Undefined only while no frame has come, and with it no floor.
   allFloors?: readonly FloorGeometry[]
 }) {
   const playerRef = useRef<Player | null>(null)
   if (!playerRef.current && floor) {
-    playerRef.current = createPlayer(allFloors ? playerConnector(floor) : floor.elevator)
+    playerRef.current = createPlayer(playerConnector(floor))
     playerRef.current.elevation = 0
     playerRef.current.physicalFloorId = (floor.elevation ?? 0) === 0 ? floor.floorId : null
   }
@@ -27,12 +28,11 @@ export function useWalking({
   // Sidebar navigation is an explicit camera action, not a delayed player walk.
   const goToZone = useCallback(
     (zoneId: string) => {
-      const floors = allFloors ?? (floor ? [floor] : [])
-      const destinationFloor = floors.find((candidate) => findZone(candidate, zoneId))
+      const destinationFloor = allFloors?.find((candidate) => findZone(candidate, zoneId))
       if (destinationFloor)
         dispatch({ type: 'floor-flown', floorId: destinationFloor.floorId, zoneId })
     },
-    [floor, dispatch, allFloors]
+    [dispatch, allFloors]
   )
   return { player, goToZone }
 }

@@ -26,7 +26,7 @@ import {
   type Side
 } from './belt-frame'
 import { MIN_BELT_M } from './town-grid'
-import { nearestCompany, type TownPlan } from './town-plan'
+import { nearestCompany, type CampusPlan } from './town-plan'
 import { campusStreet, plazaPieces } from './town-plaza'
 
 export type { GreenPlot } from './garden-pieces'
@@ -105,7 +105,7 @@ function featuresOf(ground: Ground, corners: readonly Rect[]): GreenPlot[] {
 // The campus garden, laid out from the claim: a row of trees, lamps and seats along the walk
 // on every side, an inner avenue and edging, a feature centred on each run and a piece at each
 // corner, then the plaza. Only what stands behind the row depends on the plate.
-export function campusGreen(floor: FloorGeometry, plan: TownPlan): GreenPlot[] {
+export function campusGreen(floor: FloorGeometry, plan: CampusPlan): GreenPlot[] {
   const site = surveySite(floor)
   const claim = boundsOfZone(plan.claim)
   const middleOf = (side: Side): Rect =>

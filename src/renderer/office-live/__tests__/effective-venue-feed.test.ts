@@ -30,8 +30,8 @@ function sessionsFor(projectSizes: readonly number[]): SessionRef[] {
   )
 }
 
-// dry-new: live-feed.test.ts has private setup; this harness enables world editing and visible ticks.
-function createEnvironment(options: { worldEditing?: boolean } = {}) {
+// dry-new: live-feed.test.ts has private setup; this harness keeps ticks visible.
+function createEnvironment() {
   const frames: OfficeFrame[] = []
   const bytes = new Map<string, string>()
   const storage = {
@@ -60,7 +60,6 @@ function createEnvironment(options: { worldEditing?: boolean } = {}) {
   const feed = createLiveFeed(source, {
     storage,
     settings,
-    worldEditing: options.worldEditing ?? true,
     visibility: {
       read: () => ({ isHidden: false, isFocused: true }),
       onChange: () => () => undefined
@@ -230,20 +229,6 @@ describe('effective venues in createLiveFeed', () => {
       expect(environment.bytes.get(WORLD_DOCUMENT_STORAGE_KEY)).toBe(savedBytes)
     }
     expect(environment.storage.setItem).not.toHaveBeenCalled()
-  })
-
-  it('keeps the legacy headquarters and omits global venues when world editing is disabled', () => {
-    const environment = createEnvironment({ worldEditing: false })
-    for (const roster of [[1], [2, 1], []]) {
-      const frame = environment.publish(sessionsFor(roster))
-      expect(frame.floors).toHaveLength(1)
-      expect(frame.floors[0].floorId).toBe('hq')
-      expect(frame.venues).toBeUndefined()
-      expect(frame.worldRevision).toBeUndefined()
-    }
-    expect(environment.feed.getWorldDocumentStore?.()).toBeNull()
-    expect(environment.bytes.has('claudewatch.office.layout')).toBe(true)
-    expect(environment.bytes.has(WORLD_DOCUMENT_STORAGE_KEY)).toBe(false)
   })
 
   it('reuses floors and venues for an activity-only patch without mutating earlier geometry', () => {

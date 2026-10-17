@@ -24,11 +24,6 @@ export interface RoadGraph {
 // Roads are axis-aligned, so along one this is the distance.
 export const apart = (a: Point, b: Point): number => Math.abs(a.x - b.x) + Math.abs(a.z - b.z)
 
-// Where the avenue meets the boulevard, in front of the gate: as far as a citizen comes.
-export function gatePlaza(claim: Rect): Point {
-  return { x: claim.x - claim.width / 2 + ROAD_WIDTH_M.boulevard / 2, z: 0 }
-}
-
 // A road's end that stops at a side of the claim, corners left out.
 function isOnClaimSide(point: Point, claim: Bounds): boolean {
   const isBesideX = point.z > claim.minZ && point.z < claim.maxZ

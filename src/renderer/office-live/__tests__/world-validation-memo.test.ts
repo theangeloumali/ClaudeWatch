@@ -40,7 +40,6 @@ function createEnvironment() {
   const feed = createLiveFeed(source, {
     storage: { getItem: (key) => bytes.get(key) ?? null, setItem: (key, v) => bytes.set(key, v) },
     settings,
-    worldEditing: true,
     visibility: { read: () => ({ isHidden: false, isFocused: true }), onChange: () => () => {} }
   })
   unsubscribes.push(feed.subscribe((frame) => frames.push(frame)))

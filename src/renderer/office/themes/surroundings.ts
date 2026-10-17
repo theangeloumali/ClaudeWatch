@@ -64,11 +64,6 @@ export function heightLimit(rect: Rect, offices: readonly Rect[]): number {
   return Math.min(MAX_LOT_HEIGHT_M, nearest * HEIGHT_PER_METRE)
 }
 
-// A lot on the plate stands on the slab; every other lot stands on the ground.
-export function lotBase(lot: Rect, plate: Rect): number {
-  return contains(plate, lot) ? 0 : GROUND_Y
-}
-
 export function surveySite(floor: FloorGeometry): Site {
   const companies = floor.zones
     .filter((zone) => zone.kind === 'company')
