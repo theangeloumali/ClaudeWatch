@@ -862,9 +862,9 @@ Done in the main checkout. Nothing here is committed on this branch.
   - Use a physical `node_modules` copy, per the vault trap on signed packaging.
   - Run `npm run build && npm run build:widget`, then `electron-builder --mac dir --arm64 --publish never -c.mac.notarize=false`, signed with the Developer ID identity.
   - Quit the app, move the old bundle to `~/Applications/ClaudeWatch-1.3.5-before-office-health.app`, `ditto` the new one to `/Applications`, and run `codesign --verify --deep --strict`.
-- [ ] Owner calls, decided under Angelo's 2026-10-17 direction ("Don't want you to stop until you fucking build this and let's merge everything to `main` once you're done"):
-  - [ ] The Town size setting works in the city. Village, Town and City scale the city's filler buildings to ⅓, ⅔ and all of `CITY_SCENERY_LIMIT` (`shared/office/city-scenery.ts:6`). Today the size reaches `townOf` (`use-town-plan.ts:32-34`), but `distributedTown` never reads it (`distributed-town.ts:59-70`).
-  - [ ] The city marks one landmark lot per zone kind, its largest, instead of civic only (`distributed-town.ts:107`). This brings back the Garrison radar tower and the workshop and entertainment landmarks.
+- [x] Owner calls, decided under Angelo's 2026-10-17 direction ("Don't want you to stop until you fucking build this and let's merge everything to `main` once you're done"):
+  - [x] The Town size setting works in the city. Village, Town and City scale the city's filler buildings to ⅓, ⅔ and all of `CITY_SCENERY_LIMIT` (`shared/office/city-scenery.ts:6`). Today the size reaches `townOf` (`use-town-plan.ts:32-34`), but `distributedTown` never reads it (`distributed-town.ts:59-70`).
+  - [x] The city marks one landmark lot per zone kind, its largest, instead of civic only (`distributed-town.ts:107`). This brings back the Garrison radar tower and the workshop and entertainment landmarks.
   - Accepted unchanged: citizens in plain sight 50–70%, and the recall fade for far roamers.
 - [ ] One local install for office-health and the city port together (city-port plan Phase 7), from the final city-port commit.
 - [x] Measure the installed renderer CPU, unfocused, over 60 s: `bash /tmp/office-audit-tools/perf/sample-procs.sh` (was 56.9%). Interim 1.4.1: 25.2% (whole app 73.3% → 39.8%); re-measured on the final install.
@@ -1060,3 +1060,7 @@ Phases 1, 2, 3 and 6 run in parallel, as do Phases 4 and 5. Wall-clock with the 
 - City-port integration `78974c76` (office-health + port Wave A): both `tsc`, `eslint .`, `knip` and `vitest run` (**5,003 passed, 0 failed**) exit 0, as does `npm run build`.
 - Installed 1.4.1 from `78974c76`, Developer ID signed, not notarised. `codesign --verify --deep --strict /Applications/ClaudeWatch.app` exits 0. The old app is backed up at `~/Applications/ClaudeWatch-1.3.5-before-office-health.app`.
 - Installed CPU, unfocused, Office open, 60 s: the Office renderer used **25.2%** (was 56.9%); the whole app **39.8%** (was 73.3%). Renderer memory was 784 MB mean, 940 MB max (was 486 MB), measured 30 s after launch; it is re-measured on the final install.
+- Owner calls (merged `97ed5eff`):
+  - Town size builds 12, 24 or 36 of the two-office city's 36 filler lots (plus 3 landmarks). Open lots wear the theme's garden. Streets and lots are byte-identical at every size, so the sim's obstacles don't move (`town/open-lots.ts`; the guard covers Village and Town).
+  - The largest civic, workshop and entertainment lot is each district's landmark. This brings back the Garrison radar tower.
+  - The dead company-theme lookup is gone. Lead, `cccd2690`: a lot no longer carries the always-null `zoneId`.
