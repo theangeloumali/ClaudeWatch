@@ -61,7 +61,7 @@ export function decorateSession(state: LedgerState | null, session: SessionRef):
 }
 
 // Today's tokens per project, whichever account spent them; in key order, so totals compare.
-function projectsToday(state: LedgerState, now: number): ProjectTokens[] {
+export function projectsToday(state: LedgerState, now: number): ProjectTokens[] {
   const today = dayKey(now)
   const totals = new Map<string, number>()
   for (const bucket of state.buckets.values()) {

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { session } from '../../bridge/__fixtures__/helpers'
 import type { FeedMessage, OfficeSnapshot, SessionRef } from '../../shared/office/types'
 import { withAccounts, withoutAccounts } from './office-feed'
@@ -64,6 +64,7 @@ function setup(snapshot: OfficeSnapshot | null) {
       accounts: [{ ...ACCOUNT, isActive: accounts.isActive }],
       projectsToday: accounts.today
     }),
+    projectsToday: () => accounts.today,
     onOfficeChange: (listener: () => void) => {
       accounts.officeListeners.add(listener)
       return () => {
@@ -175,6 +176,17 @@ describe('today’s tokens per project', () => {
     expect(received[0]).toMatchObject({ snapshot: { projectsToday: [{ tokens: 10 }] } })
     expect(received[2]).toMatchObject({ projectsToday: [{ projectKey: 'p_1', tokens: 25 }] })
     expect(received[4]).toMatchObject({ snapshot: { projectsToday: [{ tokens: 25 }] } })
+  })
+
+  it('a patch with unchanged totals does not rebuild the snapshot', () => {
+    const { host, accounts, received, say } = setup(snapshot())
+    say({ type: 'hello', v: 1, snapshot: snapshot() })
+    const hostSnapshot = vi.spyOn(host, 'snapshot')
+    const decorate = vi.spyOn(accounts, 'decorate')
+    say({ type: 'patch', v: 1, seq: 4, upserts: [session('b')], removed: [] })
+    expect(hostSnapshot).not.toHaveBeenCalled()
+    expect(decorate).not.toHaveBeenCalled()
+    expect(received.at(-1)).not.toHaveProperty('projectsToday')
   })
 
   it('a listener that took the snapshot first is sent no unchanged totals', () => {

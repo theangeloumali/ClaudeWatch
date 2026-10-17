@@ -39,6 +39,7 @@ const accounts = {
     accounts: [ACCOUNT]
   }),
   onOfficeChange: vi.fn(() => () => {}),
+  projectsToday: () => undefined,
   isWatchingAccounts: false,
   onWatchingChange: vi.fn((_listener: () => void) => () => {}),
   onUsageDurable: vi.fn((_listener: () => void) => vi.fn())
