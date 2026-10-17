@@ -8,7 +8,10 @@ import { stepMovers } from '../../citizens/mover-step'
 import { routePhase, routePose, type RoutePoint } from '../../citizens/route-pose'
 import { NOSE_M, zebraTraffic } from '../../citizens/zebra-traffic'
 import { SceneBodies } from '../../scene/BodySpace'
+import { EDO } from '../../themes/palettes'
+import { fallbackDress } from '../fallback-dress'
 import { reversed } from '../road-net'
+import { groundQuads } from '../town-ground'
 import {
   isAsphalt,
   liveCity,
@@ -115,6 +118,24 @@ function vehicleLanes(scenario: Scenario) {
       }
     })
   return { samples, offLane, onDivider }
+}
+
+// Every vehicle route sample outside the painted carriageway, keyed by kind and spot.
+function vehiclesOffPaving(scenario: Scenario): string[] {
+  const paved = groundQuads(scenario.plan, fallbackDress(EDO)).filter(
+    (quad) => quad.layer === 'carriageway'
+  )
+  return scenario.trips
+    .filter((trip) => trip.kind !== 'citizen')
+    .flatMap((trip) =>
+      trip.route.points
+        .slice(1)
+        .flatMap((to, index) =>
+          [...samplesOf(trip.route.points[index], to), to]
+            .filter((point) => !paved.some((rect) => within(rect, point)))
+            .map((point) => `${trip.kind}@${point.x.toFixed(2)}:${point.z.toFixed(2)}`)
+        )
+    )
 }
 
 // MoverLayer's motion, replayed headless through the same step.
@@ -241,6 +262,11 @@ describe.each([
       offLane: 0,
       onDivider: 0
     })
+  })
+
+  it('keeps every vehicle on the painted carriageway, through corners and dead ends', () => {
+    const off = vehiclesOffPaving(build())
+    expect(off.length, [...new Set(off)].slice(0, 12).join(' ')).toBe(0)
   })
 
   it('closes each transit and runabout loop on its lanes, never cutting a corner', () => {
