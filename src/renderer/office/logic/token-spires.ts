@@ -1,3 +1,4 @@
+import { clamp } from '../../../shared/range'
 import { FACADE_LAYER_STEP_M } from '../scene/building-window-parts'
 
 const FIRST_MILESTONE = 1_000_000
@@ -36,5 +37,5 @@ export function stageFor(tokens: number | null): number {
 }
 
 export function spireHeight(stage: number): number {
-  return Math.min(SPIRE_MAX_STAGES, Math.max(0, stage)) * SPIRE_MODULE_M
+  return clamp(stage, [0, SPIRE_MAX_STAGES]) * SPIRE_MODULE_M
 }

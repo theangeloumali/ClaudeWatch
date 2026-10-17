@@ -87,7 +87,7 @@ it('100 token patches write no spire or height into the saved world document', (
   }
   // The precondition the rule depends on: the patches did raise the spire.
   expect(signals.current().buildings.get(HOME)?.spireStage).toBeGreaterThan(3)
-  expect(places.place(HOME).topAt(Date.now(), true)?.y).toBeGreaterThan(ROOF.y)
+  expect(places.topAt(HOME, Date.now(), true)?.y).toBeGreaterThan(ROOF.y)
   const saved = JSON.stringify(feed.getWorldDocumentStore?.()?.get().document)
   expect(saved).toBe(savedAtStart)
   expect(saved).not.toMatch(/spire|stage|tokensToday|height/i)

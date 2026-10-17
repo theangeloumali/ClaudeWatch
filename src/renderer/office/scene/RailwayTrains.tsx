@@ -8,6 +8,7 @@ import { useQualityLevel } from '../quality-store'
 import type { ThemePalette } from '../themes/types'
 import { RAILWAY, type RailwayPlan } from '../town/railway-plan'
 import { CAR_LENGTH, laneAt, trainRuns, type CarKind } from '../town/railway-runs'
+import { cleanRange, flush, writeChanged, type DirtyRange } from './mark-mesh'
 
 // Bogies this near a car's middle keep its body on the deck through the ring's tight bends.
 const BOGIE_M = 1.5
@@ -65,7 +66,7 @@ export function trainSet(
   for (const car of runs.flatMap((run) => run.cars))
     counts.set(car.kind, (counts.get(car.kind) ?? 0) + 1)
   const material = new MeshStandardMaterial({ vertexColors: true, roughness: 0.7, metalness: 0.1 })
-  const meshes = new Map<CarKind, InstancedMesh>()
+  const meshes = new Map<CarKind, { mesh: InstancedMesh; moved: DirtyRange }>()
   const group = new Group()
   const tint = new Color()
   for (const [kind, count] of counts) {
@@ -75,7 +76,7 @@ export function trainSet(
     if (kind === 'wagon')
       for (let slot = 0; slot < count; slot++)
         mesh.setColorAt(slot, tint.set(palette[WAGON_TINTS[slot % WAGON_TINTS.length]]))
-    meshes.set(kind, mesh)
+    meshes.set(kind, { mesh, moved: cleanRange() })
     group.add(mesh)
   }
 
@@ -97,17 +98,15 @@ export function trainSet(
           place.position.set((front.x + rear.x) / 2, RAILWAY.railTop, (front.z + rear.z) / 2)
           place.rotation.set(0, car.isReversed ? heading + Math.PI : heading, 0)
           place.updateMatrix()
-          meshes.get(car.kind)?.setMatrixAt(car.slot, place.matrix)
+          const cars = meshes.get(car.kind)
+          if (cars)
+            writeChanged(cars.mesh.instanceMatrix, place.matrix.elements, car.slot, cars.moved)
         }
       }
-      for (const mesh of meshes.values()) {
-        mesh.instanceMatrix.clearUpdateRanges()
-        mesh.instanceMatrix.addUpdateRange(0, mesh.count * 16)
-        mesh.instanceMatrix.needsUpdate = true
-      }
+      for (const { mesh, moved } of meshes.values()) flush(mesh.instanceMatrix, moved)
     },
     dispose() {
-      for (const mesh of meshes.values()) {
+      for (const { mesh } of meshes.values()) {
         mesh.geometry.dispose()
         mesh.dispose()
       }

@@ -50,6 +50,14 @@ const DEFAULT_SCENE_HEIGHT = 8
 const DRAG_SMOOTH_SEC = 0.05
 const { ACTION } = CameraControlsImpl
 
+// One point to frame: an agent or the player.
+const pointBounds = ({ x, z }: { x: number; z: number }): Bounds => ({
+  minX: x,
+  maxX: x,
+  minZ: z,
+  maxZ: z
+})
+
 interface CameraRigProps {
   floorCount: number
   // The extent of everything drawn; the widest zoom frames all of it.
@@ -94,7 +102,6 @@ export function CameraRig(props: CameraRigProps) {
   // Whether the owner has moved the camera by hand since the last fly-to an agent.
   const hasMovedSinceFlyRef = useRef(false)
   const targetScratch = useMemo(() => new Vector3(), [])
-  const viewScratch = useMemo(() => new Vector3(), [])
   const viewRef = useRef<OfficeView>({
     x: 0,
     y: 0,
@@ -140,15 +147,19 @@ export function CameraRig(props: CameraRigProps) {
     startTransition(): void {
       isTransitioningRef.current = true
     },
-    manualMove(): void {
+    // Ends what the camera was doing; only a move by hand counts as moved since the last fly-to.
+    release(hasMoved: boolean): void {
       gesturesRef.current?.cancel()
       rig.stopTransition()
       rig.takeOver()
-      hasMovedSinceFlyRef.current = true
+      hasMovedSinceFlyRef.current = hasMoved
       followRef.current = null
       isRidingRef.current = false
       workstationAgentRef.current = null
       workstationSpecRef.current = null
+    },
+    manualMove(): void {
+      rig.release(true)
       latestRef.current.onManualMove?.()
     },
     stopTransition(): void {
@@ -169,14 +180,7 @@ export function CameraRig(props: CameraRigProps) {
       isTransitioningRef.current = false
     },
     preparePreset(): void {
-      gesturesRef.current?.cancel()
-      rig.stopTransition()
-      rig.takeOver()
-      followRef.current = null
-      isRidingRef.current = false
-      workstationAgentRef.current = null
-      workstationSpecRef.current = null
-      hasMovedSinceFlyRef.current = false
+      rig.release(false)
     },
     frame(
       bounds: Bounds,
@@ -217,17 +221,17 @@ export function CameraRig(props: CameraRigProps) {
         insets: latestRef.current.cityInsets
       })
     },
-    frameAgent(agent: AgentView): void {
-      rig.frame(
-        { minX: agent.x, maxX: agent.x, minZ: agent.z, maxZ: agent.z },
-        {
-          minZoom: BAND_ZOOM.desk,
-          maxZoom: BAND_ZOOM.desk,
-          height: LOOK_HEIGHT * 2,
-          elevation: agentElevation(agent),
-          insets: latestRef.current.cityInsets
-        }
-      )
+    // The close-up is a zoom, never a dolly (N7). A ride keeps the body in view by itself, so
+    // only a still close-up anchors to the agent's room.
+    frameAgent(agent: AgentView, zoom = BAND_ZOOM.desk): void {
+      rig.frame(pointBounds(agent), {
+        minZoom: zoom,
+        maxZoom: zoom,
+        height: LOOK_HEIGHT * 2,
+        elevation: agentElevation(agent),
+        insets: latestRef.current.cityInsets
+      })
+      if (isRidingRef.current) return
       const floor = floorForAgent({
         agent,
         floors: latestRef.current.visibleFloors,
@@ -238,21 +242,11 @@ export function CameraRig(props: CameraRigProps) {
       followRef.current = followAnchor(agent, floor.rooms, loungesByRoom(floor.zones))
       followElevationRef.current = agentElevation(agent)
     },
-    // The close-up is a zoom, never a dolly (N7): in to the floor band, or the owner's closer zoom.
+    // In to the floor band, or the owner's closer zoom.
     followAgent(agent: AgentView): void {
       rig.preparePreset()
-      const zoom = Math.max(camera.zoom, BAND_ZOOM.floor)
-      rig.frame(
-        { minX: agent.x, maxX: agent.x, minZ: agent.z, maxZ: agent.z },
-        {
-          minZoom: zoom,
-          maxZoom: zoom,
-          height: LOOK_HEIGHT * 2,
-          elevation: agentElevation(agent),
-          insets: latestRef.current.cityInsets
-        }
-      )
       isRidingRef.current = true
+      rig.frameAgent(agent, Math.max(camera.zoom, BAND_ZOOM.floor))
     },
     frameWorkstation(agent: AgentView, focusedSpec?: WorkstationSpec): void {
       const controls = controlsRef.current
@@ -289,15 +283,12 @@ export function CameraRig(props: CameraRigProps) {
     },
     framePlayer(position: { x: number; z: number }): void {
       rig.preparePreset()
-      rig.frame(
-        { minX: position.x, maxX: position.x, minZ: position.z, maxZ: position.z },
-        {
-          minZoom: BAND_ZOOM.desk,
-          maxZoom: BAND_ZOOM.desk,
-          height: 2.8,
-          insets: latestRef.current.cityInsets
-        }
-      )
+      rig.frame(pointBounds(position), {
+        minZoom: BAND_ZOOM.desk,
+        maxZoom: BAND_ZOOM.desk,
+        height: 2.8,
+        insets: latestRef.current.cityInsets
+      })
     },
     frameCity(): void {
       const { scene, floor, cityEnvelope } = latestRef.current
@@ -482,11 +473,11 @@ export function CameraRig(props: CameraRigProps) {
   useFrame(() => {
     const controls = controlsRef.current
     if (!controls) return
-    controls.getTarget(viewScratch, false)
+    controls.getTarget(targetScratch, false)
     const view = viewRef.current
-    view.x = viewScratch.x
-    view.y = viewScratch.y
-    view.z = viewScratch.z
+    view.x = targetScratch.x
+    view.y = targetScratch.y
+    view.z = targetScratch.z
     view.zoom = camera.zoom
     view.azimuth = controls.azimuthAngle
     view.polar = controls.polarAngle

@@ -1,70 +1,70 @@
 import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import type { Mesh } from 'three'
-import { buildingPlace, type BuildingPlace, type PlaceTop } from '../logic/building-place'
+import { buildingPlaces, type BuildingPlaces, type BuildingRoof } from '../logic/building-place'
 import { cityClock } from '../logic/city-clock'
 import { SPIRE_BASE_GAP_M, SPIRE_MAX_M } from '../logic/token-spires'
+import type { FloorGeometry } from '../scene-model'
 import { moduleFrames, spireModules } from '../themes/spire-parts'
-import type { OfficeTheme } from '../themes/types'
+import type { OfficeTheme, ThemePalette } from '../themes/types'
 import { UNIT_SHAPES } from '../themes/unit-parts'
+import { buildingGroupName } from './all-floor-model'
+import { BatchedScene } from './BatchedScene'
+import { spireBatchRevision, type CitySpire } from './batch-revision'
+import { CompanyLens } from './CompanyLens'
 import { Matte } from './InstancedParts'
 
-// How much of the tallest spire stands now: the live roof above the crown, eased and capped.
+// How much of the tallest spire stands now: the live top above the crown, eased.
 export function spireShare(
-  place: BuildingPlace,
-  crownTopY: number,
+  places: Pick<BuildingPlaces, 'topAt' | 'roofOf'>,
+  buildingId: string,
   nowMs: number,
   isPinned: boolean
 ): number {
-  const top = place.topAt(nowMs, isPinned)
-  if (!top) return 0
-  return Math.max(0, top.y - crownTopY - SPIRE_BASE_GAP_M) / SPIRE_MAX_M
+  const roof = places.roofOf(buildingId)
+  const top = places.topAt(buildingId, nowMs, isPinned)
+  if (!roof || !top) return 0
+  return Math.max(0, top.y - roof.crown.y - SPIRE_BASE_GAP_M) / SPIRE_MAX_M
 }
 
-// Unit boxes inside the shell's batch (+0 draws); only a growing module uploads its matrix.
-// Only the stages reached today mount: a hidden module still costs its triangles in the batch.
+// Unit boxes, placed each frame from the roof the shell gives the place store; only a growing
+// module moves. Only the stages reached today mount: a hidden module still costs triangles.
 export function TokenSpire({
   buildingId,
-  deck,
-  roof,
   theme,
   stage
 }: {
   buildingId: string
-  deck: PlaceTop
-  roof: PlaceTop
   theme: OfficeTheme
   stage: number
 }) {
-  const baseY = roof.y + SPIRE_BASE_GAP_M
   const modules = useMemo(() => spireModules(theme).slice(0, stage), [theme, stage])
   const meshes = useRef<(Mesh | null)[]>([])
+  const drawn = useRef<{ roof: BuildingRoof | null; share: number } | null>(null)
   useFrame(() => {
-    const share = spireShare(
-      buildingPlace(buildingId),
-      roof.y,
-      cityClock.now(),
-      cityClock.isPinned()
-    )
-    const frames = moduleFrames(share * SPIRE_MAX_M, baseY - deck.y)
-    meshes.current.forEach((mesh, stage) => {
-      const frame = frames[stage]
+    const roof = buildingPlaces.roofOf(buildingId)
+    const share = spireShare(buildingPlaces, buildingId, cityClock.now(), cityClock.isPinned())
+    if (drawn.current?.roof === roof && drawn.current.share === share) return
+    drawn.current = { roof, share }
+    const baseY = (roof?.crown.y ?? 0) + SPIRE_BASE_GAP_M
+    const frames = roof ? moduleFrames(share * SPIRE_MAX_M, baseY - roof.deck.y) : []
+    meshes.current.forEach((mesh, index) => {
+      const frame = frames[index]
       if (!mesh) return
-      mesh.visible = frame !== null
-      if (!frame) return
-      mesh.position.y = baseY + frame.y
+      mesh.visible = Boolean(roof && frame)
+      if (!roof || !frame) return
+      mesh.position.set(roof.crown.x, baseY + frame.y, roof.crown.z)
       mesh.scale.y = frame.height
     })
   })
   return (
     <group name={`token-spire:${buildingId}`}>
-      {modules.map((part, stage) => (
+      {modules.map((part, index) => (
         <mesh
-          key={stage}
+          key={index}
           ref={(mesh) => {
-            meshes.current[stage] = mesh
+            meshes.current[index] = mesh
           }}
-          position={[roof.x, baseY + part.at[1], roof.z]}
           scale={part.size}
           visible={false}
         >
@@ -73,5 +73,28 @@ export function TokenSpire({
         </mesh>
       ))}
     </group>
+  )
+}
+
+// Every office's spire in one batch of its own, so a stage reached rebuilds only it (+1 draw).
+// Its own lens re-tints it with the offices, as when spires stood in their batch.
+export function TokenSpires({
+  spires,
+  floors,
+  palette
+}: {
+  spires: readonly CitySpire[]
+  floors: readonly FloorGeometry[]
+  palette: ThemePalette
+}) {
+  return (
+    <BatchedScene revision={spireBatchRevision(spires)}>
+      {spires.map((spire) => (
+        <group key={spire.buildingId} name={buildingGroupName(spire.buildingId)}>
+          <TokenSpire {...spire} />
+        </group>
+      ))}
+      <CompanyLens floors={floors} palette={palette} />
+    </BatchedScene>
   )
 }

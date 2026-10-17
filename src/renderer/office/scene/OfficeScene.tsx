@@ -145,10 +145,7 @@ function OfficeScene(props: OfficeSceneProps) {
   const [officeAnchors] = useState<OfficeNameAnchors>(() => new Map())
   const [canvasRoot, setCanvasRoot] = useState<RootState | null>(null)
   const spireStages = useSpireStages()
-  const { surfaces, groups, townFloor, officeLabels, displays, revision } = useSceneFloorData({
-    ...props,
-    spireStages
-  })
+  const { surfaces, groups, townFloor, officeLabels, displays, revision } = useSceneFloorData(props)
   const visibleCards = useMemo(() => {
     const isCityView = props.viewMode === 'city'
     const roomWorkers = props.focusedRoomId
@@ -302,14 +299,19 @@ function OfficeScene(props: OfficeSceneProps) {
           <CompanyLens floors={surfaces} palette={theme.palette} />
         </BatchedScene>
         {!props.isLayoutPreview && (
-          <CitySigns venues={settings.town ? displayedVenues : undefined} palette={theme.palette} />
-        )}
-        {!props.isLayoutPreview && (
-          <LeaderCrowns agents={agents} sessions={props.sessions} palette={theme.palette} />
-        )}
-        {!props.isLayoutPreview && <ConstructionRig floors={props.allFloors} theme={theme} />}
-        {!props.isLayoutPreview && band !== 'building' && (
-          <WorkstationScreens displays={visibleWorkstationDisplays(displays, selectedAgentKey)} />
+          <>
+            <CitySigns
+              venues={settings.town ? displayedVenues : undefined}
+              palette={theme.palette}
+            />
+            <LeaderCrowns agents={agents} sessions={props.sessions} palette={theme.palette} />
+            <ConstructionRig floors={props.allFloors} theme={theme} />
+            {band !== 'building' && (
+              <WorkstationScreens
+                displays={visibleWorkstationDisplays(displays, selectedAgentKey)}
+              />
+            )}
+          </>
         )}
         {settings.town && (
           <>

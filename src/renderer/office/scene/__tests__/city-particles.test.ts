@@ -4,7 +4,7 @@ import { createCityEventLog } from '../../../office-live/city-events'
 import { buildingIdOf } from '../../logic/city-signals'
 import { CITY_LAYER_BUDGET, measureLayer } from '../../themes/city-layer-budget.test-utils'
 import { listThemes } from '../../themes/registry'
-import { markCeiling } from '../city-marks'
+import { MARK_RISE_M } from '../city-marks'
 import { BURST_SPARKS } from '../city-particle-motion'
 import { createParticleLayer, type ParticleLayer } from '../CityParticles'
 import {
@@ -54,7 +54,7 @@ describe('error and rate-limit smoke', () => {
       expect(puffs.every(near(ROOF.x, ROOF.z, 2))).toBe(true)
       for (const puff of puffs) {
         expect(puff.position.y).toBeGreaterThanOrEqual(ROOF.y)
-        expect(puff.position.y).toBeLessThanOrEqual(markCeiling(ROOF))
+        expect(puff.position.y).toBeLessThanOrEqual(ROOF.y + MARK_RISE_M)
       }
     }
   })

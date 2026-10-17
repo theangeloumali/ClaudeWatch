@@ -2,23 +2,18 @@ import { Color, InstancedMesh, Matrix4, OrthographicCamera, Quaternion, Vector3 
 import { describe, expect, it } from 'vitest'
 import { contrastRatio } from '../../themes/contrast'
 import { BAND_ZOOM, ISO_POLAR, ISO_START_AZIMUTH } from '../../logic/camera-bands'
-import { MARK_RISE_M } from '../city-marks'
+import { MARK_RISE_M, markHeadroomM } from '../city-marks'
 import { SIGN_BOARD, SIGN_ICONS, signInk, type SignState } from '../../logic/project-signs'
 import { CITY_LAYER_BUDGET, measureLayer } from '../../themes/city-layer-budget.test-utils'
 import { listThemes } from '../../themes/registry'
-import {
-  createCitySignsLayer,
-  SIGN_DISC_DEPTH,
-  type SignHost,
-  VENUE_BOARD
-} from '../city-signs-layer'
+import { createCitySignsLayer, SIGN_DISC_DEPTH, type SignHost } from '../city-signs-layer'
 import { cellOffset, createSignAtlas } from '../sign-atlas'
 
 const VIEW = { width: 1280, height: 800 }
 // From zoom 2 in: the city overview, the building and floor bands, to the desk threshold.
 const BAND_ZOOMS = [2, 4, BAND_ZOOM.building, 20, BAND_ZOOM.floor, 54]
-// Below 18 px ÷ 11.4 m (zoom ≈ 1.58) an 18 px board would clear MARK_RISE_M, so metres cap it.
-const CAPPED_ZOOMS = [0.1, 0.25, 0.5, 1, 1.5]
+// Out to the rig's farthest zoom, where an 18 px board stands far over MARK_RISE_M.
+const FAR_ZOOMS = [0.1, 0.25, 0.5, 1, 1.5]
 
 function cameraAt(azimuth: number, zoom: number): OrthographicCamera {
   const camera = new OrthographicCamera(
@@ -153,8 +148,9 @@ describe('city signs', () => {
     expect(
       Object.values(SIGN_BOARD).filter((board) => contrastRatio('#FFFFFF', board) < 3).length
     ).toBeGreaterThanOrEqual(3)
+    // A venue's board is its theme's gold.
     for (const theme of listThemes()) {
-      const board = VENUE_BOARD(theme.palette)
+      const board = theme.palette.gold
       expect(contrastRatio(signInk(board), board)).toBeGreaterThanOrEqual(3)
     }
     const layer = createCitySignsLayer(null)
@@ -183,17 +179,18 @@ describe('city signs', () => {
     }
   })
 
-  it('a sign never rises more than MARK_RISE_M over its roof, however far out the camera is', () => {
-    for (const zoom of [...CAPPED_ZOOMS, ...BAND_ZOOMS]) {
+  it('Horizon keeps room for a screen-sized sign at the farthest zoom', () => {
+    for (const zoom of [...FAR_ZOOMS, ...BAND_ZOOMS]) {
       const camera = cameraAt(ISO_START_AZIMUTH, zoom)
       const layer = createCitySignsLayer(null)
       layer.update(frame(camera, hosts(1)))
-      const [disc] = meshesOf(layer)
-      const board = posed(disc, 0)
-      expect(board.position.y + board.scale.y / 2).toBeLessThanOrEqual(8 + MARK_RISE_M + 1e-4)
+      const board = posed(meshesOf(layer)[0], 0)
+      const upY = new Vector3(0, 1, 0).applyQuaternion(camera.quaternion).y
+      expect(spanPxOf(camera, board)).toBeGreaterThanOrEqual(18 - 1e-3)
       expect(board.position.y - board.scale.y / 2).toBeGreaterThan(8)
-      // The cap binds out here: the board is held under the 18 px it would otherwise span.
-      if (CAPPED_ZOOMS.includes(zoom)) expect(spanPxOf(camera, board)).toBeLessThan(18)
+      // The roof stands at the scene top, so the board must fit in Horizon's room above it.
+      const room = MARK_RISE_M + markHeadroomM(zoom, upY)
+      expect(board.position.y + board.scale.y / 2).toBeLessThanOrEqual(8 + room)
     }
   })
 
@@ -221,8 +218,10 @@ describe('sign atlas', () => {
   it('each sign icon has its own atlas cell, v from the bottom', () => {
     const cells = SIGN_ICONS.map((icon) => cellOffset(icon).join(','))
     expect(new Set(cells).size).toBe(SIGN_ICONS.length)
-    expect(cellOffset(SIGN_ICONS[0])).toEqual([0, 0.8])
-    expect(cellOffset(SIGN_ICONS[5])).toEqual([0.25, 0.6])
+    // Four to a row, as many rows as the icons fill.
+    const rows = Math.ceil(SIGN_ICONS.length / 4)
+    expect(cellOffset(SIGN_ICONS[0])).toEqual([0, 1 - 1 / rows])
+    expect(cellOffset(SIGN_ICONS[5])).toEqual([0.25, 1 - 2 / rows])
   })
 
   it('is null without a canvas or Path2D, so a test or a headless page draws no icons', () => {

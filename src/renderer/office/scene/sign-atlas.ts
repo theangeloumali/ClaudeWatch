@@ -1,9 +1,10 @@
-import { CanvasTexture, SRGBColorSpace } from 'three'
+import type { CanvasTexture } from 'three'
 import { SIGN_ICONS, type SignIcon } from '../logic/project-signs'
 import { SIGN_ICON_PATHS } from './sign-icons'
+import { canvas2D, canvasTexture } from './textures'
 
 const COLUMNS = 4
-const ROWS = 5
+const ROWS = Math.ceil(SIGN_ICONS.length / COLUMNS)
 const CELL_PX = 128
 const ICON_UNITS = 24
 const ICON_PX = 84
@@ -18,11 +19,9 @@ export function cellOffset(icon: SignIcon): [number, number] {
 // White strokes, tinted per sign by its face's instance colour. Null in a test or headless page.
 export function createSignAtlas(): CanvasTexture | null {
   if (typeof Path2D === 'undefined' || typeof document === 'undefined') return null
-  const canvas = document.createElement('canvas')
-  canvas.width = COLUMNS * CELL_PX
-  canvas.height = ROWS * CELL_PX
-  const context = canvas.getContext('2d')
-  if (!context) return null
+  const made = canvas2D(COLUMNS * CELL_PX, ROWS * CELL_PX)
+  if (!made) return null
+  const [canvas, context] = made
   const scale = ICON_PX / ICON_UNITS
   const inset = (CELL_PX - ICON_PX) / 2
   context.strokeStyle = '#FFFFFF'
@@ -40,8 +39,7 @@ export function createSignAtlas(): CanvasTexture | null {
     context.lineWidth = STROKE_UNITS
     for (const path of SIGN_ICON_PATHS[icon]) context.stroke(new Path2D(path))
   })
-  const texture = new CanvasTexture(canvas)
-  texture.colorSpace = SRGBColorSpace
+  const texture = canvasTexture(canvas)
   texture.repeat.set(1 / COLUMNS, 1 / ROWS)
   return texture
 }

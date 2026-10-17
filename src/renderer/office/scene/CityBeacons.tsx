@@ -1,27 +1,17 @@
-import { useFrame } from '@react-three/fiber'
-import { useEffect, useMemo } from 'react'
+import { useMemo } from 'react'
 import { Color, CylinderGeometry, DoubleSide, MeshBasicMaterial } from 'three'
-import { useQualityLevel } from '../quality-store'
-import type { ZoomBand } from '../logic/camera-bands'
 import type { BuildingSignal } from '../logic/city-signals'
 import { STATE_COLOR } from '../office-palette'
 import type { FloorGeometry } from '../scene-model'
 import type { ThemePalette } from '../themes/types'
 import { groundLayerY } from '../town/town-ground'
-import {
-  createMarkMesh,
-  isMarkLevel,
-  markCeiling,
-  markSites,
-  readCityMarks,
-  screenMetres,
-  type CityMarkFrame,
-  type MarkMesh
-} from './city-marks'
+import { buildingKeyOf } from './all-floor-model'
+import { easeOut, MARK_RISE_M, markSites, screenMetres, type CityMarkFrame } from './city-marks'
+import { createMarkMesh, type MarkMesh } from './mark-mesh'
+import { markGated, useMarkLayer, type MarkLayerProps } from './use-mark-layer'
 
 const MAX_SITES = 8
 const PARTS_PER_SITE = 3
-const COLUMN_M = 12
 const COLUMN_PX = 8
 // The ring is a short wall, so it reads as a band from the iso camera at any zoom.
 const RING_PX = 5
@@ -38,14 +28,14 @@ export interface BeaconLayer {
   dispose(): void
 }
 
-const easeOut = (share: number): number => 1 - (1 - share) * (1 - share)
 const needsYou = (signal: BuildingSignal): boolean => signal.needsYou
 
 // Half the diagonal of a building's widest plates: the ring clears every corner.
 export function beaconFootprints(floors: readonly FloorGeometry[]): Map<string, number> {
   const sizes = new Map<string, { width: number; depth: number }>()
-  for (const { buildingId, width, depth } of floors) {
-    if (!buildingId) continue
+  for (const floor of floors) {
+    const buildingId = buildingKeyOf(floor)
+    const { width, depth } = floor
     const size = sizes.get(buildingId) ?? { width: 0, depth: 0 }
     sizes.set(buildingId, {
       width: Math.max(size.width, width),
@@ -77,14 +67,13 @@ export function createBeaconLayer(palette: ThemePalette): BeaconLayer {
     mesh: marks.mesh,
     draw(frame, footprints) {
       let count = 0
-      const sites = frame.band === 'desk' ? [] : markSites(frame.signals, needsYou, MAX_SITES)
-      for (const buildingId of sites) {
+      for (const buildingId of markSites(frame, needsYou, MAX_SITES)) {
         const top = frame.topOf(buildingId)
         if (!top) continue
-        const columnM = Math.min(COLUMN_M, markCeiling(top) - top.y)
-        if (frame.band === 'building' && columnM > 0) {
+        if (frame.band === 'building') {
           const radius = screenMetres(COLUMN_PX / 2, frame.zoom)
-          marks.put(count++, { ...top, scaleX: radius, scaleY: columnM, scaleZ: radius }, signal)
+          const column = { ...top, scaleX: radius, scaleY: MARK_RISE_M, scaleZ: radius }
+          marks.put(count++, column, signal)
         }
         const footprint = footprints.get(buildingId) ?? DEFAULT_FOOTPRINT_M
         const height = screenMetres(RING_PX, frame.zoom)
@@ -103,21 +92,13 @@ export function createBeaconLayer(palette: ThemePalette): BeaconLayer {
   }
 }
 
-interface CityBeaconsProps {
+interface CityBeaconsProps extends MarkLayerProps {
   floors: readonly FloorGeometry[]
-  palette: ThemePalette
-  band: ZoomBand
 }
 
-function BeaconMesh({ floors, palette, band }: CityBeaconsProps) {
-  const layer = useMemo(() => createBeaconLayer(palette), [palette])
-  useEffect(() => () => layer.dispose(), [layer])
+function BeaconMesh({ floors, ...props }: CityBeaconsProps) {
   const footprints = useMemo(() => beaconFootprints(floors), [floors])
-  // Reads the module stores each frame: no React commit while the city is idle.
-  useFrame(({ camera }) => layer.draw(readCityMarks(band, camera.zoom), footprints))
-  return <primitive object={layer.mesh} />
+  return useMarkLayer(createBeaconLayer, (layer, frame) => layer.draw(frame, footprints), props)
 }
 
-export function CityBeacons(props: CityBeaconsProps) {
-  return isMarkLevel(useQualityLevel()) ? <BeaconMesh {...props} /> : null
-}
+export const CityBeacons = markGated(BeaconMesh)

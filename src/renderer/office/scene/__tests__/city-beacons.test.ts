@@ -123,6 +123,8 @@ describe('needs-you beacons', () => {
     ]
     const footprints = beaconFootprints(floors)
     expect(footprints.get(HOME)).toBeCloseTo(Math.hypot(20, 30) / 2)
-    expect(footprints.size).toBe(1)
+    // A lone storey is its own building, keyed as its roof is.
+    expect(footprints.get('c')).toBeCloseTo(Math.hypot(floors[2].width, floors[2].depth) / 2)
+    expect(footprints.size).toBe(2)
   })
 })

@@ -36,7 +36,7 @@ export function LeaderCrowns({
     layer.update({
       crowned: citySignalStore.current().leaders.crowned,
       agents: byKey,
-      buildingOf: (agentKey) => buildings.get(agentKey) ?? null,
+      buildings,
       places: buildingPlaces,
       poses: officePoses,
       camera,
@@ -44,5 +44,5 @@ export function LeaderCrowns({
       isPinned: cityClock.isPinned()
     })
   )
-  return <primitive object={layer.group} />
+  return <primitive object={layer.mesh} />
 }

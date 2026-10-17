@@ -61,7 +61,7 @@ function placesWithRoof(roof = ROOF) {
 
 const rigFrame = (overrides: Partial<RigFrame>): RigFrame => ({
   events: [],
-  floorsOf: (buildingId) => (buildingId === HOME ? tower : undefined),
+  storeys: new Map([[HOME, { ground: tower[0], top: tower[tower.length - 1] }]]),
   places: placesWithRoof(),
   nowMs: T0,
   isPinned: false,
@@ -111,7 +111,7 @@ describe('construction rig', () => {
     log.observe('hello', [at(T0, 5e6)], T0, day(5e6))
     const places = placesWithRoof()
     places.setStage(HOME, stageFor(5e6), T0)
-    expect(places.place(HOME).topAt(T0, false)?.y).toBeCloseTo(
+    expect(places.topAt(HOME, T0, false)?.y).toBeCloseTo(
       ROOF.y + SPIRE_BASE_GAP_M + spireHeight(stageFor(5e6))
     )
     const layer = createConstructionRigLayer(themeForTeam())

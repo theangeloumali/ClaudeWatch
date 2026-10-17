@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber'
 import { useMemo, useRef } from 'react'
 import { Vector3, type Mesh } from 'three'
 import { clipPlanes, groundCover, type CameraPose, type SceneBox } from '../logic/camera-bands'
+import { markHeadroomM } from './city-marks'
 import { Matte } from './InstancedParts'
 
 const FLAT = -Math.PI / 2
@@ -14,6 +15,7 @@ const PLANE_EPSILON_M = 1e-3
 export function Horizon({ box, color }: { box: SceneBox; color: string }) {
   const groundRef = useRef<Mesh>(null)
   const forward = useMemo(() => new Vector3(), [])
+  const up = useMemo(() => new Vector3(), [])
   // After camera-controls (priority -1), so the pose is this frame's.
   useFrame(({ camera, size, controls }) => {
     const pose: CameraPose = {
@@ -22,7 +24,9 @@ export function Horizon({ box, color }: { box: SceneBox; color: string }) {
       halfWidth: size.width / 2 / camera.zoom,
       halfHeight: size.height / 2 / camera.zoom
     }
-    const planes = clipPlanes(box, pose)
+    // Signs and crowns keep their size on screen, so their room grows as the camera pulls out.
+    const upY = up.set(0, 1, 0).applyQuaternion(camera.quaternion).y
+    const planes = clipPlanes({ ...box, maxY: box.maxY + markHeadroomM(camera.zoom, upY) }, pose)
     if (planes.pushBack > 0) {
       // Orthographic: distance changes what is clipped and picked, never the picture.
       camera.position.addScaledVector(forward, -planes.pushBack)
