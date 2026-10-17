@@ -2,7 +2,7 @@ import type { Point } from '../../../office/sim/path'
 import type { CitizenRoute, RoutePoint } from '../citizens/route-pose'
 import type { Leg } from './road-net'
 import { ROAD_WIDTH_M, SIDEWALK_M } from './town-grid'
-import type { RoadClass } from './town-roads'
+import type { RoadClass } from '../../../shared/office/town-roads'
 
 // A city lane's centre as a share of the half-carriageway. An avenue runs two lanes each way,
 // split by the dashes at half, and traffic keeps to the outer one (clearspent-4).

@@ -9,7 +9,6 @@ import type { TownPlan } from './town-plan'
 import {
   MOVER_COUNTS,
   destinationOf,
-  themeOfLot,
   type Destination,
   type TownInput,
   type Trip
@@ -163,31 +162,20 @@ export function citizenTrips(town: TownInput, count: number): Trip[] {
     const loop = loops.length > 0 && isStroller(index) ? loops[drawIndex(seed, loops)] : null
     return { seed, destination, loop, walk: loop ? null : walkOf(ground, seed, destination) }
   })
-  // Past the budget a theme has no draw left: its streets get the floor's townsfolk.
+  // Every citizen wears the floor's townsfolk, as many figures as the draw budget allows.
   const budget = MOVER_COUNTS[town.detail].citizenKinds
-  const drawn = [
-    ...new Set([
-      town.floorThemeId,
-      ...walked.flatMap(({ walk }) => (walk ? [themeOfLot(town, walk.home.id)] : []))
-    ])
-  ].slice(0, budget)
-  const slots = Math.max(1, Math.min(FIGURES_PER_THEME, Math.floor(budget / drawn.length)))
-  const countByTheme = new Map<string, number>()
+  const slots = Math.max(1, Math.min(FIGURES_PER_THEME, budget))
+  let rank = 0
 
   return walked.flatMap(({ seed, destination, loop, walk }): Trip[] => {
     if (!loop && !walk) return []
-    // A stroller has no home lot: it wears the floor's dress.
-    const owner = walk ? themeOfLot(town, walk.home.id) : town.floorThemeId
-    const themeId = drawn.includes(owner) ? owner : town.floorThemeId
-    const rank = countByTheme.get(themeId) ?? 0
-    countByTheme.set(themeId, rank + 1)
     const speed = between(STROLL_M_PER_SEC, draw(seed, DRAW.speed))
     const route = walk ? tripRoute(walk, seed, destination) : strollRoute(loop ?? [])
     return [
       {
         kind: 'citizen',
-        themeId,
-        figure: rank % slots,
+        themeId: town.floorThemeId,
+        figure: rank++ % slots,
         route,
         speed,
         startSec: secondsAt(route, speed, draw(seed, DRAW.start)),

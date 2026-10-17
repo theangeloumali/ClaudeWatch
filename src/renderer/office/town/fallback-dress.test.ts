@@ -4,14 +4,19 @@ import { boundsOfZone } from '../logic/zone-framing'
 import type { PlacedLot } from '../themes/lot-kit'
 import { listThemes } from '../themes/registry'
 import { GROUND_Y } from '../themes/surroundings'
+import { LIVE_FLOORS } from '../themes/floors.test-utils'
+import { distributedTown } from './distributed-town'
 import { fallbackDress } from './fallback-dress'
-import { campusClaim, neededClaim } from './town-claim'
 import { dressLot } from './town-dress'
-import { planTown } from './town-plan'
 import { TOWN_DISTRICTS } from './town-zones'
-import { LARGE_FLOOR } from './town.test-utils'
+import { townOf } from './use-town-plan'
 
-const plan = planTown(campusClaim(neededClaim(LARGE_FLOOR), null), 'full')
+// What production dresses: the city on each live floor's own site.
+const lots = LIVE_FLOORS.flatMap(
+  ([, floor]) => distributedTown(townOf(floor, null), [floor]).plan.lots
+)
+// The city lays no park lot; parks are only the dress's own ground.
+const CITY_DISTRICTS = TOWN_DISTRICTS.filter((zone) => zone !== 'park')
 const EDGE = 1e-6
 
 // The box round everything that stands on a lot, in floor metres.
@@ -60,9 +65,9 @@ describe.each(listThemes().map((theme) => [theme.id, theme.palette] as const))(
       }
     })
 
-    it('fills every lot of the town inside its footprint and under its height', () => {
+    it('fills every lot of the city inside its footprint and under its height', () => {
       const dressed = new Set<string>()
-      for (const lot of plan.lots) {
+      for (const lot of lots) {
         const placed = dressLot(lot, GROUND_Y, dress)
         expect(placed.parts.length, lot.id).toBeGreaterThan(0)
         const box = standing(placed)
@@ -77,13 +82,13 @@ describe.each(listThemes().map((theme) => [theme.id, theme.palette] as const))(
         expect(box.maxZ, `${lot.id} ${placed.design}`).toBeLessThanOrEqual(ground.maxZ + EDGE)
         dressed.add(lot.zone)
       }
-      expect([...dressed].sort()).toEqual([...TOWN_DISTRICTS].sort())
+      expect([...dressed].sort()).toEqual([...CITY_DISTRICTS].sort())
     })
 
     it('roofs each zone in that zone’s accent', () => {
-      for (const zone of TOWN_DISTRICTS) {
-        const lot = plan.lots.find((each) => each.zone === zone && each.kind === 'building')
-        if (!lot) throw new Error(`the seeded town has no ${zone} building`)
+      for (const zone of CITY_DISTRICTS) {
+        const lot = lots.find((each) => each.zone === zone && each.kind === 'building')
+        if (!lot) throw new Error(`the city has no ${zone} building`)
         const colours = dressLot(lot, GROUND_Y, dress).parts.map((part) => part.color)
         expect(colours, zone).toContain(dress.looks[zone].accent)
       }

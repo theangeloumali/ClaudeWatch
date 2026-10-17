@@ -1,7 +1,6 @@
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { Object3D, type InstancedMesh } from 'three'
-import type { ThemeZoneGroup } from '../logic/office-themes'
 import { levelInUse } from '../logic/quality'
 import { groundHeight } from '../player/walk-ground'
 import type { Player } from '../player/walking'
@@ -10,7 +9,7 @@ import type { FloorGeometry } from '../scene-model'
 import { getTheme } from '../themes/registry'
 import type { OfficeTheme } from '../themes/types'
 import type { TownPlan } from '../town/town-plan'
-import { themeIdsByZone, townTrips } from '../town/town-trips'
+import { townTrips } from '../town/town-trips'
 import { citizenGeometry } from './figure-parts'
 import { moverFigure, moverKinds } from './mover-kinds'
 import { routePose, turnToward } from './route-pose'
@@ -25,10 +24,7 @@ import { zebraTraffic } from './zebra-traffic'
 interface MoverLayerProps {
   floor: FloorGeometry
   plan: TownPlan
-  // Lot id to the company that dresses it (`lotOwners`).
-  owners: ReadonlyMap<string, string>
   floorTheme: OfficeTheme
-  zoneGroups: readonly ThemeZoneGroup[]
   player: Player | null | undefined
   isReducedMotion: boolean
   // The settings panel's switch.
@@ -46,28 +42,15 @@ const scratch = new Object3D()
 // The town's citizens and vehicles: one instanced draw per kind of figure, moved by writing
 // matrices. It asks for no frames of its own, so they move only on frames the scene draws anyway.
 export function MoverLayer(props: MoverLayerProps) {
-  const { floor, plan, owners, floorTheme, zoneGroups, player, isReducedMotion } = props
+  const { floor, plan, floorTheme, player, isReducedMotion } = props
   const { hasVehicles } = props
   const bodies = useMemo(() => props.bodies ?? new SceneBodies(), [props.bodies])
   const ground = useMemo(() => citizenGround(plan), [plan])
   const { pin, chosen } = useQualityChoice()
   const detail = levelInUse(pin, chosen)
-  // Keyed by what they say, not by identity: a floor change that moves no lot keeps every trip,
-  // and with it how far each mover has got.
-  const ownersKey = [...owners].join('|')
-  const themesKey = zoneGroups
-    .map(({ themeId, companies }) => `${themeId}=${companies.map((zone) => zone.id).join(',')}`)
-    .join('|')
   const trips = useMemo(() => {
-    return townTrips({
-      plan,
-      owners,
-      floorThemeId: floorTheme.id,
-      themeIdByZone: themeIdsByZone(zoneGroups),
-      detail,
-      hasVehicles
-    })
-  }, [plan, ownersKey, themesKey, floorTheme.id, detail, hasVehicles])
+    return townTrips({ plan, floorThemeId: floorTheme.id, detail, hasVehicles })
+  }, [plan, floorTheme.id, detail, hasVehicles])
   const kinds = useMemo(() => moverKinds(trips), [trips])
   // Keyed by what is drawn, so trips that change with the same kinds upload nothing new.
   const kindsKey = kinds.map((kind) => kind.key).join('|')

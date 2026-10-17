@@ -43,9 +43,7 @@ describe('ambient sidewalk loops (citizens-8)', () => {
     const routesAt = (detail: QualityLevel) =>
       townTrips({
         plan,
-        owners: new Map(),
         floorThemeId: 'corporate-city',
-        themeIdByZone: new Map(),
         detail
       })
         .filter((trip) => trip.kind === 'citizen')
@@ -66,9 +64,7 @@ describe('the crowd across a quality step (Review Focus 3)', () => {
     const props = {
       floor: city.floor,
       plan: city.plan,
-      owners: new Map<string, string>(),
       floorTheme: getTheme('corporate-city'),
-      zoneGroups: [],
       player: null,
       isReducedMotion: false,
       hasVehicles: true,

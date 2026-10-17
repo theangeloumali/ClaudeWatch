@@ -37,15 +37,10 @@ export function liveCity(): Scenario {
     })
   )
   const floor = groundEnvelope(floors, floors[0])
-  const town = distributedTown(townOf(floor, null, 'full', 'city'), [
-    ...floors,
-    ...liveVenueSites()
-  ])
+  const town = distributedTown(townOf(floor, null, 'city'), [...floors, ...liveVenueSites()])
   const trips = townTrips({
     plan: town.plan,
-    owners: town.owners,
     floorThemeId: 'corporate-city',
-    themeIdByZone: new Map(),
     detail: 'full',
     hasVehicles: true
   })
@@ -55,15 +50,13 @@ export function liveCity(): Scenario {
 // The audit's two-office district (clearspent-4), whose transit runs the 18 m avenues.
 export function twoOfficeCity(): Scenario {
   const floor = makeFloor({ floorId: 'two-offices', x: 0, z: 0, width: 150, depth: 150 })
-  const town = distributedTown(townOf(floor, null, 'full'), [
+  const town = distributedTown(townOf(floor, null), [
     { x: 0, z: -48, width: 30, depth: 25 },
     { x: 48, z: 0, width: 30, depth: 25 }
   ])
   const trips = townTrips({
     plan: town.plan,
-    owners: town.owners,
     floorThemeId: 'corporate-city',
-    themeIdByZone: new Map(),
     detail: 'full',
     hasVehicles: true
   })

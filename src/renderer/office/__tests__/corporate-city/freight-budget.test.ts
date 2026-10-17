@@ -9,7 +9,6 @@ describe('mixed-theme freight with a distinct floor default', () => {
     'reserves the floor fallback inside the %s vehicle draw budget',
     (detail) => {
       const town = { ...townOn(LARGE_FLOOR, detail), floorThemeId: 'corporate-city' }
-      expect([...town.themeIdByZone.values()]).not.toContain(town.floorThemeId)
       const vehicles = townTrips(town).filter((trip) => trip.kind !== 'citizen')
       const kinds = new Set(vehicles.map((trip) => `${trip.kind}:${trip.themeId}:${trip.figure}`))
       expect(kinds.size).toBeLessThanOrEqual(MOVER_COUNTS[detail].vehicleKinds)

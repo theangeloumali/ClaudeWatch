@@ -6,7 +6,7 @@ import { reversed, roadNet, roadPath, type Leg, type RoadNet } from './road-net'
 import type { VehicleRole } from './town-dress'
 import type { TownLot } from './town-lots'
 import type { TownPlan } from './town-plan'
-import { MOVER_COUNTS, themeOfLot, type TownInput, type Trip } from './town-trips'
+import { type TownInput, type Trip } from './town-trips'
 import { closedLoop, lengthOf, secondsAt, sidePath } from './trip-paths'
 
 // The order vehicles are sent out in: a smaller level takes the first of them. The first six
@@ -102,8 +102,7 @@ function freightRun(yards: Yards, seed: number): { workshop: TownLot; route: Cit
   return null
 }
 
-// The first `count` of the town's vehicles. Transit and runabouts wear the floor's theme;
-// freight wears the theme that owns its workshop, while there is a draw left for it.
+// The first `count` of the town's vehicles, every one in the floor's theme.
 export function vehicleTrips(town: TownInput, count: number): Trip[] {
   const { plan, floorThemeId } = town
   const sorted = [...plan.lots].sort((a, b) => a.id.localeCompare(b.id))
@@ -117,10 +116,6 @@ export function vehicleTrips(town: TownInput, count: number): Trip[] {
     runabout: cityVehicleLoop({ plan, net: yards.net, role: 'runabout' })
   }
   const speeds = { transit: TRANSIT_M_PER_SEC, runabout: RUNABOUT_M_PER_SEC }
-  // Transit and runabouts take a draw each; what is left goes to freight, one a theme.
-  // Overflow freight uses the floor's vehicle, so its draw must be reserved too.
-  const freightThemes = new Set<string>([floorThemeId])
-  const freightBudget = MOVER_COUNTS[town.detail].vehicleKinds - 2
   const sent: Record<VehicleRole, number> = { transit: 0, runabout: 0, freight: 0 }
 
   return FLEET.slice(0, count).flatMap((role): Trip[] => {
@@ -147,13 +142,11 @@ export function vehicleTrips(town: TownInput, count: number): Trip[] {
     const seed = hashOf(`freight:${nth}`)
     const run = freightRun(yards, seed)
     if (!run) return []
-    const owner = themeOfLot(town, run.workshop.id)
-    if (freightThemes.size < freightBudget) freightThemes.add(owner)
     const speed = between(FREIGHT_M_PER_SEC, draw(seed, DRAW.speed))
     return [
       {
         kind: 'freight',
-        themeId: freightThemes.has(owner) ? owner : floorThemeId,
+        themeId: floorThemeId,
         figure: 0,
         route: run.route,
         speed,

@@ -10,7 +10,7 @@ import { groundBuffers, groundQuads, type GroundQuad } from './town-ground'
 import { LARGE_FLOOR, roadStrip } from './town.test-utils'
 import { townOf } from './use-town-plan'
 
-const { plan } = distributedTown(townOf(LARGE_FLOOR, null, 'full'), [LARGE_FLOOR])
+const { plan } = distributedTown(townOf(LARGE_FLOOR, null), [LARGE_FLOOR])
 const dress = fallbackDress(EDO)
 const quads = groundQuads(plan, dress)
 const of = (layer: GroundQuad['layer']): GroundQuad[] =>

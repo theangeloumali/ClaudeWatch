@@ -120,8 +120,7 @@ describe.each(MOVER_FLOORS)('townTrips on %s', (_name, floor) => {
     for (const { homeId, route, themeId } of freight) {
       const workshop = lotById.get(homeId ?? '')
       expect(workshop?.zone).toBe('workshop')
-      const owner = town.themeIdByZone.get(town.owners.get(workshop?.id ?? '') ?? '')
-      expect([owner ?? town.floorThemeId, town.floorThemeId]).toContain(themeId)
+      expect(themeId).toBe(town.floorThemeId)
       expect(route.stops).toHaveLength(2)
       const market = lapOf({ ...({ route } as Trip) })[
         Math.floor((route.stops?.[0].at ?? 0) / 0.25)

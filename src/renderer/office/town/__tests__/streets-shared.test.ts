@@ -22,7 +22,7 @@ const byId = (roads: readonly TownRoad[]): TownRoad[] =>
 function rendererRoads(layout: LayoutMap, sessions: readonly SessionRef[]): TownRoad[] {
   const ground = toFloorGeometry(layout, sessions).filter((floor) => (floor.elevation ?? 0) === 0)
   const sites = [...ground, ...(layout.effectiveVenues ?? []).map(cityVenueSite)]
-  return distributedTown(townOf(ground[0], null, 'full'), sites).plan.roads
+  return distributedTown(townOf(ground[0], null), sites).plan.roads
 }
 
 function world(): { base: LayoutMap; document: WorldDocument; sessions: SessionRef[] } {

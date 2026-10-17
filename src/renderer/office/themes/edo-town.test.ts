@@ -2,9 +2,9 @@ import { Box3, Euler, Matrix4, Quaternion, Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import { citizenGeometry } from '../citizens/figure-parts'
 import { BRASS_CITIZENS, EDO_CITIZENS } from '../citizens/figures-edo-brass'
-import { campusClaim, neededClaim } from '../town/town-claim'
+import { distributedTown } from '../town/distributed-town'
 import { dressLot, type TownDress } from '../town/town-dress'
-import { townBlocks } from '../town/town-plan'
+import { townOf } from '../town/use-town-plan'
 import { TOWN_DISTRICTS, ZONE_HEIGHT_CAP_M } from '../town/town-zones'
 import { BRASS_TOWN } from './brass-town'
 import { brassWorkshop, neoEdoSteam } from './builtins'
@@ -155,8 +155,8 @@ describe.each(THEMES)('%s zoned town', (_name, dress) => {
   })
 
   it.each(LIVE_FLOORS)('dresses every lot of %s within its oriented footprint', (_label, floor) => {
-    const plan = townBlocks(campusClaim(neededClaim(floor), null), 'full')
-    expect(plan.lots.length).toBeGreaterThan(20)
+    const { plan } = distributedTown(townOf(floor, null), [floor])
+    expect(plan.lots.length).toBeGreaterThan(10)
     for (const lot of plan.lots) {
       const placed = dressLot(lot, 0, dress)
       expect(placed.parts.length, lot.id).toBeGreaterThan(0)
