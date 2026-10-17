@@ -5,7 +5,7 @@ import type { WorldFootprint } from '../../shared/office/world-document-types'
 import type { LoungeLayout, Slot } from './layout'
 import type { Point } from './path'
 import { NAV_CELL_METRES, ROUTE_MARGIN_METRES } from './navigation'
-import { LOUNGE_SEATS_PER_ROW, loungeMetres } from './rooms'
+import { LOUNGE_SEATS_PER_ROW, LOUNGE_WIDTH, loungeMetres } from './rooms'
 
 const MAX_SEATS = 8
 const WALL_METRES = 1
@@ -30,8 +30,15 @@ type Side = (typeof SIDES)[number]
 export const cornerSeats = (deskCount: number): number => clamp(deskCount, [1, MAX_SEATS])
 
 // Seats a pitch apart with half a metre beyond each end's half pitch; four make LOUNGE_WIDTH.
-const rowWidth = (seats: number): number =>
-  loungeMetres(1 + 1.25 * Math.min(seats, LOUNGE_SEATS_PER_ROW))
+const rowWidth = (seats: number): number => loungeMetres(1 + 1.25 * seats)
+
+// Seat counts and widths to try: fewer rows at the full width the renderer's screen and
+// cabinets need, then one row of fewer seats as narrow as they are (I2).
+function* cornerSizes(seats: number): Generator<{ seats: number; across: number }> {
+  for (let count = seats; count > 0; count--) yield { seats: count, across: LOUNGE_WIDTH }
+  for (let count = Math.min(seats, LOUNGE_SEATS_PER_ROW); count > 0; count--)
+    yield { seats: count, across: rowWidth(count) }
+}
 
 // Each row takes a row step, the last its aisle on the door side; the front row its screen too.
 export const cornerDepth = (seats: number): number =>
@@ -47,15 +54,17 @@ interface CornerFloor {
   deskCount: number
 }
 
-// The floor's game corner beside its offices; short of room for every seat on any side, it
-// takes fewer rows, then a shorter row, and none when no side has room for one seat (I2).
+// The floor's game corner beside its offices, the largest any side has room for, or none
+// when no side has room for one seat.
 export function gameCorner(floor: CornerFloor): LoungeLayout | undefined {
   if (!floor.rooms.length) return undefined
   const envelope = enclose(floor.rooms)
-  for (let seats = cornerSeats(floor.deskCount); seats > 0; seats--)
+  for (const { seats, across } of cornerSizes(cornerSeats(floor.deskCount)))
     for (const side of SIDES) {
-      const size = { reach: cornerDepth(seats), across: rowWidth(seats) }
-      const area = besideOffices(side, envelope, floor.footprint, size)
+      const area = besideOffices(side, envelope, floor.footprint, {
+        reach: cornerDepth(seats),
+        across
+      })
       if (fits(area, floor)) return layOut(area, side, seats, floor.floorId)
     }
   return undefined

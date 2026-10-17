@@ -9,6 +9,7 @@ import { buildLayout, type FloorLayout, type LoungeLayout } from '../layout'
 import { createAgent } from '../behaviour'
 import { FloorRoutes } from '../world-floor-routes'
 import { WORKER_BODY_RADIUS } from '../../../shared/office/body-footprints'
+import { LOUNGE_WIDTH } from '../rooms'
 
 const SCREEN_METRES = 1.2
 const EPSILON = 1e-6
@@ -231,6 +232,12 @@ describe('game corner: placement', () => {
       Math.round((seat.x * facing!.x + seat.z * facing!.z) * 1000)
     )
     expect({ seats: depths?.length, rows: new Set(depths).size }).toEqual({ seats: 4, rows: 1 })
+  })
+
+  // The renderer's screen and cabinets need the full width; a short row narrows only to fit.
+  it('keeps a full width corner for a single seat when the floor has room', () => {
+    const corner = gameCorner({ ...floor(30, 30, { x: 0, z: 15 }), deskCount: 1 })
+    expect(corner && Math.max(corner.width, corner.depth)).toBeCloseTo(LOUNGE_WIDTH, 6)
   })
 
   // 8 m across leaves 6 m inside the walls: a row of two fits, one of three or four does not.
