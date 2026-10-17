@@ -46,7 +46,6 @@ export class World {
   private agents = new Map<string, AgentRecord>()
   private bodyObstacles: readonly BodyFootprint[] = []
   private readonly recovery = new MovementRecovery()
-  private readonly members = new Map<string, Placement['member']>()
   // Agents fading where they stand, with how long each has faded. A leaver goes; any other
   // reappears at its desk: a newcomer, a desk moved off its floor, or a recall (FOUND 7).
   private readonly fading = new Map<string, number>()
@@ -163,7 +162,6 @@ export class World {
     )
     for (const placement of desired) {
       const { session, room, slot, floorId } = placement
-      this.members.set(session.key, placement.member)
       const isFinished =
         placement.isFinished || (session.observation?.coverage === 'own' && isAtRest(session))
       const floor = this.map.floors.find((candidate) => candidate.id === floorId)!
@@ -409,7 +407,6 @@ export class World {
     this.recovery.clear(key)
     this.passages.clear(key)
     this.fading.delete(key)
-    this.members.delete(key)
   }
 
   step(dtMs: number): AgentView[] {

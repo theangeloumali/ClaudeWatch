@@ -110,12 +110,15 @@ describe('departures and arrivals: each fades where it stands', () => {
     })
   })
 
-  it('forgets the crew record of an arrival whose work ended before it got in', () => {
+  it('forgets an arrival whose work ended before it got in', () => {
     const { world, crew } = seatedWorld([])
     crew(Array.from({ length: 6 }, (_, index) => member(`late-${index}`)))
     crew([])
     follow(world, LEAD, 10)
-    expect(world['members'].size).toBe(1)
+    expect({ agents: world['agents'].size, fading: world['fading'].size }).toEqual({
+      agents: 1,
+      fading: 0
+    })
   })
 
   it('materialises an arriver at its desk, whatever stands in the office door', () => {
