@@ -11,10 +11,9 @@ import {
   bodyStep,
   bodyFits,
   placeBody,
-  SUBAGENT_BODY_RADIUS,
-  WORKER_BODY_RADIUS,
   type BodyFootprint
 } from '../../shared/office/body-footprints'
+import { agentBody } from './agent-body'
 import {
   createAgent,
   leaveAgent,
@@ -24,7 +23,7 @@ import {
   updateAgent,
   type AgentRecord
 } from './behaviour'
-import { buildLayout, type LayoutMap, type LoungeLayout } from './layout'
+import { buildLayout, type FloorLayout, type LayoutMap, type LoungeLayout } from './layout'
 import { loungesByRoom } from './lounge'
 import type { PathCache } from './navigation'
 import { MovementRecovery, remainingRouteMetres } from './movement-recovery'
@@ -32,6 +31,7 @@ import { placements, type Placement } from './placements'
 import { FloorRoutes, floorElevation, floorEntrance } from './world-floor-routes'
 import { VenueBookings, type WorldVenue } from './world-venues'
 import { homeRoute, reconcileLeisure } from './world-leisure'
+import { isAwayForLeisure, seatAtDesk, walksHome } from './world-recall'
 import { RoamOutings } from './roaming'
 import type { Point } from './path'
 import {
@@ -45,18 +45,6 @@ import {
 export type { WorldVenue } from './world-venues'
 
 const TICK_MS = 100
-
-function agentBody(view: AgentView): BodyFootprint {
-  return {
-    id: view.agentKey,
-    x: view.x,
-    z: view.z,
-    elevation: view.elevation ?? 0,
-    connectorId:
-      'connectorId' in view && typeof view.connectorId === 'string' ? view.connectorId : undefined,
-    radius: view.isSubagent ? SUBAGENT_BODY_RADIUS : WORKER_BODY_RADIUS
-  }
-}
 
 export class World {
   private readonly routes = new FloorRoutes()
@@ -73,7 +61,8 @@ export class World {
   private departurePaths = new Map<string, PathCache>()
   private readonly recovery = new MovementRecovery()
   private readonly members = new Map<string, Placement['member']>()
-  // Departing agents fading out in place, with how long each has faded.
+  // Agents fading out in place, with how long each has faded. A leaver goes; any other was
+  // called back to work and reappears at its desk (FOUND 7).
   private readonly fading = new Map<string, number>()
   private readonly passages = new BodyPassages()
   // Who waited on whom last tick, and who could have stepped; one of each cycle steps now.
@@ -252,7 +241,7 @@ export class World {
           : previousAgent
       const waiting = this.arrivals.get(session.key)
       this.departurePaths.delete(session.key)
-      if (existing?.view.place === 'lounge') {
+      if (existing && isAwayForLeisure(existing, isFinished, this.fading.has(session.key))) {
         const updated = setFinished(
           updateAgent(existing, session.activity, session.attention),
           isFinished
@@ -265,16 +254,7 @@ export class World {
           label: session.name
         })
         if (!isFinished) this.passages.clear(session.key)
-        this.agents.set(
-          session.key,
-          isFinished
-            ? updated
-            : returnToDesk(
-                updated,
-                slot.heading,
-                homeRoute(updated, floor, slot, this.routes, this.venueTargets())
-              )
-        )
+        this.agents.set(session.key, isFinished ? updated : this.callHome(updated, floor, slot))
         continue
       }
       const oldSlot = oldRooms
@@ -397,6 +377,7 @@ export class World {
         (walker) =>
           walker.state === 'arriving' &&
           !walker.path[0]?.sidewalk &&
+          !this.fading.has(walker.view.agentKey) &&
           walker.view.floorId === floor.id &&
           !this.recovery.isBodyBlocked(walker.view.agentKey) &&
           (walker.view.physicalFloorId === null ||
@@ -627,6 +608,15 @@ export class World {
     return next
   }
 
+  // Work calls it home: it walks when that fits the call, else fades to reappear at its desk.
+  private callHome(agent: AgentRecord, floor: FloorLayout, desk: Placement['slot']): AgentRecord {
+    if (this.fading.has(agent.view.agentKey)) return agent
+    const route = homeRoute(agent, floor, desk, this.routes, this.venueTargets())
+    if (walksHome(agent, route)) return returnToDesk(agent, desk.heading, route)
+    this.startFade(agent.view.agentKey)
+    return returnToDesk(agent, desk.heading, [])
+  }
+
   private startFade(key: string): void {
     this.fading.set(key, 0)
     this.passages.clear(key)
@@ -636,6 +626,14 @@ export class World {
   private fadeOut(key: string, agent: AgentRecord): void {
     this.agents.set(key, agent)
     this.startFade(key)
+  }
+
+  // A desk another body stands on keeps it faded until the next tick.
+  private seatRecalled(key: string, agent: AgentRecord): void {
+    const seated = seatAtDesk(agent, this.map.floors, this.bodies())
+    if (!seated) return
+    this.agents.set(key, seated)
+    this.fading.delete(key)
   }
 
   private remove(key: string): void {
@@ -662,8 +660,9 @@ export class World {
       for (const [key, agent] of [...ordered.slice(offset), ...ordered.slice(0, offset)]) {
         const fadedMs = this.fading.get(key)
         if (fadedMs !== undefined) {
-          if (fadedMs + TICK_MS >= DEPARTURE_FADE_MS) this.remove(key)
-          else this.fading.set(key, fadedMs + TICK_MS)
+          if (fadedMs + TICK_MS < DEPARTURE_FADE_MS) this.fading.set(key, fadedMs + TICK_MS)
+          else if (agent.state === 'leaving') this.remove(key)
+          else this.seatRecalled(key, agent)
           continue
         }
         const next = this.moveAgent(agent)

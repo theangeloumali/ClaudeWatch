@@ -44,7 +44,9 @@ export class DoorInvariants {
     const current = new Map(views.map((view) => [view.agentKey, view]))
     for (const view of views) {
       const before = this.previous.get(view.agentKey)
-      const step = before ? Math.hypot(view.x - before.x, view.z - before.z) : 0
+      // A recall fades out first, so its move to the desk is never seen (FOUND 7).
+      const step =
+        before && before.fade === undefined ? Math.hypot(view.x - before.x, view.z - before.z) : 0
       if (!this.jump && step > MAX_STEP_METRES)
         this.jump = { atMs, detail: `${view.agentKey} stepped ${step.toFixed(3)} m` }
       this.checkProgress(view, atMs)

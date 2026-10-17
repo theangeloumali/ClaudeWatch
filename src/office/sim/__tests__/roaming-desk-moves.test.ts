@@ -14,7 +14,7 @@ vi.setConfig({ testTimeout: 240_000 })
 
 // Finer than any carriageway is wide.
 const LINE_SAMPLE_METRES = 0.25
-// Long enough for a called-back roamer to have turned for home.
+// Long enough for a roamer sent home to have turned for it.
 const RETURN_SET_OFF_MS = 1_000
 // A body at its doorstep steps in; it is never sent round the block (P5b).
 const DOORSTEP_WALK_METRES = 3
@@ -58,8 +58,8 @@ const walkedMetres = (from: WorldPoint, route: readonly FloorWaypoint[]) =>
   )
 
 // The live 08:23 capture (CW-ROAM): idle peers roam while a lead works; once one is across a
-// street from its door all are called back, and as they walk home the lead's crew grows, so
-// the offices shift and their desks move.
+// street from its door all are sent home, and as they walk the lead's crew grows, so the
+// offices shift and their desks move. The trips switch sends them, as work fades them home.
 function deskMovesMidWalk(peerCount = 3) {
   let crewSize = 1
   const lead = (nowMs: number): SessionRef => ({
@@ -83,16 +83,12 @@ function deskMovesMidWalk(peerCount = 3) {
     across = frame.find((view) => peerKeys.has(view.agentKey) && isAcrossStreet(view))
     return !!across
   })
-  const working = () => [
-    lead(city.clock),
-    ...peers(city.clock).map((peer) => ({ ...peer, activity: 'thinking' as const }))
-  ]
-  city.patch(working())
+  city.world.setLoungeTrips(false)
   city.run(RETURN_SET_OFF_MS, () => {})
   const returning = city.world.step(0).find((view) => view.agentKey === across?.agentKey)
   const deskBefore = returning && city.deskOf(returning)
   crewSize = 3
-  city.patch(working())
+  city.patch([lead(city.clock)])
   const deskAfter = returning && city.deskOf(returning)
   const onAsphalt: string[] = []
   let views: AgentView[] = []
