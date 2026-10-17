@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path'
 import type { FeedMessage, OfficeSnapshot } from '../shared/office/types'
 import { parseWorldDocument, type WorldDocument } from '../shared/office/world-document'
 import type { WorldSaveReply, WorldSnapshot } from '../shared/office/world-sync'
+import { lockFile } from './file-lock'
 
 // One saved city per host, on a file every process of this user shares, so the app window,
 // the Browser Office and each standalone port show the same arrangement (health-13).
@@ -37,28 +38,52 @@ export function createHostWorld(path: string): HostWorld {
   return {
     current,
     save(candidate) {
-      const saved = current()
       const parsed = parseWorldDocument(candidate)
-      if (!parsed.success) return { success: false, reason: 'invalid-document', document: saved }
-      // The first city comes from whichever page held one; after that, compare and swap.
-      if (saved && parsed.document.revision !== saved.revision + 1)
-        return { success: false, reason: 'conflict', document: saved }
+      if (!parsed.success)
+        return { success: false, reason: 'invalid-document', document: current() }
+      // Another host process may save the same file: its check and write go under one lock.
+      const release = makeFolder(path) ? lockFile(`${path}.lock`) : null
+      if (!release) return { success: false, reason: 'storage-write', document: current() }
       try {
-        mkdirSync(dirname(path), { recursive: true })
-        const pending = `${path}.${process.pid}.tmp`
-        writeFileSync(pending, JSON.stringify(parsed.document), { mode: 0o600 })
-        renameSync(pending, path)
-      } catch {
-        return { success: false, reason: 'storage-write', document: saved }
+        const reply = compareAndWrite(path, parsed.document, current())
+        if (reply.success) for (const listener of listeners) listener(reply.document)
+        return reply
+      } finally {
+        release()
       }
-      for (const listener of listeners) listener(parsed.document)
-      return { success: true, document: parsed.document }
     },
     onChange(listener) {
       listeners.add(listener)
       return () => listeners.delete(listener)
     }
   }
+}
+
+function makeFolder(path: string): boolean {
+  try {
+    mkdirSync(dirname(path), { recursive: true })
+    return true
+  } catch {
+    return false
+  }
+}
+
+// The first city comes from whichever page held one; after that, compare and swap.
+function compareAndWrite(
+  path: string,
+  document: WorldDocument,
+  saved: WorldDocument | null
+): WorldSaveReply {
+  if (saved && document.revision !== saved.revision + 1)
+    return { success: false, reason: 'conflict', document: saved }
+  try {
+    const pending = `${path}.${process.pid}.tmp`
+    writeFileSync(pending, JSON.stringify(document), { mode: 0o600 })
+    renameSync(pending, path)
+  } catch {
+    return { success: false, reason: 'storage-write', document: saved }
+  }
+  return { success: true, document }
 }
 
 interface FeedHost {
