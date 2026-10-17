@@ -6,7 +6,8 @@ import { buildLayout } from '../office/sim/layout'
 import { session } from '../office/sim/fixtures'
 import { createWorldDocument, type WorldDocument } from '../shared/office/world-document'
 import type { WorldSaveReply } from '../shared/office/world-sync'
-import { createHostWorld } from './host-world'
+import type { OfficeSnapshot } from '../shared/office/types'
+import { createHostWorld, withWorld } from './host-world'
 
 // Lets a test run another host's whole save between this host's read and its write.
 vi.mock('node:fs', async (importOriginal) => {
@@ -70,5 +71,34 @@ describe('two host processes on one saved city', () => {
     const world = createHostWorld(path)
     expect(world.save(city(1))).toMatchObject({ success: true })
     expect(world.save(city(2))).toMatchObject({ success: true })
+  })
+
+  it('a save by another host reaches this host’s pages', async () => {
+    const snapshot: OfficeSnapshot = { rev: 1, generatedAtMs: 1, sessions, sources: [] }
+    const app = createHostWorld(path)
+    const web = createHostWorld(path)
+    const pages = vi.fn()
+    const stop = withWorld({ snapshot: () => snapshot, onMessage: () => () => {} }, app).onMessage(
+      pages
+    )
+    web.save(city(1, 'From the browser'))
+    await vi.waitFor(() =>
+      expect(pages).toHaveBeenCalledWith({
+        type: 'hello',
+        v: 1,
+        snapshot: { ...snapshot, world: city(1, 'From the browser') }
+      })
+    )
+    stop()
+  })
+
+  it('tells its pages of its own save once, not again when the file changes', async () => {
+    const app = createHostWorld(path)
+    const heard = vi.fn()
+    const stop = app.onChange(heard)
+    app.save(city(1))
+    await new Promise((resolve) => setTimeout(resolve, 200))
+    expect(heard).toHaveBeenCalledExactlyOnceWith(city(1))
+    stop()
   })
 })

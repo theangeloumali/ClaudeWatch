@@ -1,6 +1,6 @@
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, renameSync, watch, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import type { FeedMessage, OfficeSnapshot } from '../shared/office/types'
 import { parseWorldDocument, type WorldDocument } from '../shared/office/world-document'
 import type { WorldSaveReply, WorldSnapshot } from '../shared/office/world-sync'
@@ -26,6 +26,15 @@ export interface HostWorld {
 
 export function createHostWorld(path: string): HostWorld {
   const listeners = new Set<(document: WorldDocument) => void>()
+  // The city last told, so a file event for this host's own save is not told twice.
+  let told = ''
+  let stopWatching: (() => void) | null = null
+  const tell = (document: WorldDocument): void => {
+    const serialized = JSON.stringify(document)
+    if (serialized === told) return
+    told = serialized
+    for (const listener of listeners) listener(document)
+  }
   const current = (): WorldDocument | null => {
     try {
       const parsed = parseWorldDocument(JSON.parse(readFileSync(path, 'utf8')))
@@ -46,7 +55,7 @@ export function createHostWorld(path: string): HostWorld {
       if (!release) return { success: false, reason: 'storage-write', document: current() }
       try {
         const reply = compareAndWrite(path, parsed.document, current())
-        if (reply.success) for (const listener of listeners) listener(reply.document)
+        if (reply.success) tell(reply.document)
         return reply
       } finally {
         release()
@@ -54,8 +63,36 @@ export function createHostWorld(path: string): HostWorld {
     },
     onChange(listener) {
       listeners.add(listener)
-      return () => listeners.delete(listener)
+      if (!stopWatching) {
+        told = JSON.stringify(current())
+        // Another host process saves by renaming into this folder; without a watch, only this
+        // host's own saves are told.
+        stopWatching = watchFile(path, () => {
+          const document = current()
+          if (document) tell(document)
+        })
+      }
+      return () => {
+        listeners.delete(listener)
+        if (listeners.size) return
+        stopWatching?.()
+        stopWatching = null
+      }
     }
+  }
+}
+
+function watchFile(path: string, onChange: () => void): (() => void) | null {
+  if (!makeFolder(path)) return null
+  try {
+    const watcher = watch(dirname(path), { persistent: false }, (_event, name) => {
+      if (name === null || name === basename(path)) onChange()
+    })
+    // A folder removed under the watch ends it; the next save recreates the file.
+    watcher.on('error', () => watcher.close())
+    return () => watcher.close()
+  } catch {
+    return null
   }
 }
 
