@@ -7,21 +7,15 @@ import {
 import type { AgentView } from '../../shared/office/types'
 import type { Point } from './path'
 import type { AgentRecord } from './behaviour'
-import type { FloorRoutes, FloorWaypoint } from './world-floor-routes'
+import type { FloorRoutes } from './world-floor-routes'
 import { floorElevation } from './world-floor-routes'
 import type { FloorLayout } from './layout'
 import { contains } from '../../shared/office/world-document-geometry'
 
 // dry-new: a physical-floor cache alone cannot guide a body across the street/door seam.
-export function workerNavigation(options: {
-  routes: FloorRoutes
-  from: AgentView
-  to: FloorWaypoint
-}) {
+export function workerNavigation(options: { routes: FloorRoutes; from: AgentView }) {
   const paths =
-    options.routes.paths(options.from.physicalFloorId) ??
-    options.routes.paths(options.to.physicalFloorId) ??
-    options.routes.paths(options.from.floorId)
+    options.routes.paths(options.from.physicalFloorId) ?? options.routes.paths(options.from.floorId)
   const isOpen = (point: Point): boolean =>
     paths?.contains(point)
       ? paths.isOpen(point)
@@ -104,19 +98,14 @@ export function recoverWorkerRoute(options: {
   routes: FloorRoutes
   obstacles: readonly BodyFootprint[]
   body: BodyFootprint
-}): FloorWaypoint[] {
+}): Point[] {
   const { agent, routes, body, obstacles } = options
   const paths = routes.paths(agent.view.physicalFloorId)
   const target = agent.path.at(-1)
   if (!target) return []
-  const route = paths?.contains(body)
+  return paths?.contains(body)
     ? paths.around({ body, to: target, obstacles })
     : routes.aroundStreet(body, target, obstacles)
-  return route.map((point) => ({
-    ...point,
-    elevation: agent.view.elevation,
-    physicalFloorId: agent.view.physicalFloorId
-  }))
 }
 
 export function resumeUnseatedWorker(agent: AgentRecord, routes: FloorRoutes): AgentRecord {

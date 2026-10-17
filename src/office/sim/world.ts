@@ -316,7 +316,7 @@ export class World {
     })
     let hasYielded = false
     const next = tickAgent(agent, TICK_MS, (from, to) => {
-      const navigation = workerNavigation({ routes: this.routes, from, to })
+      const navigation = workerNavigation({ routes: this.routes, from })
       const { isOpen } = navigation
       const body = agentBody(from)
       const hasClosedStart = !isOpen(from)

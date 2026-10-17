@@ -1,11 +1,10 @@
-import type { FloorWaypoint } from '../../../office/sim/world-floor-routes'
 import type { Point } from '../../../office/sim/path'
 import { streetPath } from '../../../office/sim/street-path'
 import { entranceApproach } from '../../../shared/office/entrance-approach'
 import { placeBody, PLAYER_BODY_RADIUS } from '../../../shared/office/body-footprints'
 import type { FloorGeometry } from '../scene-model'
 import { walkGround, walkPath } from './walk-ground'
-import type { Player } from './walking'
+import type { FloorWaypoint, Player } from './walking'
 
 // dry-new: camera floor selection is not a physical route; walking owns connector travel.
 export function playerConnector(floor: FloorGeometry): Point {

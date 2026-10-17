@@ -5,13 +5,13 @@ import type {
   SessionRef
 } from '../../shared/office/types'
 import type { Slot } from './layout'
-import type { FloorWaypoint } from './world-floor-routes'
+import type { Point } from './path'
 
 type AgentState = 'arriving' | 'working' | 'needs_you' | 'done' | 'leaving'
 export interface AgentRecord {
   view: AgentView
   state: AgentState
-  path: FloorWaypoint[]
+  path: Point[]
   dwellMs: number
   queued: AgentActivity | null
   slotHeading: number
@@ -70,7 +70,7 @@ export function wantsLounge(agent: AgentRecord): boolean {
   )
 }
 
-function walk(agent: AgentRecord, heading: number, path: FloorWaypoint[]): AgentRecord {
+function walk(agent: AgentRecord, heading: number, path: Point[]): AgentRecord {
   return { ...agent, state: 'arriving', slotHeading: heading, path: path.map((p) => ({ ...p })) }
 }
 
@@ -78,7 +78,7 @@ function walk(agent: AgentRecord, heading: number, path: FloorWaypoint[]): Agent
 export function goToLounge(
   agent: AgentRecord,
   seat: Pick<Slot, 'id' | 'heading'>,
-  path: FloorWaypoint[]
+  path: Point[]
 ): AgentRecord {
   const walking = walk(agent, seat.heading, path)
   return { ...walking, view: { ...agent.view, place: 'lounge' }, loungeSeatId: seat.id }
@@ -89,11 +89,7 @@ function withoutPlace(agent: AgentRecord): AgentRecord {
   return { ...agent, view, loungeSeatId: null }
 }
 
-export function returnToDesk(
-  agent: AgentRecord,
-  heading: number,
-  path: FloorWaypoint[]
-): AgentRecord {
+export function returnToDesk(agent: AgentRecord, heading: number, path: Point[]): AgentRecord {
   return walk(withoutPlace(agent), heading, path)
 }
 
@@ -137,7 +133,7 @@ export function leaveAgent(agent: AgentRecord): AgentRecord {
 export function tickAgent(
   agent: AgentRecord,
   dtMs: number,
-  move?: (from: AgentView, to: FloorWaypoint) => FloorWaypoint
+  move?: (from: AgentView, to: Point) => Point
 ): AgentRecord {
   const next = {
     ...agent,

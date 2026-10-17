@@ -170,7 +170,6 @@ it('recovers a crowded indoor route around a body on fractional geometry', () =>
   for (const point of recovered) {
     expect(paths.contains(point)).toBe(true)
     expect(paths.isOpen(point)).toBe(true)
-    expect(point).toMatchObject({ elevation: floor.elevation, physicalFloorId: floor.id })
     expect(bodyFits({ ...body, ...point }, obstacles)).toBe(true)
   }
   expect(agent.path).toEqual(originalPath)

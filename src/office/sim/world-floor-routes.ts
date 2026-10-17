@@ -6,14 +6,6 @@ import { streetPath } from './street-path'
 import { bodiesShareElevation } from '../../shared/office/body-sweep'
 import type { BodyFootprint } from '../../shared/office/body-footprints'
 
-// dry-new: PathCache is planar; transfers retain surface and connector metadata per waypoint.
-export interface FloorWaypoint extends Point {
-  elevation?: number
-  physicalFloorId?: string | null
-  // The player's lift rides; agents never leave their floor.
-  connectorId?: string
-}
-
 export function floorElevation(floor: FloorLayout): number {
   return 'elevation' in floor &&
     typeof floor.elevation === 'number' &&
@@ -103,7 +95,7 @@ export class FloorRoutes {
 
   // Agents stay on their floor: a route exists only from a point on its path grid, and a
   // caller with none fades the agent across instead (CW-OFFICE-RETENTION).
-  toFloor(view: AgentView, floor: FloorLayout, to: Point): FloorWaypoint[] {
+  toFloor(view: AgentView, floor: FloorLayout, to: Point): Point[] {
     const paths = this.paths(floor.id)
     if (
       view.physicalFloorId !== floor.id ||
@@ -111,10 +103,6 @@ export class FloorRoutes {
       !paths?.contains(view)
     )
       return []
-    return paths.get(view, to).map((point) => ({
-      ...point,
-      elevation: floorElevation(floor),
-      physicalFloorId: floor.id
-    }))
+    return paths.get(view, to)
   }
 }
