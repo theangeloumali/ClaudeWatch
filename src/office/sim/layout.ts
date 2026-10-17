@@ -68,12 +68,21 @@ export function buildLayout(sessions: SessionRef[], saved: LayoutMap | undefined
   }
 }
 
+// Each map's floors by id, built on first look: a new map is a new floors array.
+const floorIndexes = new WeakMap<readonly FloorLayout[], Map<string, FloorLayout>>()
+
 // The floor and desk a view names, or undefined once the map no longer has them.
 export function deskOf(
   floors: readonly FloorLayout[],
   view: Pick<AgentView, 'floorId' | 'roomId' | 'slotId'>
 ): { floor: FloorLayout; desk: Slot } | undefined {
-  const floor = floors.find((candidate) => candidate.id === view.floorId)
+  let byId = floorIndexes.get(floors)
+  if (!byId) {
+    byId = new Map()
+    for (const floor of floors) if (!byId.has(floor.id)) byId.set(floor.id, floor)
+    floorIndexes.set(floors, byId)
+  }
+  const floor = byId.get(view.floorId)
   const desk = floor?.rooms
     .find((room) => room.id === view.roomId)
     ?.slots.find((slot) => slot.id === view.slotId)
