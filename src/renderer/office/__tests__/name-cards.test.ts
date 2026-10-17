@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { AgentView } from '../../../shared/office/types'
 import { ACTIVITY_UNAVAILABLE_LABEL, PLAYING_GAMES_LABEL } from '../logic/activity-summary'
 import { buildNameCards, buildProjectStacks, MAX_NAME_CARDS } from '../logic/name-cards'
+import { gameCornerFixture } from '../themes/game-corner.test-utils'
 import { makeAgent, makeFloor, makeFrame, makeRoom, makeSession, makeZone } from './fixtures'
 
 const floor = makeFloor({
@@ -57,12 +58,26 @@ describe('buildNameCards', () => {
   })
 
   describe('an agent in its game corner', () => {
+    const corner = gameCornerFixture(Math.PI, 4, { x: 10, z: 10 })
+    const [seat] = corner.seats
+    const cornerFloor = {
+      ...floor,
+      zones: [makeZone({ id: 'c', kind: 'company', lounge: corner })]
+    }
     const gamer = (overrides: Partial<AgentView> = {}) =>
-      makeAgent({ agentKey: 'a', roomId: 'r1', activity: 'idle', place: 'lounge', ...overrides })
+      makeAgent({
+        agentKey: 'a',
+        roomId: 'r1',
+        activity: 'idle',
+        place: 'lounge',
+        x: seat.x,
+        z: seat.z,
+        ...overrides
+      })
     const cardOf = (agent: ReturnType<typeof makeAgent>, sources = frame.sources) =>
       buildNameCards(
         makeFrame({
-          floors: [floor],
+          floors: [cornerFloor],
           sources,
           sessions: [
             makeSession({ key: 'a', activity: agent.activity, attention: agent.attention })
@@ -89,6 +104,15 @@ describe('buildNameCards', () => {
       expect(cardOf(gamer({ activity: 'editing', attention: 'done' }))?.detail).toBe(
         PLAYING_GAMES_LABEL
       )
+    })
+
+    // The sim marks the trip at its start; the walk across the floor is not yet play.
+    it('reads its usual at-rest label on the walk to the corner, until it sits', () => {
+      const walking = gamer({ attention: 'done', x: seat.x + 3, z: seat.z + 2 })
+      const atDesk = cardOf({ ...walking, place: undefined })?.detail
+      expect(atDesk).not.toBe(PLAYING_GAMES_LABEL)
+      expect(cardOf(walking)?.detail).toBe(atDesk)
+      expect(cardOf({ ...walking, x: seat.x, z: seat.z })?.detail).toBe(PLAYING_GAMES_LABEL)
     })
 
     it('shows what it needs instead when it needs you', () => {

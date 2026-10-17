@@ -9,6 +9,7 @@ import { listThemes } from '../office/themes/registry'
 import { isJsonObject } from '../../shared/json-object'
 import { applyFeed } from '../../shared/office/apply-feed'
 import type {
+  AgentView,
   FocusResult,
   FeedMessage,
   InteractionResult,
@@ -24,6 +25,7 @@ import type { FloorGeometry, OfficeFeed, OfficeFrame } from '../office/scene-mod
 import { cityEvents, type CityEventLog } from './city-events'
 import { toFloorGeometry } from './layout-geometry'
 import { officePoses, poseOf, structuralKey, type PoseStore } from './pose-store'
+import { createGamingCheck } from '../office/scene/worker-seat-presence'
 
 export interface FeedSource {
   ready(): Promise<void>
@@ -152,6 +154,16 @@ export function createLiveFeed(
       lastTick = now()
     })
     let lastAgents = ''
+    let lastGamers = ''
+    let gaming = { floors, isGaming: createGamingCheck(floors) }
+    // A walk moves poses only; a gamer sitting down changes its card, so it needs a frame.
+    const gamersOf = (agents: readonly AgentView[]): string => {
+      if (gaming.floors !== floors) gaming = { floors, isGaming: createGamingCheck(floors) }
+      return agents
+        .filter(gaming.isGaming)
+        .map((agent) => agent.agentKey)
+        .join('\n')
+    }
     let structureRevision = 0
     let lastFrameAtMs = Number.NEGATIVE_INFINITY
     let isDirty = true
@@ -249,11 +261,13 @@ export function createLiveFeed(
       for (const agent of agents) poses.write(agent.agentKey, poseOf(agent))
       // A walk moves poses only: the scene reads those each drawn frame, without React (perf-2).
       const agentsKey = structuralKey(agents)
-      if (!isDirty && agentsKey === lastAgents) return
+      const gamers = gamersOf(agents)
+      if (!isDirty && agentsKey === lastAgents && gamers === lastGamers) return
       if (!visibility.read().isFocused && tick - lastFrameAtMs < BLURRED_FRAME_GAP_MS) return
       isDirty = false
       if (agentsKey !== lastAgents) structureRevision += 1
       lastAgents = agentsKey
+      lastGamers = gamers
       lastFrameAtMs = tick
       poses.retain(new Set(agents.map((agent) => agent.agentKey)))
       const frame: OfficeFrame = {
