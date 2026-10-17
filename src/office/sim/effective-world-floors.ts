@@ -1,4 +1,5 @@
-import type { FloorLayout, LayoutMap, LoungeLayout, RoomLayout, ZoneLayout } from './layout'
+import { gameCorner } from './game-corner'
+import type { FloorLayout, LayoutMap, RoomLayout, ZoneLayout } from './layout'
 import { bounds } from './rooms'
 import {
   WORLD_STOREY_METRES,
@@ -60,12 +61,6 @@ export function buildEffectiveFloors({
               ]
             : []
         })
-      const lounge =
-        floorNumber === 1 &&
-        company.children[0]?.projectKey === building.projectKey &&
-        company.lounge
-          ? effectiveLounge(company.lounge, building)
-          : undefined
       const capacity = rooms.reduce((count, room) => count + room.capacity, 0)
       const projectZone: ZoneLayout = {
         ...structuredClone(project),
@@ -77,22 +72,21 @@ export function buildEffectiveFloors({
         capacity,
         children: rooms
       }
+      const door = {
+        x: building.footprint.x + building.entrance.x,
+        z: building.footprint.z + building.entrance.z
+      }
       const companyZone: ZoneLayout = {
         ...structuredClone(company),
         id: `${floorId}:company:${company.id}`,
         ...building.footprint,
         ...metadata,
-        door: {
-          x: building.footprint.x + building.entrance.x,
-          z: building.footprint.z + building.entrance.z
-        },
+        door,
         // The building's name is its project's; the company keeps its own.
         themeId: building.themeId,
         capacity,
         children: rooms.length ? [projectZone] : []
       }
-      delete companyZone.lounge
-      if (lounge) companyZone.lounge = lounge
       const connector = building.connector
         ? {
             ...building.connector,
@@ -104,6 +98,17 @@ export function buildEffectiveFloors({
             }
           }
         : undefined
+      // Every floor with offices gets its own corner; idle agents never leave their floor.
+      delete companyZone.lounge
+      const corner = gameCorner({
+        floorId,
+        footprint: building.footprint,
+        rooms,
+        entrance: door,
+        connector,
+        deskCount: rooms.flatMap((room) => room.slots).filter((slot) => slot.id !== 'door').length
+      })
+      if (corner) companyZone.lounge = corner
       floors.push({
         id: floorId,
         label: project.label,
@@ -169,17 +174,4 @@ function roomEnvelope(
   const envelope = bounds(west, north, east - west, south - north)
   if (project.door.z > project.z) envelope.door.z = south
   return envelope
-}
-function effectiveLounge(lounge: LoungeLayout, building: WorldBuilding): LoungeLayout {
-  const x = building.footprint.x + building.footprint.width / 2 - lounge.width / 2 - 3
-  const z = building.footprint.z
-  const shiftX = x - lounge.x
-  const shiftZ = z - lounge.z
-  return {
-    ...structuredClone(lounge),
-    x,
-    z,
-    door: { x: lounge.door.x + shiftX, z: lounge.door.z + shiftZ },
-    slots: lounge.slots.map((slot) => ({ ...slot, x: slot.x + shiftX, z: slot.z + shiftZ }))
-  }
 }

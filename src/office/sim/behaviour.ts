@@ -9,20 +9,15 @@ import type { FloorWaypoint } from './world-floor-routes'
 
 type AgentState = 'arriving' | 'working' | 'needs_you' | 'done' | 'leaving'
 export interface AgentRecord {
-  view: AgentView & { venueId?: string; connectorId?: string }
+  view: AgentView
   state: AgentState
   path: FloorWaypoint[]
   dwellMs: number
   queued: AgentActivity | null
   slotHeading: number
-  removed: boolean
   // How long its work has been over; null while it works.
   finishedForMs: number | null
   loungeSeatId: string | null
-  destinationVenueId?: string
-  leisureArrivedAtMs?: number
-  // Its walk leads home from a leisure outing, not to a desk it was just given.
-  isReturningFromLeisure?: boolean
 }
 type Destination = Pick<
   AgentView,
@@ -33,7 +28,7 @@ const urgent = (attention: AgentAttention) =>
 
 // How long a finished agent stays at its desk before it walks to its company's lounge.
 export const LOUNGE_DELAY_MS = 20_000
-export const WALK_METRES_PER_SECOND = 1.4
+const WALK_METRES_PER_SECOND = 1.4
 
 export function createAgent(
   session: SessionRef,
@@ -61,7 +56,6 @@ export function createAgent(
     dwellMs: 0,
     queued: null,
     slotHeading: destination.heading,
-    removed: false,
     finishedForMs: null,
     loungeSeatId: null
   }
@@ -92,23 +86,12 @@ export function goToLounge(
   path: FloorWaypoint[]
 ): AgentRecord {
   const walking = walk(agent, seat.heading, path)
-  return {
-    ...walking,
-    view: { ...agent.view, place: 'lounge' },
-    loungeSeatId: seat.id,
-    isReturningFromLeisure: undefined
-  }
+  return { ...walking, view: { ...agent.view, place: 'lounge' }, loungeSeatId: seat.id }
 }
 
 function withoutPlace(agent: AgentRecord): AgentRecord {
-  const { place: _place, venueId: _venueId, ...view } = agent.view
-  return {
-    ...agent,
-    view,
-    loungeSeatId: null,
-    destinationVenueId: undefined,
-    leisureArrivedAtMs: undefined
-  }
+  const { place: _place, ...view } = agent.view
+  return { ...agent, view, loungeSeatId: null }
 }
 
 export function returnToDesk(
@@ -116,7 +99,7 @@ export function returnToDesk(
   heading: number,
   path: FloorWaypoint[]
 ): AgentRecord {
-  return { ...walk(withoutPlace(agent), heading, path), isReturningFromLeisure: true }
+  return walk(withoutPlace(agent), heading, path)
 }
 
 export function updateAgent(
@@ -151,13 +134,9 @@ export function updateAgent(
   return next
 }
 
-export function leaveAgent(agent: AgentRecord, path: FloorWaypoint[]): AgentRecord {
-  return {
-    ...withoutPlace(agent),
-    state: 'leaving',
-    path: path.map((p) => ({ ...p })),
-    finishedForMs: null
-  }
+// A leaver fades where it stands, so it has nowhere to walk.
+export function leaveAgent(agent: AgentRecord): AgentRecord {
+  return { ...withoutPlace(agent), state: 'leaving', path: [], finishedForMs: null }
 }
 
 export function tickAgent(
@@ -172,7 +151,7 @@ export function tickAgent(
     dwellMs: agent.dwellMs + dtMs,
     finishedForMs: agent.finishedForMs === null ? null : agent.finishedForMs + dtMs
   }
-  if (next.state === 'arriving' || next.state === 'leaving') {
+  if (next.state === 'arriving') {
     let distance = (dtMs / 1000) * WALK_METRES_PER_SECOND
     while (next.path.length) {
       const target = next.path[0],
@@ -219,16 +198,13 @@ export function tickAgent(
       next.path.shift()
     }
     if (!next.path.length) {
-      if (next.state === 'leaving') next.removed = true
-      else {
-        next.state = urgent(next.view.attention)
-          ? 'needs_you'
-          : next.view.attention === 'done'
-            ? 'done'
-            : 'working'
-        next.view.heading = next.slotHeading
-        if (next.state === 'done') next.dwellMs = 0
-      }
+      next.state = urgent(next.view.attention)
+        ? 'needs_you'
+        : next.view.attention === 'done'
+          ? 'done'
+          : 'working'
+      next.view.heading = next.slotHeading
+      if (next.state === 'done') next.dwellMs = 0
     }
   }
   if (next.dwellMs >= 1500 && next.queued !== null) {

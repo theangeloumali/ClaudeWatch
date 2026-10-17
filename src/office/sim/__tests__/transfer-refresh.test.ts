@@ -4,11 +4,13 @@ import { World } from '../world'
 import { buildLayout } from '../layout'
 import { resolveEffectiveWorld } from '../effective-world'
 import { createWorldDocument } from '../../../shared/office/world-document'
+import { DEPARTURE_FADE_MS } from '../../../shared/office/types'
 
 // Full sim or scene builds: the 5 s default times out under multi-agent load (health-9).
 vi.setConfig({ testTimeout: 60_000 })
 
-it('preserves an active lift route during equivalent source observations', () => {
+// Equivalent observations every tick must not restart the fade, or it never lands.
+it('fades a desk moved two storeys up across, through observations every tick', () => {
   const sessions = [session('one')]
   const base = buildLayout(sessions, undefined)
   const document = createWorldDocument(base, sessions)
@@ -22,17 +24,20 @@ it('preserves an active lift route during equivalent source observations', () =>
     v: 1,
     snapshot: { rev: 0, generatedAtMs: 1000, sessions, sources: [] }
   })
+  const before = world.step(0)[0]
   document.rooms[0].floorNumber = 3
   document.revision++
   world.refreshLayout()
-  let previousY = 0
-  let hasAscended = false
-  for (let tick = 1; tick <= 1000; tick++) {
+  const elevations = new Set<number>()
+  let landedAtMs: number | null = null
+  for (let tick = 1; tick <= 20; tick++) {
     world.apply({ type: 'patch', v: 1, seq: tick, removed: [], upserts: sessions })
     const agent = world.step(100)[0]
-    if (agent.elevation! > previousY) hasAscended = true
-    if (hasAscended) expect(agent.elevation).toBeGreaterThanOrEqual(previousY)
-    previousY = agent.elevation ?? 0
+    elevations.add(agent.elevation ?? 0)
+    if (agent.elevation === 11 && agent.fade === undefined) landedAtMs ??= tick * 100
+    if (agent.elevation === 0)
+      expect({ x: agent.x, z: agent.z }).toEqual({ x: before.x, z: before.z })
   }
-  expect(previousY).toBe(11)
+  expect([...elevations]).toEqual([0, 11])
+  expect(landedAtMs).toBeLessThanOrEqual(DEPARTURE_FADE_MS + 100)
 })

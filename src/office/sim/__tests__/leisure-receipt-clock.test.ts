@@ -38,3 +38,38 @@ it('keeps healthy idle dwell through fresh observations received before the next
   }
   expect(hasVisited).toBe(true)
 })
+
+it('freezes new leisure choices on resync and failed own source', () => {
+  const actor = {
+    ...session('actor'),
+    attention: 'done' as const,
+    observation: {
+      sourceId: 'source',
+      coverage: 'own' as const,
+      observedAtMs: 0,
+      staleAfterMs: 100_000
+    }
+  }
+  const world = new World()
+  world.apply({
+    type: 'hello',
+    v: 1,
+    snapshot: {
+      rev: 1,
+      generatedAtMs: 0,
+      sessions: [actor],
+      sources: [{ id: 'source', ok: false, detail: 'offline' }]
+    }
+  })
+  for (let tick = 0; tick < 250; tick++) world.step(100)
+  expect(world.step(0)[0].place).toBeUndefined()
+  world.apply({ type: 'resync' })
+  for (let tick = 0; tick < 250; tick++) world.step(100)
+  expect(world.step(0)).toHaveLength(1)
+  expect(world.step(0)[0]).toMatchObject({
+    agentKey: actor.key,
+    attention: 'done',
+    activity: 'idle'
+  })
+  expect(world.step(0)[0].place).toBeUndefined()
+})

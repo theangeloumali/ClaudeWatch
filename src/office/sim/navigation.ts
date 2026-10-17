@@ -128,9 +128,4 @@ export class PathCache {
     }
     return path.map((p) => ({ ...p }))
   }
-  via(from: Point, door: Point, to: Point): Point[] {
-    const first = this.get(from, door),
-      second = this.get(door, to)
-    return first.length && second.length ? [...first, ...second.slice(1)] : []
-  }
 }

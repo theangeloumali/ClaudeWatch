@@ -13,36 +13,30 @@ vi.setConfig({ testTimeout: 120_000 })
 
 describe('door churn: a crew turning over through one lobby door', () => {
   it('lets departed subagents go and seats the current crew, every body honest', () => {
-    const { roamersSetOut: _setOut, roamersReturned: _returned, ...result } = runDoorChurn({})
-    expect(result).toEqual(CLEARED)
+    const { loungersSetOut: _setOut, ...result } = runDoorChurn({})
+    expect(result).toEqual({ ...CLEARED, loungersOutside: 0 })
   })
 
-  // Fading subagents cannot pass this one by construction: teammates walk out.
+  // Every leaver fades in place, so a teammate crew clears the same way as subagents.
   it('does the same for teammates', () => {
-    const {
-      roamersSetOut: _setOut,
-      roamersReturned: _returned,
-      ...result
-    } = runDoorChurn({
-      kind: 'teammate'
-    })
-    expect(result).toEqual(CLEARED)
+    const { loungersSetOut: _setOut, ...result } = runDoorChurn({ kind: 'teammate' })
+    expect(result).toEqual({ ...CLEARED, loungersOutside: 0 })
   })
 
-  it('clears the churn while two idle leads take city trips through the same door', () => {
-    const { roamersSetOut, ...result } = runDoorChurn({ kind: 'teammate', hasRoamingPeers: true })
-    // The roam rule must send both out, or this is the plain churn (MISSED-3).
-    expect(roamersSetOut).toBe(2)
-    expect(result).toEqual({ ...CLEARED, roamersReturned: 2 })
+  it('clears the churn while two idle peers take lounge trips indoors', () => {
+    const { loungersSetOut, ...result } = runDoorChurn({ kind: 'teammate', hasLoungingPeers: true })
+    // The lounge rule must send both off, or this is the plain churn (MISSED-3).
+    expect(loungersSetOut).toBe(2)
+    expect(result).toEqual({ ...CLEARED, loungersOutside: 0 })
   })
 
-  // Review Focus 1, with a subagent crew as the owner's teams run them. A teammate crew's
-  // walk-outs take about 52 s to clear the same door.
-  it('clears a mixed swap with two roamers returning', () => {
-    const { roamersAtKiosk, doorClearAtMs, unseated } = runMixedSwap(60_000)
-    expect(roamersAtKiosk).toBe(true)
-    expect({ isDoorClearWithin30s: (doorClearAtMs ?? Infinity) <= 30_000, unseated }).toEqual({
-      isDoorClearWithin30s: true,
+  // Review Focus 1, with a subagent crew as the owner's teams run them: leavers fade and
+  // newcomers fade in, so only the peers' walk back from the lounge is left.
+  it('clears a mixed swap with two loungers called back to work', () => {
+    const { loungersSeated, doorClearAtMs, unseated } = runMixedSwap(60_000)
+    expect(loungersSeated).toBe(true)
+    expect({ isDoorClearWithin1s: (doorClearAtMs ?? Infinity) <= 1_000, unseated }).toEqual({
+      isDoorClearWithin1s: true,
       unseated: 0
     })
   })

@@ -1,19 +1,13 @@
 import { canSweepBody } from './body-sweep'
 import { WORKER_BODY_RADIUS } from './body-footprints'
-import type { WorldBuilding, WorldFootprint, WorldPoint, WorldRoom } from './world-document-types'
+import type { WorldBuilding, WorldPoint, WorldRoom } from './world-document-types'
 
 interface FloorPassages {
   building: WorldBuilding
   rooms: WorldRoom[]
   floorNumber: number
-  lounge?: WorldFootprint
 }
-export function unreachableFloorTargets({
-  building,
-  rooms,
-  floorNumber,
-  lounge
-}: FloorPassages): string[] {
+export function unreachableFloorTargets({ building, rooms, floorNumber }: FloorPassages): string[] {
   const radius = WORKER_BODY_RADIUS + 0.02
   const halfWidth = building.footprint.width / 2 - radius
   const halfDepth = building.footprint.depth / 2 - radius
@@ -35,7 +29,6 @@ export function unreachableFloorTargets({
   if (floorNumber === 1 && building.connector)
     goals.push({ target: building.id, x: building.connector.x, z: building.connector.z })
   const obstacles = rooms.map((room) => ({ ...room.position, ...room.size }))
-  if (lounge) obstacles.push(lounge)
   const isOpen = (point: WorldPoint): boolean => {
     if (Math.abs(point.x) > halfWidth || Math.abs(point.z) > halfDepth) return false
     return obstacles.every((obstacle) => {

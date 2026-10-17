@@ -1,3 +1,4 @@
+import { cornerReach, cornerSeats } from '../../office/sim/game-corner'
 import type { LayoutMap } from '../../office/sim/layout'
 import { WORLD_DOCUMENT_LIMITS } from './world-document-limits'
 import type { WorldDocument, WorldRoom } from './world-document-types'
@@ -8,27 +9,19 @@ const ROOM_EDGE_METRES = 2
 const ENTRY_HALL_METRES = 4
 
 // dry-new: footprint packing moves buildings; consolidation must preserve desks while packing rooms.
+// dead-code-allowed: WorldEditor.tsx still passes the baseline; the lead drops it at integration 2026-10-24
 export function singleFloorWorldDocument(
   document: WorldDocument,
-  layout: LayoutMap
+  _layout: LayoutMap
 ): WorldDocument {
   const consolidated = structuredClone(document)
-  const companies = layout.floors.flatMap((floor) => floor.zones)
   for (const building of consolidated.buildings) {
     const rooms = consolidated.rooms.filter((room) => room.buildingId === building.id)
-    const company = companies.find((zone) => zone.companyKey === building.companyKey)
-    const firstProject = company?.children.toSorted(
-      (first, second) => first.index - second.index
-    )[0]
-    const lounge = firstProject?.projectKey === building.projectKey ? company?.lounge : undefined
     const packed = packRooms(rooms)
-    const loungeBand = lounge ? lounge.width + ROOM_GAP_METRES + 3 : 0
-    const width = Math.max(12, packed.width + ROOM_EDGE_METRES * 2 + loungeBand)
-    const depth = Math.max(
-      12,
-      packed.depth + ENTRY_HALL_METRES + ROOM_EDGE_METRES,
-      (lounge?.depth ?? 0) + 6
-    )
+    // East of the offices, the edge margin is the corner's room gap and wall margin both.
+    const cornerBand = cornerReach(cornerSeats(rooms.flatMap((room) => room.desks).length))
+    const width = Math.max(12, packed.width + ROOM_EDGE_METRES * 2 + cornerBand)
+    const depth = Math.max(12, packed.depth + ENTRY_HALL_METRES + ROOM_EDGE_METRES)
     if (
       width > WORLD_DOCUMENT_LIMITS.buildingMetres ||
       depth > WORLD_DOCUMENT_LIMITS.buildingMetres

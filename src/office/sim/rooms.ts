@@ -71,9 +71,9 @@ export interface FloorLayout {
 }
 
 // The lounge was laid out for agents at their old size: every length of it grows with them.
-const loungeMetres = (metres: number): number => metres * FURNITURE_SCALE
+export const loungeMetres = (metres: number): number => metres * FURNITURE_SCALE
 export const LOUNGE_WIDTH = loungeMetres(6)
-const LOUNGE_SEATS_PER_ROW = 4
+export const LOUNGE_SEATS_PER_ROW = 4
 
 export function bounds(left: number, top: number, width: number, depth: number): Bounds {
   return {

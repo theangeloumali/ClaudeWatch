@@ -112,3 +112,11 @@ it('keeps a deterministic head-on yield active rather than stepping straight bac
   expect(Math.sign(held.x)).toBe(Math.sign(first.x))
   expect(passages.guide({ ...options, obstacles: [], walkers: [], tick: 2 })).toEqual(options.to)
 })
+
+it('keeps connector capacity one even when its occupants are vertically separated', () => {
+  const body = { id: 'lower', x: 0, z: 0, radius: 0.65, elevation: 1, connectorId: 'lift' }
+  expect(bodyFits(body, [{ ...body, id: 'upper', elevation: 9 }])).toBe(false)
+  expect(bodyFits(body, [{ ...body, id: 'upper', elevation: 9, connectorId: 'other-lift' }])).toBe(
+    true
+  )
+})
