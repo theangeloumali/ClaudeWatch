@@ -11,10 +11,12 @@ import {
   type BuildingId,
   buildingIdOf,
   createDayLedger,
+  createDayLedgerStore,
   type DayLedger,
-  observeDay,
+  type DayLedgerStore,
   projectTokensToday
 } from '../office/logic/city-signals'
+import { pageDay } from '../office/logic/city-signal-store'
 import { milestoneStep, stageFor } from '../office/logic/token-spires'
 
 export type CityEventKind = 'milestone' | 'hoist' | 'dispatch' | 'done'
@@ -70,8 +72,9 @@ const isFresh = (session: SessionRef, atMs: number): boolean =>
 const buildingOf = (session: SessionRef): BuildingId =>
   buildingIdOf(session.companyKey, session.projectKey)
 
-// A hello is a baseline, never an edge: only a patch between two known states fires.
-export function createCityEventLog(): CityEventLog {
+// A hello is a baseline, never an edge: only a patch between two known states fires. The day is
+// the one the spires count, so a hoist rises with its spire.
+export function createCityEventLog(ledger: DayLedgerStore = createDayLedgerStore()): CityEventLog {
   let seen = new Map<string, SessionSeen>()
   let totals = new Map<BuildingId, number>()
   let day: DayLedger = createDayLedger('')
@@ -135,7 +138,7 @@ export function createCityEventLog(): CityEventLog {
         totals = new Map()
         return
       }
-      day = observeDay(day, sessions, atMs)
+      day = ledger.observe(sessions, atMs)
       const next = buildingTotals(sessions, { projectsToday, day, nowMs: atMs })
       if (type === 'patch') {
         for (const session of sessions) sessionEdges(session, atMs)
@@ -185,4 +188,4 @@ function leadCrew(
 }
 
 // The page's log: a module store like `officePoses`, fed once per feed message.
-export const cityEvents = createCityEventLog()
+export const cityEvents = createCityEventLog(pageDay)

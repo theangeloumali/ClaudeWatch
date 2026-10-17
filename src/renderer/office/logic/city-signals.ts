@@ -109,6 +109,21 @@ export function observeDay(
   return hasChanged ? next : day
 }
 
+// The page keeps one day, so a hoist and its spire count the same tokens (one ledger, two readers).
+export interface DayLedgerStore {
+  observe(sessions: readonly SessionRef[], nowMs: number): DayLedger
+}
+
+export function createDayLedgerStore(): DayLedgerStore {
+  let day: DayLedger | null = null
+  return {
+    observe(sessions, nowMs) {
+      day = observeDay(day ?? createDayLedger(dayKey(nowMs)), sessions, nowMs)
+      return day
+    }
+  }
+}
+
 export function citySignals(frame: OfficeFrame, day: DayLedger, nowMs: number): CitySignals {
   const agents = freshAgents(frame, nowMs)
   const buildings = new Map<BuildingId, BuildingSignal>()

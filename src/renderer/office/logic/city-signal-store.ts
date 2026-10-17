@@ -1,15 +1,13 @@
 import { useSyncExternalStore } from 'react'
-import { dayKey } from '../../../shared/day-key'
 import type { OfficeFrame } from '../scene-model'
 import {
   type BuildingId,
   type BuildingSignal,
   citySignals,
-  createDayLedger,
+  createDayLedgerStore,
+  type DayLedgerStore,
   type LeaderRow,
-  observeDay,
-  type CitySignals,
-  type DayLedger
+  type CitySignals
 } from './city-signals'
 import { createSubscribers } from './subscribers'
 
@@ -78,9 +76,10 @@ const reachedStages = (buildings: ReadonlyMap<BuildingId, BuildingSignal>) =>
     [...buildings].flatMap(([id, { spireStage }]) => (spireStage > 0 ? [[id, spireStage]] : []))
   )
 
-export function createCitySignalStore(): CitySignalStore {
+export function createCitySignalStore(
+  day: DayLedgerStore = createDayLedgerStore()
+): CitySignalStore {
   const { subscribe, notify } = createSubscribers()
-  let day: DayLedger | null = null
   let signals = EMPTY
   let stages: ReadonlyMap<BuildingId, number> = new Map()
   let version = 0
@@ -88,9 +87,8 @@ export function createCitySignalStore(): CitySignalStore {
   return {
     update(frame, nowMs) {
       if (!frame) return
-      day = observeDay(day ?? createDayLedger(dayKey(nowMs)), frame.sessions, nowMs)
       const previous = signals
-      signals = citySignals(frame, day, nowMs)
+      signals = citySignals(frame, day.observe(frame.sessions, nowMs), nowMs)
       const isSceneSame = isSameScene(previous, signals)
       if (isSceneSame && isSameHud(previous, signals)) return
       version += 1
@@ -109,8 +107,11 @@ export function createCitySignalStore(): CitySignalStore {
   }
 }
 
+// The page's one day, shared with the city's event log.
+export const pageDay = createDayLedgerStore()
+
 // The page's signals: fed at the Office root, read by layers in their frame loop.
-export const citySignalStore = createCitySignalStore()
+export const citySignalStore = createCitySignalStore(pageDay)
 
 // Spires build into the building batch, so the scene re-renders only when a stage is reached.
 export function useSpireStages(
