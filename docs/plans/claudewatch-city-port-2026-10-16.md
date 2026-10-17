@@ -676,7 +676,7 @@ Research: `cross-cutting.md` X1, `hud.md` §1.
 
 - [x] Merge `--no-ff` in the order 3 → 2 → 4, then 5 and 6. After each merge run `npx vitest run`.
 - [x] Gates: prettier, `eslint .`, both `tsc`, `vitest run`, `knip`, `npm run build`.
-- [ ] Page probe: full, balanced and light, focused and blurred. Record against the Phase 0 baseline and the Global Constraints budgets.
+- [x] Page probe: full, balanced and light, focused and blurred. Record against the Phase 0 baseline and the Global Constraints budgets.
 - [x] A 10-minute live capture on real sessions (view-only server):
   - 0 citizen or vehicle samples on a carriageway outside a crossing;
   - 0 working agents off their desks;
@@ -765,3 +765,17 @@ Authorised by Angelo on 2026-10-17. After the close: push; merge PR #12 (`releas
 
 - `/simplify`: four reviews (reuse, simplification, efficiency, altitude), fixed in three slices plus lead changes; two visible bugs fixed on the way (spires vanished on offices of four storeys or more; lots with no street were trip destinations). Spires batch city-wide (+1 draw), paid for by crowns at full only and work-trip rings counted as transient.
 - Dead-code scan: clean.
+
+### Final page probe (`6b9af858`, view-only server on real data)
+
+| Level             | View | Draws (base → now) | Triangles      | Upload p50          | react-dom / 30 s (base → now) |
+| ----------------- | ---- | ------------------ | -------------- | ------------------- | ----------------------------- |
+| full, focused     | city | 38 → 47 (+9)       | 185,020 (+54k) | 16.8 kB (base 21.1) | 54 → 52                       |
+| full, blurred     | city | 38 → 47            | 179,602        | 17.8 kB (base 14.3) | 25 → 34                       |
+| balanced, focused | city | 37 → 42 (+5)       | 159,596        | 10.6 kB             | 48 → 55                       |
+| balanced, blurred | city | 37 → 42            | 160,414        | 15.0 kB             | 23 → 33                       |
+| light, focused    | city | 34 → 38 (+4)       | 159,106        | 13.0 kB             | 49 → 54                       |
+| light, blurred    | city | 34 → 38            | 163,580        | 11.7 kB             | 26 → 26                       |
+
+- Within every draw budget (+12 / +8 / +4), triangles +54k (≤ 80k), upload within +20 kB, 0 page errors.
+- React commits: the scene layers commit nothing while idle (Profiler specs). The blurred city rows vary by up to +10 per 30 s with live activity on real sessions (news lines and leader changes as agents work); light blurred shows none. Recorded as live-feed variance, not an idle cost.
