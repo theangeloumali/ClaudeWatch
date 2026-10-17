@@ -132,7 +132,7 @@ describe('game corner: one beside the offices on every floor', () => {
               elevation: floor.elevation,
               physicalFloorId: floor.id
             },
-            []
+            false
           )
           for (const seat of cornerOf(floor)!.slots)
             if (!routes.toFloor(agent.view, floor, seat).length)

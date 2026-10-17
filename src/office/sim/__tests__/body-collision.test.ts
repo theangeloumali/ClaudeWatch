@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import { session } from '../fixtures'
+import { session, walkingAgent } from '../fixtures'
 import { World } from '../world'
 import { WORKER_BODY_RADIUS } from '../../../shared/office/body-footprints'
 import type { AgentView } from '../../../shared/office/types'
@@ -36,7 +36,7 @@ function emptyWorld(): World {
 it('advances activity dwell and finished timers while a body blocks movement', () => {
   const waiting = updateAgent(
     setFinished(
-      createAgent(
+      walkingAgent(
         session('waiting'),
         { floorId: 'hq', roomId: 'room', slotId: 'desk_main', x: 2, z: 0, heading: 0 },
         [

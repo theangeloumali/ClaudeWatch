@@ -10,11 +10,12 @@ describe('recall: reappearing at its desk', () => {
   const floor = layout.floors[0]
   const room = floor.rooms.find((candidate) => candidate.sessionKey === 'claude:a')!
   const desk = room.slots.find((slot) => slot.id !== 'door')!
-  const away = createAgent(
+  const atDesk = createAgent(
     { ...session('claude:a'), activity: 'thinking' },
     { floorId: floor.id, roomId: room.id, slotId: desk.id, x: desk.x, z: desk.z, heading: 0 },
-    [{ x: 300, z: 300, elevation: 0, physicalFloorId: null }]
+    false
   )
+  const away = { ...atDesk, view: { ...atDesk.view, x: 300, z: 300 } }
   const body = (x: number) => ({
     id: 'other',
     x,

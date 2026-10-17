@@ -30,29 +30,24 @@ const urgent = (attention: AgentAttention) =>
 export const LOUNGE_DELAY_MS = 20_000
 const WALK_METRES_PER_SECOND = 1.4
 
+// Seated at its destination: a newcomer fades in there, and a mover is given its route after.
 export function createAgent(
   session: SessionRef,
   destination: Destination,
-  path: FloorWaypoint[]
+  isSubagent: boolean
 ): AgentRecord {
-  const start = path[0] ?? destination
   return {
     view: {
       ...destination,
-      x: start.x,
-      z: start.z,
-      elevation: start.elevation ?? destination.elevation,
-      physicalFloorId:
-        start.physicalFloorId === undefined ? destination.physicalFloorId : start.physicalFloorId,
       agentKey: session.key,
       activity: session.activity,
       attention: session.attention,
       provider: session.provider,
-      isSubagent: false,
+      isSubagent,
       label: session.name
     },
     state: 'arriving',
-    path: path.map((p) => ({ ...p })),
+    path: [],
     dwellMs: 0,
     queued: null,
     slotHeading: destination.heading,

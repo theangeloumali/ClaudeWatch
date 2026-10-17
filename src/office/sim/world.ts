@@ -249,9 +249,8 @@ export class World {
         elevation: floorElevation(floor),
         physicalFloorId: floorId
       },
-      []
+      isSubagent
     )
-    agent.view.isSubagent = isSubagent
     this.passages.clear(key)
     this.fading.delete(key)
     if (!existing) {
