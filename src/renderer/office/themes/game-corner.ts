@@ -15,11 +15,6 @@ interface Cabinet extends Footprint {
   facing: Facing
 }
 
-export interface GameCornerPlan {
-  screen: Footprint
-  cabinets: Cabinet[]
-}
-
 const WALL_GAP_M = 0.15
 const SCREEN = { bottom: 0.55, height: 1.15, depth: 0.08, minWidth: 2, maxWidth: 4.2 }
 // The frame, and the panel in front of it, measured in from the far edge.
@@ -157,11 +152,6 @@ function layOut(lounge: LoungeGeometry) {
     cabinets.push(cabinet)
   }
   return { ahead, site, cabinets }
-}
-
-export function planGameCorner(lounge: LoungeGeometry): GameCornerPlan {
-  const { site, cabinets } = layOut(lounge)
-  return { screen: site.footprint, cabinets }
 }
 
 // A rug, a beanbag at every seat, a wall screen beyond them, and arcade cabinets out of the way.
