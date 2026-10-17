@@ -109,8 +109,8 @@ describe('the seeded preview runs the office sim', () => {
     }
   })
 
-  // A city outing: a venue or a sidewalk loop, then home (Phase 5).
-  it('sends a finished agent out of its office inside a minute, and back to its desk later', () => {
+  // A game corner visit: a finished agent plays, then goes home to its desk.
+  it('sends a finished agent to play inside a minute, and back to its desk later', () => {
     const frames = watch(300)
     const firstOut = frames.findIndex(({ frame }) =>
       frame.agents.some((agent) => agent.place === 'lounge')
