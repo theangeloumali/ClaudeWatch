@@ -1,5 +1,5 @@
 import type { WorkTripRequest } from '../../office-live/work-trip-store'
-import { roadNet, type RoadNet } from '../town/road-net'
+import { roadNet } from '../town/road-net'
 import type { VehicleRole } from '../town/town-dress'
 import type { TownPlan } from '../town/town-plan'
 import type { Trip } from '../town/town-trips'
@@ -55,7 +55,6 @@ export function createWorkFleet({ plan, trips, clock, carried }: WorkFleetOption
   const passes = [...ambient.passes]
   const traffic = { ...ambient, passes }
   const flights = new Map<number, Flight>()
-  let net: RoadNet | null = null
 
   const poseOf = (slot: number): RoutePoint => {
     const { route, speed } = live[slot]
@@ -79,8 +78,7 @@ export function createWorkFleet({ plan, trips, clock, carried }: WorkFleetOption
     stops: readonly WorkStop[],
     home: RoutePoint
   ) => {
-    net ??= roadNet(plan)
-    const route = workRoute(net, from, stops, home)
+    const route = workRoute(roadNet(plan), from, stops, home)
     if (!route) return false
     const trip = { ...trips[slot], route, startSec: 0 }
     flights.set(slot, { role, ambientMoved: clock.moved[slot], stops, lapSec: lapOf(trip) })
