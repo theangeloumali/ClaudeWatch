@@ -13,10 +13,14 @@ import {
   crownAnchor
 } from '../themes/physical-building-parts'
 import { buildingPlaces, crownTopOf } from '../logic/building-place'
-import { floorElevation, PHYSICAL_STOREY_HEIGHT } from './all-floor-model'
+import {
+  buildingGroupName,
+  buildingKeyOf,
+  floorElevation,
+  PHYSICAL_STOREY_HEIGHT
+} from './all-floor-model'
 import { BuildingWindows } from './BuildingWindows'
 import { OperationalStructure } from './OperationalStructure'
-import { TokenSpire } from './TokenSpire'
 import { editSceneTarget, isStillClick, trackPress, type SceneEditTarget } from './ZonePickers'
 
 // dry-new: theme landmarks invent storeys; this shell encloses only supplied physical floors.
@@ -27,7 +31,6 @@ export function PhysicalBuildingShell({
   areRoofsVisible = true,
   wallsMode = 'cutaway',
   isOverview = false,
-  spireStage = 0,
   onFocusFloor,
   onEditTarget
 }: {
@@ -37,7 +40,6 @@ export function PhysicalBuildingShell({
   areRoofsVisible?: boolean
   wallsMode?: WallsMode
   isOverview?: boolean
-  spireStage?: number
   onFocusFloor?: (floorId: string) => void
   onEditTarget?: (target: SceneEditTarget) => void
 }) {
@@ -73,20 +75,20 @@ export function PhysicalBuildingShell({
         ),
     [ordered, focused, theme.palette.stone]
   )
-  const buildingId = ground?.buildingId ?? ground?.floorId ?? ''
+  const buildingId = ground ? buildingKeyOf(ground) : ''
   const isCrownShown = areRoofsVisible && !focused
   const roof = useMemo(
     () => (isCrownShown ? crownTopOf(ordered, theme) : null),
     [isCrownShown, ordered, theme]
   )
-  const deck = useMemo(() => (top ? crownAnchor(top) : null), [top])
-  // A ref with a cleanup, not an effect: marks lose the roof the moment the shell goes.
+  const deck = useMemo(() => (top ? crownAnchor(top) : undefined), [top])
+  // A ref with a cleanup, not an effect: marks and the spire lose the roof the moment it goes.
   const feedRoof = useMemo(
     () => () => {
-      buildingPlaces.setRoof(buildingId, roof)
+      buildingPlaces.setRoof(buildingId, roof, deck)
       return () => buildingPlaces.setRoof(buildingId, null)
     },
-    [buildingId, roof]
+    [buildingId, roof, deck]
   )
   const entranceFacade = useRef<Group>(null)
   const forward = useMemo(() => new Vector3(), [])
@@ -108,28 +110,19 @@ export function PhysicalBuildingShell({
   return (
     <group
       ref={feedRoof}
-      name={`physical-building:${buildingId}`}
+      name={buildingGroupName(buildingId)}
       onPointerDown={trackPress}
       onContextMenu={(event) =>
         editSceneTarget(event, {
           kind: 'building',
-          id: ground.buildingId ?? ground.floorId,
+          id: buildingId,
           onEditTarget
         })
       }
     >
       {areRoofsVisible && (
-        <group name={`physical-roof:${ground.buildingId ?? ground.floorId}`}>
+        <group name={`physical-roof:${buildingId}`}>
           {!focused && <Parts parts={crown} />}
-          {roof && deck && spireStage > 0 && (
-            <TokenSpire
-              buildingId={buildingId}
-              deck={deck}
-              roof={roof}
-              theme={theme}
-              stage={spireStage}
-            />
-          )}
           {!focused && (
             <group
               position={[entrance.x, floorElevation(ground), entrance.z]}

@@ -69,13 +69,12 @@ describe('floor batch revision', () => {
     expect(revisionOf({ agents: crew(4) })).toBe(revisionOf({ agents: crew(3) }))
   })
 
-  // A spire's modules live in the shell's batch, so a new stage has to rebuild it.
-  it('a spire reaching a new stage rebuilds the floor batch', () => {
+  // Spires batch apart, city-wide, so a new stage rebuilds only them.
+  it('a spire stage change leaves the floor batch alone', () => {
     const agents = crew(3)
-    expect(revisionOf({ agents, spireStages: new Map([['tower', 2]]) })).not.toBe(
+    expect(revisionOf({ agents, spireStages: new Map([['tower', 2]]) })).toBe(
       revisionOf({ agents, spireStages: new Map([['tower', 1]]) })
     )
-    expect(revisionOf({ agents, spireStages: new Map() })).toBe(revisionOf({ agents }))
   })
 
   it('entering overview rebuilds the floor batch, which drops detail', () => {
