@@ -56,12 +56,19 @@ export interface CitySignals {
   companies: ReadonlyMap<string, CompanyCounts>
 }
 
-// Each project's highest counted total seen today, for hosts with no accounts ledger, and each
-// session's total when today began for it: what it spent before then is not today's.
+// For hosts with no accounts ledger: each session's total when today began for it, its highest
+// spend since, and each project's sum of those, so a session that ends keeps its tokens counted.
 export interface DayLedger {
   dayKey: string
-  highest: ReadonlyMap<string, number>
   sessionBase: ReadonlyMap<string, number>
+  sessionSpend: ReadonlyMap<string, SessionSpend>
+  projectTotals: ReadonlyMap<string, number>
+}
+
+// Counted under the project it was first seen in today, so no total ever loses it.
+interface SessionSpend {
+  projectKey: string
+  tokens: number
 }
 
 const CROWNS = 3
@@ -74,17 +81,34 @@ export const buildingIdOf = (companyKey: string, projectKey: string): BuildingId
 
 export const createDayLedger = (day: string): DayLedger => ({
   dayKey: day,
-  highest: new Map(),
-  sessionBase: new Map()
+  sessionBase: new Map(),
+  sessionSpend: new Map(),
+  projectTotals: new Map()
 })
 
-// A session started today spent all of its tokens today; an older one, only what came after
-// it was first seen today.
+// A conversation begun today spent all of its tokens today; an older one, only what came after
+// it was first seen today. Its thread outlives a resumed process, which starts today.
+const baseToday = (session: SessionRef, tokens: number, today: string): number =>
+  dayKey(session.threadStartedAtMs ?? session.startedAtMs) === today ? 0 : tokens
+
 function spentToday(day: DayLedger, session: SessionRef): number | null {
   const tokens = sessionTokens(session.usage)
   if (tokens === null) return null
   return Math.max(0, tokens - (day.sessionBase.get(session.key) ?? 0))
 }
+
+interface DayDraft extends DayLedger {
+  sessionBase: Map<string, number>
+  sessionSpend: Map<string, SessionSpend>
+  projectTotals: Map<string, number>
+}
+
+const draftOf = (today: string, from: DayLedger = createDayLedger(today)): DayDraft => ({
+  dayKey: today,
+  sessionBase: new Map(from.sessionBase),
+  sessionSpend: new Map(from.sessionSpend),
+  projectTotals: new Map(from.projectTotals)
+})
 
 // Grow-only within the local day, so a session ending never lowers a spire. The maps are copied
 // on the first change only: most frames change nothing.
@@ -94,23 +118,21 @@ export function observeDay(
   nowMs: number
 ): DayLedger {
   const today = dayKey(nowMs)
-  type Draft = DayLedger & { highest: Map<string, number>; sessionBase: Map<string, number> }
-  let draft: Draft | null =
-    day.dayKey === today ? null : { dayKey: today, highest: new Map(), sessionBase: new Map() }
-  const edit = (): Draft =>
-    (draft ??= {
-      dayKey: today,
-      highest: new Map(day.highest),
-      sessionBase: new Map(day.sessionBase)
-    })
+  let draft = day.dayKey === today ? null : draftOf(today)
+  const edit = (): DayDraft => (draft ??= draftOf(today, day))
   for (const session of sessions) {
     const tokens = sessionTokens(session.usage)
-    if (tokens === null || (draft ?? day).sessionBase.has(session.key)) continue
-    edit().sessionBase.set(session.key, dayKey(session.startedAtMs) === today ? 0 : tokens)
-  }
-  for (const [projectKey, tokens] of countedProjects(draft ?? day, sessions)) {
-    if (tokens <= ((draft ?? day).highest.get(projectKey) ?? -1)) continue
-    edit().highest.set(projectKey, tokens)
+    if (tokens === null) continue
+    if (!(draft ?? day).sessionBase.has(session.key))
+      edit().sessionBase.set(session.key, baseToday(session, tokens, today))
+    const spent = spentToday(draft ?? day, session) ?? 0
+    const known = (draft ?? day).sessionSpend.get(session.key)
+    if (known && spent <= known.tokens) continue
+    const projectKey = known?.projectKey ?? session.projectKey
+    const ledger = edit()
+    ledger.sessionSpend.set(session.key, { projectKey, tokens: spent })
+    const total = ledger.projectTotals.get(projectKey) ?? 0
+    ledger.projectTotals.set(projectKey, total + spent - (known?.tokens ?? 0))
   }
   return draft ?? day
 }
@@ -208,16 +230,6 @@ function knownBuildings(frame: OfficeFrame): Map<BuildingId, Place> {
   return places
 }
 
-function countedProjects(day: DayLedger, sessions: readonly SessionRef[]): Map<string, number> {
-  const totals = new Map<string, number>()
-  for (const session of sessions) {
-    const tokens = spentToday(day, session)
-    if (tokens !== null)
-      totals.set(session.projectKey, (totals.get(session.projectKey) ?? 0) + tokens)
-  }
-  return totals
-}
-
 // The accounts ledger's day where the host keeps one; null is unknown, never 0.
 export function projectTokensToday(
   today: { projectsToday: readonly ProjectTokens[] | undefined; day: DayLedger; nowMs: number },
@@ -226,7 +238,7 @@ export function projectTokensToday(
   if (today.projectsToday)
     return today.projectsToday.find((entry) => entry.projectKey === projectKey)?.tokens ?? null
   const isToday = today.day.dayKey === dayKey(today.nowMs)
-  return isToday ? (today.day.highest.get(projectKey) ?? null) : null
+  return isToday ? (today.day.projectTotals.get(projectKey) ?? null) : null
 }
 
 function buildingSignal(agents: readonly FreshAgent[], tokensToday: number | null): BuildingSignal {
