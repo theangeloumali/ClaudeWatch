@@ -94,7 +94,6 @@ interface ProjectSource {
   company: ZoneLayout
   project: ZoneLayout
   rooms: RoomLayout[]
-  hasLounge: boolean
 }
 export function createWorldDocument(
   layout: LayoutMap,
@@ -107,7 +106,7 @@ export function createWorldDocument(
   const projects: ProjectSource[] = []
   for (const floor of layout.floors)
     for (const company of floor.zones ?? []) {
-      for (const [index, project] of company.children.entries()) {
+      for (const project of company.children) {
         if (!project.projectKey) continue
         const id = worldBuildingId(company.companyKey, project.projectKey)
         if (seen.has(id)) continue
@@ -121,12 +120,7 @@ export function createWorldDocument(
           )
         if (!rooms.some((room) => room.sessionKey !== null)) continue
         seen.add(id)
-        projects.push({
-          company,
-          project,
-          rooms,
-          hasLounge: index === 0 && company.lounge !== undefined
-        })
+        projects.push({ company, project, rooms })
       }
     }
   const includedProjects = projects.slice(0, LIMITS.buildings)
@@ -154,14 +148,9 @@ export function createWorldDocument(
 }
 
 function defaultBuilding(source: ProjectSource): WorldBuilding {
-  const { company, project, hasLounge } = source
-  const loungeWidth = hasLounge ? (company.lounge?.width ?? 0) : 0
-  const loungeDepth = hasLounge ? (company.lounge?.depth ?? 0) : 0
-  const width = Math.min(LIMITS.buildingMetres, Math.max(36, project.width + loungeWidth + 12))
-  const depth = Math.min(
-    LIMITS.buildingMetres,
-    Math.max(28, Math.max(project.depth, loungeDepth) + 8)
-  )
+  const { company, project } = source
+  const width = Math.min(LIMITS.buildingMetres, Math.max(36, project.width + 12))
+  const depth = Math.min(LIMITS.buildingMetres, Math.max(28, project.depth + 8))
   return {
     id: worldBuildingId(company.companyKey, project.projectKey ?? ''),
     companyKey: company.companyKey,
@@ -180,14 +169,13 @@ function defaultRoom(options: {
 }): WorldRoom {
   const { source, building, room } = options
   const target = worldRoomTarget(room)
-  const loungeWidth = source.hasLounge ? (source.company.lounge?.width ?? 0) : 0
   return {
     id: target,
     target,
     buildingId: building.id,
     floorNumber: 1,
     position: {
-      x: room.x - source.project.x - (loungeWidth ? loungeWidth / 2 + 1 : 0),
+      x: room.x - source.project.x,
       z: room.z - source.project.z
     },
     size: { width: room.width, depth: room.depth },
