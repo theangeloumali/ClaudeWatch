@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEPARTURE_FADE_MS } from '../../../shared/office/types'
+import { DEPARTURE_FADE_MS, SIM_TICK_MS } from '../../../shared/office/types'
 import { presenceAfter } from '../scene/Robot'
 
 const FRAME_S = 1 / 60
@@ -12,11 +12,13 @@ function settle(fade: number | undefined, isReducedMotion: boolean, seconds: num
 }
 
 describe('robot fade on departure (seating-4)', () => {
-  it('shrinks a fading robot to nothing over the sim fade', () => {
-    const halfway = settle(0, false, DEPARTURE_FADE_MS / 2000)
+  // The sim's last faded view is one step before the fade's end, so the shrink ends there.
+  it('shrinks a fading robot to nothing over the views the sim shows faded', () => {
+    const shrinkS = (DEPARTURE_FADE_MS - SIM_TICK_MS) / 1000
+    const halfway = settle(0, false, shrinkS / 2)
     expect(halfway).toBeGreaterThan(0.4)
     expect(halfway).toBeLessThan(0.6)
-    expect(settle(0, false, DEPARTURE_FADE_MS / 1000 + FRAME_S)).toBe(0)
+    expect(settle(0, false, shrinkS + FRAME_S)).toBe(0)
   })
 
   it('keeps a robot whole while it is not fading', () => {
