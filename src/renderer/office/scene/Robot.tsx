@@ -6,6 +6,7 @@ import { DEPARTURE_FADE_MS, type AgentView } from '../../../shared/office/types'
 import { livePose, officePoses } from '../../office-live/pose-store'
 import type { FloorGeometry } from '../scene-model'
 import { approach, approachAngle, moodFor, robotPose } from '../logic/character-pose'
+import { createSeatEase, type SeatEase } from '../logic/seat-ease'
 import type { ThemeZoneGroup } from '../logic/office-themes'
 import { getTheme } from '../themes/registry'
 import { applyModelPose, useRobotRig } from '../themes/rig'
@@ -95,6 +96,10 @@ export function Robot({
   agentRef.current = agent
   const phase = useMemo(() => phaseFor(agent.agentKey), [agent.agentKey])
   const travelDistanceRef = useRef(0)
+  const seatRef = useRef<SeatEase>(null)
+  seatRef.current ??= createSeatEase()
+  const seat = seatRef.current
+  const seatModelRef = useRef(Model)
   // Read once: an arrival still fading in starts at nothing, then the frame loop owns the scale.
   const mountedPresence = useRef<number>(null)
   mountedPresence.current ??= presenceTarget(agent)
@@ -166,6 +171,11 @@ export function Robot({
       motion.travelDistance = travelDistanceRef.current
       motions.set(target.agentKey, motion)
     }
+    // A swapped model starts its sit afresh: the ease it carried was measured on the old one.
+    if (seatModelRef.current !== Model) {
+      seatModelRef.current = Model
+      seat.seatedness = null
+    }
     const mood = moodFor(target, isMoving)
     const seatPresence = seats
       ? workerSeatPresence({ agent: target, position: root.position, seats, isMoving })
@@ -186,7 +196,8 @@ export function Robot({
         travelDistance: travelDistanceRef.current,
         isSubagent: target.isSubagent,
         isInLounge: seatPresence === 'lounge',
-        seatPresence
+        seatPresence,
+        seat
       }
     }
     if (isOverviewModel) applyHumanPose(rig, pose, poseInput.options)

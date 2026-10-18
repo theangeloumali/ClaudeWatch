@@ -1,4 +1,6 @@
+import { MathUtils } from 'three'
 import { GAMING_POSE, type RobotPose } from '../../logic/character-pose'
+import { advanceSeat } from '../../logic/seat-ease'
 import { BEANBAG_SEAT_M } from '../game-corner'
 import type { RobotRig, ThemePoseOptions } from '../types'
 import { HUMAN_PIVOT, HUMAN_PELVIS, HUMAN_LOWER_LEG_LENGTH } from './human-parts'
@@ -10,7 +12,11 @@ import {
 
 export const HUMAN_STRIDE_METRES = 1.05
 const SEATED_HIP_Y = 0.3
+const STANDING_Y = HUMAN_PIVOT.body[1]
 const QUARTER_TURN = Math.PI / 2
+
+// Lengthens or shortens the shins so the feet reach the floor from a seat at this height.
+const shinScaleAt = (hipY: number): number => 1 + (hipY - SEATED_HIP_Y) / HUMAN_LOWER_LEG_LENGTH
 
 const SEATED_POSTURES = {
   idle: {
@@ -98,7 +104,7 @@ export function humanPose(pose: RobotPose, options: ThemePoseOptions) {
     isReading: options.mood === 'reading',
     needsAttention,
     bodyY: hipY,
-    lowerLegScale: 1 + (hipY - SEATED_HIP_Y) / HUMAN_LOWER_LEG_LENGTH,
+    lowerLegScale: shinScaleAt(hipY),
     bodyRoll: 0,
     leftHip: -QUARTER_TURN - posture.bodyPitch,
     rightHip: -QUARTER_TURN - posture.bodyPitch,
@@ -176,8 +182,17 @@ function walkingPose(options: ThemePoseOptions) {
 
 export function applyHumanPose(rig: RobotRig, pose: RobotPose, options: ThemePoseOptions): void {
   const target = humanPose(pose, options)
+  const seatedness = advanceSeat(options.seat, target.isSeated, target.bodyY, options)
+  // The hip and legs are drawn back toward where the sit or stand began by the share still to go.
+  const away = target.isSeated ? 1 - seatedness : seatedness
+  const lastSeatY = options.seat?.seatedY ?? target.bodyY
+  const fromY = target.isSeated ? STANDING_Y : lastSeatY
+  const fromHip = target.isSeated ? 0 : -QUARTER_TURN
+  const fromKnee = target.isSeated ? 0 : QUARTER_TURN
+  const fromShin = target.isSeated ? 1 : shinScaleAt(lastSeatY)
+  const shinScale = MathUtils.lerp(target.lowerLegScale, fromShin, away)
   if (rig.body.current) {
-    rig.body.current.position.y = target.bodyY
+    rig.body.current.position.y = MathUtils.lerp(target.bodyY, fromY, away)
     rig.body.current.rotation.set(target.bodyPitch, 0, target.bodyRoll)
   }
   rig.head.current?.rotation.set(target.headPitch, 0, 0)
@@ -185,12 +200,12 @@ export function applyHumanPose(rig: RobotRig, pose: RobotPose, options: ThemePos
   rig.rightArm.current?.rotation.set(target.rightArm, target.rightArmYaw, target.rightArmRoll)
   rig.leftElbow?.current?.rotation.set(target.leftElbow, 0, 0)
   rig.rightElbow?.current?.rotation.set(target.rightElbow, 0, 0)
-  rig.leftHip?.current?.rotation.set(target.leftHip, 0, 0)
-  rig.rightHip?.current?.rotation.set(target.rightHip, 0, 0)
-  rig.leftKnee?.current?.rotation.set(target.leftKnee, 0, 0)
-  rig.rightKnee?.current?.rotation.set(target.rightKnee, 0, 0)
-  if (rig.leftKnee?.current) rig.leftKnee.current.scale.y = target.lowerLegScale
-  if (rig.rightKnee?.current) rig.rightKnee.current.scale.y = target.lowerLegScale
+  rig.leftHip?.current?.rotation.set(MathUtils.lerp(target.leftHip, fromHip, away), 0, 0)
+  rig.rightHip?.current?.rotation.set(MathUtils.lerp(target.rightHip, fromHip, away), 0, 0)
+  rig.leftKnee?.current?.rotation.set(MathUtils.lerp(target.leftKnee, fromKnee, away), 0, 0)
+  rig.rightKnee?.current?.rotation.set(MathUtils.lerp(target.rightKnee, fromKnee, away), 0, 0)
+  if (rig.leftKnee?.current) rig.leftKnee.current.scale.y = shinScale
+  if (rig.rightKnee?.current) rig.rightKnee.current.scale.y = shinScale
   rig.sensor.current?.scale.set(1, Math.max(0.2, target.eyeOpen), 1)
   if (rig.gear.current) rig.gear.current.visible = target.isReading
   if (rig.thought.current) rig.thought.current.visible = false

@@ -6,10 +6,14 @@ import { officePoses } from '../../../office-live/pose-store'
 import type { AgentView } from '../../../../shared/office/types'
 import { makeAgent } from '../../__tests__/fixtures'
 import { themeForTeam } from '../../themes/registry'
+import type { OfficeTheme, ThemePoseOptions } from '../../themes/types'
 import { Robot } from '../Robot'
 
 type FrameCallback = (state: { clock: { elapsedTime: number } }, delta: number) => void
-const frames = vi.hoisted(() => ({ callbacks: [] as FrameCallback[] }))
+const frames = vi.hoisted(() => ({
+  callbacks: [] as FrameCallback[],
+  poseOptions: [] as ThemePoseOptions[]
+}))
 
 // react-dom stands in for the canvas: the frame loop is driven by hand, and the effect that
 // seeds three.js objects is skipped.
@@ -23,11 +27,13 @@ vi.mock('@react-three/fiber', () => ({
 vi.mock('../textures', () => ({ blobShadowTexture: () => null }))
 vi.mock('../../themes/rig', () => ({
   useRobotRig: () => ({ body: { current: {} } }),
-  applyModelPose: () => undefined
+  applyModelPose: (input: { options: ThemePoseOptions }) =>
+    void frames.poseOptions.push(input.options)
 }))
 
 beforeEach(() => {
   frames.callbacks.length = 0
+  frames.poseOptions.length = 0
   vi.spyOn(console, 'error').mockImplementation(() => undefined)
 })
 afterEach(() => {
@@ -36,18 +42,18 @@ afterEach(() => {
 })
 
 function mountRobot(agent: AgentView, isReducedMotion: boolean) {
-  const theme = { ...themeForTeam(), robot: { ...themeForTeam().robot, Model: () => null } }
-  const robot = createElement(Robot, {
-    agent,
-    theme,
-    rosterIndex: 0,
-    isSelected: false,
-    isSpeaking: false,
-    isReducedMotion,
-    onSelect: () => undefined,
-    onFly: () => undefined
-  })
-  const { container } = render(robot)
+  const robotWith = (Model: OfficeTheme['robot']['Model']) =>
+    createElement(Robot, {
+      agent,
+      theme: { ...themeForTeam(), robot: { ...themeForTeam().robot, Model } },
+      rosterIndex: 0,
+      isSelected: false,
+      isSpeaking: false,
+      isReducedMotion,
+      onSelect: () => undefined,
+      onFly: () => undefined
+    })
+  const { container, rerender } = render(robotWith(() => null))
   // The groups react-dom drew get the transform fields three.js would give them.
   for (const group of container.querySelectorAll('group'))
     Object.assign(group, {
@@ -59,10 +65,11 @@ function mountRobot(agent: AgentView, isReducedMotion: boolean) {
     position: Vector3
     scale: Vector3
   }[]
-  const step = (seconds: number) => {
-    for (const callback of frames.callbacks) callback({ clock: { elapsedTime: 0 } }, seconds)
-  }
-  return { root, presence, step }
+  // R3F keeps only the latest frame callback a render registered.
+  const step = (seconds: number) =>
+    frames.callbacks.at(-1)?.({ clock: { elapsedTime: 0 } }, seconds)
+  const swapModel = (Model: OfficeTheme['robot']['Model']) => rerender(robotWith(Model))
+  return { root, presence, step, swapModel }
 }
 
 it('eases toward the pose store, not the position its frame carried (perf-2)', () => {
@@ -87,4 +94,29 @@ it('moves a robot faded to nothing straight to its new place, so a recall never 
   expect(root.position.x).toBe(40)
   expect(root.position.z).toBe(-12)
   expect(presence.scale.x).toBeGreaterThan(0)
+})
+
+it("carries one seat ease across a robot's frames, so a sit can span them", () => {
+  officePoses.write('sitter', { x: 0, z: 0, heading: 0, elevation: 0 })
+  const { step } = mountRobot(makeAgent({ agentKey: 'sitter', x: 0, z: 0 }), false)
+  step(0.03)
+  step(0.03)
+
+  const [first, second] = frames.poseOptions
+  expect(first?.seat).toBeDefined()
+  expect(second?.seat).toBe(first?.seat)
+})
+
+it("starts the sit afresh when the model is swapped, never in the old model's terms", () => {
+  officePoses.write('swapper', { x: 0, z: 0, heading: 0, elevation: 0 })
+  const { step, swapModel } = mountRobot(makeAgent({ agentKey: 'swapper', x: 0, z: 0 }), false)
+  step(0.03)
+  const seat = frames.poseOptions[0]?.seat
+  if (seat) seat.seatedness = 1
+  step(0.03)
+  expect(frames.poseOptions.at(-1)?.seat?.seatedness).toBe(1)
+
+  swapModel(() => null)
+  step(0.03)
+  expect(frames.poseOptions.at(-1)?.seat?.seatedness).toBeNull()
 })
