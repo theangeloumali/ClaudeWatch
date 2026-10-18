@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildLayout } from '../../../office/sim/layout'
 import { session, subagent } from '../../../office/sim/fixtures'
+import { resolveEffectiveWorld } from '../../../office/sim/effective-world'
 import { createWorldDocument, parseWorldDocument, validateWorldDocument } from '../world-document'
 
 const sessions = [session('one')]
@@ -85,6 +86,23 @@ describe('world document boundary', () => {
     expect(validateWorldDocument(unreachable, { layout, sessions })).toEqual(
       expect.arrayContaining([expect.objectContaining({ reason: 'desk-clearance' })])
     )
+  })
+
+  // Agents fade between buildings and the player finds its own way, so no lift is needed (M5).
+  it('accepts a room moved into another building, neither with a connector', () => {
+    const pair = [session('one', 'p_a'), session('two', 'p_b')]
+    const base = buildLayout(pair, undefined)
+    const document = createWorldDocument(base, pair)
+    const before = resolveEffectiveWorld(base, document, pair)
+    const [from, to] = document.buildings
+    const moved = document.rooms.find((room) => room.buildingId === from.id)!
+    expect(before.floors.find((floor) => floor.buildingId === from.id)?.rooms).toHaveLength(1)
+    to.footprint.width += 12
+    moved.buildingId = to.id
+    moved.position = { x: to.footprint.width / 2 - 6, z: 0 }
+    delete from.connector
+    delete to.connector
+    expect(validateWorldDocument(document, { layout: before, sessions: pair })).toEqual([])
   })
 
   it('checks new live rooms as well as saved overrides', () => {
