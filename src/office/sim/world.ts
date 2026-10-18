@@ -256,28 +256,25 @@ export class World {
       },
       isSubagent
     )
-    // One fading or not yet seated has no cleared body: it comes back as a newcomer does.
-    const wasUnseen = this.fading.has(key) || this.arrivals.has(key)
+    const isUnseen = this.fading.has(key) || this.arrivals.has(key)
     this.passages.clear(key)
-    this.fading.delete(key)
-    this.arrivals.delete(key)
-    if (!existing || wasUnseen) {
+    if (existing)
+      Object.assign(agent.view, {
+        x: existing.view.x,
+        z: existing.view.z,
+        elevation: existing.view.elevation,
+        physicalFloorId: existing.view.physicalFloorId
+      })
+    // Unseen till its fade ends, where it stands; seatRecalled then seats it, so it never glides.
+    if (existing ? isUnseen : !isInitial) {
       this.recovery.clear(key)
-      if (existing || !isInitial) {
-        this.startFade(key)
-        this.arrivals.add(key)
-      }
-      return agent
+      this.fading.set(key, this.fading.get(key) ?? 0)
+      this.arrivals.add(key)
     }
+    if (!existing || isUnseen) return agent
     // A desk that moved does not restart its wait for the lounge.
     agent.finishedForMs = existing.finishedForMs
     agent.path = this.routes.toFloor(existing.view, floor, slot)
-    Object.assign(agent.view, {
-      x: existing.view.x,
-      z: existing.view.z,
-      elevation: existing.view.elevation,
-      physicalFloorId: existing.view.physicalFloorId
-    })
     if (!agent.path.length) this.startFade(key)
     return agent
   }

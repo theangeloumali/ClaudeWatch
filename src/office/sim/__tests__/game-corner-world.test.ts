@@ -196,6 +196,22 @@ describe('game corner: idle agents play on their own floor', () => {
     })
   })
 
+  // The renderer eases a shrinking robot toward its view, so a mid-fade move is a glide.
+  it('holds a flapped gamer where it faded until the fade ends, then seats it at its desk', () => {
+    const { city, idle } = threeBuildings()
+    city.patch([], ['claude:idle'])
+    city.run(200, () => {})
+    city.patch([working('claude:idle', 'p_b', city.clock)])
+    let movedWhileFaded = 0
+    let isSeated = false
+    city.run(5_000, (frame) => {
+      const view = frame.find((candidate) => candidate.agentKey === 'claude:idle')!
+      if (view.fade === undefined) return (isSeated = city.isSeated(view))
+      movedWhileFaded = Math.max(movedWhileFaded, Math.hypot(view.x - idle.x, view.z - idle.z))
+    })
+    expect({ movedWhileFaded, isSeated }).toEqual({ movedWhileFaded: 0, isSeated: true })
+  })
+
   // Before I1 a gamer stood 12 s against an office wall and the last one sat after 41.9 s.
   it('walks a full corner of gamers home with none standing still for long', () => {
     const idle = Array.from({ length: 9 }, (_, index) => `claude:idle-${index}`)
