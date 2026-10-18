@@ -347,9 +347,14 @@ export class World {
     const recovery = this.recovery.record({
       id: key,
       position: next.view,
-      waypoint: next.path[0],
+      path: next.path,
       hasYielded
     })
+    // Its retries gained no ground: it fades to its desk and waits there before another outing.
+    if (recovery.isStuck) {
+      const resting = { ...next, finishedForMs: next.finishedForMs === null ? null : 0 }
+      return crowd.updated(this.callHome(resting, false) ?? next)
+    }
     // Brief direct steps can still circle a wall corner; recover from lack of waypoint progress.
     if (next.path.length && recovery.canRepath) {
       const route = recoverWorkerRoute({
@@ -362,19 +367,19 @@ export class World {
         next.path = route
         if (recovery.isStalled) this.passages.clear(key)
       }
-      this.recovery.retried(key)
+      this.recovery.retried(key, next.path)
     }
     return crowd.updated(next)
   }
 
   // Work calls it home: it walks when its desk is on its floor, else fades to reappear there.
-  private callHome(agent: AgentRecord): AgentRecord | undefined {
+  private callHome(agent: AgentRecord, canWalk = true): AgentRecord | undefined {
     const key = agent.view.agentKey
     const home = deskOf(this.map.floors, agent.view)
     if (!home) return undefined
     this.passages.clear(key)
     if (this.fading.has(key)) return agent
-    const route = this.routes.toFloor(agent.view, home.floor, home.desk)
+    const route = canWalk ? this.routes.toFloor(agent.view, home.floor, home.desk) : []
     if (!route.length) this.startFade(key)
     return returnToDesk(agent, home.desk.heading, route)
   }
