@@ -3,7 +3,7 @@ import { createWorldDocument } from '../../../shared/office/world-document'
 import type { WorldDocument } from '../../../shared/office/world-document-types'
 import { resolveEffectiveWorld } from '../effective-world'
 import { session } from '../fixtures'
-import type { LayoutMap, Slot } from '../layout'
+import { deskOf, type LayoutMap } from '../layout'
 import { World } from '../world'
 import { TICK_MS } from './door-invariants'
 
@@ -71,16 +71,8 @@ export class CityWorld {
       if (onFrame(this.step(), elapsed) === true) return
   }
 
-  deskOf(view: AgentView): Slot | undefined {
-    return this.world
-      .layout()
-      .floors.find((floor) => floor.id === view.floorId)
-      ?.rooms.find((room) => room.id === view.roomId)
-      ?.slots.find((slot) => slot.id === view.slotId)
-  }
-
   isSeated(view: AgentView | undefined): boolean {
-    const desk = view && this.deskOf(view)
+    const desk = view && deskOf(this.world.layout().floors, view)?.desk
     return (
       !!view &&
       !!desk &&
