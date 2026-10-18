@@ -7,13 +7,9 @@ import type { LoungeGeometry } from '../scene-model'
 export const HEADINGS = [0, Math.PI, Math.PI / 2, -Math.PI / 2] as const
 const OFFICES_M = 4
 
-// The sim's own corner, its seats facing `heading`, moved to `centre`. The synthetic floor is
-// one office against its back wall, with room for a corner only on the side ahead of it.
-export function gameCornerFixture(
-  heading: number,
-  seatCount: number,
-  centre = { x: 20, z: -10 }
-): LoungeGeometry {
+// The sim's own corner, its seats facing `heading`. The synthetic floor is one office against
+// its back wall, with room for a corner only on the side ahead of it.
+function simCorner(heading: number, seatCount: number): LoungeGeometry {
   const ahead = { x: Math.round(Math.sin(heading)), z: Math.round(Math.cos(heading)) }
   const length = OFFICES_M + cornerDepth(seatCount) + 3
   const across = LOUNGE_WIDTH + 2.5
@@ -34,11 +30,30 @@ export function gameCornerFixture(
     deskCount: seatCount
   })
   if (!layout) throw new Error(`No game corner faces ${heading} rad`)
-  const lounge = toLounge(layout)
-  const moved = <Point extends { x: number; z: number }>(point: Point): Point => ({
+  return toLounge(layout)
+}
+
+// The sim's own corner, its seats facing `heading`, moved to `centre`. The sim lays corners
+// facing the camera (π, −π/2); a cramped floor can still face 0 or π/2, so those are the
+// opposite corner turned half round its centre.
+export function gameCornerFixture(
+  heading: number,
+  seatCount: number,
+  centre = { x: 20, z: -10 }
+): LoungeGeometry {
+  const isTurned = Math.cos(heading) > 0.5 || Math.sin(heading) > 0.5
+  const lounge = simCorner(isTurned ? heading + Math.PI : heading, seatCount)
+  const placed = <Point extends { x: number; z: number }>(point: Point): Point => ({
     ...point,
-    x: point.x + centre.x - lounge.x,
-    z: point.z + centre.z - lounge.z
+    x: centre.x + (isTurned ? lounge.x - point.x : point.x - lounge.x),
+    z: centre.z + (isTurned ? lounge.z - point.z : point.z - lounge.z)
   })
-  return { ...moved(lounge), door: moved(lounge.door), seats: lounge.seats.map(moved) }
+  return {
+    ...placed(lounge),
+    door: placed(lounge.door),
+    seats: lounge.seats.map((seat) => ({
+      ...placed(seat),
+      heading: isTurned ? heading : seat.heading
+    }))
+  }
 }
