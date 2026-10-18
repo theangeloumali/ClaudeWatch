@@ -1,5 +1,6 @@
 import {
   DEPARTURE_FADE_MS,
+  SIM_TICK_MS,
   type AgentView,
   type FeedMessage,
   type SessionRef,
@@ -36,8 +37,6 @@ import {
   waitsForMovingBody,
   workerNavigation
 } from './worker-navigation'
-
-const TICK_MS = 100
 
 export class World {
   private readonly routes = new FloorRoutes()
@@ -306,10 +305,10 @@ export class World {
   // Steps one agent and brings its entry in this tick's crowd up to date.
   private moveAgent(agent: AgentRecord, crowd: TickCrowd): AgentRecord {
     agent = resumeUnseatedWorker(agent, this.routes, this.map.floors)
-    if (agent.path.length === 0) return crowd.updated(tickAgent(agent, TICK_MS))
+    if (agent.path.length === 0) return crowd.updated(tickAgent(agent, SIM_TICK_MS))
     const { bodies: obstacles, walkers } = crowd
     let hasYielded = false
-    const next = tickAgent(agent, TICK_MS, (from, to) => {
+    const next = tickAgent(agent, SIM_TICK_MS, (from, to) => {
       const navigation = workerNavigation({ routes: this.routes, from })
       const { isOpen } = navigation
       const body = agentBody(from)
@@ -414,8 +413,8 @@ export class World {
   step(dtMs: number): AgentView[] {
     this.syncClock()
     this.accumulatedMs += Number.isFinite(dtMs) ? clamp(dtMs, [0, 1000]) : 0
-    while (this.accumulatedMs >= TICK_MS) {
-      if (!this.options.now) this.nowMs += TICK_MS
+    while (this.accumulatedMs >= SIM_TICK_MS) {
+      if (!this.options.now) this.nowMs += SIM_TICK_MS
       this.cycleLeaders = waitCycleLeaders(this.waitEdges, (id) => this.steppable.has(id))
       this.waitEdges = new Map()
       this.steppable = new Set()
@@ -427,15 +426,15 @@ export class World {
         const fadedMs = this.fading.get(key)
         // A fader stands still, but its clocks run, however long its desk is taken.
         const agent =
-          fadedMs === undefined ? this.moveAgent(current, crowd) : passTime(current, TICK_MS)
+          fadedMs === undefined ? this.moveAgent(current, crowd) : passTime(current, SIM_TICK_MS)
         this.agents.set(key, agent)
         if (fadedMs === undefined) continue
-        if (fadedMs + TICK_MS < DEPARTURE_FADE_MS) this.fading.set(key, fadedMs + TICK_MS)
+        if (fadedMs + SIM_TICK_MS < DEPARTURE_FADE_MS) this.fading.set(key, fadedMs + SIM_TICK_MS)
         else if (agent.state === 'leaving') this.remove(key, crowd)
         else this.seatRecalled(key, agent, crowd)
       }
       this.seatLounges()
-      this.accumulatedMs -= TICK_MS
+      this.accumulatedMs -= SIM_TICK_MS
     }
     return [...this.agents.values()]
       .sort((a, b) => a.view.agentKey.localeCompare(b.view.agentKey))

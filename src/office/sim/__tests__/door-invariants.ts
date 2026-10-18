@@ -4,9 +4,9 @@ import {
   type BodyFootprint
 } from '../../../shared/office/body-footprints'
 import { bodiesShareElevation } from '../../../shared/office/body-sweep'
-import type { AgentView } from '../../../shared/office/types'
+import { SIM_TICK_MS, type AgentView } from '../../../shared/office/types'
 
-export const TICK_MS = 100
+export const TICK_MS = SIM_TICK_MS
 // Ghosting (verifier E6) breaks the clearance check, teleporting (E7) the step check.
 const CLEARANCE_SLACK_METRES = 0.02
 const MAX_STEP_METRES = 0.14 + 1e-6
