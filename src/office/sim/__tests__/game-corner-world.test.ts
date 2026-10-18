@@ -121,6 +121,28 @@ describe('game corner: idle agents play on their own floor', () => {
     expect(seatedAtMs).not.toBeNull()
   })
 
+  // A session that ends and comes straight back must not reappear walking from the corner.
+  it('brings back a gamer whose session flapped faded in at its desk, never in the open', () => {
+    const { city, idle } = threeBuildings()
+    expect(idle.place).toBe('lounge')
+    city.patch([], ['claude:idle'])
+    city.run(200, () => {})
+    city.patch([working('claude:idle', 'p_b', city.clock)])
+    const shownAway: AgentView[] = []
+    let shownAtDesk = false
+    city.run(5_000, (frame) => {
+      const view = frame.find((candidate) => candidate.agentKey === 'claude:idle')
+      if (!view || view.fade !== undefined) return
+      if (city.isSeated(view)) shownAtDesk = true
+      else shownAway.push(view)
+      return true
+    })
+    expect({ shownAway: shownAway.length, shownAtDesk }).toEqual({
+      shownAway: 0,
+      shownAtDesk: true
+    })
+  })
+
   // Before I1 a gamer stood 12 s against an office wall and the last one sat after 41.9 s.
   it('walks a full corner of gamers home with none standing still for long', () => {
     const idle = Array.from({ length: 9 }, (_, index) => `claude:idle-${index}`)

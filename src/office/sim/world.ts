@@ -256,13 +256,17 @@ export class World {
       },
       isSubagent
     )
+    // One fading or not yet seated has no cleared body: it comes back as a newcomer does.
+    const wasUnseen = this.fading.has(key) || this.arrivals.has(key)
     this.passages.clear(key)
     this.fading.delete(key)
     this.arrivals.delete(key)
-    if (!existing) {
+    if (!existing || wasUnseen) {
       this.recovery.clear(key)
-      if (!isInitial) this.startFade(key)
-      if (!isInitial) this.arrivals.add(key)
+      if (existing || !isInitial) {
+        this.startFade(key)
+        this.arrivals.add(key)
+      }
       return agent
     }
     // A desk that moved does not restart its wait for the lounge.

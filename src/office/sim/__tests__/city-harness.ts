@@ -47,8 +47,8 @@ export class CityWorld {
     })
   }
 
-  patch(upserts: SessionRef[]): void {
-    this.world.apply({ type: 'patch', v: 1, seq: ++this.sequence, upserts, removed: [] })
+  patch(upserts: SessionRef[], removed: string[] = []): void {
+    this.world.apply({ type: 'patch', v: 1, seq: ++this.sequence, upserts, removed })
   }
 
   step(): AgentView[] {
