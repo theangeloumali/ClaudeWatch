@@ -6,12 +6,26 @@ export type ZoomDirection = 'in' | 'out'
 // Orthographic zoom in screen pixels per metre: the desk fly-to, the scene's first frame and the
 // cap on the building overview.
 export const BAND_ZOOM: Record<ZoomBand, number> = { desk: 90, floor: 34, building: 8 }
+// Hardware inspection needs more detail than the original agent fly-to.
+export const MAX_INSPECTION_ZOOM = 240
 
 const DEG_TO_RAD = Math.PI / 180
 const ISO_ELEVATION_DEG = 35
 // camera-controls measures polar angle from straight up.
 export const ISO_POLAR = (90 - ISO_ELEVATION_DEG) * DEG_TO_RAD
 export const ISO_START_AZIMUTH = 45 * DEG_TO_RAD
+export const MIN_POLAR = 20 * DEG_TO_RAD
+export const MAX_POLAR = 70 * DEG_TO_RAD
+const TILT_STEP = 10 * DEG_TO_RAD
+
+export function tiltPolar(polar: number, direction: -1 | 1): number {
+  return Math.min(MAX_POLAR, Math.max(MIN_POLAR, polar - direction * TILT_STEP))
+}
+
+// dry-new: quadrant snapping cannot choose the nearest equivalent of an authored preset yaw.
+export function nearestAzimuth(current: number, destination: number): number {
+  return destination + Math.round((current - destination) / (2 * Math.PI)) * 2 * Math.PI
+}
 const SNAP_STEP = 90 * DEG_TO_RAD
 const SNAP_EPSILON = 1e-6
 
@@ -45,15 +59,19 @@ export function snapAzimuth(azimuth: number, direction: -1 | 1): number {
 export function buildingFraming(
   scene: { x?: number; z?: number; width: number; depth: number },
   floorCount: number,
-  viewport: { width: number; height: number }
+  viewport: { width: number; height: number },
+  pose: { azimuth?: number; polar?: number } = {}
 ) {
   const { x = 0, z = 0, width, depth } = scene
   const height = Math.max(8, floorCount * 2.2 + 1)
-  const projectedWidth = (width + depth) / Math.SQRT2
-  const projectedHeight = projectedWidth * Math.cos(ISO_POLAR) + height * Math.sin(ISO_POLAR)
+  const azimuth = pose.azimuth ?? ISO_START_AZIMUTH
+  const polar = pose.polar ?? ISO_POLAR
+  const projectedWidth = width * Math.abs(Math.cos(azimuth)) + depth * Math.abs(Math.sin(azimuth))
+  const projectedDepth = width * Math.abs(Math.sin(azimuth)) + depth * Math.abs(Math.cos(azimuth))
+  const projectedHeight = projectedDepth * Math.cos(polar) + height * Math.sin(polar)
   return {
     // The scene's own centre: its extent already includes the deeper apron to the north.
-    target: [x, height / 2, z] as [number, number, number],
+    target: [x, height / 2, z] satisfies [number, number, number],
     projectedWidth,
     projectedHeight,
     zoom: Math.max(

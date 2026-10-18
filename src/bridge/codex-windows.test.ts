@@ -3,6 +3,7 @@ import { collectCodex, codexProcesses } from './codex'
 import type { BridgeIo } from './io'
 import type { ProcessRow } from './process-table'
 import { splitCommandLine } from '../shared/platform-process'
+import { OBSERVATION_STALE_AFTER_MS } from '../shared/office/observation'
 import { fixtureIo } from './__fixtures__/helpers'
 
 // Command lines as Win32_Process reports them on Windows 11, observed 2026-10-13.
@@ -84,7 +85,15 @@ it('places a Windows process at the rollout it began writing, without asking for
   expect(sessions).toMatchObject([
     { key: 'codex:mine', pid: 42, cwd: 'C:\\Users\\a\\repo', projectLabel: 'repo' }
   ])
-  expect(sources).toEqual([{ id: 'codex', ok: true, detail: 'live' }])
+  expect(sources).toEqual([
+    {
+      id: 'codex',
+      ok: true,
+      detail: 'live',
+      checkedAtMs: STARTED_MS + 60_000,
+      staleAfterMs: OBSERVATION_STALE_AFTER_MS
+    }
+  ])
   expect(exec).not.toHaveBeenCalled()
 })
 

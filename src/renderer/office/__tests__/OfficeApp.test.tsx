@@ -64,21 +64,21 @@ const busyFrame = makeFrame({
   ],
   agents: [
     makeAgent({
-      agentKey: 'a',
+      agentKey: 'claude:a',
       floorId: 'f1',
       roomId: 'r1',
       label: 'office renderer',
       activity: 'editing'
     }),
     makeAgent({
-      agentKey: 'a/s1',
+      agentKey: 'claude:a#s1',
       floorId: 'f1',
       roomId: 'r1',
       label: 'Explore',
       isSubagent: true
     }),
     makeAgent({
-      agentKey: 'b',
+      agentKey: 'claude:b',
       floorId: 'f2',
       roomId: 'r2',
       label: 'listing search',
@@ -89,10 +89,15 @@ const busyFrame = makeFrame({
 
 describe('OfficeApp', () => {
   beforeEach(() => {
+    localStorage.clear()
+    vi.stubGlobal('innerWidth', 1440)
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(NOW)
   })
-  afterEach(() => vi.useRealTimers())
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
 
   it('shows the empty state when no agents are running', () => {
     const { feed, push } = controllableFeed()
@@ -132,11 +137,47 @@ describe('OfficeApp', () => {
     const inspector = screen.getByRole('complementary', { name: 'Agent details' })
     expect(within(inspector).getByText('ClaudeWatch')).toBeInTheDocument()
     expect(within(inspector).getByText('Claude')).toBeInTheDocument()
-    expect(within(inspector).getByText('Edit')).toBeInTheDocument()
+    const evidence = screen.getByRole('region', { name: 'Current-session evidence' })
+    expect(within(evidence).getByRole('region', { name: 'Live work' })).toHaveTextContent(
+      /Tool: Edit/
+    )
     expect(within(inspector).getByText('2:05')).toBeInTheDocument()
     expect(within(inspector).getByText('1 active')).toBeInTheDocument()
     fireEvent.click(within(inspector).getByRole('button', { name: /^Focus terminal/ }))
     expect(feed.focus).toHaveBeenCalledWith('claude:a')
+  })
+
+  it('shows the office network and persistent evidence without automatically peeking', () => {
+    const { feed, push } = controllableFeed()
+    render(<OfficeApp feed={feed} />)
+    push(busyFrame)
+    const network = screen.getByRole('region', { name: 'Office network' })
+    expect(within(network).getByRole('button', { name: /^ClaudeWatch/ })).toHaveTextContent(
+      /2 assigned · 0 confirmed working · 0 confirmed attention/
+    )
+    expect(within(network).getByRole('button', { name: /^PropApp/ })).toHaveTextContent(
+      /1 assigned · 0 confirmed working · 0 confirmed attention/
+    )
+    const choices = screen.getByRole('combobox', { name: 'Choose office or physical floor' })
+    expect(within(choices).getByRole('option', { name: /^ClaudeWatch/ })).toHaveValue('f1')
+    expect(within(choices).getByRole('option', { name: /^PropApp/ })).toHaveValue('f2')
+    const evidence = screen.getByRole('region', { name: 'Current-session evidence' })
+    expect(evidence).toHaveTextContent('Select a worker to view current-session evidence.')
+    expect(within(evidence).queryByRole('region', { name: 'Live work' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /^office renderer/i }))
+    const liveWork = within(evidence).getByRole('region', { name: 'Live work' })
+    expect(liveWork).toHaveTextContent(/Unknown/i)
+    expect(liveWork).toHaveTextContent(/Own activity freshness unknown/i)
+    expect(liveWork).toHaveTextContent(/Own source unavailable/i)
+    expect(liveWork).toHaveTextContent(/Reported activity: editing.*Tool: Edit/i)
+    expect(
+      within(screen.getByRole('complementary', { name: 'Agent details' })).queryByRole('region', {
+        name: 'Live work'
+      })
+    ).not.toBeInTheDocument()
+    expect(feed.peek).not.toHaveBeenCalled()
+    expect(feed.send).not.toHaveBeenCalled()
+    expect(feed.respond).not.toHaveBeenCalled()
   })
 
   it('works from the keyboard: N opens the next waiting session', () => {

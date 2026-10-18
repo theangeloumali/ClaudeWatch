@@ -172,6 +172,30 @@ describe('createOfficeServer', () => {
   })
 
   describe('the launch code', () => {
+    it('gives a renewed launch a full idle interval instead of expiring during page startup', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      try {
+        await start({ idleMs: 100, unopened: true })
+        await vi.advanceTimersByTimeAsync(75)
+        server.renewLaunchCode()
+        await vi.advanceTimersByTimeAsync(50)
+        expect(onIdle).not.toHaveBeenCalled()
+        await vi.advanceTimersByTimeAsync(50)
+        expect(onIdle).toHaveBeenCalledOnce()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+    it('renews one-use launches without revoking an already authorized page', async () => {
+      await start()
+      const firstToken = token
+      const renewed = server.renewLaunchCode()
+      expect(renewed).not.toBe(CODE)
+      expect((await openSession(pageHeaders(renewed))).status).toBe(200)
+      expect((await openSession(pageHeaders(renewed))).status).toBe(401)
+      expect((await focus(pageHeaders(firstToken))).status).toBe(200)
+    })
+
     it('is traded once for a session token, and refused from then on', async () => {
       await start({ unopened: true })
       const first = await openSession()

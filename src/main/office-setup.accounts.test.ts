@@ -3,7 +3,8 @@ import { beforeEach, expect, it, vi } from 'vitest'
 const { handle, fork } = vi.hoisted(() => ({ handle: vi.fn(), fork: vi.fn() }))
 vi.mock('electron', () => ({
   ipcMain: { handle },
-  app: { isPackaged: false },
+  app: { isPackaged: false, getPath: () => '/unused-user-data', getAppPath: () => '/unused-app' },
+  shell: { openExternal: vi.fn() },
   screen: { getAllDisplays: () => [] },
   utilityProcess: { fork },
   BrowserWindow: vi.fn()

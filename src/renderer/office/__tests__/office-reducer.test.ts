@@ -89,6 +89,27 @@ describe('officeReducer', () => {
     expect(emptied.focusedFloorId).toBeNull()
   })
 
+  it('highlights a floor without taking back a manually owned City camera', () => {
+    const city = officeReducer(withFrame(), { type: 'view-set', view: 'city' })
+    const manual = officeReducer(city, { type: 'camera-zoomed', direction: 'out' })
+    const focused = officeReducer(manual, { type: 'floor-focused', floorId: 'f1' })
+    expect(focused.focusedFloorId).toBe('f1')
+    expect(focused.viewMode).toBe('city')
+    expect(focused.isCameraManuallyOwned).toBe(true)
+    expect(focused.cameraRequest).toBe(manual.cameraRequest)
+    expect(focused.frame).toBe(frame)
+  })
+
+  it('lets Reset re-arm the overview after a manual floor highlight', () => {
+    const manual = officeReducer(withFrame(), { type: 'camera-manually-moved' })
+    const focused = officeReducer(manual, { type: 'floor-focused', floorId: 'f1' })
+    const reset = officeReducer(focused, { type: 'camera-reset' })
+    expect(focused.cameraRequest).toBeNull()
+    expect(reset.focusedFloorId).toBe('f1')
+    expect(reset.isCameraManuallyOwned).toBe(false)
+    expect(reset.cameraRequest).toMatchObject({ kind: 'reset' })
+  })
+
   it('only flies to the selected agent when one is selected', () => {
     expect(officeReducer(withFrame(), { type: 'fly-to-selected' }).cameraRequest).toBeNull()
     const selected = officeReducer(withFrame(), { type: 'agent-selected', agentKey: 'c' })

@@ -11,6 +11,7 @@ export interface Leg {
   from: Point
   to: Point
   class: RoadClass
+  width?: number
 }
 
 interface Way {
@@ -18,6 +19,7 @@ interface Way {
   to: number
   class: RoadClass
   costPerMetre: number
+  width?: number
 }
 
 // The plan's road graph as one kind of traveller may use it.
@@ -53,6 +55,7 @@ export function roadNet(plan: TownPlan, traveller: Traveller): RoadNet {
         from: edge.from,
         to: edge.to,
         class: edge.class,
+        ...(edge.width === undefined ? {} : { width: edge.width }),
         costPerMetre: traveller === 'citizen' ? walkCost : 1
       }
     })
@@ -116,18 +119,24 @@ export function roadPath(net: RoadNet, from: Point, to: Point): Leg[] | null {
   const direct = start.way === end.way ? apart(start.at, end.at) * first.costPerMetre : Infinity
   const arrival = costVia(last.from) <= costVia(last.to) ? last.from : last.to
   const legs: Leg[] = []
-  if (direct <= costVia(arrival)) legs.push({ from: start.at, to: end.at, class: first.class })
+  const legFor = (way: Way, from: Point, to: Point): Leg => ({
+    from,
+    to,
+    class: way.class,
+    ...(way.width === undefined ? {} : { width: way.width })
+  })
+  if (direct <= costVia(arrival)) legs.push(legFor(first, start.at, end.at))
   else {
     if (!Number.isFinite(costVia(arrival))) return null
-    legs.push({ from: nodes[arrival], to: end.at, class: last.class })
+    legs.push(legFor(last, nodes[arrival], end.at))
     let node = arrival
     while (reachedBy[node] >= 0) {
       const way = net.ways[reachedBy[node]]
       const before = way.from === node ? way.to : way.from
-      legs.unshift({ from: nodes[before], to: nodes[node], class: way.class })
+      legs.unshift(legFor(way, nodes[before], nodes[node]))
       node = before
     }
-    legs.unshift({ from: start.at, to: nodes[node], class: first.class })
+    legs.unshift(legFor(first, start.at, nodes[node]))
   }
   return legs.filter((leg) => apart(leg.from, leg.to) > 0)
 }

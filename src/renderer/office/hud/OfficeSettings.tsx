@@ -123,7 +123,19 @@ function restoreDefaults(): void {
 
 // Every feature of the living world, each with its own switch. The choices are this page's own
 // and apply as they are made.
-export function OfficeSettingsPanel({ id, onClose }: { id: string; onClose: () => void }) {
+export function OfficeSettingsPanel({
+  id,
+  onClose,
+  isDistributedCity = false,
+  mapThemeLabel,
+  onOpenThemes
+}: {
+  id: string
+  onClose: () => void
+  isDistributedCity?: boolean
+  mapThemeLabel?: string
+  onOpenThemes?: () => void
+}) {
   const titleId = useId()
   const titleRef = useRef<HTMLHeadingElement>(null)
   const settings = useOfficeSettings()
@@ -135,7 +147,7 @@ export function OfficeSettingsPanel({ id, onClose }: { id: string; onClose: () =
       id={id}
       role="dialog"
       aria-labelledby={titleId}
-      className="absolute bottom-full left-1/2 z-10 mb-2 w-[25rem] max-w-[calc(100vw-1.5rem)] -translate-x-1/2"
+      className="absolute bottom-full left-1/2 z-30 mb-2 w-[25rem] max-w-[calc(100vw-1.5rem)] -translate-x-1/2"
       onKeyDown={(event) => {
         if (event.key === 'Escape') onClose()
       }}
@@ -155,6 +167,17 @@ export function OfficeSettingsPanel({ id, onClose }: { id: string; onClose: () =
           </button>
         </div>
         <div className="divide-y divide-border">
+          {onOpenThemes && (
+            <div className="space-y-1.5 py-2.5">
+              <p className="text-body font-semibold text-text-primary">Map theme</p>
+              <p className="text-xs text-text-secondary">
+                Change the city and offices following its theme. Individual office choices stay.
+              </p>
+              <button type="button" className={BUTTON_QUIET_COMPACT_CLASS} onClick={onOpenThemes}>
+                Change map theme: {mapThemeLabel}
+              </button>
+            </div>
+          )}
           {FEATURES.map(({ key, label, description }) => (
             <SettingRow key={key} label={label} description={description}>
               <ToggleSwitch
@@ -164,7 +187,17 @@ export function OfficeSettingsPanel({ id, onClose }: { id: string; onClose: () =
               />
             </SettingRow>
           ))}
-          <TownSizeChoice townSize={settings.townSize} />
+          {isDistributedCity ? (
+            <div className="py-2.5">
+              <p className="text-body font-semibold text-text-primary">City layout</p>
+              <p className="mt-0.5 text-xs text-text-secondary">
+                Street blocks follow your saved offices and venues. Use Detail level to reduce
+                rendering work. Your campus-size choice is kept for legacy layouts.
+              </p>
+            </div>
+          ) : (
+            <TownSizeChoice townSize={settings.townSize} />
+          )}
           <div className="py-2.5">
             <p className="text-body font-semibold text-text-primary">Detail level</p>
             <p className="mt-0.5 text-xs text-text-secondary">

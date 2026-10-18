@@ -5,7 +5,8 @@ import { ICON_BUTTON_CLASS, PLATE_TITLE_CLASS } from '../../components/deck/deck
 import { Plate } from '../../components/deck/Plate'
 import { agentCountLabel } from '../logic/floor-model'
 import type { CompanyThemeRow, ThemeTarget } from '../logic/office-themes'
-import type { OfficeCompanyRow } from '../logic/zone-model'
+import type { buildOfficeActivity, OfficeCompanyRow } from '../logic/zone-model'
+import { summariseActivity } from '../logic/activity-summary'
 import { getTheme } from '../themes/registry'
 import { NewAgentMenu } from './NewAgentMenu'
 import { ThemeToggle, ZoneButton } from './OfficeRow'
@@ -23,6 +24,7 @@ interface OfficesPanelProps {
   onFlyToZone: (zoneId: string) => void
   // Null where the page may only watch: then no office offers a new agent.
   onStart: ((projectKey: string, provider: ProviderId) => Promise<InteractionResult>) | null
+  activity: ReturnType<typeof buildOfficeActivity>
 }
 
 // Company › Project tree: each row flies to its zone and picks its theme, and a project row
@@ -34,7 +36,8 @@ export function OfficesPanel({
   onChooseTheme,
   focusedZoneId,
   onFlyToZone,
-  onStart
+  onStart,
+  activity
 }: OfficesPanelProps) {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const toggleRefs = useRef(new Map<string, HTMLButtonElement>())
@@ -52,7 +55,7 @@ export function OfficesPanel({
 
   return (
     <nav aria-label="Offices">
-      <Plate faceClassName="flex max-h-[46vh] flex-col gap-1.5 overflow-y-auto p-3">
+      <Plate faceClassName="flex max-h-[38vh] min-w-0 flex-col gap-2 overflow-y-auto overscroll-contain p-3">
         <h2 className={PLATE_TITLE_CLASS}>Offices</h2>
         <ul className="flex flex-col gap-0.5">
           <li className="flex min-h-[30px] items-center gap-2 px-1.5 text-xs text-text-secondary">
@@ -68,16 +71,23 @@ export function OfficesPanel({
             const companyTheme = themeRows[companyIndex]
             const companyMenuId = `theme:company:${company.companyKey}`
             return (
-              <li key={company.companyKey} className="flex flex-col">
+              <li
+                key={company.companyKey}
+                className="flex min-w-0 flex-col border-t border-border pt-1.5"
+              >
                 <div className="flex items-center gap-0.5">
                   <ZoneButton
                     row={company}
+                    activity={
+                      activity.companies.get(company.companyKey) ??
+                      summariseActivity([], activity.office.isAvailable)
+                    }
                     tokens={ledger.companies.get(company.companyKey)}
                     isPartial={ledger.partialCompanies.has(company.companyKey)}
                     focusedZoneId={focusedZoneId}
                     onFlyToZone={onFlyToZone}
                   >
-                    <span className="min-w-0 flex-1 truncate pt-[3px] font-plate text-base font-bold leading-none text-text-primary">
+                    <span className="min-w-0 flex-1 break-words pt-[3px] font-plate text-base font-bold leading-tight text-text-primary">
                       {company.label}
                     </span>
                   </ZoneButton>
@@ -103,15 +113,19 @@ export function OfficesPanel({
                     const agentMenuId = `agent:${project.projectKey}`
                     return (
                       <li key={project.projectKey} className="flex flex-col">
-                        <div className="flex items-center gap-0.5">
+                        <div className="flex items-start gap-0.5">
                           <ZoneButton
                             row={project}
+                            activity={
+                              activity.projects.get(project.projectKey) ??
+                              summariseActivity([], activity.office.isAvailable)
+                            }
                             tokens={ledger.projects.get(project.projectKey)}
                             isPartial={ledger.partialProjects.has(project.projectKey)}
                             focusedZoneId={focusedZoneId}
                             onFlyToZone={onFlyToZone}
                           >
-                            <span className="min-w-0 flex-1 truncate text-body text-text-primary">
+                            <span className="min-w-0 flex-1 break-words text-body text-text-primary">
                               {project.label}
                             </span>
                           </ZoneButton>

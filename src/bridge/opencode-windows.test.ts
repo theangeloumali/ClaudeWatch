@@ -6,6 +6,7 @@ import { collectOpencode } from './opencode'
 import { opencodeProcesses } from './opencode-activity'
 import type { ProcessRow } from './process-table'
 import { splitCommandLine } from '../shared/platform-process'
+import { OBSERVATION_STALE_AFTER_MS } from '../shared/office/observation'
 import { fixtureIo } from './__fixtures__/helpers'
 import { buildOpencodeDb, insertSession } from './__fixtures__/opencode-db'
 
@@ -61,7 +62,15 @@ it('places a Windows process at the session it began, without asking for its fol
   expect(sessions).toMatchObject([
     { key: 'opencode:ses_mine', pid: 42, cwd: 'C:\\Users\\a\\repo', name: 'ses_mine' }
   ])
-  expect(sources).toEqual([{ id: 'opencode', ok: true, detail: 'live' }])
+  expect(sources).toEqual([
+    {
+      id: 'opencode',
+      ok: true,
+      detail: 'live',
+      checkedAtMs: NOW,
+      staleAfterMs: OBSERVATION_STALE_AFTER_MS
+    }
+  ])
   expect(fixture.io.exec).not.toHaveBeenCalled()
 })
 

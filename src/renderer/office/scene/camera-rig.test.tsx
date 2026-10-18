@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Ref } from 'react'
 import { CameraRig } from './CameraRig'
 import { makeAgent, makeFloor, makeRoom, makeZone } from '../__tests__/fixtures'
-import { ISO_POLAR } from '../logic/camera-bands'
+import { ISO_POLAR, MAX_POLAR, MIN_POLAR, MAX_INSPECTION_ZOOM } from '../logic/camera-bands'
+import { WORKSTATIONS } from '../themes/workstations'
 
 type FrameCallback = (state: object, deltaSec: number) => void
 
@@ -22,6 +23,7 @@ const { controls, surface, frames } = vi.hoisted(() => {
       size: { width: 1200, height: 800 },
       gl: { domElement: canvas },
       camera,
+      minimumZoom: 3,
       invalidate: vi.fn(),
       badge
     },
@@ -29,8 +31,10 @@ const { controls, surface, frames } = vi.hoisted(() => {
       mouseButtons: {} as Record<string, number>,
       touches: {} as Record<string, number>,
       azimuthAngle: 0,
+      polarAngle: 0,
+      stop: vi.fn(),
       minZoom: 3,
-      maxZoom: 108,
+      maxZoom: 240,
       truckSpeed: 2,
       draggingSmoothTime: 0.125,
       moveTo: vi.fn(),
@@ -75,9 +79,26 @@ vi.mock('@react-three/drei', async () => {
   const { useImperativeHandle } = await import('react')
   return {
     CameraControlsImpl: {
-      ACTION: { TRUCK: 1, NONE: 0, TOUCH_TRUCK: 2, ROTATE: 3, TOUCH_ROTATE: 4 }
+      ACTION: {
+        TRUCK: 1,
+        NONE: 0,
+        TOUCH_TRUCK: 2,
+        ROTATE: 3,
+        TOUCH_ROTATE: 4,
+        TOUCH_ZOOM_ROTATE: 5
+      }
     },
-    CameraControls: ({ ref }: { ref: Ref<typeof controls> }) => {
+    CameraControls: ({
+      ref,
+      minZoom,
+      maxZoom
+    }: {
+      ref: Ref<typeof controls>
+      minZoom: number
+      maxZoom: number
+    }) => {
+      surface.minimumZoom = minZoom
+      controls.maxZoom = maxZoom
       useImperativeHandle(ref, () => controls)
       return null
     }
@@ -112,7 +133,23 @@ beforeEach(() => {
   surface.camera.zoom = 34
   surface.size = { width: 1440, height: 900 }
   controls.azimuthAngle = 0
+  controls.polarAngle = ISO_POLAR
   vi.clearAllMocks()
+})
+it('permits the shared hardware-inspection zoom limit', () => {
+  render(
+    <CameraRig
+      floor={makeFloor({ floorId: 'one' })}
+      floorCount={1}
+      scene={{ width: 40, depth: 40 }}
+      agents={[]}
+      liveSessionKeys={new Set()}
+      request={null}
+      isReducedMotion
+      onBandChange={vi.fn()}
+    />
+  )
+  expect(controls.maxZoom).toBe(MAX_INSPECTION_ZOOM)
 })
 afterEach(() => vi.restoreAllMocks())
 
@@ -186,6 +223,34 @@ it('frames the occupied project office, not the plate centre, at the floor band'
   expect(Math.hypot(Number(x) - 45, Number(z) - 32)).toBeLessThan(12)
 })
 
+it('City frames the town extent rather than the occupied office, and Fit returns to work', () => {
+  const props = { ...rigProps(), scene: { x: 80, z: -30, width: 180, depth: 140, maxY: 24 } }
+  const { rerender } = render(<CameraRig {...props} />)
+  const officeZoom = surface.camera.zoom
+  rerender(<CameraRig {...props} request={{ kind: 'city', nonce: 1 }} />)
+  expect(surface.camera.zoom).toBeLessThan(officeZoom)
+  expect(surface.camera.zoom).toBeLessThanOrEqual(8)
+  expect(surface.minimumZoom).toBeLessThanOrEqual(surface.camera.zoom)
+  const cityTarget = controls.moveTo.mock.calls.at(-1)
+  expect(cityTarget?.[2]).toBeLessThan(0)
+  surface.size = { width: 900, height: 600 }
+  rerender(<CameraRig {...props} request={{ kind: 'city', nonce: 2 }} />)
+  expect(surface.minimumZoom).toBeLessThanOrEqual(surface.camera.zoom)
+  expect(controls.moveTo.mock.calls.at(-1)?.[2]).toBeLessThan(0)
+  const withInspectorZoom = surface.camera.zoom
+  rerender(<CameraRig {...props} hasInspector={false} request={{ kind: 'city', nonce: 3 }} />)
+  expect(surface.camera.zoom).toBeGreaterThan(withInspectorZoom)
+  rerender(<CameraRig {...props} request={{ kind: 'fit', nonce: 4 }} />)
+  expect(surface.camera.zoom).toBeGreaterThan(8)
+})
+
+it('routes keyboard Fit through the same application action as the button', () => {
+  const onFit = vi.fn()
+  render(<CameraRig {...rigProps()} onFit={onFit} />)
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: '0' }))
+  expect(onFit).toHaveBeenCalledOnce()
+})
+
 it('flies to a company zone when asked, at a zoom that keeps the floor level of detail', () => {
   const props = rigProps()
   const { rerender } = render(<CameraRig {...props} />)
@@ -201,7 +266,7 @@ it('pans 1:1 with left-drag and rotates with right-drag or two fingers', () => {
   expect(controls.mouseButtons.left).toBe(1)
   expect(controls.mouseButtons.right).toBe(3)
   expect(controls.touches.one).toBe(2)
-  expect(controls.touches.two).toBe(4)
+  expect(controls.touches.two).toBe(5)
   expect(controls.truckSpeed).toBe(1)
 })
 
@@ -236,6 +301,29 @@ it('at desk zoom keeps the office in view when its room is re-packed, shifting f
   // The room moved +6 m in x; the user's own pan (target 100, 50) is kept and shifted.
   expect(controls.moveTo).toHaveBeenLastCalledWith(106, 0.6, 50, false)
   expect(first.onBandChange).toHaveBeenLastCalledWith('desk')
+})
+
+it('reframes a followed agent once when layout and room position change together', () => {
+  const first = deskProps(10)
+  const layout = {
+    width: 320,
+    viewportWidth: 1440,
+    viewportHeight: 900,
+    topInset: 0,
+    isExpanded: false
+  }
+  const { rerender } = render(<CameraRig {...first} inspectorLayout={layout} />)
+  runFrame()
+  controls.moveTo.mockClear()
+  rerender(
+    <CameraRig
+      {...deskProps(16)}
+      request={first.request}
+      onBandChange={first.onBandChange}
+      inspectorLayout={{ ...layout, width: 480 }}
+    />
+  )
+  expect(controls.moveTo).toHaveBeenCalledOnce()
 })
 
 it('returns to the floor band when the followed agent leaves', () => {
@@ -459,6 +547,80 @@ describe('pan', () => {
 })
 
 describe('auto-framing', () => {
+  it("interrupts an animated preset at the live pose, not stop()'s end pose", () => {
+    const props = { ...rigProps(), isReducedMotion: false }
+    const { rerender } = render(<CameraRig {...props} />)
+    const zoom = surface.camera.zoom
+    controls.polarAngle = MIN_POLAR
+    controls.stop.mockImplementationOnce(() => {
+      surface.camera.zoom = 7
+      controls.polarAngle = MAX_POLAR
+    })
+    rerender(<CameraRig {...props} request={{ kind: 'rotate', direction: 1, nonce: 1 }} />)
+    expect(surface.camera.zoom).toBe(zoom)
+    expect(controls.rotateTo).toHaveBeenLastCalledWith(expect.any(Number), MIN_POLAR, true)
+  })
+
+  it('frames a reserved workstation and translates a room repack exactly once until manual input', () => {
+    const first = deskProps(10)
+    const seat = { slotId: 'desk_main', x: 11, z: 3, heading: 0.4 }
+    const agent = { ...first.agents[0], slotId: seat.slotId, x: 200, z: 200 }
+    const floor = makeFloor({
+      floorId: 'one',
+      rooms: [makeRoom({ id: agent.roomId, x: 10, seats: [seat] })]
+    })
+    const request = { kind: 'workstation' as const, agentKey: agent.agentKey, nonce: 1 }
+    const props = { ...first, floor, agents: [agent], workstation: WORKSTATIONS.samurai, request }
+    const { rerender } = render(<CameraRig {...props} />)
+    runFrame()
+    expect(controls.rotateTo).toHaveBeenLastCalledWith(
+      expect.closeTo(seat.heading - Math.PI + Math.PI / 4),
+      ISO_POLAR,
+      false
+    )
+    expect(Number(controls.moveTo.mock.calls.at(-1)?.[0])).toBeLessThan(40)
+    controls.moveTo.mockClear()
+    const movedFloor = {
+      ...floor,
+      rooms: [makeRoom({ id: agent.roomId, x: 16, seats: [{ ...seat, x: 17 }] })]
+    }
+    rerender(<CameraRig {...props} floor={movedFloor} />)
+    expect(controls.moveTo).toHaveBeenCalledOnce()
+    expect(controls.moveTo).toHaveBeenLastCalledWith(106, 0.6, 50, false)
+    controls.emit('controlstart')
+    controls.moveTo.mockClear()
+    surface.size = { width: 1100, height: 700 }
+    rerender(<CameraRig {...props} floor={movedFloor} />)
+    expect(controls.moveTo).not.toHaveBeenCalled()
+  })
+
+  it('releases desk follow and stops the transition on manual yaw, preserving pitch through resize and repack', () => {
+    const first = deskProps(10)
+    const { rerender } = render(<CameraRig {...first} />)
+    runFrame()
+    controls.polarAngle = MIN_POLAR
+    const request = { kind: 'rotate' as const, direction: 1 as const, nonce: 8 }
+    rerender(<CameraRig {...first} request={request} />)
+    expect(controls.stop).toHaveBeenCalled()
+    expect(controls.rotateTo).toHaveBeenLastCalledWith(expect.any(Number), MIN_POLAR, false)
+    controls.moveTo.mockClear()
+    controls.zoomTo.mockClear()
+    surface.size = { width: 1000, height: 700 }
+    rerender(<CameraRig {...deskProps(16)} request={request} />)
+    expect(controls.moveTo).not.toHaveBeenCalled()
+    expect(controls.zoomTo).not.toHaveBeenCalled()
+  })
+
+  it('bounds PageDown tilt and restores Office reference only on command', () => {
+    const props = rigProps()
+    const { rerender } = render(<CameraRig {...props} />)
+    controls.polarAngle = MAX_POLAR
+    rerender(<CameraRig {...props} request={{ kind: 'tilt', direction: -1, nonce: 1 }} />)
+    expect(controls.rotateTo).toHaveBeenLastCalledWith(0, MAX_POLAR, false)
+    rerender(<CameraRig {...props} request={{ kind: 'office', nonce: 2 }} />)
+    expect(controls.rotateTo).toHaveBeenLastCalledWith(Math.PI / 4, ISO_POLAR, false)
+  })
+
   it('re-frames on a resize until the owner moves the camera, and again after Fit (0)', () => {
     const props = rigProps()
     const { rerender } = render(<CameraRig {...props} />)

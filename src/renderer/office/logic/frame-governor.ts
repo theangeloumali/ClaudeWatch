@@ -3,7 +3,7 @@ export interface PageVisibility {
   isFocused: boolean
 }
 
-interface VisibilityEnv {
+export interface VisibilityEnv {
   read(): PageVisibility
   onChange(callback: () => void): () => void
 }
@@ -70,19 +70,33 @@ export function targetFps(
   return visibility.isFocused ? focusedFps : Math.min(blurredFps, focusedFps)
 }
 
-export function browserFrameEnv(): FrameEnv {
+export function browserVisibilityEnv(): VisibilityEnv {
   return {
-    read: () => ({ isHidden: document.hidden, isFocused: document.hasFocus() }),
+    read: () => ({
+      isHidden:
+        typeof document !== 'undefined' &&
+        (document.hidden || window.officeBridge?.isVisible?.() === false),
+      isFocused: typeof document === 'undefined' || document.hasFocus()
+    }),
     onChange: (callback) => {
+      if (typeof window === 'undefined') return () => {}
+      const stopNative = window.officeBridge?.onVisibilityChanged?.(callback)
       document.addEventListener('visibilitychange', callback)
       window.addEventListener('focus', callback)
       window.addEventListener('blur', callback)
       return () => {
+        stopNative?.()
         document.removeEventListener('visibilitychange', callback)
         window.removeEventListener('focus', callback)
         window.removeEventListener('blur', callback)
       }
-    },
+    }
+  }
+}
+
+export function browserFrameEnv(): FrameEnv {
+  return {
+    ...browserVisibilityEnv(),
     requestFrame: (callback) => requestAnimationFrame(callback),
     cancelFrame: (handle) => cancelAnimationFrame(handle),
     sleep: (callback, delayMs) => window.setTimeout(callback, delayMs),

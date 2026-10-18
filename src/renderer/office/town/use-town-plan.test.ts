@@ -35,6 +35,30 @@ describe('townOf', () => {
 })
 
 describe('useTownPlan', () => {
+  it('previews moved plots without changing the persisted live claim or its held edges', () => {
+    const initialProps: {
+      preview: { floor: FloorGeometry; protectedSites: FloorGeometry[] } | undefined
+    } = { preview: undefined }
+    const { result, rerender } = renderHook(
+      ({
+        preview
+      }: {
+        preview: { floor: FloorGeometry; protectedSites: FloorGeometry[] } | undefined
+      }) => useTownPlan(PAIR_FLOOR, { protectedSites: [PAIR_FLOOR], preview }),
+      { initialProps }
+    )
+    const live = result.current
+    const before = localStorage.getItem(CLAIM_STORAGE_KEY)
+    const draft = { ...PAIR_FLOOR, x: PAIR_FLOOR.x + 350 }
+    rerender({ preview: { floor: draft, protectedSites: [draft] } })
+    expect(result.current.plan.officeSites).toEqual([draft])
+    expect(edges(result.current.plan.claim)).not.toEqual(edges(live.plan.claim))
+    expect(localStorage.getItem(CLAIM_STORAGE_KEY)).toBe(before)
+    rerender({ preview: undefined })
+    expect(edges(result.current.plan.claim)).toEqual(edges(live.plan.claim))
+    expect(localStorage.getItem(CLAIM_STORAGE_KEY)).toBe(before)
+  })
+
   it('uses a stored claim that still holds the campus', () => {
     // A floor whose east edge a first start would snap 15 m out, so 12 m nearer still holds it.
     const spare = fresh(LARGE_FLOOR).east - edges(neededClaim(LARGE_FLOOR)).east
@@ -107,12 +131,13 @@ describe('useTownPlan', () => {
     expect(edges(result.current.plan.claim)).toEqual(edges(full.claim))
   })
 
-  it('plans a village when nothing is stored', () => {
+  it('plans a city when nothing is stored', () => {
     const { result } = renderHook(() => useTownPlan(LARGE_FLOOR))
-    expect(result.current.plan.size).toBe('village')
+    expect(result.current.plan.size).toBe('city')
   })
 
   it('rebuilds the plan once for a size change, and not for an agent step', () => {
+    officeSettings.setTownSize('village')
     const { result, rerender } = renderHook(({ floor }) => useTownPlan(floor), {
       initialProps: { floor: LARGE_FLOOR }
     })

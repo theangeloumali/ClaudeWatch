@@ -3,13 +3,19 @@ import { useLayoutEffect, useMemo, useRef, type ReactElement } from 'react'
 import type { Group } from 'three'
 import { AGENT_SCALE, SUBAGENT_SCALE } from '../../../shared/office/figure-scale'
 import type { AgentView } from '../../../shared/office/types'
+import type { WorldVenue } from '../../../shared/office/world-document'
+import type { FloorGeometry } from '../scene-model'
 import { approach, approachAngle, moodFor, robotPose } from '../logic/character-pose'
 import type { ThemeZoneGroup } from '../logic/office-themes'
 import { getTheme } from '../themes/registry'
-import { applyThemePose, useRobotRig } from '../themes/rig'
+import { applyModelPose, useRobotRig } from '../themes/rig'
 import type { OfficeTheme } from '../themes/types'
 import { SHARED_BATCH } from './mesh-batches'
 import { blobShadowTexture } from './textures'
+import { agentElevation, physicalFloorId } from './all-floor-model'
+import { OverviewWorker } from './OverviewWorker'
+import { applyHumanPose } from '../themes/corporate-city/human-pose'
+import { workerSeats, workerSeatPresence, type WorkerSeats } from './worker-seat-presence'
 
 const MOVE_RATE = 5
 const TURN_RATE = 6
@@ -27,6 +33,18 @@ interface RobotProps {
   isReducedMotion: boolean
   onSelect: (agentKey: string) => void
   onFly: (agentKey: string) => void
+  motions?: Map<string, RobotMotion>
+  isOverview?: boolean
+  seats?: WorkerSeats
+}
+
+// dry-new: retained render poses prevent a presence change between crews from teleporting a worker.
+export interface RobotMotion {
+  x: number
+  y: number
+  z: number
+  heading: number
+  travelDistance: number
 }
 
 function phaseFor(key: string): number {
@@ -43,22 +61,34 @@ export function Robot({
   isSpeaking,
   isReducedMotion,
   onSelect,
-  onFly
+  onFly,
+  motions,
+  isOverview = false,
+  seats
 }: RobotProps) {
   const rig = useRobotRig()
   const rootRef = useRef<Group>(null)
-  const Model = theme.robot.Model
+  const isOverviewModel = isOverview && !isSelected
+  const Model = isOverviewModel ? OverviewWorker : theme.robot.Model
   const agentRef = useRef(agent)
   agentRef.current = agent
   const phase = useMemo(() => phaseFor(agent.agentKey), [agent.agentKey])
+  const travelDistanceRef = useRef(0)
 
   useLayoutEffect(() => {
     const root = rootRef.current
     if (!root) return
-    root.position.set(agentRef.current.x, 0, agentRef.current.z)
-    root.rotation.y = agentRef.current.heading
+    const initial = agentRef.current
+    const retained = motions?.get(initial.agentKey)
+    root.position.set(
+      retained?.x ?? initial.x,
+      retained?.y ?? agentElevation(initial),
+      retained?.z ?? initial.z
+    )
+    root.rotation.y = retained?.heading ?? initial.heading
+    travelDistanceRef.current = retained?.travelDistance ?? 0
     // Seeds the first position only; later frames ease toward the target.
-  }, [rootRef])
+  }, [rootRef, motions])
 
   // Per-frame motion mutates refs only; React re-renders only when the feed sends a new frame.
   useFrame(({ clock }, delta) => {
@@ -67,19 +97,61 @@ export function Robot({
     if (!root || !body) return
     const target = agentRef.current
     const isMoving =
-      Math.hypot(root.position.x - target.x, root.position.z - target.z) > MOVING_EPSILON
-    root.position.x = approach(root.position.x, target.x, delta, MOVE_RATE)
-    root.position.z = approach(root.position.z, target.z, delta, MOVE_RATE)
+      Math.hypot(
+        root.position.x - target.x,
+        root.position.y - agentElevation(target),
+        root.position.z - target.z
+      ) > MOVING_EPSILON
+    const previousX = root.position.x
+    const previousZ = root.position.z
+    root.position.x = approach(previousX, target.x, delta, MOVE_RATE)
+    root.position.y = approach(root.position.y, agentElevation(target), delta, MOVE_RATE)
+    root.position.z = approach(previousZ, target.z, delta, MOVE_RATE)
+    travelDistanceRef.current += Math.hypot(
+      root.position.x - previousX,
+      root.position.z - previousZ
+    )
     root.rotation.y = approachAngle(root.rotation.y, target.heading, delta, TURN_RATE)
+    if (motions) {
+      const motion = motions.get(target.agentKey) ?? {
+        x: 0,
+        y: 0,
+        z: 0,
+        heading: 0,
+        travelDistance: 0
+      }
+      motion.x = root.position.x
+      motion.y = root.position.y
+      motion.z = root.position.z
+      motion.heading = root.rotation.y
+      motion.travelDistance = travelDistanceRef.current
+      motions.set(target.agentKey, motion)
+    }
     const mood = moodFor(target, isMoving)
-    const pose = robotPose(mood, clock.elapsedTime, phase, { isReducedMotion })
-    applyThemePose(rig, pose, {
-      mood,
-      time: clock.elapsedTime,
-      phase,
-      delta,
-      isReducedMotion
-    })
+    const seatPresence = seats
+      ? workerSeatPresence({ agent: target, position: root.position, seats, isMoving })
+      : undefined
+    const isWaiting = seatPresence === 'none' && mood !== 'walking' && mood !== 'needs-you'
+    const pose = robotPose(isWaiting ? 'idle' : mood, clock.elapsedTime, phase, { isReducedMotion })
+    const poseInput = {
+      theme,
+      rig,
+      pose,
+      options: {
+        mood,
+        time: clock.elapsedTime,
+        phase,
+        delta,
+        isReducedMotion,
+        isMoving,
+        travelDistance: travelDistanceRef.current,
+        isSubagent: target.isSubagent,
+        isInLounge: seatPresence === 'lounge',
+        seatPresence
+      }
+    }
+    if (isOverviewModel) applyHumanPose(rig, pose, poseInput.options)
+    else applyModelPose(poseInput)
   })
 
   const select = (event: ThreeEvent<MouseEvent>): void => {
@@ -143,12 +215,17 @@ export function Robot({
   )
 }
 
-interface RobotCrewProps extends Pick<RobotProps, 'isReducedMotion' | 'onSelect' | 'onFly'> {
+interface RobotCrewProps extends Pick<
+  RobotProps,
+  'isReducedMotion' | 'onSelect' | 'onFly' | 'motions' | 'isOverview'
+> {
   agents: readonly AgentView[]
   zoneGroups: readonly ThemeZoneGroup[]
   floorTheme: OfficeTheme
   selectedAgentKey: string | null
   speakingAgentKey: string | null
+  floors?: readonly FloorGeometry[]
+  venues?: readonly WorldVenue[]
 }
 
 // Shallow value equality: a sim step hands over fresh agent objects whose fields mostly match.
@@ -164,8 +241,22 @@ function isShallowEqual(prev: object, next: object): boolean {
 }
 
 function isSameRobot(prev: RobotProps, next: RobotProps): boolean {
+  const previousSeats = prev.seats
+  const nextSeats = next.seats
+  const hasSameSeats =
+    previousSeats === nextSeats ||
+    (previousSeats !== undefined &&
+      nextSeats !== undefined &&
+      previousSeats.workstationY === nextSeats.workstationY &&
+      (previousSeats.workstation === nextSeats.workstation ||
+        (previousSeats.workstation !== null &&
+          nextSeats.workstation !== null &&
+          isShallowEqual(previousSeats.workstation, nextSeats.workstation))) &&
+      previousSeats.lounge.length === nextSeats.lounge.length &&
+      previousSeats.lounge.every((seat, index) => isShallowEqual(seat, nextSeats.lounge[index])))
   return (
-    isShallowEqual({ ...prev, agent: null }, { ...next, agent: null }) &&
+    hasSameSeats &&
+    isShallowEqual({ ...prev, agent: null, seats: null }, { ...next, agent: null, seats: null }) &&
     isShallowEqual(prev.agent, next.agent)
   )
 }
@@ -183,6 +274,8 @@ export function RobotCrew({
   floorTheme,
   selectedAgentKey,
   speakingAgentKey,
+  floors,
+  venues,
   ...robotProps
 }: RobotCrewProps) {
   const drawn = useRef<Map<string, DrawnRobot>>(null)
@@ -199,12 +292,17 @@ export function RobotCrew({
     [zoneGroups]
   )
   const previous = drawn.current
+  const seatCache = useMemo(() => new Map<string, WorkerSeats>(), [floors, zoneGroups, venues])
   const next = new Map<string, DrawnRobot>()
   const elements = agents.map((agent) => {
     const home = homes.get(agent.roomId)
+    const seatKey = `${agent.floorId}:${agent.roomId}:${agent.slotId}:${physicalFloorId(agent)}:${agent.venueId ?? ''}`
+    const seats = seatCache.get(seatKey) ?? workerSeats({ agent, floors, zoneGroups, venues })
+    seatCache.set(seatKey, seats)
     const props: RobotProps = {
       ...robotProps,
       agent,
+      seats,
       theme: home?.theme ?? floorTheme,
       rosterIndex: home?.rosterIndex ?? 0,
       isSelected: agent.agentKey === selectedAgentKey,

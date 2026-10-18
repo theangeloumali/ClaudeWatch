@@ -11,6 +11,8 @@ import { campusClaim, heldClaim, neededClaim } from './town-claim'
 import type { TownSize } from './town-grid'
 import { campusGreen, type GreenPlot } from './town-green'
 import { lotOwners, townBlocks, type TownPlan } from './town-plan'
+import { distributedTown } from './distributed-town'
+import type { WorldFootprint } from '../../../shared/office/world-document'
 
 export const CLAIM_STORAGE_KEY = 'claudewatch.office.claim'
 const STORAGE_VERSION = 1
@@ -59,7 +61,14 @@ function claimKey(claim: Rect): string {
 
 // The one town the scene and the movers share. The claim is held from floor to floor, and from
 // start to start through storage, so a desk column coming and going moves no building.
-export function useTownPlan(floor: FloorGeometry): Town {
+export function useTownPlan(
+  floor: FloorGeometry,
+  options?: {
+    protectedSites?: readonly WorldFootprint[]
+    preview?: { floor: FloorGeometry; protectedSites: readonly WorldFootprint[] }
+  }
+): Town {
+  const { protectedSites, preview } = options ?? {}
   const { pin, chosen } = useQualityChoice()
   const level = levelInUse(pin, chosen)
   const { townSize } = useOfficeSettings()
@@ -73,13 +82,19 @@ export function useTownPlan(floor: FloorGeometry): Town {
     }
     const next = townOf(floor, heldRef.current, level, townSize)
     heldRef.current = next.plan.claim
-    return next
-  }, [floor, level, townSize])
+    return protectedSites ? distributedTown(next, protectedSites) : next
+  }, [floor, level, townSize, protectedSites])
   const key = claimKey(town.plan.claim)
   useEffect(() => {
     if (key === savedRef.current) return
     savedRef.current = key
     writeStored(CLAIM_STORAGE_KEY, key)
   }, [key])
-  return town
+  return useMemo(
+    () =>
+      preview
+        ? distributedTown(townOf(preview.floor, null, level, townSize), preview.protectedSites)
+        : town,
+    [preview, level, townSize, town]
+  )
 }

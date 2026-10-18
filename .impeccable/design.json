@@ -1,0 +1,173 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-13",
+  "title": "Design System: ClaudeWatch",
+  "extensions": {
+    "colorMeta": {
+      "corporate-frame": {
+        "role": "neutral",
+        "displayName": "Corporate graphite frame"
+      },
+      "corporate-glass": {
+        "role": "primary",
+        "displayName": "Corporate blue-gray glazing"
+      },
+      "corporate-wood": {
+        "role": "secondary",
+        "displayName": "Corporate timber"
+      },
+      "hud-lantern": {
+        "role": "primary",
+        "displayName": "Inherited Lantern action accent"
+      },
+      "hud-surface": {
+        "role": "neutral",
+        "displayName": "Inherited dark Surface"
+      }
+    },
+    "typographyMeta": {
+      "title": {
+        "displayName": "Plate title",
+        "purpose": "Inherited condensed plate labels. Source: tailwind.config.ts:75 and src/renderer/components/deck/deck-styles.ts:28."
+      },
+      "count": {
+        "displayName": "Plate count",
+        "purpose": "Inherited numerical emphasis. Source: src/renderer/office/hud/hud-styles.ts:17."
+      },
+      "body": {
+        "displayName": "Reading text",
+        "purpose": "Inherited HUD reading text and Office entry. Source: tailwind.config.ts:85 and src/renderer/office/hud/hud-styles.ts:20."
+      },
+      "mono-sm": {
+        "displayName": "Monospaced small text",
+        "purpose": "Configured mono scale; HUD keycaps separately use the Caption scale. Source: tailwind.config.ts:78 and src/renderer/office/hud/hud-styles.ts:3."
+      }
+    },
+    "shadows": [
+      {
+        "name": "slip",
+        "value": "inset 0 -2px 0 #D9CCAE, 0 4px 10px rgba(4, 6, 16, 0.45)",
+        "purpose": "Inherited paper-slip edge and diffuse shadow. Source: tailwind.config.ts:92."
+      }
+    ],
+    "motion": [
+      {
+        "name": "pulse-dot",
+        "value": "pulse-dot 2s steps(8, end) infinite",
+        "purpose": "Configured dot animation; opacity moves from 1 to 0.4 and returns to 1. Source: tailwind.config.ts:95."
+      },
+      {
+        "name": "slip-drop",
+        "value": "slip-drop 120ms ease-out both",
+        "purpose": "Configured entry: opacity 0 and translateY(-6px) rotate(-2deg) to opacity 1 and translateY(0) rotate(0). Source: tailwind.config.ts:100."
+      },
+      {
+        "name": "css-reduced-motion",
+        "value": "@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; } }",
+        "purpose": "Existing global CSS override, independent of the worker pose adapter. Source: src/renderer/styles/globals.css:123."
+      },
+      {
+        "name": "human-travel-stride",
+        "value": "HUMAN_STRIDE_METRES = 1.05",
+        "purpose": "Walking pose follows travel distance; reduced motion or paused travel suppresses gait. Source: src/renderer/office/themes/corporate-city/human-pose.ts:119."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "office-hud-columns",
+        "value": "768px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Inherited regular primary action. Utilities expanded from src/renderer/components/deck/deck-styles.ts:4; colors and font stack from tailwind.config.ts; focus from globals.css:28. Preview supplies no application action.",
+      "html": "<button class=\"ds-primary\" type=\"button\">Approve</button>",
+      "css": ".ds-primary { display: inline-flex; align-items: center; justify-content: center; gap: 0.375rem; white-space: nowrap; border: none; border-radius: 0.375rem; height: 2rem; padding: 0 0.75rem; font-family: 'Avenir Next', 'Segoe UI', system-ui, sans-serif; font-size: 0.8125rem; line-height: 1.5; font-weight: 600; background: #FFC46B; color: #1C1A1E; } .ds-primary:hover { background: #FFD28E; } .ds-primary:focus-visible { outline: 2px solid #FFC46B; outline-offset: 2px; } .ds-primary:disabled { cursor: not-allowed; opacity: 0.5; }"
+    },
+    {
+      "name": "Quiet button",
+      "kind": "button",
+      "refersTo": "button-quiet",
+      "description": "Inherited secondary action with an inset edge. Utilities expanded from src/renderer/components/deck/deck-styles.ts:4; focus from globals.css:28. Preview supplies no application action.",
+      "html": "<button class=\"ds-quiet\" type=\"button\">Cancel</button>",
+      "css": ".ds-quiet { display: inline-flex; align-items: center; justify-content: center; gap: 0.375rem; white-space: nowrap; border: none; border-radius: 0.375rem; height: 2rem; padding: 0 0.75rem; font-family: 'Avenir Next', 'Segoe UI', system-ui, sans-serif; font-size: 0.8125rem; line-height: 1.5; font-weight: 600; background: #262D54; color: #EFE6D2; box-shadow: inset 0 0 0 1px #353D6C; } .ds-quiet:hover { box-shadow: inset 0 0 0 1px #7A6748; } .ds-quiet:focus-visible { outline: 2px solid #FFC46B; outline-offset: 2px; } .ds-quiet:disabled { cursor: not-allowed; opacity: 0.5; }"
+    },
+    {
+      "name": "Paper-surface action",
+      "kind": "button",
+      "refersTo": "button-ink",
+      "description": "Compact Ink action on Paper. Utilities expanded from src/renderer/components/deck/deck-styles.ts:18; paper focus from globals.css:33. Wrapper only establishes the existing paper surface for the preview.",
+      "html": "<div class=\"ds-paper\"><button class=\"ds-ink\" type=\"button\">Approve</button></div>",
+      "css": ".ds-paper { background: #EFE6D2; } .ds-ink { display: inline-flex; align-items: center; justify-content: center; gap: 0.375rem; white-space: nowrap; border: none; border-radius: 0.375rem; height: 1.75rem; padding: 0 0.625rem; font-family: 'Avenir Next', 'Segoe UI', system-ui, sans-serif; font-size: 0.75rem; line-height: 1rem; font-weight: 600; background: #1C1A1E; color: #EFE6D2; } .ds-ink:hover { background: rgb(28 26 30 / 0.85); } .ds-ink:focus-visible { outline: 2px solid #1C1A1E; outline-offset: 2px; } .ds-ink:disabled { cursor: not-allowed; opacity: 0.5; }"
+    },
+    {
+      "name": "Bottom-bar camera control",
+      "kind": "button",
+      "refersTo": "bar-button",
+      "description": "Inherited HUD control and pressed treatment, not a new corporate skin. Utilities expanded from src/renderer/office/hud/hud-styles.ts:13; focus from globals.css:28. Static preview does not implement camera movement or toggle state.",
+      "html": "<button class=\"ds-bar\" type=\"button\" aria-pressed=\"true\">Office</button>",
+      "css": ".ds-bar { display: inline-flex; align-items: center; gap: 0.375rem; white-space: nowrap; border: none; border-radius: 0.375rem; height: 1.75rem; padding: 0 0.625rem; font-family: 'Avenir Next', 'Segoe UI', system-ui, sans-serif; font-size: 0.75rem; line-height: 1rem; font-weight: 500; background: transparent; color: #B3B9D6; } .ds-bar:hover { background: #262D54; color: #EFE6D2; } .ds-bar[aria-pressed='true'] { background: #262D54; color: #EFE6D2; box-shadow: inset 0 0 0 1px #B08D57; } .ds-bar:focus-visible { outline: 2px solid #FFC46B; outline-offset: 2px; } .ds-bar:disabled { cursor: not-allowed; opacity: 0.5; }"
+    },
+    {
+      "name": "Office text entry",
+      "kind": "input",
+      "refersTo": "office-field",
+      "description": "Office textarea variant, distinct from the Deck's compact field. Utilities expanded from src/renderer/office/hud/hud-styles.ts:20; focus from globals.css:28. Source defines no separate hover, error or disabled skin here.",
+      "html": "<textarea class=\"ds-office-field\" aria-label=\"Session message\"></textarea>",
+      "css": ".ds-office-field { resize: none; border-radius: 0.375rem; border: 1px solid #B08D57; background: #121629; color: #EFE6D2; padding: 0.375rem 0.5rem; font-family: 'Avenir Next', 'Segoe UI', system-ui, sans-serif; font-size: 0.8125rem; line-height: 1.5; font-weight: 400; } .ds-office-field:focus-visible { outline: 2px solid #FFC46B; outline-offset: 2px; }"
+    },
+    {
+      "name": "Instrument plate",
+      "kind": "card",
+      "refersTo": "plate",
+      "description": "Inherited two-element chamfer and edge, with no added content padding or shadow. Exact geometry from src/renderer/styles/globals.css:72 and nesting from src/renderer/components/deck/Plate.tsx:11. The wrapper has no interactive states.",
+      "html": "<div class=\"ds-plate\"><div class=\"ds-plate-face\">Office</div></div>",
+      "css": ".ds-plate { --cut: 10px; padding: 1px; background: #7A6748; color: #EFE6D2; font-family: 'Avenir Next', 'Segoe UI', system-ui, sans-serif; clip-path: polygon(var(--cut) 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%, 0 var(--cut)); } .ds-plate-face { height: 100%; background: #1B2140; clip-path: polygon(calc(var(--cut) - 0.5px) 0, 100% 0, 100% calc(100% - var(--cut) + 0.5px), calc(100% - var(--cut) + 0.5px) 100%, 0 100%, 0 calc(var(--cut) - 0.5px)); }"
+    },
+    {
+      "name": "Selected segment",
+      "kind": "nav",
+      "refersTo": "segment-selected",
+      "description": "Shared segment styling, including checked state. Utilities expanded from src/renderer/components/deck/deck-styles.ts:31; focus from globals.css:28. Radio attributes demonstrate the style selector only; the static preview does not implement a radio-group keyboard contract.",
+      "html": "<button class=\"ds-segment\" type=\"button\" role=\"radio\" aria-checked=\"true\">Corporate City</button>",
+      "css": ".ds-segment { border: none; border-radius: 0.375rem; padding: 0.25rem 0.625rem; font-family: 'Avenir Next', 'Segoe UI', system-ui, sans-serif; font-size: 0.75rem; line-height: 1rem; font-weight: 500; background: transparent; color: #B3B9D6; } .ds-segment:hover { background: #262D54; color: #EFE6D2; } .ds-segment[aria-checked='true'] { background: rgba(255, 196, 107, 0.15); color: #FFC46B; } .ds-segment:focus-visible { outline: 2px solid #FFC46B; outline-offset: 2px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Corporate City",
+    "overview": "This reference helps designers and engineers extend ClaudeWatch's built Office scene without replacing its operational controls. The approved world is a contemporary business district with original human-looking software agents and Cities: Skylines-style readable zoning. People depict software sessions; they do not depict employees or imply human staffing.\n\nThe 3D world uses mineral façades, graphite frames, blue-gray glazing, muted planting and timber. The heads-up display (HUD) retains the Dispatch Deck's dark instrument plates, warm action accent and existing font stacks. These are separate material systems, not competing status palettes. Corporate City supplies a theme kit, tower, town, worker model, pose adapter and player geometry through the existing theme interface.",
+    "keyCharacteristics": [
+      "Contemporary city materials around open working offices.",
+      "Stable adult appearances for actual software-session workers.",
+      "Inherited dark controls with shared attention and status colors.",
+      "Camera framing accounts for occupied workspaces and HUD rails."
+    ],
+    "rules": [
+      {
+        "name": "The Separate Palettes Rule",
+        "body": "Corporate materials describe the world; inherited HUD and state tokens describe actions and session activity.",
+        "section": "colors"
+      }
+    ],
+    "dos": [
+      "Do use corporate materials for world geometry and inherited HUD tokens for controls and session states.",
+      "Do preserve the isometric projection, deterministic layout, existing theme IDs and saved choices.",
+      "Do derive camera reservations from the shared HUD grid and current inspector visibility.",
+      "Do keep human appearances stable by agent key and worker motion tied to actual session state and travel.",
+      "Do preserve reduced motion, quality controls and the List fallback; operational access must not require walking.",
+      "Do use the shared button, field and Plate implementations instead of parallel corporate controls."
+    ],
+    "donts": [
+      "Don't treat workers, the player or decorative citizens as employee records or real-person likenesses.",
+      "Don't reuse corporate material colors as a new status palette or universal idle mapping.",
+      "Don't replace the inherited HUD's fonts, dark plates or focus treatment to match the city materials.",
+      "Don't turn readable zoning into a city simulator or copy game assets.",
+      "Don't describe source colors or model detail as measured contrast, graphics performance or photorealism.",
+      "Don't treat screenshots as shipping raster assets; this pass records no generated shipping raster assets."
+    ]
+  }
+}

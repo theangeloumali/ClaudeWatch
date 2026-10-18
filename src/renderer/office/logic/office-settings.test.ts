@@ -26,7 +26,7 @@ const ALL_OFF = {
 }
 
 describe('parseOfficeSettings', () => {
-  it('starts with every feature on, and the town a village', () => {
+  it('starts with every feature on, and the town a city', () => {
     expect(DEFAULT_OFFICE_SETTINGS).toEqual({
       town: true,
       citizens: true,
@@ -34,7 +34,7 @@ describe('parseOfficeSettings', () => {
       ambient: true,
       loungeTrips: true,
       player: true,
-      townSize: 'village'
+      townSize: 'city'
     })
     expect(parseOfficeSettings(null)).toEqual(DEFAULT_OFFICE_SETTINGS)
   })
@@ -63,7 +63,7 @@ describe('parseOfficeSettings', () => {
   })
 
   it.each([['metropolis'], [true], [3], [null], ['Village']])(
-    'keeps the town a village for a stored size of %j',
+    'keeps the default city for a stored size of %j',
     (townSize) => {
       expect(parseOfficeSettings(JSON.stringify({ townSize, player: false }))).toEqual({
         ...DEFAULT_OFFICE_SETTINGS,
@@ -188,7 +188,7 @@ describe('createOfficeSettingsStore', () => {
     expect(store.get().townSize).toBe('town')
     expect(listener).toHaveBeenCalledOnce()
     store.reset()
-    expect(store.get().townSize).toBe('village')
+    expect(store.get().townSize).toBe('city')
   })
 
   it('runs without storage', () => {

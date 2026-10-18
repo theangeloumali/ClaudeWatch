@@ -1,7 +1,7 @@
 import { useRef } from 'react'
 import type { Group, Mesh } from 'three'
-import { steamPuffs, type RobotMood, type RobotPose } from '../logic/character-pose'
-import type { RobotRig } from './types'
+import { steamPuffs, type RobotPose } from '../logic/character-pose'
+import type { OfficeTheme, RobotRig, ThemePoseOptions } from './types'
 
 export function useRobotRig(): RobotRig {
   return {
@@ -15,21 +15,17 @@ export function useRobotRig(): RobotRig {
     sensor: useRef<Group>(null),
     eye: useRef<Mesh>(null),
     thought: useRef<Group>(null),
-    puffs: [useRef<Mesh>(null), useRef<Mesh>(null), useRef<Mesh>(null)]
+    puffs: [useRef<Mesh>(null), useRef<Mesh>(null), useRef<Mesh>(null)],
+    leftElbow: useRef<Group>(null),
+    rightElbow: useRef<Group>(null),
+    leftHip: useRef<Group>(null),
+    rightHip: useRef<Group>(null),
+    leftKnee: useRef<Group>(null),
+    rightKnee: useRef<Group>(null)
   }
 }
 
-export function applyThemePose(
-  rig: RobotRig,
-  pose: RobotPose,
-  options: {
-    mood: RobotMood
-    time: number
-    phase: number
-    delta: number
-    isReducedMotion: boolean
-  }
-): void {
+export function applyThemePose(rig: RobotRig, pose: RobotPose, options: ThemePoseOptions): void {
   if (rig.body.current) {
     rig.body.current.position.y = pose.bob
     rig.body.current.rotation.z = pose.sway
@@ -40,9 +36,10 @@ export function applyThemePose(
   rig.rightArm.current?.rotation.set(pose.rightArm, 0, pose.rightArmRoll)
   if (rig.gear.current) rig.gear.current.rotation.z += pose.gearSpeed * options.delta
   rig.eye.current?.scale.set(1, pose.eyeOpen, 1)
-  if (rig.thought.current) rig.thought.current.visible = options.mood === 'thinking'
+  if (rig.thought.current)
+    rig.thought.current.visible = options.mood === 'thinking' && options.seatPresence !== 'none'
   const puffs =
-    options.mood === 'working' && !options.isReducedMotion
+    options.mood === 'working' && options.seatPresence !== 'none' && !options.isReducedMotion
       ? steamPuffs(options.time, options.phase)
       : []
   rig.puffs.forEach((ref, index) => {
@@ -54,4 +51,15 @@ export function applyThemePose(
     mesh.position.y = 1.12 + puff.y
     mesh.scale.setScalar(puff.scale)
   })
+}
+
+// A single writer owns the joints; legacy themes keep their original adapter.
+export function applyModelPose(input: {
+  theme: OfficeTheme
+  rig: RobotRig
+  pose: RobotPose
+  options: ThemePoseOptions
+}): void {
+  const applyPose = input.theme.robot.applyPose ?? applyThemePose
+  applyPose(input.rig, input.pose, input.options)
 }

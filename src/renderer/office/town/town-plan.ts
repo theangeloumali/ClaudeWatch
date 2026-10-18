@@ -28,6 +28,8 @@ interface TownBlock extends Rect {
 export interface TownPlan {
   size: TownSize
   claim: Rect
+  // Distributed offices have individual plots, not a shared headquarters gate plaza.
+  officeSites?: readonly Rect[]
   // The claim less the belt: it always contains the plate, and moves only when the claim does.
   envelope: Rect
   extent: Rect

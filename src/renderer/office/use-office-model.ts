@@ -1,14 +1,16 @@
 import { useMemo } from 'react'
+import { parseAgentKey } from '../../shared/office/agent-key'
 import { buildTokenLedger } from '../deck/tokens'
 import { buildAgentFacts, type AgentFacts } from './hud/agent-facts'
 import { buildAttentionQueue } from './logic/attention-queue'
-import { bayForAgent, memberForAgent, sessionForAgent, summariseFloors } from './logic/floor-model'
+import { bayForAgent, summariseFloors } from './logic/floor-model'
 import { reachTarget } from './logic/interactions'
 import { buildNameCards, buildProjectStacks } from './logic/name-cards'
+import { workstationSeat } from './logic/workstation-framing'
 import { resolveTheme, type ThemeAssignments } from './logic/office-themes'
-import { buildCompanyList, buildOfficesTree } from './logic/zone-model'
+import { buildCompanyList, buildOfficeActivity, buildOfficesTree } from './logic/zone-model'
 import type { OfficeFrame } from './scene-model'
-import { themeCharacter } from './themes/registry'
+import { getTheme, themeCharacter } from './themes/registry'
 
 // What the HUD and the scene show, derived from the latest frame. The feed keeps `sessions`
 // between its messages while a frame arrives for every step, so the lists follow the sessions.
@@ -22,6 +24,7 @@ export function useOfficeLists(
   // The Tower stays as a landmark showing the building's totals; it no longer picks floors.
   const towerFloors = useMemo(() => (frame ? summariseFloors(frame) : []), [frame])
   const companies = useMemo(() => (frame ? buildOfficesTree(frame) : []), [frame])
+  const activity = useMemo(() => buildOfficeActivity(frame), [frame])
   const ledger = useMemo(() => buildTokenLedger(sessions ?? []), [sessions])
   const agentFacts = useMemo(
     () => (frame ? buildAgentFacts(frame) : new Map<string, AgentFacts>()),
@@ -32,19 +35,17 @@ export function useOfficeLists(
     [frame, floorId]
   )
   const cards = useMemo(
-    () => (frame && floorId ? buildNameCards(frame, floorId, selectedAgentKey) : []),
-    [frame, floorId, selectedAgentKey]
+    () => (frame ? buildNameCards(frame, null, selectedAgentKey) : []),
+    [frame, selectedAgentKey]
   )
-  const stacks = useMemo(
-    () => (frame && floorId ? buildProjectStacks(frame, floorId) : []),
-    [frame, floorId]
-  )
+  const stacks = useMemo(() => (frame ? buildProjectStacks(frame, null) : []), [frame])
   const companyList = useMemo(() => (frame ? buildCompanyList(frame) : []), [frame])
   return {
     sessions,
     queue,
     towerFloors,
     companies,
+    activity,
     ledger,
     agentFacts,
     floorAgents,
@@ -63,8 +64,12 @@ export function selectionOf(
   floorThemeId: string
 ) {
   const agent = frame?.agents.find((candidate) => candidate.agentKey === selectedAgentKey)
-  const session = frame && agent ? sessionForAgent(frame, agent) : undefined
-  const member = agent ? memberForAgent(session, agent.agentKey) : undefined
+  const identity = frame && agent ? parseAgentKey(agent.agentKey, frame.sessions) : null
+  const hasCurrentIdentity = Boolean(
+    agent && identity && agent.isSubagent === (identity.member !== undefined)
+  )
+  const session = hasCurrentIdentity ? identity?.session : undefined
+  const member = hasCurrentIdentity ? identity?.member : undefined
   const target = session ? reachTarget(session, member) : undefined
   const character =
     frame && agent && session
@@ -74,5 +79,11 @@ export function selectionOf(
           bayForAgent(frame, agent)
         )
       : null
-  return { agent, session, member, target, character }
+  const themeId = session ? resolveTheme(session, themeAssignments, floorThemeId) : floorThemeId
+  const workstation = getTheme(themeId).workstation
+  const floor = frame?.floors.find((candidate) => candidate.floorId === agent?.floorId)
+  const canWorkstation = Boolean(
+    session && agent && floor && workstation && workstationSeat(agent, floor)
+  )
+  return { agent, session, member, target, character, workstation, canWorkstation }
 }

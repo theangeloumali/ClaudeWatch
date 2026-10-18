@@ -50,7 +50,15 @@ it('carries an OpenCode session and its source health in the snapshot', async ()
     // Its own running total, not a transcript count.
     usage: { own: { input: 10, output: 25, cacheWrite: 40, cacheRead: 300 } }
   })
-  expect(snapshot.sources).toContainEqual({ id: 'opencode', ok: true, detail: 'live' })
+  expect(snapshot.sources).toContainEqual(
+    expect.objectContaining({
+      id: 'opencode',
+      ok: true,
+      detail: 'live',
+      checkedAtMs: NOW,
+      staleAfterMs: 60000
+    })
+  )
 })
 
 it('gives an OpenCode process in an Orca pane its pane key, as a Claude session gets one', async () => {

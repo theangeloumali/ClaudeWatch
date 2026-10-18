@@ -130,7 +130,10 @@ function expectEverySeatOnce(sim: World, sessions: Iterable<SessionRef>): void {
     s.key,
     ...s.subagents.map((g) => `${s.key}#${g.id}`)
   ])
-  const live = sim.step(0).filter((agent) => expected.includes(agent.agentKey))
+  // Queued actors own real seats but have no on-scene body until admission.
+  const live = [...sim.step(0), ...[...sim['arrivals'].values()].map((agent) => agent.view)].filter(
+    (agent) => expected.includes(agent.agentKey)
+  )
   expect(live.map((agent) => agent.agentKey).sort()).toEqual(expected.sort())
   const seats = live.map((agent) => `${agent.roomId}/${agent.slotId}`)
   expect(new Set(seats).size).toBe(seats.length)
@@ -143,6 +146,19 @@ it('seats every guest when a session in the team area shrinks as a neighbour gro
   const next = [withSubagents('A', ['a2', 'a3']), withSubagents('B', ['b1', 'b2', 'b3'])]
   expect(() => patch(sim, next)).not.toThrow()
   expectEverySeatOnce(sim, next)
+  run(sim, SETTLE_S)
+  expect(sim['arrivals'].size).toBe(0)
+  expectEverySeatOnce(sim, next)
+  const expected = new Set(
+    next.flatMap((lead) => [lead.key, ...lead.subagents.map((guest) => `${lead.key}#${guest.id}`)])
+  )
+  const floor = sim.layout().floors[0]
+  for (const agent of sim.step(0).filter((agent) => expected.has(agent.agentKey))) {
+    const seat = floor.rooms
+      .find((room) => room.id === agent.roomId)!
+      .slots.find((slot) => slot.id === agent.slotId)!
+    expect(at(agent)).toEqual(at(seat))
+  }
 })
 
 // A small seeded generator, so a failing run can be replayed from its seed.

@@ -13,7 +13,7 @@ import { TowerView } from '../scene/WorldView'
 import { groundBuffers, groundQuads } from '../town/town-ground'
 import { dressOf, TownAmbient, TownView } from '../town/TownView'
 import type { TownSize } from '../town/town-grid'
-import { townOf } from '../town/use-town-plan'
+import { townOf, type Town } from '../town/use-town-plan'
 import { getTheme, listThemes } from './registry'
 import { mergedDraws, type DrawCount } from './scene.test-utils'
 import { GROUND_Y } from './surroundings'
@@ -29,6 +29,7 @@ export const BRASS = 'brass-workshop'
 export const REAL_THEMES = listThemes()
 
 export interface Composition {
+  town?: Town
   floor: FloorGeometry
   agents: readonly AgentView[]
   floorTheme: OfficeTheme
@@ -57,7 +58,14 @@ function batchDraws(layer: ReactNode): DrawCount {
 }
 
 // An upper bound: every thought dot and steam puff at once, and the world at building zoom.
-export function measure({ floor, agents, floorTheme, themeIdFor, townSize }: Composition) {
+export function measure({
+  floor,
+  agents,
+  floorTheme,
+  themeIdFor,
+  townSize,
+  town: suppliedTown
+}: Composition) {
   const zoneGroups = groupZonesByTheme(floor, themeIdFor)
   // Each layer merges on its own, as its own BatchedScene does at runtime.
   const focused = mergedDraws([
@@ -80,7 +88,7 @@ export function measure({ floor, agents, floorTheme, themeIdFor, townSize }: Com
     })
   ])
   // The town of a first start at full detail: the most there is to draw.
-  const town = townOf(floor, null, 'full', townSize)
+  const town = suppliedTown ?? townOf(floor, null, 'full', townSize)
   const world = batchDraws(
     TowerView({
       plan: town.plan,

@@ -1,6 +1,12 @@
 import { findPath, type NavGrid, type Point } from '../../../office/sim/path'
 import { FURNITURE_SCALE } from '../../../shared/office/figure-scale'
-import { DESK_REACH, doorSide, SIDE_NORMAL, type DooredRect } from '../logic/room-layout'
+import {
+  DESK_REACH,
+  roomWallSegments,
+  doorSide,
+  SIDE_NORMAL,
+  type DooredRect
+} from '../logic/room-layout'
 import type { FloorGeometry, ZoneGeometry } from '../scene-model'
 import { contains, type Rect } from '../themes/lot-math'
 import { GROUND_Y } from '../themes/surroundings'
@@ -15,8 +21,6 @@ const WALK_CELL_M = 0.5
 // The widest desk any theme draws, so the player stands clear of all of them.
 // The scene draws desks enlarged with the agents, so the footprint the player walks round is too.
 const DESK_M = { width: 1.3 * FURNITURE_SCALE, depth: 0.65 * FURNITURE_SCALE }
-// Half the opening left in a wall: one cell where the door sits on the lattice, two where it does not.
-const DOOR_HALF_M = 0.2
 const DOORSTEP_M = 1
 // How far a click inside something solid looks for open ground: past half the largest lot.
 const NEAREST_OPEN_CELLS = 24
@@ -69,6 +73,8 @@ export function walkGround(
   }
 
   for (const solid of solids) closeRect(solid)
+  // The owner starts beside the lift, not inside its housing or beneath its roof.
+  closeRect({ ...floor.elevator, width: 2.2, depth: 2.2 })
   for (const seat of floor.rooms.flatMap((room) => room.seats)) {
     const ahead = { x: Math.sin(seat.heading), z: Math.cos(seat.heading) }
     const half = DESK_M.width / 2
@@ -82,24 +88,20 @@ export function walkGround(
       )
     }
   }
-  const walled: DooredRect[] = [...flatten(floor.zones), ...floor.rooms].flatMap((zone) =>
-    zone.door ? [{ ...zone, door: zone.door }] : []
-  )
+  const walled: DooredRect[] = [
+    ...flatten(floor.zones).filter((zone) => !floor.buildingId || zone.kind !== 'project'),
+    ...floor.rooms
+  ].flatMap((zone) => (zone.door ? [{ ...zone, door: zone.door }] : []))
   for (const zone of walled) {
-    const west = zone.x - zone.width / 2
-    const east = zone.x + zone.width / 2
-    const north = zone.z - zone.depth / 2
-    const south = zone.z + zone.depth / 2
-    closeLine({ x: west, z: north }, { x: east, z: north })
-    closeLine({ x: west, z: south }, { x: east, z: south })
-    closeLine({ x: west, z: north }, { x: west, z: south })
-    closeLine({ x: east, z: north }, { x: east, z: south })
-  }
-  // Doors last: an opening stays open whatever wall was drawn across it.
-  for (const zone of walled) {
-    const outward = SIDE_NORMAL[doorSide(zone)]
-    for (const side of [-DOOR_HALF_M, DOOR_HALF_M])
-      mark({ x: zone.door.x + outward.z * side, z: zone.door.z + outward.x * side }, 0)
+    // Rasterize the rendered gap, rather than clearing doors through unrelated walls or solids.
+    for (const segment of roomWallSegments({ ...zone, id: 'walk-wall' })) {
+      const halfX = (segment.normalZ * segment.length) / 2
+      const halfZ = (segment.normalX * segment.length) / 2
+      closeLine(
+        { x: segment.x - halfX, z: segment.z - halfZ },
+        { x: segment.x + halfX, z: segment.z + halfZ }
+      )
+    }
   }
 
   const blocked: string[] = []
@@ -176,5 +178,9 @@ export function doorstep(zone: DooredRect): Point {
 
 // What is underfoot: the slab on the plate, the town's ground everywhere else.
 export function groundHeight(floor: FloorGeometry, point: Point): number {
-  return contains(floor, { ...point, width: 0, depth: 0 }) ? 0 : GROUND_Y
+  return contains(floor, { ...point, width: 0, depth: 0 })
+    ? (floor.elevation ?? 0)
+    : floor.buildingId
+      ? 0
+      : GROUND_Y
 }

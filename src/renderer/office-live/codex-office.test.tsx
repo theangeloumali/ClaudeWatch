@@ -158,7 +158,7 @@ describe('Codex from the bridge feed to the Office', () => {
     feed.stop()
   })
 
-  it.each(listThemes())('draws both robots, including a Codex body, in $id', (theme) => {
+  it.each(listThemes())('draws both workers with a Codex provider identity in $id', (theme) => {
     const feed = startFeed(sessionsFor('terminal'))
     // Unknown three.js tags warn under React DOM, which stands in for the canvas here.
     vi.spyOn(console, 'error').mockImplementation(() => undefined)
@@ -179,6 +179,7 @@ describe('Codex from the bridge feed to the Office', () => {
       expect(robot.querySelectorAll('meshstandardmaterial').length).toBeGreaterThan(0)
     const codex = feed.frame().agents[1]
     let bodyColor = theme.robot.skins.codex.body
+    if (theme.id === 'corporate-city') bodyColor = theme.robot.skins.codex.trim
     if (theme.roster) {
       const index = theme.roster.indexFor(codex, 0)
       expect(themeCharacter(theme.id, codex, 0)).toEqual(theme.roster.entries(null)[index])

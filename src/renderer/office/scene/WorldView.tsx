@@ -32,7 +32,7 @@ export function TowerView({
         <BatchedScene revision={revision} isStatic>
           {hasTower ? (
             <group position={[lot.x, GROUND_Y, lot.z]}>
-              <Tower floors={floors} />
+              <Tower floors={floors} plot={lot} />
             </group>
           ) : (
             <LotFill placed={[dressLot(lot, GROUND_Y, dressOf(theme))]} />

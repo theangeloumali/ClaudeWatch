@@ -50,7 +50,7 @@ describe('Claude registry', () => {
     expect((await collectClaude([root], io, 1000)).sessions).toHaveLength(1)
     expect(exec.mock.calls.filter(([program, args]) => !isTableQuery(program, args))).toEqual([])
   })
-  it('drops a pid the process table lists under another start time, without a second ask', async () => {
+  it('drops a stale registry pid without asking for its start time again', async () => {
     const io = fixtureIo({ [file]: JSON.stringify(entry), [repoGit]: null })
     const exec = vi.fn(async (program: string, args: string[]) =>
       isTableQuery(program, args)
@@ -59,7 +59,10 @@ describe('Claude registry', () => {
     )
     io.exec = exec
     expect((await collectClaude([root], io, 1000)).sessions).toEqual([])
-    expect(exec.mock.calls.filter(([program, args]) => !isTableQuery(program, args))).toEqual([])
+    expect(exec).not.toHaveBeenCalledWith(ownStartQuery.file, ownStartQuery.args)
+    expect(exec.mock.calls.filter(([program]) => program.endsWith('lsof'))).toHaveLength(
+      process.platform === 'win32' ? 0 : 1
+    )
   })
   it('still proves a session live, by its pid, when the process table cannot be read', async () => {
     const io = fixtureIo({ [file]: JSON.stringify(entry), [repoGit]: null })
@@ -70,15 +73,17 @@ describe('Claude registry', () => {
     const batch = await collectClaude([root], io, 1000)
     expect(batch.sessions.map((session) => session.sessionId)).toEqual(['a'])
   })
-  it('says the registry read failed while PowerShell cannot answer for a pid', async () => {
+  it('reports discovery as unhealthy when process identity cannot be checked', async () => {
     const io = fixtureIo({ [file]: JSON.stringify(entry), [repoGit]: null })
     io.exec = async () => {
       throw Object.assign(new Error('timed out'), { killed: true, code: null, signal: 'SIGTERM' })
     }
     const batch = await collectClaude([root], io, 1000)
     expect(batch.sessions).toEqual([])
-    // ps exits with a status for a pid it cannot find; only PowerShell's silence is unknown.
-    expect(batch.sources[0].ok).toBe(process.platform !== 'win32')
+    expect(batch.sources[0]).toMatchObject({
+      ok: false,
+      detail: process.platform === 'win32' ? 'session read failed' : 'process discovery failed'
+    })
   })
   it('reads a transcript tail again only when the file changed, and afresh for a session that came back', async () => {
     const transcript = join(projects, 'a.jsonl')

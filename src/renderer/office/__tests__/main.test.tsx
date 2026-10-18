@@ -96,7 +96,10 @@ describe('the Office page entry point', () => {
     await openPage({ isPreviewBuild: true, userAgent: ELECTRON_AGENT })
     expect(await screen.findByText('The office')).toBeInTheDocument()
     expect(shown.feed).toBe(feeds.live)
-    expect(createLiveFeed).toHaveBeenCalledWith(bridge, { storage: window.localStorage })
+    expect(createLiveFeed).toHaveBeenCalledWith(bridge, {
+      storage: window.localStorage,
+      worldEditing: true
+    })
     expect(createFixtureFeed).not.toHaveBeenCalled()
   })
 
@@ -139,6 +142,9 @@ describe('the Office page entry point', () => {
     Reflect.set(window, 'officeBridge', { ready: vi.fn() })
     await openPage()
     expect(await screen.findByText('The office')).toBeInTheDocument()
-    expect(createLiveFeed).toHaveBeenLastCalledWith(expect.anything(), { storage: null })
+    expect(createLiveFeed).toHaveBeenLastCalledWith(expect.anything(), {
+      storage: null,
+      worldEditing: true
+    })
   })
 })

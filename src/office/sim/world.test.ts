@@ -22,8 +22,13 @@ it('keeps applying later messages after one it could not place', () => {
   expect(() =>
     sim.apply({ type: 'patch', v: 1, seq: 3, upserts: [session('b')], removed: [] })
   ).not.toThrow()
-  expect(sim.step(0).map((agent) => agent.agentKey)).toEqual(['a', 'b'])
+  expect([...sim.step(0).map((agent) => agent.agentKey), ...sim['arrivals'].keys()].sort()).toEqual(
+    ['a', 'b']
+  )
   expect(sim.layout().floors[0].rooms.map((room) => room.sessionKey)).toEqual(['a', 'b'])
+  for (let tick = 0; tick < 1000; tick++) sim.step(100)
+  expect(sim['arrivals'].size).toBe(0)
+  expect(sim.step(0).map((agent) => agent.agentKey)).toEqual(['a', 'b'])
 })
 it('reads a saved map only for order and bays, never as the floor it moves agents from', () => {
   const first = new World()
@@ -127,7 +132,7 @@ it('applies the patch that follows the hello revision, then rejects duplicates a
   }
 })
 
-it('arrives from the same gate for all 60 agents across four companies', () => {
+it('retains all 60 identities while admitting bodies through the shared gate', () => {
   const sim = new World()
   const sessions = Array.from({ length: 60 }, (_, i) => ({
     ...session(`s${i}`, `p_${i % 12}`),
@@ -140,9 +145,18 @@ it('arrives from the same gate for all 60 agents across four companies', () => {
     snapshot: { rev: 1, generatedAtMs: 0, sessions: [], sources: [] }
   })
   sim.apply({ type: 'patch', v: 1, seq: 2, upserts: sessions, removed: [] })
-  expect(sim.step(0)).toHaveLength(60)
-  for (const view of sim.step(0))
-    expect({ x: view.x, z: view.z, floorId: view.floorId }).toEqual({ x: 0, z: 0, floorId: 'hq' })
+  const arrivals = sim.step(0)
+  expect(arrivals).toHaveLength(1)
+  expect(sim['arrivals'].size).toBe(59)
+  expect([...arrivals.map((agent) => agent.agentKey), ...sim['arrivals'].keys()].sort()).toEqual(
+    sessions.map((agent) => agent.key).sort()
+  )
+  expect(arrivals.some((view) => view.x === 0 && view.z === 0)).toBe(true)
+  for (const [index, view] of arrivals.entries()) {
+    expect(view.floorId).toBe('hq')
+    for (const other of arrivals.slice(index + 1))
+      expect(Math.hypot(view.x - other.x, view.z - other.z)).toBeGreaterThanOrEqual(1.3 - 1e-8)
+  }
 })
 it('keeps a subagent at its desk when a sibling finishes', () => {
   const sim = new World()

@@ -1,4 +1,7 @@
 import { brassWorkshop, neoEdoSteam } from '../themes/builtins'
+import { CORPORATE_CITIZENS } from '../themes/corporate-city/town-movers'
+import { CYBERPUNK_CITIZENS } from '../themes/cyberpunk-city/town-movers'
+import { SAMURAI_TOWN } from '../themes/samurai-empire/town'
 import { ORBITAL_GARRISON_ID } from '../themes/orbital-garrison/roster'
 import { GROVE } from '../themes/quiet-grove/palette'
 import { QUIET_GROVE_ID } from '../themes/quiet-grove/roster'
@@ -64,7 +67,10 @@ const FIGURES: Record<string, readonly CitizenFigure[] | undefined> = {
   [brassWorkshop.id]: BRASS_CITIZENS,
   [VIOLET_COURT_ID]: COURT_CITIZENS,
   [ORBITAL_GARRISON_ID]: GARRISON_CITIZENS,
-  [QUIET_GROVE_ID]: GROVE_CITIZENS
+  [QUIET_GROVE_ID]: GROVE_CITIZENS,
+  'corporate-city': CORPORATE_CITIZENS,
+  'cyberpunk-city': CYBERPUNK_CITIZENS,
+  'samurai-empire': SAMURAI_TOWN.citizens
 }
 
 // The people and animals on a theme's streets. A theme with none of its own gets the default town's.

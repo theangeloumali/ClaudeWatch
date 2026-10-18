@@ -1,4 +1,5 @@
 import { needsHuman } from '../../../shared/office/attention'
+import { parseAgentKey } from '../../../shared/office/agent-key'
 import type { InteractionFailure, SessionRef } from '../../../shared/office/types'
 import { canRespond, failureMessage, reachBlocker, type ReachTarget } from '../logic/interactions'
 import type { OfficeFeed } from '../scene-model'
@@ -17,6 +18,7 @@ interface AgentActionsProps {
   onReviewClose: () => void
   onFocusTerminal: () => void
   onSent: (agentKey: string) => void
+  selectedAgentKey?: string
 }
 
 // The work order, talk, review and peek for the inspected agent, each shown only when it applies.
@@ -28,7 +30,8 @@ export function AgentActions({
   onReview,
   onReviewClose,
   onFocusTerminal,
-  onSent
+  onSent,
+  selectedAgentKey
 }: AgentActionsProps) {
   const isOwnSession = target.isLead
   // Mounted while reviewing even after the prompt clears, so the panel itself closes the review.
@@ -37,6 +40,7 @@ export function AgentActions({
   const { attention } = session
   const waitingOn = needsHuman(attention) ? attention : null
   const isViewOnly = feed.isViewOnly === true
+  const terminalMember = parseAgentKey(target.key, [session])?.member
   // A typed message would answer the agent's open dialog (Enter confirms its default), so no box.
   const talkBlocker = ((): InteractionFailure | null => {
     if (isViewOnly) return 'not-permitted'
@@ -66,9 +70,24 @@ export function AgentActions({
       ) : (
         <TalkBox agentKey={target.key} agentName={target.name} send={feed.send} onSent={onSent} />
       )}
-      {!isViewOnly && reachBlocker(target) === null && (
-        <PeekPanel agentKey={target.key} peek={feed.peek} />
-      )}
+      <PeekPanel
+        agentKey={target.key}
+        selectedAgentKey={selectedAgentKey}
+        peek={feed.peek}
+        isViewOnly={isViewOnly}
+        paneKey={target.isLead ? session.orcaPaneKey : terminalMember?.orcaPaneKey}
+        incarnationKey={JSON.stringify([
+          session.sessionId,
+          session.pid,
+          session.startedAtMs,
+          session.cwd,
+          terminalMember?.pid,
+          terminalMember?.startedAtMs
+        ])}
+        disabledReason={
+          reachBlocker(target) ? 'A verified Orca terminal is required for capture.' : undefined
+        }
+      />
     </div>
   )
 }

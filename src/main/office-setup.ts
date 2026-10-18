@@ -1,4 +1,4 @@
-import { app, screen, utilityProcess } from 'electron'
+import { app, screen, shell, utilityProcess } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import { BridgeHost } from './bridge-host'
@@ -14,7 +14,9 @@ import type { SettingsStore } from './store'
 import { rememberBounds, restoreBounds } from './window-bounds'
 import { officeChrome } from './window-chrome'
 import { runInteractivePowerShell } from '../shared/powershell-host'
-import { type AccountLedger, type OfficeAccounts, withAccounts } from './accounts'
+import { type AccountLedger, type OfficeAccounts, withAccounts, withoutAccounts } from './accounts'
+import { createBrowserOffice } from './office-browser'
+import { loadStaticFiles } from '../office-web/static-files'
 
 type OfficeWindowStore = Pick<SettingsStore, 'getOfficeWindowBounds' | 'setOfficeWindowBounds'>
 
@@ -46,6 +48,8 @@ function createOfficeWindow(store: OfficeWindowStore): Electron.BrowserWindow {
 
 export interface Office {
   open: (options?: { isAtStartup?: boolean }) => void
+  openBrowser: () => Promise<void>
+  hasBrowserWatchers: () => boolean
   // The bridge runs from start to stop, with or without the Office window.
   start: () => void
   stop: () => void
@@ -95,6 +99,17 @@ export function setupOffice(
     isInteractive: true,
     runScript: runInteractivePowerShell
   })
+  const browser = createBrowserOffice({
+    loadFiles: () => loadStaticFiles(join(__dirname, '../office-web')),
+    launchFolder: join(app.getPath('userData'), 'office-browser'),
+    service: createOfficeService({
+      host: withoutAccounts(bridge),
+      run: execFilePromise,
+      terminalOf: async (pid) => (await terminalResolver.resolve(pid)).terminalType,
+      isInteractive: false
+    }),
+    openExternal: (url) => shell.openExternal(url)
+  })
   const paneFocus = new PaneFocus({
     instances: () => tracker.getInstances(),
     processStart: service.processStart,
@@ -119,8 +134,13 @@ export function setupOffice(
 
   return {
     open: (options) => controller.open(options),
+    openBrowser: () => browser.open(),
+    hasBrowserWatchers: () => browser.hasWatchers(),
     start: () => bridge.start(),
-    stop: () => bridge.stop(),
+    stop: () => {
+      void browser.close().catch(() => console.error('Browser Office could not close.'))
+      bridge.stop()
+    },
     snapshot: () => host.snapshot(),
     setPollInterval: (intervalMs) => bridge.setPollInterval(intervalMs),
     focusSession: (pid) => paneFocus.focus(pid)

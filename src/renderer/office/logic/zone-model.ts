@@ -1,8 +1,15 @@
 import type { AgentView, SessionRef } from '../../../shared/office/types'
 import type { FloorGeometry, OfficeFrame, ZoneGeometry } from '../scene-model'
 import { needsHuman } from '../../../shared/office/attention'
+import { observeAgent } from '../../../shared/office/observation'
 import { sessionForAgent } from './floor-model'
 import { doorSignPlacement, roomWallSegments, type WallSegment } from './room-layout'
+import {
+  combineActivity,
+  isActivityAvailable,
+  summariseActivity,
+  type ActivitySummary
+} from './activity-summary'
 
 export interface OfficeProjectRow {
   projectKey: string
@@ -89,6 +96,73 @@ function groupByProject(frame: OfficeFrame): Map<string, Grouped> {
   return groups
 }
 
+export function buildOfficeActivity(frame: OfficeFrame | null) {
+  const isAvailable = frame ? isActivityAvailable(frame) : false
+  const projects = new Map<string, ActivitySummary>()
+  const companies = new Map<string, ActivitySummary>()
+  if (frame) {
+    for (const group of groupByProject(frame).values()) {
+      const summary = evidencedActivity({
+        frame,
+        agents: group.agents,
+        isAvailable: isActivityAvailable(frame, [
+          ...group.agents.map((agent) => agent.provider),
+          ...group.sessions.map((session) => session.provider)
+        ])
+      })
+      projects.set(group.projectKey, summary)
+      const previous = companies.get(group.companyKey)
+      companies.set(
+        group.companyKey,
+        combineActivity(previous ? [previous, summary] : [summary], frame.connected)
+      )
+    }
+  }
+  return {
+    office: frame
+      ? evidencedActivity({ frame, agents: frame.agents, isAvailable })
+      : summariseActivity([], false),
+    projects,
+    companies
+  }
+}
+
+function evidencedActivity({
+  frame,
+  agents,
+  isAvailable
+}: {
+  frame: OfficeFrame
+  agents: readonly AgentView[]
+  isAvailable: boolean
+}): ActivitySummary {
+  const hasOwnMetadata =
+    frame.feedReceivedAtMs !== undefined ||
+    frame.sessions.some(
+      (session) =>
+        session.observation !== undefined ||
+        session.subagents.some((member) => member.observation !== undefined)
+    )
+  if (!hasOwnMetadata) return summariseActivity(agents, isAvailable)
+  const reports = agents.map((agent) =>
+    observeAgent({ ...frame, agentKey: agent.agentKey, nowMs: Date.now() })
+  )
+  return summariseActivity(
+    reports.flatMap((report) =>
+      report.activity !== undefined && report.attention !== undefined
+        ? [{ activity: report.activity, attention: report.attention }]
+        : []
+    ),
+    isAvailable &&
+      reports.every(
+        (report) =>
+          report.status === 'fresh' &&
+          report.attention !== undefined &&
+          report.activity !== undefined
+      )
+  )
+}
+
 function projectRow(
   projectKey: string,
   label: string,
@@ -127,13 +201,18 @@ function officesTree(frame: OfficeFrame, groups: Map<string, Grouped>): OfficeCo
       return [projectRow(projectKey, child.label, child.id, groups.get(projectKey))]
     })
     const companyKey = zone.companyKey ?? zone.id
+    const previous = companies.get(companyKey)
+    const knownProjects = new Set(previous?.projects.map((project) => project.projectKey))
     companies.set(companyKey, {
       companyKey,
       label: zone.label,
-      zoneId: zone.id,
+      zoneId: previous?.zoneId ?? zone.id,
       agentCount: 0,
       attentionCount: 0,
-      projects
+      projects: [
+        ...(previous?.projects ?? []),
+        ...projects.filter((project) => !knownProjects.has(project.projectKey))
+      ]
     })
   }
 

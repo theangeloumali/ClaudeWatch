@@ -27,6 +27,20 @@ export interface CitizenPose extends RoutePoint {
   isIndoors: boolean
 }
 
+// dry-new: interpolated poses cannot tell collision-delayed walkers when a corner or wait begins.
+export interface RoutePhase {
+  target: CitizenPose
+  untilSec: number
+  isWaiting: boolean
+}
+
+const ROUTE_EPSILON = 1e-8
+
+export function turnToward(from: number, to: number, share: number): number {
+  const gap = Math.atan2(Math.sin(to - from), Math.cos(to - from))
+  return from + gap * Math.min(1, share)
+}
+
 // A citizen stops this far short of the player rather than walk through it.
 export const HOLD_RADIUS_M = 1.1
 
@@ -71,6 +85,65 @@ export function routePose(route: CitizenRoute, travelled: number, speed = 1): Ci
     metres -= wait
   }
   return poseAlong(route, metres, false)
+}
+
+function nextVertex(route: CitizenRoute, metres: number, isReturning: boolean): number {
+  let at = 0
+  let next = isReturning ? 0 : route.length
+  for (let index = 1; index < route.points.length; index++) {
+    const from = route.points[index - 1]
+    const to = route.points[index]
+    at += Math.hypot(to.x - from.x, to.z - from.z)
+    if (isReturning && at < metres - ROUTE_EPSILON) next = at
+    if (!isReturning && at > metres + ROUTE_EPSILON) return at
+  }
+  return next
+}
+
+// A physical walker must reach this boundary before its clock can enter the following phase.
+export function routePhase(route: CitizenRoute, walked: number, speed: number): RoutePhase {
+  if (route.length <= 0 || speed <= 0)
+    return { target: routePose(route, 0), untilSec: Infinity, isWaiting: true }
+  const stops = route.isLoop ? (route.stops ?? []) : []
+  const duration = route.isLoop
+    ? route.length / speed + stops.reduce((sum, stop) => sum + stop.sec, 0)
+    : (route.length * 2) / speed
+  // Division can put an exact lap boundary just inside the previous lap.
+  const cycleStart = Math.floor((walked + ROUTE_EPSILON) / duration) * duration
+  const elapsed = Math.max(0, walked - cycleStart)
+  if (!route.isLoop) {
+    const isReturning = elapsed + ROUTE_EPSILON >= route.length / speed
+    const metres = isReturning ? route.length * 2 - elapsed * speed : elapsed * speed
+    const at = nextVertex(route, metres, isReturning)
+    return {
+      target: poseAlong(route, at, isReturning),
+      untilSec: cycleStart + (isReturning ? route.length * 2 - at : at) / speed,
+      isWaiting: false
+    }
+  }
+  let waited = 0
+  let nextStop = route.length
+  for (const stop of stops) {
+    const starts = stop.at / speed + waited
+    if (elapsed + ROUTE_EPSILON < starts) {
+      nextStop = stop.at
+      break
+    }
+    if (elapsed < starts + stop.sec - ROUTE_EPSILON)
+      return {
+        target: { ...poseAlong(route, stop.at, false), isIndoors: stop.isIndoors },
+        untilSec: cycleStart + starts + stop.sec,
+        isWaiting: true
+      }
+    waited += stop.sec
+  }
+  const metres = (elapsed - waited) * speed
+  const at = Math.min(nextVertex(route, metres, false), nextStop)
+  return {
+    target: poseAlong(route, at, false),
+    untilSec: cycleStart + at / speed + waited,
+    isWaiting: false
+  }
 }
 
 interface Step {

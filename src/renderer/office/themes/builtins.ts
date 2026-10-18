@@ -15,12 +15,14 @@ import { EdoTower } from './EdoDistrict'
 import { BRASS, EDO } from './palettes'
 import { BrassCompanyZone, BrassProjectOffice, EdoCompanyZone, EdoProjectOffice } from './ZoneKits'
 import type { OfficeTheme } from './types'
+import { WORKSTATIONS } from './workstations'
 
 export const neoEdoSteam: OfficeTheme = {
   id: 'neo-edo-steam',
   label: 'Neo Edo Steam',
   description: 'A lantern-lit cedar atelier within a vast steam-powered pagoda district.',
   palette: EDO,
+  workstation: WORKSTATIONS.edo,
   town: EDO_TOWN,
   robot: {
     Model: SamuraiFrame,

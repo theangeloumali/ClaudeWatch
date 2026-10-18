@@ -1,5 +1,12 @@
 import type { Point } from '../../../office/sim/path'
+import type { FloorWaypoint } from '../../../office/sim/world-floor-routes'
 import type { WalkGround } from './walk-ground'
+import {
+  bodyFits,
+  bodyStep,
+  PLAYER_BODY_RADIUS,
+  type BodyFootprint
+} from '../../../shared/office/body-footprints'
 
 export const WALK_SPEED_M_PER_SEC = 4
 // An agent this close can be spoken to.
@@ -30,11 +37,14 @@ export function walkKey(key: string): string | null {
 
 // The owner's character. Local to the page: nothing here is sent anywhere.
 export interface Player {
+  elevation?: number
+  physicalFloorId?: string | null
+  connectorId?: string
   position: Point
   // Yaw in radians, like an agent's: it faces (sin heading, cos heading).
   heading: number
   // Waypoints still to walk, nearest first.
-  path: Point[]
+  path: FloorWaypoint[]
   held: Set<string>
   // Where it was last sent; the scene turns this into a path on its next frame.
   goal: Point | null
@@ -102,26 +112,92 @@ export function stepWalk(
   return position
 }
 
-function walkPathBy(player: Player, metres: number): void {
+function walkPathBy(
+  player: Player,
+  metres: number,
+  ground: Pick<WalkGround, 'isOpen'>,
+  obstacles: readonly BodyFootprint[]
+): boolean {
+  const before = player.position
+  const beforeElevation = player.elevation
   let left = metres
   while (left > ARRIVED_M && player.path.length > 0) {
     const [next] = player.path
     const dx = next.x - player.position.x
     const dz = next.z - player.position.z
-    const distance = Math.hypot(dx, dz)
-    if (distance > ARRIVED_M) player.heading = Math.atan2(dx, dz)
-    if (distance <= left) {
-      player.position = { ...next }
+    const dy = (next.elevation ?? player.elevation ?? 0) - (player.elevation ?? 0)
+    const distance = Math.hypot(dx, dz, dy)
+    if (distance <= ARRIVED_M) {
+      if (next.elevation !== undefined) player.elevation = next.elevation
+      if (next.physicalFloorId !== undefined) player.physicalFloorId = next.physicalFloorId
       player.path.shift()
-      left -= distance
-    } else {
-      player.position = {
-        x: player.position.x + (dx / distance) * left,
-        z: player.position.z + (dz / distance) * left
+      continue
+    }
+    const budget = Math.min(left, distance, STEP_M)
+    if (dy !== 0 && next.connectorId) {
+      const fraction = budget / distance
+      const candidate = {
+        x: player.position.x + dx * fraction,
+        z: player.position.z + dz * fraction,
+        elevation: (player.elevation ?? 0) + dy * fraction
       }
-      left = 0
+      if (
+        !bodyFits(
+          {
+            id: 'owner-player',
+            ...candidate,
+            connectorId: next.connectorId,
+            radius: PLAYER_BODY_RADIUS
+          },
+          obstacles
+        )
+      )
+        break
+      player.position = { x: candidate.x, z: candidate.z }
+      player.elevation = candidate.elevation
+      player.physicalFloorId = null
+      player.connectorId = next.connectorId
+      left -= budget
+      if (budget >= distance - ARRIVED_M) {
+        player.elevation = next.elevation
+        player.physicalFloorId = next.physicalFloorId
+        player.connectorId = undefined
+        player.path.shift()
+      }
+      continue
+    }
+    const position = bodyStep({
+      body: {
+        id: 'owner-player',
+        ...player.position,
+        elevation: player.elevation,
+        radius: PLAYER_BODY_RADIUS
+      },
+      to: {
+        x: player.position.x + (dx / distance) * budget,
+        z: player.position.z + (dz / distance) * budget
+      },
+      obstacles,
+      isOpen: ground.isOpen
+    })
+    const walked = Math.hypot(position.x - player.position.x, position.z - player.position.z)
+    if (walked <= ARRIVED_M) break
+    player.heading = Math.atan2(position.x - player.position.x, position.z - player.position.z)
+    player.position = position
+    left -= walked
+    if (Math.hypot(next.x - position.x, next.z - position.z) <= ARRIVED_M) {
+      player.position = { x: next.x, z: next.z }
+      if (next.elevation !== undefined) player.elevation = next.elevation
+      if (next.physicalFloorId !== undefined) player.physicalFloorId = next.physicalFloorId
+      player.path.shift()
     }
   }
+  return (
+    before.x !== player.position.x ||
+    before.z !== player.position.z ||
+    beforeElevation !== player.elevation ||
+    player.path.some((point) => point.connectorId)
+  )
 }
 
 // One frame of walking. True when the player moved or turned, which is the only time the scene
@@ -130,19 +206,33 @@ export function tickPlayer(
   player: Player,
   ground: Pick<WalkGround, 'isOpen'>,
   deltaSec: number,
-  azimuth: number
+  azimuth: number,
+  obstacles: readonly BodyFootprint[] = []
 ): boolean {
-  const metres = WALK_SPEED_M_PER_SEC * Math.min(deltaSec, MAX_FRAME_SEC)
-  const direction = heldDirection(player.held)
+  const metres =
+    WALK_SPEED_M_PER_SEC *
+    (Number.isFinite(deltaSec) ? Math.max(0, Math.min(deltaSec, MAX_FRAME_SEC)) : 0)
+  const direction = player.path.some((point) => point.connectorId)
+    ? null
+    : heldDirection(player.held)
   if (!direction) {
     if (player.path.length === 0) return false
-    walkPathBy(player, metres)
-    return true
+    return walkPathBy(player, metres, ground, obstacles)
   }
   // The keys are the owner's hand on the player: they end a walk it was sent on.
   player.path = []
   const move = screenMove(direction, azimuth)
-  const next = stepWalk(player.position, move, metres, ground.isOpen)
+  const next = stepWalk(
+    player.position,
+    move,
+    metres,
+    (point) =>
+      ground.isOpen(point) &&
+      bodyFits(
+        { id: 'owner-player', ...point, elevation: player.elevation, radius: PLAYER_BODY_RADIUS },
+        obstacles
+      )
+  )
   const heading = Math.atan2(move.x, move.z)
   const hasChanged =
     next.x !== player.position.x || next.z !== player.position.z || heading !== player.heading
@@ -153,13 +243,19 @@ export function tickPlayer(
 
 // The nearest agent close enough to speak to, if any.
 export function agentInReach<Agent extends Point>(
-  position: Point,
+  position: Point & { elevation?: number },
   agents: readonly Agent[]
 ): Agent | null {
   let nearest: Agent | null = null
   let nearestDistance = REACH_M
   for (const agent of agents) {
-    const distance = Math.hypot(agent.x - position.x, agent.z - position.z)
+    const elevation =
+      'elevation' in agent && typeof agent.elevation === 'number' ? agent.elevation : 0
+    const distance = Math.hypot(
+      agent.x - position.x,
+      agent.z - position.z,
+      elevation - (position.elevation ?? 0)
+    )
     if (distance <= nearestDistance) {
       nearest = agent
       nearestDistance = distance

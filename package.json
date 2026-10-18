@@ -1,6 +1,6 @@
 {
   "name": "claudewatch",
-  "version": "1.4.0",
+  "version": "1.3.5",
   "description": "Cross-platform Electron app to monitor Claude Code CLI instances",
   "main": "./out/main/index.js",
   "engines": {
@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "electron-vite dev",
-    "build": "electron-vite build",
+    "build": "electron-vite build && npm run build:office-web",
     "preview": "electron-vite preview",
     "start": "electron-vite preview",
     "postinstall": "electron-builder install-app-deps",

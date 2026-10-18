@@ -11,12 +11,12 @@ describe('theme picker', () => {
   it('sets a company theme from its row and marks the choice', () => {
     setupHud()
     const offices = officesPanel()
-    const toggle = within(offices).getByRole('button', { name: 'Theme for ZKidz: Neo Edo Steam' })
-    expect(toggle).toHaveTextContent('Neo Edo Steam')
+    const toggle = within(offices).getByRole('button', { name: 'Theme for ZKidz: Corporate City' })
+    expect(toggle).toHaveTextContent('Corporate City')
     fireEvent.click(toggle)
     const picker = within(offices).getByRole('group', { name: 'Theme for ZKidz' })
     expect(
-      within(picker).getByRole('radio', { name: 'Follow the floor (Neo Edo Steam)' })
+      within(picker).getByRole('radio', { name: 'Follow the floor (Corporate City)' })
     ).toBeChecked()
     fireEvent.click(within(picker).getByRole('radio', { name: 'Brass Workshop' }))
     expect(officeThemes.getAssignments().companies).toEqual({ c_zk: 'brass-workshop' })
@@ -42,7 +42,7 @@ describe('theme picker', () => {
   it('closes on Escape and returns focus to its row button', () => {
     setupHud()
     const offices = officesPanel()
-    const toggle = within(offices).getByRole('button', { name: 'Theme for ZKidz: Neo Edo Steam' })
+    const toggle = within(offices).getByRole('button', { name: 'Theme for ZKidz: Corporate City' })
     fireEvent.click(toggle)
     fireEvent.keyDown(within(offices).getByRole('group', { name: 'Theme for ZKidz' }), {
       key: 'Escape'
@@ -55,11 +55,11 @@ describe('theme picker', () => {
     setupHud()
     fireEvent.click(within(officesPanel()).getByRole('button', { name: /^PropApp, 1 agent/ }))
     fireEvent.keyDown(window, { key: 't' })
-    expect(officeThemes.getAssignments().projects).toEqual({ p_pa: 'brass-workshop' })
+    expect(officeThemes.getAssignments().projects).toEqual({ p_pa: 'neo-edo-steam' })
     expect(
-      screen.getByText('PropApp office is now Brass Workshop. Other offices keep their themes.')
+      screen.getByText('PropApp office is now Neo Edo Steam. Other offices keep their themes.')
     ).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /^Floor theme: Neo Edo Steam/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Map theme: Corporate City/ })).toBeInTheDocument()
     expect(localStorage.getItem('claudewatch.office.theme')).toBeNull()
   })
 
@@ -67,7 +67,7 @@ describe('theme picker', () => {
     setupHud()
     const offices = officesPanel()
     fireEvent.click(
-      within(offices).getByRole('button', { name: 'Theme for ClaudeWatch: Neo Edo Steam' })
+      within(offices).getByRole('button', { name: 'Theme for ClaudeWatch: Corporate City' })
     )
     fireEvent.click(within(offices).getByRole('radio', { name: 'Violet Court' }))
     expect(

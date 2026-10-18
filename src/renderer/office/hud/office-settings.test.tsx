@@ -70,22 +70,22 @@ it('offers three town sizes above the detail level, each saying what it changes'
     'The campus, its garden and one ring of streets. Lightest.'
   )
   for (const size of sizes) expect(size).toHaveAccessibleDescription(/\w{20,}|.{40,}/)
-  expect(within(group).getByRole('radio', { name: 'Village' })).toBeChecked()
+  expect(within(group).getByRole('radio', { name: 'City' })).toBeChecked()
   const detail = within(dialog).getByRole('group', { name: 'Detail level' })
   expect(group.compareDocumentPosition(detail) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
 })
 
 it('changes the town size at once and remembers it', () => {
   open()
-  fireEvent.click(screen.getByRole('radio', { name: 'City' }))
-  expect(screen.getByRole('radio', { name: 'City' })).toBeChecked()
-  expect(screen.getByRole('radio', { name: 'Village' })).not.toBeChecked()
-  expect(officeSettings.get().townSize).toBe('city')
+  fireEvent.click(screen.getByRole('radio', { name: 'Village' }))
+  expect(screen.getByRole('radio', { name: 'Village' })).toBeChecked()
+  expect(screen.getByRole('radio', { name: 'City' })).not.toBeChecked()
+  expect(officeSettings.get().townSize).toBe('village')
   expect(JSON.parse(localStorage.getItem(OFFICE_SETTINGS_STORAGE_KEY) ?? 'null')).toMatchObject({
-    townSize: 'city'
+    townSize: 'village'
   })
   fireEvent.click(screen.getByRole('button', { name: 'Restore defaults' }))
-  expect(screen.getByRole('radio', { name: 'Village' })).toBeChecked()
+  expect(screen.getByRole('radio', { name: 'City' })).toBeChecked()
 })
 
 it('holds the detail level control, with the level in use marked', () => {
@@ -143,6 +143,17 @@ it('closes on Escape from anywhere inside, and from its close button', () => {
   expect(onClose).toHaveBeenCalledTimes(1)
   fireEvent.click(screen.getByRole('button', { name: 'Close settings' }))
   expect(onClose).toHaveBeenCalledTimes(2)
+})
+
+it('does not offer ineffective campus-size controls for a distributed city or rewrite its saved choice', () => {
+  officeSettings.setTownSize('village')
+  const before = localStorage.getItem(OFFICE_SETTINGS_STORAGE_KEY)
+  render(<OfficeSettingsPanel id="city-settings" onClose={vi.fn()} isDistributedCity />)
+  expect(screen.queryByRole('radiogroup', { name: 'Town size' })).not.toBeInTheDocument()
+  expect(screen.getByText(/Street blocks follow your saved offices/)).toBeInTheDocument()
+  expect(screen.getByRole('group', { name: 'Detail level' })).toBeInTheDocument()
+  expect(localStorage.getItem(OFFICE_SETTINGS_STORAGE_KEY)).toBe(before)
+  expect(officeSettings.get().townSize).toBe('village')
 })
 
 it('follows a change made on another page while it is open', () => {

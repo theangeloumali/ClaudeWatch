@@ -37,7 +37,7 @@ const NOT_PERMITTED: InteractionResult = { success: false, reason: 'not-permitte
 export interface ApiOptions {
   service: ApiService
   // The bridge runs only while a page is watching the feed.
-  bridge: { start(): void; stop(): void }
+  bridge?: { start(): void; stop(): void }
   interactive: boolean
   onWatchers: (count: number) => void
 }
@@ -93,7 +93,7 @@ export function createApi(
       if (--watchers === 0) {
         stopping = setTimeout(() => {
           stopping = null
-          bridge.stop()
+          bridge?.stop()
         }, lingerMs)
         // A pending stop must not hold the process open once the server has closed.
         stopping.unref()
@@ -102,7 +102,7 @@ export function createApi(
     })
     if (++watchers === 1) {
       if (stopping) clearTimeout(stopping)
-      else bridge.start()
+      else bridge?.start()
       stopping = null
     }
     onWatchers(watchers)

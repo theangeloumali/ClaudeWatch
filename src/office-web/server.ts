@@ -15,11 +15,13 @@ interface OfficeServerOptions extends Omit<ApiOptions, 'onWatchers'> {
   onIdle: () => void
   // Called once, when the launch code is traded.
   onFirstUse: () => void
+  onWatchers?: ApiOptions['onWatchers']
 }
 
 export interface OfficeServer {
   listen(port: number): Promise<AddressInfo>
   close(): Promise<void>
+  renewLaunchCode(): string
 }
 
 // Any local program or page can open sockets here, so they are few and cannot idle half-sent.
@@ -47,10 +49,13 @@ export function createOfficeServer(
   let sessionToken: string | null = null
   let isClosed = false
   let idleTimer: NodeJS.Timeout | null = null
+  let watcherCount = 0
 
   const countIdleTime = (watchers: number): void => {
+    watcherCount = watchers
     if (idleTimer) clearTimeout(idleTimer)
     idleTimer = watchers === 0 && !isClosed ? setTimeout(onIdle, idleMs) : null
+    options.onWatchers?.(watchers)
   }
   const api = createApi({ ...options, onWatchers: countIdleTime })
 
@@ -58,7 +63,8 @@ export function createOfficeServer(
   // racing requests cannot both be answered with a token.
   function openSession(response: ServerResponse): void {
     launchCode = null
-    sessionToken = createLaunchToken()
+    // New native launches authorize another tab without disconnecting existing watchers.
+    sessionToken ??= createLaunchToken()
     onFirstUse()
     response.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
     response.end(JSON.stringify({ success: true, token: sessionToken }))
@@ -86,6 +92,12 @@ export function createOfficeServer(
   server.requestTimeout = limits.requestTimeoutMs
 
   return {
+    renewLaunchCode: () => {
+      if (isClosed) throw new Error('Office server is closed')
+      launchCode = createLaunchToken()
+      countIdleTime(watcherCount)
+      return launchCode
+    },
     listen: (requestedPort) =>
       new Promise((resolve, reject) => {
         server.once('error', reject)

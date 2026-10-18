@@ -8,11 +8,19 @@ interface FactProps {
   isLantern?: boolean
   // A part of the fact above it.
   isNested?: boolean
+  isWrapping?: boolean
   children?: ReactNode
 }
 
 // One row of the inspector's definition list.
-export function Fact({ term, value, isLantern = false, isNested = false, children }: FactProps) {
+export function Fact({
+  term,
+  value,
+  isLantern = false,
+  isNested = false,
+  isWrapping = false,
+  children
+}: FactProps) {
   return (
     <>
       <dt className={cn('text-caption text-text-secondary', isNested && 'pl-3')}>{term}</dt>
@@ -23,7 +31,9 @@ export function Fact({ term, value, isLantern = false, isNested = false, childre
           isLantern ? 'font-semibold text-accent' : !isNested && 'text-text-primary'
         )}
       >
-        <span className="block truncate">{value}</span>
+        <span className={cn('block', isWrapping ? '[overflow-wrap:anywhere]' : 'truncate')}>
+          {value}
+        </span>
         {children}
       </dd>
     </>
