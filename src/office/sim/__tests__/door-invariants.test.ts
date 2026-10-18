@@ -44,6 +44,24 @@ describe('door invariants: every agent is a body but a newcomer fading in or a l
     expect(invariants.report().overlap?.detail).toMatch(/leaver and walker/)
   })
 
+  // The sim drops a returning leaver's body until its fade ends (M2).
+  it('lets a walker pass a leaver whose session came back while it fades', () => {
+    const invariants = new DoorInvariants(() => false)
+    const leaver = (fade: number): AgentView => ({ ...view('back', 0, fade), place: 'leaving' })
+    invariants.check([view('back', 0), view('walker', 1.4)], 0)
+    invariants.check([leaver(0.2), view('walker', 1.3)], 100)
+    invariants.check([view('back', 0, 0.4), view('walker', 0.5)], 200)
+    expect(invariants.report().overlap).toBeNull()
+  })
+
+  it('lets a walker pass an agent whose fade restarted, as a newcomer', () => {
+    const invariants = new DoorInvariants(() => false)
+    invariants.check([view('again', 0), view('walker', 1.4)], 0)
+    invariants.check([view('again', 0, 0.4), view('walker', 1.3)], 100)
+    invariants.check([view('again', 0, 0), view('walker', 0.5)], 200)
+    expect(invariants.report().overlap).toBeNull()
+  })
+
   it('lets a newcomer fade in on a desk until it is seated there', () => {
     const invariants = new DoorInvariants(() => true)
     invariants.check([view('seated', 0), view('newcomer', 0.5, 0)], 0)

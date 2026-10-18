@@ -45,7 +45,7 @@ export class DoorInvariants {
   private blocked: Violation | null = null
   private previous = new Map<string, AgentView>()
   private anchors = new Map<string, { x: number; z: number; sinceMs: number }>()
-  // First seen faded, so fading in: like the sim, not a body until it is seated.
+  // Like the sim, no body until seated: first seen faded, faded on rejoining, or fade restarted.
   private arriving = new Set<string>()
   // A relayout carried a seated agent onto a leaver fading where it stood: that pair may overlap.
   private carried = new Set<string>()
@@ -56,9 +56,16 @@ export class DoorInvariants {
     const current = new Map(views.map((view) => [view.agentKey, view]))
     for (const key of this.arriving)
       if (current.get(key)?.fade === undefined) this.arriving.delete(key)
-    for (const view of views)
-      if (view.fade !== undefined && !this.previous.has(view.agentKey))
+    for (const view of views) {
+      const before = this.previous.get(view.agentKey)
+      if (
+        view.fade !== undefined &&
+        (!before ||
+          (before.fade !== undefined && view.fade < before.fade) ||
+          (before.place === 'leaving' && view.place !== 'leaving'))
+      )
         this.arriving.add(view.agentKey)
+    }
     this.recordCarries(views)
     this.checkClearance(views, atMs)
     for (const view of views) {
