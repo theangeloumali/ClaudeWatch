@@ -185,6 +185,8 @@ export interface AgentView {
 
 // How long a departing agent takes to fade out where it stands.
 export const DEPARTURE_FADE_MS = 500
+// The sim's step. Its last faded view comes one step before the fade's end, when it reseats.
+export const SIM_TICK_MS = 100
 
 // Why an office interaction did not happen; the UI turns each into plain words.
 export const INTERACTION_FAILURES = [

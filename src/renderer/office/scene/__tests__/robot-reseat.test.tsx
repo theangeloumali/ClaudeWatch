@@ -1,7 +1,7 @@
 import { advance } from '@react-three/fiber'
 import type { Object3D, Scene } from 'three'
 import { afterEach, expect, it, vi } from 'vitest'
-import { DEPARTURE_FADE_MS, type AgentView } from '../../../../shared/office/types'
+import { DEPARTURE_FADE_MS, SIM_TICK_MS, type AgentView } from '../../../../shared/office/types'
 import { officePoses, poseOf } from '../../../office-live/pose-store'
 import { makeAgent } from '../../__tests__/fixtures'
 import { themeForTeam } from '../../themes/registry'
@@ -160,7 +160,8 @@ it('a recall that reappears where it stood grows back from the size its shrink h
   const frames = await playReturn({ frameRate: 60, fadeSeenTick: 2, desk: SPOT })
 
   expect(frames.every((frame) => isAt(frame, SPOT))).toBe(true)
-  expect(Math.min(...frames.map((frame) => frame.scale))).toBeGreaterThan(0.3)
+  // Seen faded for 300 of its 400 ms shrink: it never vanishes before growing back.
+  expect(Math.min(...frames.map((frame) => frame.scale))).toBeGreaterThan(0.2)
   expect(frames.at(-1)?.scale).toBe(1)
 })
 
@@ -173,8 +174,9 @@ it('a robot remounted mid-fade carries on shrinking from the size it was drawn a
   })
 
   const scales = frames.map((frame) => frame.scale)
-  const growStep = 1000 / 60 / DEPARTURE_FADE_MS
+  // The shrink is the faster of the two, so no frame may change by more than its step.
+  const shrinkStep = 1000 / 60 / (DEPARTURE_FADE_MS - SIM_TICK_MS)
   scales.slice(1).forEach((scale, index) => {
-    expect(Math.abs(scale - scales[index])).toBeLessThanOrEqual(growStep + 1e-9)
+    expect(Math.abs(scale - scales[index])).toBeLessThanOrEqual(shrinkStep + 1e-9)
   })
 })

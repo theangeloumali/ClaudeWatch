@@ -3,7 +3,7 @@ import { useLayoutEffect, useMemo, useRef, type ReactElement } from 'react'
 import type { Group } from 'three'
 import { WORKER_BODY_RADIUS } from '../../../shared/office/body-footprints'
 import { AGENT_SCALE, SUBAGENT_SCALE } from '../../../shared/office/figure-scale'
-import { DEPARTURE_FADE_MS, type AgentView } from '../../../shared/office/types'
+import { DEPARTURE_FADE_MS, SIM_TICK_MS, type AgentView } from '../../../shared/office/types'
 import { livePose, officePoses } from '../../office-live/pose-store'
 import type { FloorGeometry } from '../scene-model'
 import { approach, approachAngle, moodFor, robotPose } from '../logic/character-pose'
@@ -70,8 +70,10 @@ export function presenceAfter(
 ): number {
   const target = presenceTarget(agent)
   if (isReducedMotion) return target
-  const step = (delta * 1000) / DEPARTURE_FADE_MS
-  return target > presence ? Math.min(target, presence + step) : Math.max(target, presence - step)
+  // It shrinks away within the views the sim shows faded, so a reseat lands at scale 0.
+  if (target < presence)
+    return Math.max(target, presence - (delta * 1000) / (DEPARTURE_FADE_MS - SIM_TICK_MS))
+  return Math.min(target, presence + (delta * 1000) / DEPARTURE_FADE_MS)
 }
 
 function phaseFor(key: string): number {
