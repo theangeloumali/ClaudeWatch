@@ -30,14 +30,14 @@ const SCENERY_CAP = 64
 const PROTECTED_CLEARANCE_METRES = 3
 
 describe('recovered city parcels', () => {
-  it('retains 47 lots around walkable offices, including 6.9 m rear and 4.69 m side strips', () => {
+  // Every building's floor keeps a row's width for its sideways game corner, so the offices
+  // take more frontage.
+  it('retains 48 lots around walkable offices, including 6.9 m rear and 4.19 m side strips', () => {
     const lots = cityScenerySites(protectedSites)
-    expect(lots).toHaveLength(47)
+    expect(lots).toHaveLength(48)
     expect(lots.some((lot) => Math.abs(lot.depth - 6.9) < 0.001)).toBe(true)
-    expect(lots.some((lot) => Math.abs(lot.width - 4.692307692307693) < 0.001)).toBe(true)
-    expect(Math.min(...lots.flatMap((lot) => [lot.width, lot.depth]))).toBeCloseTo(
-      4.692307692307693
-    )
+    expect(lots.some((lot) => Math.abs(lot.width - 4.1923) < 0.001)).toBe(true)
+    expect(Math.min(...lots.flatMap((lot) => [lot.width, lot.depth]))).toBeCloseTo(4.1923)
   })
 
   it('keeps every recovered parcel disjoint from other lots and the protected 3 m envelope', () => {
@@ -178,7 +178,7 @@ describe('explicit single-floor rebuilding', () => {
   it('repacks only room origins and storey assignments while preserving identity and local geometry', () => {
     const { layout, sessions, saved } = legacyWorld()
     const before = structuredClone(saved)
-    const rebuilt = arrangeWorldDocument(singleFloorWorldDocument(saved, layout))
+    const rebuilt = arrangeWorldDocument(singleFloorWorldDocument(saved))
     expect(rebuilt.buildings.every((building) => building.floors === 1)).toBe(true)
     expect(rebuilt.rooms.every((room) => room.floorNumber === 1)).toBe(true)
     expect(rebuilt.rooms).toEqual(
@@ -214,10 +214,10 @@ describe('explicit single-floor rebuilding', () => {
   })
 
   it('previews without persistence, saves the explicit rebuild and undoes to the exact saved legacy geometry', async () => {
-    const { layout, saved, bytes, options } = legacyWorld()
+    const { saved, bytes, options } = legacyWorld()
     const store = createWorldDocumentStore(options)
     const beforeBytes = bytes.get(WORLD_DOCUMENT_STORAGE_KEY)
-    const rebuilt = arrangeWorldDocument(singleFloorWorldDocument(saved, layout))
+    const rebuilt = arrangeWorldDocument(singleFloorWorldDocument(saved))
     try {
       expect(store.preview(rebuilt).success).toBe(true)
       expect(store.get().document).toEqual(saved)

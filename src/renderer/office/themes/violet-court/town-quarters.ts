@@ -1,3 +1,4 @@
+import { FACADE_LAYER_STEP_M } from '../../scene/building-window-parts'
 import type { ZoneDesign, ZonePlot } from '../../town/town-dress'
 import { box, cone, cylinder, lit, SIDES, sphere, type PartSpec } from '../parts'
 import { COURT } from './palette'
@@ -146,7 +147,11 @@ function armoury({ width, depth, height, accent }: ZonePlot): PartSpec[] {
     box([0, eaves + roof * 0.8, -depth * 0.06], [width * 0.44, roof * 0.4, depth * 0.3], accent),
     box([0, 0.12 + hall * 0.3, front + 0.02], [width * 0.22, hall * 0.6, 0.04], COURT.ink),
     ...PORTCULLIS.map((spot) =>
-      box([spot * width, 0.12 + hall * 0.3, front + 0.05], [0.05, hall * 0.6, 0.03], COURT.gold)
+      box(
+        [spot * width, 0.12 + hall * 0.3, front + 0.05],
+        [0.05, hall * 0.6 - 2 * FACADE_LAYER_STEP_M, 0.03],
+        COURT.gold
+      )
     ),
     ...SHIELDS.map((spot, index) =>
       box(

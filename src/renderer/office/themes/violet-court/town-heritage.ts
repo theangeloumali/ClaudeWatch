@@ -1,3 +1,4 @@
+import { FACADE_LAYER_STEP_M } from '../../scene/building-window-parts'
 import type { ZoneDesign, ZonePlot } from '../../town/town-dress'
 import { heritageDesigns, paintedIn, type Restyle } from '../heritage'
 import { box, SIDES, type PartSpec } from '../parts'
@@ -15,7 +16,11 @@ function scholarStalls({ width, depth }: ZonePlot): PartSpec[] {
 
 // A cloth roof over the back of the gantry: the front stays open so the frame is seen.
 const hangarCanopy = ({ width, depth, height, accent }: ZonePlot): PartSpec[] => [
-  box([0, height - 0.015, -depth * 0.2], [width * 0.96, 0.03, depth * 0.4], accent)
+  box(
+    [0, height - 0.015 - FACADE_LAYER_STEP_M, -depth * 0.2],
+    [width * 0.96, 0.03, depth * 0.4],
+    accent
+  )
 ]
 
 const RESTYLES: Record<string, Restyle | undefined> = {

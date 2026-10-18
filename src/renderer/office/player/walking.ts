@@ -1,5 +1,4 @@
 import type { Point } from '../../../office/sim/path'
-import type { FloorWaypoint } from '../../../office/sim/world-floor-routes'
 import type { WalkGround } from './walk-ground'
 import {
   bodyFits,
@@ -33,6 +32,13 @@ const KEY_DIRECTION: Record<string, readonly [number, number] | undefined> = {
 export function walkKey(key: string): string | null {
   const name = key.length === 1 ? key.toLowerCase() : key
   return KEY_DIRECTION[name] ? name : null
+}
+
+// A player route point: a lift ride changes surface and connector partway along a route.
+export interface FloorWaypoint extends Point {
+  elevation?: number
+  physicalFloorId?: string | null
+  connectorId?: string
 }
 
 // The owner's character. Local to the page: nothing here is sent anywhere.

@@ -60,7 +60,7 @@ it.each([20, 40, 60])('keeps %i identities on their actual storeys across update
   expect(world.baseLayout().floors.map((floor) => floor.id)).toEqual(['hq'])
 })
 
-it('walks an edited floor through its connector without resetting feed revision', () => {
+it('fades a worker across to its edited storey without resetting feed revision', () => {
   let elevation = 0
   const resolveLayout = (base: LayoutMap): LayoutMap => ({
     ...base,
@@ -79,40 +79,19 @@ it('walks an edited floor through its connector without resetting feed revision'
     x: start.x,
     z: start.z,
     elevation: 0,
-    floorId: 'floor:5.5'
+    floorId: 'floor:5.5',
+    fade: 0
   })
-  let previous = world.step(0)[0]
-  let hasUsedConnector = false
-  let hasRefreshedInConnector = false
-  for (let tick = 0; tick < 1000; tick++) {
-    const current = world.step(100)[0]
-    expect(
-      Math.hypot(
-        current.x - previous.x,
-        current.z - previous.z,
-        (current.elevation ?? 0) - (previous.elevation ?? 0)
-      )
-    ).toBeLessThanOrEqual(0.140001)
-    hasUsedConnector ||= current.physicalFloorId === null && (current.elevation ?? 0) > 0
-    if (
-      current.physicalFloorId === null &&
-      (current.elevation ?? 0) > 0 &&
-      !hasRefreshedInConnector
-    ) {
-      world.refreshLayout()
-      expect(world.step(0)[0]).toMatchObject({
-        x: current.x,
-        z: current.z,
-        elevation: current.elevation,
-        physicalFloorId: null
-      })
-      hasRefreshedInConnector = true
-    }
-    previous = current
+  const samples = []
+  for (let tick = 1; tick <= 8; tick++) {
+    // A refresh mid-fade must not restart it.
+    if (tick === 2) world.refreshLayout()
+    samples.push(world.step(100)[0])
   }
-  expect(hasUsedConnector).toBe(true)
-  expect(hasRefreshedInConnector).toBe(true)
-  expect(previous).toMatchObject({ elevation: 5.5, physicalFloorId: 'floor:5.5' })
+  expect(samples.every((sample) => sample.physicalFloorId !== null)).toBe(true)
+  expect(samples.findIndex((sample) => sample.elevation === 5.5)).toBe(4)
+  expect(samples.at(-1)).toMatchObject({ elevation: 5.5, physicalFloorId: 'floor:5.5' })
+  expect(samples.at(-1)?.fade).toBeUndefined()
   expect(world.revision()).toBe(7)
 })
 
@@ -129,7 +108,7 @@ it('ignores upper-storey bodies while sweeping ground and rejects nonfinite elev
   expect(bodyFits({ ...body, elevation: Number.NaN }, [])).toBe(false)
 })
 
-it('never sends an unobserved member to an advanced venue on its lead coverage', () => {
+it('never sends an unobserved member to the lounge on its lead coverage', () => {
   const lead = {
     ...session('lead'),
     attention: 'done' as const,
@@ -141,17 +120,7 @@ it('never sends an unobserved member to an advanced venue on its lead coverage',
     },
     subagents: [{ id: 'member', type: 'worker', activity: 'idle' as const }]
   }
-  const world = new World({
-    getVenueTargets: () => [
-      {
-        id: 'arcade',
-        kind: 'arcade',
-        entrance: { x: 0, z: 0 },
-        slots: [{ id: 'seat', x: 0, z: -10, heading: 0 }],
-        capacity: 1
-      }
-    ]
-  })
+  const world = new World()
   world.apply({
     type: 'hello',
     v: 1,
@@ -163,5 +132,8 @@ it('never sends an unobserved member to an advanced venue on its lead coverage',
     }
   })
   for (let tick = 0; tick < 250; tick++) world.step(100)
-  expect(world.step(0).find((agent) => agent.agentKey === 'lead#member')?.place).toBeUndefined()
+  const views = world.step(0)
+  // Its observed lead does go, so the lounge was open to the member too.
+  expect(views.find((agent) => agent.agentKey === 'lead')?.place).toBe('lounge')
+  expect(views.find((agent) => agent.agentKey === 'lead#member')?.place).toBeUndefined()
 })

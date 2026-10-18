@@ -81,8 +81,18 @@ export function useQualityChoice(): QualityChoice {
   return useSyncExternalStore(subscribeQuality, readQuality)
 }
 
+export function useQualityLevel(): QualityLevel {
+  const { pin, chosen } = useQualityChoice()
+  return levelInUse(pin, chosen)
+}
+
+// For a frame loop, where a hook cannot run.
+export function readQualityLevel(): QualityLevel {
+  const { pin, chosen } = readQuality()
+  return levelInUse(pin, chosen)
+}
+
 // The level in use and what it sets.
 export function useQualitySettings(): QualitySettings {
-  const { pin, chosen } = useQualityChoice()
-  return QUALITY_SETTINGS[levelInUse(pin, chosen)]
+  return QUALITY_SETTINGS[useQualityLevel()]
 }

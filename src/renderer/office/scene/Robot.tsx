@@ -1,12 +1,13 @@
 import { useFrame, type ThreeEvent } from '@react-three/fiber'
 import { useLayoutEffect, useMemo, useRef, type ReactElement } from 'react'
 import type { Group } from 'three'
+import { WORKER_BODY_RADIUS } from '../../../shared/office/body-footprints'
 import { AGENT_SCALE, SUBAGENT_SCALE } from '../../../shared/office/figure-scale'
-import { DEPARTURE_FADE_MS, type AgentView } from '../../../shared/office/types'
+import { DEPARTURE_FADE_MS, SIM_TICK_MS, type AgentView } from '../../../shared/office/types'
 import { livePose, officePoses } from '../../office-live/pose-store'
-import type { WorldVenue } from '../../../shared/office/world-document'
 import type { FloorGeometry } from '../scene-model'
 import { approach, approachAngle, moodFor, robotPose } from '../logic/character-pose'
+import { createSeatEase, type SeatEase } from '../logic/seat-ease'
 import type { ThemeZoneGroup } from '../logic/office-themes'
 import { getTheme } from '../themes/registry'
 import { applyModelPose, useRobotRig } from '../themes/rig'
@@ -21,6 +22,8 @@ import { workerSeats, workerSeatPresence, type WorkerSeats } from './worker-seat
 const MOVE_RATE = 5
 const TURN_RATE = 6
 const MOVING_EPSILON = 0.05
+// A reseat this far from where the robot is drawn is a jump to hide; nearer, it stood there.
+const RESEAT_SNAP_METRES = WORKER_BODY_RADIUS
 // Merged shadows sort as one object, so they are drawn before every other see-through part.
 const SHADOW_BATCH = { [SHARED_BATCH]: 'agent-shadow' }
 const SHADOW_RENDER_ORDER = -1
@@ -46,20 +49,36 @@ export interface RobotMotion {
   z: number
   heading: number
   travelDistance: number
+  // The floor it was drawn on: a robot remounting on another floor was carried, not walked.
+  physicalFloorId: string | null
+  presence: number
+  // The last reseat it saw, and whether it is still shrinking away before jumping there.
+  reseats: number
+  isReseating: boolean
 }
+
+const isFadingAgent = (agent: Pick<AgentView, 'fade'>): boolean => agent.fade !== undefined
+
+// Whole unless the sim is fading the agent, in or out.
+const presenceTarget = (agent: Pick<AgentView, 'fade'>): number => (isFadingAgent(agent) ? 0 : 1)
 
 // Batched robot parts share opaque materials, so a departing robot fades by shrinking away over
 // the sim's fade; reduced motion skips the animation and the robot simply goes (seating-4).
+// A reseat holds the robot until it reaches 0, so it shrinks over the views the sim shows faded.
+const SHRINK_MS = DEPARTURE_FADE_MS - SIM_TICK_MS
+// A leaver unmounts on the tick that removes it: a tick of slack covers a late first fade view.
+export const LEAVER_SHRINK_MS = SHRINK_MS - SIM_TICK_MS
+
 export function presenceAfter(
   presence: number,
-  agent: Pick<AgentView, 'fade'>,
+  target: number,
   delta: number,
-  isReducedMotion: boolean
+  isReducedMotion: boolean,
+  shrinkMs = SHRINK_MS
 ): number {
-  const target = agent.fade === undefined ? 1 : 0
   if (isReducedMotion) return target
-  const step = (delta * 1000) / DEPARTURE_FADE_MS
-  return target > presence ? Math.min(target, presence + step) : Math.max(target, presence - step)
+  if (target < presence) return Math.max(target, presence - (delta * 1000) / shrinkMs)
+  return Math.min(target, presence + (delta * 1000) / DEPARTURE_FADE_MS)
 }
 
 function phaseFor(key: string): number {
@@ -90,12 +109,32 @@ export function Robot({
   agentRef.current = agent
   const phase = useMemo(() => phaseFor(agent.agentKey), [agent.agentKey])
   const travelDistanceRef = useRef(0)
+  const seatRef = useRef<SeatEase>(null)
+  seatRef.current ??= createSeatEase()
+  const seat = seatRef.current
+  const seatModelRef = useRef(Model)
+  // Read once: an arrival still fading in starts at nothing, then the frame loop owns the scale.
+  const mountedPresence = useRef<number>(null)
+  mountedPresence.current ??= presenceTarget(agent)
+  const reseatsRef = useRef<number>(null)
+  reseatsRef.current ??= livePose(officePoses, agent).reseats ?? 0
+  const isReseatingRef = useRef(false)
 
   useLayoutEffect(() => {
     const root = rootRef.current
     if (!root) return
-    const initial = livePose(officePoses, agentRef.current)
-    const retained = motions?.get(agentRef.current.agentKey)
+    const agent = agentRef.current
+    const initial = livePose(officePoses, agent)
+    const kept = motions?.get(agent.agentKey)
+    const retained = kept?.physicalFloorId === physicalFloorId(agent) ? kept : undefined
+    // Carried to another floor by the sim: it grows in where it now stands, never glides there.
+    if (kept && !retained) presenceRef.current?.scale.setScalar(0)
+    // Same floor, same robot: it carries on its fade from the size it was drawn at.
+    if (retained) {
+      presenceRef.current?.scale.setScalar(retained.presence)
+      reseatsRef.current = retained.reseats
+      isReseatingRef.current = retained.isReseating
+    }
     root.position.set(
       retained?.x ?? initial.x,
       retained?.y ?? initial.elevation,
@@ -114,43 +153,80 @@ export function Robot({
     if (!root || !body) return
     const target = agentRef.current
     const goal = livePose(officePoses, target)
-    const isMoving =
-      Math.hypot(
-        root.position.x - goal.x,
-        root.position.y - goal.elevation,
-        root.position.z - goal.z
-      ) > MOVING_EPSILON
+    const goalDistance = Math.hypot(
+      root.position.x - goal.x,
+      root.position.y - goal.elevation,
+      root.position.z - goal.z
+    )
+    // The count, not the fade, marks a reseat: one sim step can start and end a whole fade.
+    const reseats = goal.reseats ?? 0
+    if (reseats !== reseatsRef.current) {
+      reseatsRef.current = reseats
+      if (goalDistance > RESEAT_SNAP_METRES) isReseatingRef.current = true
+    }
+    const isFading = isFadingAgent(target)
+    const isHeld = isFading || isReseatingRef.current
+    const isMoving = !isHeld && goalDistance > MOVING_EPSILON
     const previousX = root.position.x
     const previousZ = root.position.z
     const presence = presenceRef.current
-    // A robot faded to nothing goes straight to its pose: a recall seats it across town (FOUND 7).
-    if (presence?.scale.x === 0) root.position.set(goal.x, goal.elevation, goal.z)
-    else {
+    // A robot shrunk to nothing goes straight to its pose, so nothing invisible streaks (FOUND 7).
+    if (presence?.scale.x === 0) {
+      root.position.set(goal.x, goal.elevation, goal.z)
+      root.rotation.y = goal.heading
+      isReseatingRef.current = false
+    }
+    // A fader stands where it is, as the sim's does; a reseat finishes its shrink there, however
+    // late its fade was seen, so it never pops away.
+    else if (!isHeld) {
       root.position.x = approach(previousX, goal.x, delta, MOVE_RATE)
       root.position.y = approach(root.position.y, goal.elevation, delta, MOVE_RATE)
       root.position.z = approach(previousZ, goal.z, delta, MOVE_RATE)
+      root.rotation.y = approachAngle(root.rotation.y, goal.heading, delta, TURN_RATE)
     }
     travelDistanceRef.current += Math.hypot(
       root.position.x - previousX,
       root.position.z - previousZ
     )
-    root.rotation.y = approachAngle(root.rotation.y, goal.heading, delta, TURN_RATE)
+    // Read after the jump above, so a robot grows in at its desk on the frame it lands there.
+    const isAway = isFading || isReseatingRef.current
     if (presence)
-      presence.scale.setScalar(presenceAfter(presence.scale.x, target, delta, isReducedMotion))
+      presence.scale.setScalar(
+        presenceAfter(
+          presence.scale.x,
+          isAway ? 0 : 1,
+          delta,
+          isReducedMotion,
+          target.place === 'leaving' ? LEAVER_SHRINK_MS : undefined
+        )
+      )
     if (motions) {
       const motion = motions.get(target.agentKey) ?? {
         x: 0,
         y: 0,
         z: 0,
         heading: 0,
-        travelDistance: 0
+        travelDistance: 0,
+        physicalFloorId: null,
+        presence: 1,
+        reseats: 0,
+        isReseating: false
       }
+      motion.physicalFloorId = physicalFloorId(target)
+      motion.presence = presence?.scale.x ?? 1
+      motion.reseats = reseatsRef.current
+      motion.isReseating = isReseatingRef.current
       motion.x = root.position.x
       motion.y = root.position.y
       motion.z = root.position.z
       motion.heading = root.rotation.y
       motion.travelDistance = travelDistanceRef.current
       motions.set(target.agentKey, motion)
+    }
+    // A swapped model starts its sit afresh: the ease it carried was measured on the old one.
+    if (seatModelRef.current !== Model) {
+      seatModelRef.current = Model
+      seat.seatedness = null
     }
     const mood = moodFor(target, isMoving)
     const seatPresence = seats
@@ -172,7 +248,8 @@ export function Robot({
         travelDistance: travelDistanceRef.current,
         isSubagent: target.isSubagent,
         isInLounge: seatPresence === 'lounge',
-        seatPresence
+        seatPresence,
+        seat
       }
     }
     if (isOverviewModel) applyHumanPose(rig, pose, poseInput.options)
@@ -190,7 +267,7 @@ export function Robot({
 
   return (
     <group ref={rootRef} scale={agent.isSubagent ? SUBAGENT_SCALE : AGENT_SCALE}>
-      <group ref={presenceRef}>
+      <group ref={presenceRef} scale={mountedPresence.current}>
         <mesh
           position={[0, 0.012, 0]}
           rotation={[-Math.PI / 2, 0, 0]}
@@ -252,7 +329,6 @@ interface RobotCrewProps extends Pick<
   selectedAgentKey: string | null
   speakingAgentKey: string | null
   floors?: readonly FloorGeometry[]
-  venues?: readonly WorldVenue[]
 }
 
 // Shallow value equality: a sim step hands over fresh agent objects whose fields mostly match.
@@ -302,7 +378,6 @@ export function RobotCrew({
   selectedAgentKey,
   speakingAgentKey,
   floors,
-  venues,
   ...robotProps
 }: RobotCrewProps) {
   const drawn = useRef<Map<string, DrawnRobot>>(null)
@@ -319,12 +394,12 @@ export function RobotCrew({
     [zoneGroups]
   )
   const previous = drawn.current
-  const seatCache = useMemo(() => new Map<string, WorkerSeats>(), [floors, zoneGroups, venues])
+  const seatCache = useMemo(() => new Map<string, WorkerSeats>(), [floors, zoneGroups])
   const next = new Map<string, DrawnRobot>()
   const elements = agents.map((agent) => {
     const home = homes.get(agent.roomId)
-    const seatKey = `${agent.floorId}:${agent.roomId}:${agent.slotId}:${physicalFloorId(agent)}:${agent.venueId ?? ''}`
-    const seats = seatCache.get(seatKey) ?? workerSeats({ agent, floors, zoneGroups, venues })
+    const seatKey = `${agent.floorId}:${agent.roomId}:${agent.slotId}:${physicalFloorId(agent)}`
+    const seats = seatCache.get(seatKey) ?? workerSeats({ agent, floors, zoneGroups })
     seatCache.set(seatKey, seats)
     const props: RobotProps = {
       ...robotProps,

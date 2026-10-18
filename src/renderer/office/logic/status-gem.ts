@@ -15,7 +15,7 @@ export const GEM_SPECS: Record<GemKind, GemSpec> = {
   question: { kind: 'question', label: 'Waiting for you', color: STATE_COLOR.question },
   done: { kind: 'done', label: 'Done', color: STATE_COLOR.done },
   error: { kind: 'error', label: 'Error', color: STATE_COLOR.error },
-  limited: { kind: 'limited', label: 'Limited', color: STATE_COLOR.limited },
+  limited: { kind: 'limited', label: 'Rate limited', color: STATE_COLOR.limited },
   working: { kind: 'working', label: 'Working', color: STATE_COLOR.working }
 }
 

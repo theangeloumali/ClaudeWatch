@@ -1,4 +1,4 @@
-import { observeAgent } from '../../../shared/office/observation'
+import { type AgentEvidence, observeAgent } from '../../../shared/office/observation'
 import type { AgentActivity, AgentView, ProviderId } from '../../../shared/office/types'
 import { stateOfAttention } from '../../deck/roster'
 import type { OfficeFrame } from '../scene-model'
@@ -21,6 +21,8 @@ export const ACTIVITY_SUMMARY_LABELS = {
 export const ACTIVITY_UNAVAILABLE_LABEL = 'Activity unavailable'
 // A worker on its way out, as the sim reports it (seating-5).
 export const LEAVING_LABEL = 'Leaving'
+// An idle agent seated in its office's game corner.
+export const PLAYING_GAMES_LABEL = 'Playing games'
 
 export function isActivityAvailable(
   frame: Pick<OfficeFrame, 'connected' | 'sources'>,
@@ -56,10 +58,12 @@ export function hasObservedFeed(
 export function isAgentActivityAvailable(
   frame: OfficeFrame,
   agent: Pick<AgentView, 'agentKey' | 'provider'>,
-  nowMs = Date.now()
+  nowMs = Date.now(),
+  // Already read by the caller, so an agent is observed once.
+  observed?: AgentEvidence
 ): boolean {
-  if (!hasOwnRecords(frame)) return isActivityAvailable(frame, [agent.provider])
-  const evidence = observeAgent({ ...frame, agentKey: agent.agentKey, nowMs })
+  if (!hasObservedFeed(frame)) return isActivityAvailable(frame, [agent.provider])
+  const evidence = observed ?? observeAgent({ ...frame, agentKey: agent.agentKey, nowMs })
   return (
     evidence.status === 'fresh' &&
     evidence.activity !== undefined &&

@@ -152,6 +152,12 @@ it('shows a running OpenCode process as a session, from its newest session in th
   expect(feed).not.toContain('DO_NOT_READ')
 })
 
+it('gives the running tool its own part id as its call id', async () => {
+  const { io, root } = setup(workingSession)
+  const [session] = (await collectOpencode(root, io, undefined, NOW, 'darwin')).sessions
+  expect(session.currentTool).toEqual({ name: 'bash', category: 'run', callId: 'prt_3' })
+})
+
 // The database and its log as `stat` sees them; a test moves either one.
 function stampDatabase(io: BridgeIo): { db: number; wal: number } {
   const stamps = { db: 1000, wal: 1000 }

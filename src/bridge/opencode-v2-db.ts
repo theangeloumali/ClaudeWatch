@@ -96,8 +96,9 @@ export const OPENCODE_V2_STATEMENTS = {
     LIMIT ${MAX_V2_BATCH}`,
   // The tools still running in each listed session's newest message, 16 at most apiece.
   v2NewestParts: `
-    SELECT session_id, type, tool, status FROM (
+    SELECT session_id, id, type, tool, status FROM (
       SELECT newest.value AS session_id,
+             json_extract(part.value, '$.id') AS id,
              json_extract(part.value, '$.type') AS type,
              COALESCE(json_extract(part.value, '$.tool'), json_extract(part.value, '$.name')) AS tool,
              COALESCE(json_extract(part.value, '$.state.status'), json_extract(part.value, '$.status')) AS status,

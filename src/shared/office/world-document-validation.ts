@@ -139,33 +139,12 @@ export function validateWorldGeometry(
       if (overlaps(venue.footprint, other.footprint, 3))
         report(`${field}.footprint`, venue.id, 'overlap')
   }
+  // A floor's game corner is laid in whatever free space it has, so none is reserved here.
   for (const building of document.buildings) {
-    const company = context.layout.floors
-      .flatMap((floor) => floor.zones ?? [])
-      .find((zone) => zone.companyKey === building.companyKey)
-    const firstProject = company?.children.toSorted(
-      (first, second) => first.index - second.index
-    )[0]
-    const lounge =
-      company?.lounge && firstProject?.projectKey === building.projectKey
-        ? {
-            x: building.footprint.width / 2 - company.lounge.width / 2 - 3,
-            z: 0,
-            width: company.lounge.width,
-            depth: company.lounge.depth
-          }
-        : undefined
-    if (lounge && !contains(building.footprint, lounge, 0.65))
-      report('buildings.footprint', building.id, 'outside-building')
     for (let floorNumber = 1; floorNumber <= building.floors; floorNumber++) {
       const rooms = document.rooms.filter(
         (room) => room.buildingId === building.id && room.floorNumber === floorNumber
       )
-      if (floorNumber === 1 && lounge)
-        for (const room of rooms) {
-          if (overlaps({ ...room.position, ...room.size }, lounge, 0.65))
-            report('rooms.position', room.target, 'overlap')
-        }
       if (
         errors.some(
           (error) =>
@@ -173,12 +152,7 @@ export function validateWorldGeometry(
         )
       )
         continue
-      for (const target of unreachableFloorTargets({
-        building,
-        rooms,
-        floorNumber,
-        ...(floorNumber === 1 && lounge ? { lounge } : {})
-      })) {
+      for (const target of unreachableFloorTargets({ building, rooms, floorNumber })) {
         report(
           'rooms.door',
           target,
@@ -231,17 +205,6 @@ function validateRoom({ room, building, field, context, report }: RoomValidation
     requiredIds.some((id) => !room.desks.some((desk) => desk.id === id))
   )
     report(`${field}.desks`, room.target, 'occupied-capacity')
-  const previous = context.layout.floors
-    .flatMap((floor) => floor.rooms)
-    .find((prior) => prior.sessionKey && room.target === `session:${prior.sessionKey}`)
-  if (
-    previous?.buildingId &&
-    (previous.buildingId !== building.id || previous.floorNumber !== room.floorNumber)
-  ) {
-    const oldFloor = context.layout.floors.find((floor) => floor.id === previous.floorId)
-    if (!building.connector || !oldFloor?.connector)
-      report(`${field}.floorNumber`, room.target, 'transfer-connector')
-  }
   for (const desk of room.desks) {
     if (!deskHasClearance(room, desk))
       report(`${field}.desks.${desk.id}`, room.target, 'desk-clearance')

@@ -7,10 +7,18 @@ import type { TownRoad } from '../../../shared/office/town-roads'
 import { CROSSWALK_DEPTH_M, crosswalks, roadCrossings } from '../../../shared/office/crosswalks'
 import { pavedStrip } from '../../../shared/office/street-paving'
 
+export const GROUND_LAYERS = ['pad', 'sidewalk', 'carriageway', 'marking', 'beacon'] as const
+type GroundLayer = (typeof GROUND_LAYERS)[number]
 // Lifts above the ground, lowest first: a later layer lies over an earlier one. These are the
-// heights the Phase 6 flicker sweep passed with; moving one means running it again.
-const LIFTS = { pad: 1, sidewalk: 4, carriageway: 5, marking: 7 } as const
-type GroundLayer = keyof typeof LIFTS
+// heights the Phase 6 flicker sweep passed with; moving one means running it again. The
+// needs-you rings take the top slot, so they never fight the paint.
+const LIFTS: Record<GroundLayer, number> = {
+  pad: 1,
+  sidewalk: 4,
+  carriageway: 5,
+  marking: 7,
+  beacon: 8
+}
 
 export interface GroundQuad extends Rect {
   layer: GroundLayer
@@ -20,6 +28,9 @@ export interface GroundQuad extends Rect {
 
 // Far enough apart for the depth buffer at the widest zoom, and too little to see as a step.
 const LAYER_LIFT_M = 0.01
+
+export const groundLayerY = (layer: GroundLayer): number => LIFTS[layer] * LAYER_LIFT_M
+
 const CORNERS_PER_QUAD = 6
 
 function quad(layer: GroundLayer, rect: Rect, color: string): GroundQuad {
@@ -30,7 +41,7 @@ function quad(layer: GroundLayer, rect: Rect, color: string): GroundQuad {
     z,
     width,
     depth,
-    y: LIFTS[layer] * LAYER_LIFT_M,
+    y: groundLayerY(layer),
     color
   }
 }

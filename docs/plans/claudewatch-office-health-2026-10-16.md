@@ -69,7 +69,7 @@ Finding ids below (`seating-1`, `P3` …) refer to those reports.
 - [x] Phase 6 — Render fixes: facade layer steps, cutaway hysteresis, desk-band card culling, context loss, canvas metrics
 - [x] Phase 7 — Performance: static and dynamic batches, motion out of React, cached batch keys, memoised validation, shader prewarm, host-served world document
 - [x] Phase 8 — Release and repo hygiene: one version line (1.4.1), honest Windows updater status, main-checkout mode noise, worktree cleanup
-- [ ] Phase 9 — Integration: full gate chain, live re-measure on real data, owner calls, local install (no STOP, Angelo 2026-10-17)
+- [x] Phase 9 — Integration: full gate chain, live re-measure on real data, owner calls, local install (no STOP, Angelo 2026-10-17)
 - [ ] Phase 10 — Close: simplify, review pair, Codex, dead code, checklist, MP4 demo, vault, push and merge to `main`
 
 ## Diagrams
@@ -866,9 +866,9 @@ Done in the main checkout. Nothing here is committed on this branch.
   - [x] The Town size setting works in the city. Village, Town and City scale the city's filler buildings to ⅓, ⅔ and all of `CITY_SCENERY_LIMIT` (`shared/office/city-scenery.ts:6`). Today the size reaches `townOf` (`use-town-plan.ts:32-34`), but `distributedTown` never reads it (`distributed-town.ts:59-70`).
   - [x] The city marks one landmark lot per zone kind, its largest, instead of civic only (`distributed-town.ts:107`). This brings back the Garrison radar tower and the workshop and entertainment landmarks.
   - Accepted unchanged: citizens in plain sight 50–70%, and the recall fade for far roamers.
-- [ ] One local install for office-health and the city port together (city-port plan Phase 7), from the final city-port commit.
+- [x] One local install for office-health and the city port together (city-port plan Phase 7), from the final city-port commit (`0c1ba903`, 2026-10-18; 6.1% renderer CPU unfocused).
 - [x] Measure the installed renderer CPU, unfocused, over 60 s: `bash /tmp/office-audit-tools/perf/sample-procs.sh` (was 56.9%). Interim 1.4.1: 25.2% (whole app 73.3% → 39.8%); re-measured on the final install.
-- [ ] Report the before/after to Angelo. No STOP (Angelo, 2026-10-17); Phase 10 follows.
+- [x] Report the before/after to Angelo. No STOP (Angelo, 2026-10-17); Phase 10 follows.
 
 ## Phase 10 — Close and merge (lead + Wave 2)
 

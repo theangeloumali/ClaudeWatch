@@ -9,9 +9,16 @@ import { box, Parts } from '../themes/parts'
 import {
   buildingCrown,
   buildingEntrance,
-  buildingExteriorProfile
+  buildingExteriorProfile,
+  crownAnchor
 } from '../themes/physical-building-parts'
-import { floorElevation, PHYSICAL_STOREY_HEIGHT } from './all-floor-model'
+import { buildingPlaces, crownTopOf } from '../logic/building-place'
+import {
+  buildingGroupName,
+  buildingKeyOf,
+  floorElevation,
+  PHYSICAL_STOREY_HEIGHT
+} from './all-floor-model'
 import { BuildingWindows } from './BuildingWindows'
 import { OperationalStructure } from './OperationalStructure'
 import { editSceneTarget, isStillClick, trackPress, type SceneEditTarget } from './ZonePickers'
@@ -68,6 +75,21 @@ export function PhysicalBuildingShell({
         ),
     [ordered, focused, theme.palette.stone]
   )
+  const buildingId = ground ? buildingKeyOf(ground) : ''
+  const isCrownShown = areRoofsVisible && !focused
+  const roof = useMemo(
+    () => (isCrownShown ? crownTopOf(ordered, theme) : null),
+    [isCrownShown, ordered, theme]
+  )
+  const deck = useMemo(() => (top ? crownAnchor(top) : undefined), [top])
+  // A ref with a cleanup, not an effect: marks and the spire lose the roof the moment it goes.
+  const feedRoof = useMemo(
+    () => () => {
+      buildingPlaces.setRoof(buildingId, roof, deck)
+      return () => buildingPlaces.setRoof(buildingId, null)
+    },
+    [buildingId, roof, deck]
+  )
   const entranceFacade = useRef<Group>(null)
   const forward = useMemo(() => new Vector3(), [])
   const cutaway = useMemo(() => createSideCutaway<'entrance'>(), [])
@@ -87,18 +109,19 @@ export function PhysicalBuildingShell({
   if (!ground || !top) return null
   return (
     <group
-      name={`physical-building:${ground.buildingId ?? ground.floorId}`}
+      ref={feedRoof}
+      name={buildingGroupName(buildingId)}
       onPointerDown={trackPress}
       onContextMenu={(event) =>
         editSceneTarget(event, {
           kind: 'building',
-          id: ground.buildingId ?? ground.floorId,
+          id: buildingId,
           onEditTarget
         })
       }
     >
       {areRoofsVisible && (
-        <group name={`physical-roof:${ground.buildingId ?? ground.floorId}`}>
+        <group name={`physical-roof:${buildingId}`}>
           {!focused && <Parts parts={crown} />}
           {!focused && (
             <group

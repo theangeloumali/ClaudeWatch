@@ -1,5 +1,6 @@
 import type { CameraControlsImpl } from '@react-three/drei'
 import { useEffect, useRef, type RefObject } from 'react'
+import { Vector3 } from 'three'
 import type { AgentView } from '../../../shared/office/types'
 import { withLivePose } from '../../office-live/pose-store'
 import {
@@ -38,6 +39,7 @@ interface PresetOptions {
     frame(bounds: Bounds, options: Parameters<typeof frameBounds>[2] & { elevation?: number }): void
     frameFloor(pose?: { azimuth: number; polar: number }): void
     frameAgent(agent: AgentView): void
+    followAgent(agent: AgentView): void
     frameWorkstation(agent: AgentView): void
     frameCity(): void
     framePlayer(position: { x: number; z: number }): void
@@ -74,6 +76,13 @@ export function useCameraPresets(options: PresetOptions): void {
         return rig.frameCity()
       case 'player':
         return rig.framePlayer(request.position)
+      case 'point': {
+        const { y } = controls.getTarget(new Vector3(), false)
+        rig.preparePreset()
+        if (isAnimated) rig.startTransition()
+        void controls.moveTo(request.x, y, request.z, isAnimated)
+        return
+      }
       case 'rotate': {
         const azimuth = snapAzimuth(controls.azimuthAngle, request.direction)
         const polar = controls.polarAngle
@@ -110,12 +119,14 @@ export function useCameraPresets(options: PresetOptions): void {
         })
       }
       case 'fly':
+      case 'follow':
       case 'workstation': {
         const found = agents.find((candidate) => candidate.agentKey === request.agentKey)
         if (!found) return
         // A roamer is framed where it walks now, not where its last frame left it (perf-2).
         const agent = withLivePose(found)
         if (request.kind === 'workstation') return rig.frameWorkstation(agent)
+        if (request.kind === 'follow') return rig.followAgent(agent)
         rig.preparePreset()
         return rig.frameAgent(agent)
       }

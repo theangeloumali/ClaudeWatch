@@ -28,8 +28,19 @@ export interface RoadNet {
   waysAt: number[][]
 }
 
-// A vehicle never uses a footpath lane, and every road is the same to it.
+const built = new WeakMap<TownPlan, RoadNet>()
+
+// Built once per plan: the ambient fleet and every work trip drive the same net.
 export function roadNet(plan: TownPlan): RoadNet {
+  const known = built.get(plan)
+  if (known) return known
+  const net = netOf(plan)
+  built.set(plan, net)
+  return net
+}
+
+// A vehicle never uses a footpath lane, and every road is the same to it.
+function netOf(plan: TownPlan): RoadNet {
   const { nodes, edges } = plan.graph
   const ways = edges
     .filter((edge) => edge.class !== 'lane')

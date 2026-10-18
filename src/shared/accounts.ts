@@ -1,3 +1,4 @@
+import { isJsonObject } from './json-object'
 import type { AccountConfidence, AccountRef, SessionRef, TokenCounts } from './office/types'
 
 // How long the ledger remembers a quiet transcript or a closed sign-in span. It never counts a
@@ -20,7 +21,27 @@ export interface UsageDelta {
 export interface UsageMessage {
   type: 'usage'
   v: 1
+  // Counts up from 1 per bridge; the ledger's answer names the latest it has on disk.
+  handover: number
   deltas: UsageDelta[]
+}
+
+// What main tells its bridge once the ledger has saved every hand-over up to `handover`.
+export interface UsageDurableMessage {
+  type: 'usage-durable'
+  handover: number
+}
+
+// The hand-over a message of `type` names; null for any other message or a malformed number.
+export function handoverOf(
+  message: unknown,
+  type: UsageMessage['type'] | UsageDurableMessage['type']
+): number | null {
+  if (!isJsonObject(message) || message.type !== type) return null
+  const { handover } = message
+  return typeof handover === 'number' && Number.isSafeInteger(handover) && handover > 0
+    ? handover
+    : null
 }
 
 // A Codex thread's running total as the bridge last read it, with what the ledger files it

@@ -8,6 +8,7 @@ import { pinQuality } from '../quality-store'
 import { themeForTeam } from '../themes/registry'
 import { sceneExtent } from '../themes/surroundings'
 import { distributedTown } from '../town/distributed-town'
+import { railwayReach } from '../town/railway-plan'
 import { townOf } from '../town/use-town-plan'
 import OfficeScene from './OfficeScene'
 
@@ -15,6 +16,9 @@ import OfficeScene from './OfficeScene'
 // The lights and the background are three.js elements, which the DOM cannot draw.
 vi.mock('@react-three/fiber', () => ({
   useFrame: () => undefined,
+  // The company lens asks for its invalidate.
+  useThree: (select: (state: { invalidate: () => void }) => unknown) =>
+    select({ invalidate: () => undefined }),
   Canvas: ({ children }: { children?: ReactNode }) => (
     <div>
       {Children.toArray(children).filter(
@@ -53,6 +57,9 @@ vi.mock('./CardProjector', () => ({
 vi.mock('./NameCards', () => ({ NameCardLayer: () => null }))
 vi.mock('./OfficeNames', () => ({ OfficeNameLayer: () => null, OfficeNameProjector: () => null }))
 vi.mock('./WorkstationScreens', () => ({ WorkstationScreens: () => null }))
+vi.mock('./CitySigns', () => ({ CitySigns: () => null }))
+vi.mock('./LeaderCrowns', () => ({ LeaderCrowns: () => null }))
+vi.mock('./ConstructionRig', () => ({ ConstructionRig: () => null }))
 vi.mock('./CameraRig', () => ({
   CameraRig: ({ scene }: { scene: object }) => (
     <i data-layer="camera" data-scene={JSON.stringify(scene)} />
@@ -66,6 +73,9 @@ vi.mock('../player/PlayerLayer', () => ({
   PlayerLayer: ({ solids, extent }: { solids: readonly unknown[]; extent: object }) => (
     <i data-layer="player" data-solids={solids.length} data-extent={JSON.stringify(extent)} />
   )
+}))
+vi.mock('./RailwayStructures', () => ({
+  RailwayLayer: () => <i data-layer="railway" />
 }))
 vi.mock('../citizens/MoverLayer', () => ({
   MoverLayer: (props: {
@@ -133,7 +143,8 @@ function mount(off: readonly OfficeSettingKey[] = []) {
   return { layer, layers }
 }
 
-const TOWN = ['roads', 'town', 'ambient']
+// The railway ring stands round the town and goes with it.
+const TOWN = ['roads', 'town', 'ambient', 'railway']
 
 it('renders real agents on all three usable storeys in the same canvas', () => {
   const allFloors = [0, 5.5, 11].map((elevation, index) => ({
@@ -210,7 +221,10 @@ it('takes the buildings, the roads, the tower and the ambient life out when the 
 
 it('frames the whole town, to its last road, while the town is on', () => {
   const { layer } = mount()
-  expect(JSON.parse(layer('camera')?.dataset.scene ?? '{}')).toMatchObject(plan.extent)
+  // The scene box reaches the railway ring outside the town; the player keeps to the town.
+  expect(JSON.parse(layer('camera')?.dataset.scene ?? '{}')).toMatchObject(
+    railwayReach(plan.extent, plan)
+  )
   expect(JSON.parse(layer('player')?.dataset.extent ?? '{}')).toEqual(plan.extent)
 })
 

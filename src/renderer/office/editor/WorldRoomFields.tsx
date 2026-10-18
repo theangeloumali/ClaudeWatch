@@ -27,9 +27,12 @@ export function NumberField({
 
 export function WorldRoomFields({
   room,
+  maskedName,
   onChange
 }: {
   room: RoomGeometry
+  // Set while names are hidden: shown in place of the name, which cannot be edited then.
+  maskedName?: string
   onChange: (changes: Partial<RoomGeometry>) => void
 }) {
   const updateSeat = (slotId: string, changes: { x?: number; z?: number; heading?: number }) => {
@@ -42,7 +45,8 @@ export function WorldRoomFields({
       <label className="flex flex-col gap-1 text-xs text-text-secondary">
         Room name
         <input
-          value={room.label}
+          value={maskedName ?? room.label}
+          readOnly={maskedName !== undefined}
           maxLength={120}
           onChange={(event) => onChange({ label: event.target.value })}
           className={FIELD_CLASS}

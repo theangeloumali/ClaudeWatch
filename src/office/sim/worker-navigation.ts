@@ -6,36 +6,21 @@ import {
 } from '../../shared/office/body-sweep'
 import type { AgentView } from '../../shared/office/types'
 import type { Point } from './path'
-import type { PathCache } from './navigation'
 import type { AgentRecord } from './behaviour'
-import type { FloorRoutes, FloorWaypoint } from './world-floor-routes'
+import type { FloorRoutes } from './world-floor-routes'
 import { floorElevation } from './world-floor-routes'
-import type { FloorLayout } from './layout'
+import { deskOf, type FloorLayout } from './layout'
 import { contains } from '../../shared/office/world-document-geometry'
 
-// dry-new: a physical-floor cache alone cannot guide a body across the street/door seam.
-export function workerNavigation(options: {
-  routes: FloorRoutes
-  from: AgentView
-  to: FloorWaypoint
-  departure?: PathCache
-}) {
-  const paths =
-    options.departure ??
-    options.routes.paths(options.from.physicalFloorId) ??
-    options.routes.paths(options.to.physicalFloorId) ??
-    options.routes.paths(options.from.floorId)
-  const isOpen = (point: Point): boolean =>
-    paths?.contains(point)
-      ? paths.isOpen(point)
-      : (options.from.elevation ?? 0) === 0 && options.routes.isStreetOpen(point)
+// Agents never leave their floor, so its grid is all the ground a walker has: off it is closed.
+export function workerNavigation(options: { routes: FloorRoutes; from: AgentView }) {
+  const paths = options.routes.paths(options.from.physicalFloorId)
   return {
-    paths,
-    isOpen,
+    isOpen: (point: Point): boolean => paths?.isOpen(point) ?? false,
     around: (body: BodyFootprint, target: Point, obstacles: readonly BodyFootprint[]): Point[] =>
-      paths && paths.contains(body) && paths.contains(target)
+      paths?.contains(body) && paths.contains(target)
         ? paths.around({ body, to: target, obstacles })
-        : options.routes.aroundStreet(body, target, obstacles)
+        : []
   }
 }
 
@@ -101,69 +86,38 @@ export function waitCycleLeaders(
   return leaders
 }
 
+// Every route stays on the walker's floor, so a fresh one around the crowd to its target will do.
 export function recoverWorkerRoute(options: {
   agent: AgentRecord
   routes: FloorRoutes
-  paths?: PathCache
   obstacles: readonly BodyFootprint[]
   body: BodyFootprint
-}): FloorWaypoint[] {
+}): Point[] {
   const { agent, routes, body, obstacles } = options
-  const paths = options.paths ?? routes.paths(agent.view.physicalFloorId)
+  const paths = routes.paths(agent.view.physicalFloorId)
   const target = agent.path.at(-1)
   if (!target) return []
-  let indoorLength = 0
-  if (paths?.contains(body)) {
-    for (const point of agent.path) {
-      if (
-        point.connectorId !== undefined ||
-        !paths.contains(point) ||
-        (point.elevation !== undefined && point.elevation !== (agent.view.elevation ?? 0)) ||
-        (point.physicalFloorId !== undefined &&
-          point.physicalFloorId !== agent.view.physicalFloorId)
-      )
-        break
-      indoorLength++
-    }
-  }
-  // Recover to this surface's seam; later waypoints may leave its grid or change elevation.
-  const seam = agent.path[indoorLength - 1]
-  if (!seam && target.physicalFloorId && target.physicalFloorId !== agent.view.physicalFloorId) {
-    const floor = routes.floor(target.physicalFloorId)
-    return floor ? routes.toFloor(agent.view, floor, target) : []
-  }
-  if (!seam && agent.path.some((point) => point.connectorId)) return []
-  const destination = seam ?? target
-  const route = paths?.contains(body)
-    ? paths.around({ body, to: destination, obstacles })
-    : routes.aroundStreet(body, destination, obstacles)
-  if (!route.length) return []
-  const recovered = route.map((point) => ({
-    ...point,
-    elevation: agent.view.elevation,
-    physicalFloorId: agent.view.physicalFloorId
-  }))
-  return [...recovered, ...(seam ? agent.path.slice(indoorLength) : [])]
+  return paths?.contains(body) ? paths.around({ body, to: target, obstacles }) : []
 }
 
-export function resumeUnseatedWorker(agent: AgentRecord, routes: FloorRoutes): AgentRecord {
-  if (agent.path.length || agent.view.place || agent.state === 'leaving') return agent
-  const floor = routes.floor(agent.view.floorId)
-  const seat = floor?.rooms
-    .find((room) => room.id === agent.view.roomId)
-    ?.slots.find((slot) => slot.id === agent.view.slotId)
+export function resumeUnseatedWorker(
+  agent: AgentRecord,
+  routes: FloorRoutes,
+  floors: readonly FloorLayout[]
+): AgentRecord {
+  if (agent.path.length || agent.view.place) return agent
+  const home = deskOf(floors, agent.view)
   if (
-    !floor ||
-    !seat ||
-    (agent.view.physicalFloorId === floor.id &&
-      Math.hypot(agent.view.x - seat.x, agent.view.z - seat.z) < 1e-6)
+    !home ||
+    (agent.view.physicalFloorId === home.floor.id &&
+      Math.hypot(agent.view.x - home.desk.x, agent.view.z - home.desk.z) < 1e-6)
   )
     return agent
   return {
     ...agent,
     state: 'arriving',
-    path: routes.toFloor(agent.view, floor, seat),
-    slotHeading: seat.heading
+    path: routes.toFloor(agent.view, home.floor, home.desk),
+    slotHeading: home.desk.heading
   }
 }
 
@@ -206,6 +160,8 @@ export function relayoutWorker(options: {
   )
     return agent
   const nextRoom = oldRoom && destination.rooms.find(matchesRoom)
+  // Its room left this floor: the agent goes to its new desk, not along with the floor.
+  if (oldRoom && !nextRoom) return agent
   const offsetX = (nextRoom?.x ?? destination.x) - (oldRoom?.x ?? previous.x)
   const offsetZ = (nextRoom?.z ?? destination.z) - (oldRoom?.z ?? previous.z)
   const elevation = floorElevation(destination)
@@ -224,8 +180,7 @@ export function relayoutWorker(options: {
       x: agent.view.x + offsetX,
       z: agent.view.z + offsetZ,
       elevation,
-      physicalFloorId: destination.id,
-      connectorId: undefined
+      physicalFloorId: destination.id
     }
   }
 }

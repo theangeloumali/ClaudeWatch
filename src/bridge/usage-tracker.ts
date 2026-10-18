@@ -6,6 +6,7 @@ import type { AgentFile } from './subagents'
 import {
   contextTokens,
   emptyFold,
+  firstRecordAtMs,
   foldLines,
   foldTotal,
   type UsageFold,
@@ -29,6 +30,8 @@ interface TrackedFile {
   fold: UsageFold
   hasReachedEnd: boolean
   ino?: number
+  // Taken from the first read at byte 0: a resumed conversation's earlier usage is in the file.
+  startedAtMs?: number
 }
 
 // A full tick of this many bytes takes about 0.6 s: 880 MB of live transcripts take four.
@@ -73,8 +76,10 @@ export class UsageTracker {
   // yet listed again is kept, so a session discovered late does not read its history again.
   offsets(): Map<string, UsageOffset> {
     const tracked = [...this.files].flatMap(
-      ([path, { offset, fold, ino }]): [string, UsageOffset][] =>
-        ino === undefined ? [] : [[path, { offset, fold, ino }]]
+      ([path, { offset, fold, ino, startedAtMs }]): [string, UsageOffset][] =>
+        ino === undefined
+          ? []
+          : [[path, { offset, fold, ino, ...(startedAtMs !== undefined && { startedAtMs }) }]]
     )
     return new Map([...this.saved, ...tracked])
   }
@@ -197,6 +202,7 @@ export class UsageTracker {
         return { spent, isAtEnd: false }
       }
       const read = await this.io.readFrom(path, file.offset, window)
+      if (file.offset === 0) file.startedAtMs ??= firstRecordAtMs(read.text)
       if (read.nextOffset > file.offset) {
         // Measured back from the end of the read: one resumed inside a character after a skipped
         // line decodes its first bytes to a different length, and every line would shift.
@@ -224,7 +230,7 @@ export class UsageTracker {
     const saved = this.saved.get(path)
     if (!saved) return undefined
     this.saved.delete(path)
-    return { offset: saved.offset, fold: saved.fold, ino: saved.ino, hasReachedEnd: false }
+    return { ...saved, hasReachedEnd: false }
   }
 
   private spawnedPaths(sessionKey: string, files: SessionFiles): string[] {
@@ -265,8 +271,10 @@ export class UsageTracker {
       ...(files?.agents ?? []).map((agent): [string, string[]] => [agent.id, [agent.path]]),
       ...(files?.teammates ?? [])
     ])
+    const threadStartedAtMs = files && this.files.get(files.main)?.startedAtMs
     return {
       ...session,
+      ...(threadStartedAtMs !== undefined && { threadStartedAtMs }),
       usage,
       subagents: session.subagents.map((agent) => ({
         ...agent,

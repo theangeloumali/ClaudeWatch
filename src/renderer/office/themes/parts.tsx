@@ -18,6 +18,10 @@ export const box = (at: Vector, size: Vector, color: string): PartSpec => ({
   color
 })
 
+// The highest point any part reaches.
+export const topOf = (parts: readonly PartSpec[]): number =>
+  Math.max(...parts.map((part) => part.at[1] + part.size[1] / 2))
+
 const shaped =
   (shape: UnitShape) =>
   (at: Vector, size: Vector, color: string): PartSpec => ({ shape, at, size, color })

@@ -3,7 +3,7 @@ import { STEAM } from '../office-palette'
 import type { FloorGeometry } from '../scene-model'
 import type { InstancePlacement } from '../scene/instancing'
 import { InstancedParts, Matte } from '../scene/InstancedParts'
-import { signTexture } from '../scene/textures'
+import { useSignTexture } from '../scene/textures'
 
 const CAGE = { size: 1.8, height: 2.4, bar: 0.035, barsPerSide: 4 }
 
@@ -33,6 +33,7 @@ export function Elevator({ floor }: { floor: FloorGeometry }) {
 
   // The sign faces the corridor.
   const towardCorridor = floor.elevator.z <= floor.corridor.z ? 1 : -1
+  const sign = useSignTexture(`Lift, floor ${floor.plate}`)
   return (
     <group>
       <InstancedParts placements={bars}>
@@ -54,7 +55,7 @@ export function Elevator({ floor }: { floor: FloorGeometry }) {
         rotation={[0, towardCorridor > 0 ? 0 : Math.PI, 0]}
       >
         <planeGeometry args={[1.5, 0.31]} />
-        <meshBasicMaterial map={signTexture(`Lift, floor ${floor.plate}`)} toneMapped={false} />
+        <meshBasicMaterial map={sign} toneMapped={false} />
       </mesh>
     </group>
   )

@@ -29,6 +29,8 @@ export type SessionHost = 'terminal' | 'orca' | 'vscode' | 'unknown'
 export interface CurrentTool {
   name: string
   category: ToolCategory
+  // Opaque per-call id, so two calls of one tool read as two; never drawn.
+  callId?: string
 }
 
 export interface AgentObservation {
@@ -129,12 +131,19 @@ export interface SourceHealth {
   staleAfterMs?: number
 }
 
+// Today's tokens for one project, from the accounts ledger. Numbers only.
+export interface ProjectTokens {
+  projectKey: string
+  tokens: number
+}
+
 export interface OfficeSnapshot {
   rev: number
   generatedAtMs: number
   sessions: SessionRef[]
   sources: SourceHealth[]
   accounts?: AccountRef[]
+  projectsToday?: ProjectTokens[]
 }
 
 export type FeedMessage =
@@ -147,6 +156,8 @@ export type FeedMessage =
       removed: string[]
       // Present only when a source's health changed.
       sources?: SourceHealth[]
+      // Present only when a project's total for today changed.
+      projectsToday?: ProjectTokens[]
     }
   | { type: 'resync' }
 
@@ -154,8 +165,6 @@ export type FeedMessage =
 export interface AgentView {
   elevation?: number
   physicalFloorId?: string | null
-  venueId?: string
-  connectorId?: string
   agentKey: string
   floorId: string
   roomId: string
@@ -172,10 +181,15 @@ export interface AgentView {
   place?: 'lounge' | 'leaving'
   // How far a departing agent has faded out where it stands, 0–1; absent while fully here.
   fade?: number
+  // Times the sim seated it away from where it faded, absent until the first. One step can
+  // span a whole fade, so this count, not `fade`, tells the renderer to hide the jump.
+  reseats?: number
 }
 
 // How long a departing agent takes to fade out where it stands.
 export const DEPARTURE_FADE_MS = 500
+// The sim's step. Its last faded view comes one step before the fade's end, when it reseats.
+export const SIM_TICK_MS = 100
 
 // Why an office interaction did not happen; the UI turns each into plain words.
 export const INTERACTION_FAILURES = [

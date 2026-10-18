@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { session } from '../../../office/sim/fixtures'
-import type { AgentView, FeedMessage, SessionRef } from '../../../shared/office/types'
+import { LOUNGE_DELAY_MS } from '../../../office/sim/behaviour'
+import type { AgentView, FeedMessage, SessionRef, SourceHealth } from '../../../shared/office/types'
 import { createOfficeSettingsStore } from '../../office/logic/office-settings'
 import type { PageVisibility } from '../../office/logic/frame-governor'
 import type { OfficeFrame } from '../../office/scene-model'
 import { createLiveFeed, type FeedSource } from '../live-feed'
-import { createPoseStore, officePoses, structuralKey, withLivePose } from '../pose-store'
+import { createPoseStore, officePoses, poseOf, structuralKey, withLivePose } from '../pose-store'
 
 const agent = (overrides: Partial<AgentView> = {}): AgentView => ({
   agentKey: 'claude:a',
@@ -40,6 +41,18 @@ describe('createPoseStore', () => {
     expect(poses.version()).toBe(moved)
     poses.write('claude:a', { x: 1.1, z: 2, heading: 0, elevation: 0 })
     expect(poses.version()).toBe(moved + 1)
+  })
+
+  // The frame loop reads the reseat with the desk pose it explains, before React hears of it.
+  it('keeps a reseat even where the pose it lands with has not moved', () => {
+    const poses = createPoseStore()
+    poses.write('claude:a', poseOf(agent()))
+    const before = poses.version()
+    poses.write('claude:a', poseOf(agent({ reseats: 1 })))
+    expect({ reseats: poses.read('claude:a')?.reseats, version: poses.version() }).toEqual({
+      reseats: 1,
+      version: before + 1
+    })
   })
 
   it('forgets agents that left the roster', () => {
@@ -82,8 +95,8 @@ describe('structuralKey', () => {
     ['attention', { attention: 'permission' }],
     ['label', { label: 'renamed' }],
     ['physical floor', { physicalFloorId: null }],
-    ['venue', { venueId: 'cafe' }],
-    ['fade start', { fade: 0 }]
+    ['fade start', { fade: 0 }],
+    ['reseat count', { reseats: 1 }]
   ])('changes with the %s', (_name, change) => {
     expect(structuralKey([agent(change)])).not.toBe(reference)
   })
@@ -95,7 +108,10 @@ describe('structuralKey', () => {
 
 const unsubscribes: (() => void)[] = []
 
-function createEnvironment(visibility: PageVisibility = { isHidden: false, isFocused: true }) {
+function createEnvironment(
+  visibility: PageVisibility = { isHidden: false, isFocused: true },
+  hasGameCorner = false
+) {
   const frames: OfficeFrame[] = []
   let listener: ((message: FeedMessage) => void) | undefined
   const source: FeedSource = {
@@ -111,7 +127,7 @@ function createEnvironment(visibility: PageVisibility = { isHidden: false, isFoc
     start: vi.fn()
   }
   const settings = createOfficeSettingsStore(null)
-  settings.set('loungeTrips', false)
+  settings.set('loungeTrips', hasGameCorner)
   const feed = createLiveFeed(source, {
     storage: null,
     settings,
@@ -123,14 +139,14 @@ function createEnvironment(visibility: PageVisibility = { isHidden: false, isFoc
   return {
     feed,
     frames,
-    hello: (sessions: SessionRef[]) =>
+    hello: (sessions: SessionRef[], sources: SourceHealth[] = []) =>
       listener?.({
         type: 'hello',
         v: 1,
-        snapshot: { rev: seq, generatedAtMs: Date.now(), sessions, sources: [] }
+        snapshot: { rev: seq, generatedAtMs: Date.now(), sessions, sources }
       }),
-    patch: (upserts: SessionRef[]) =>
-      listener?.({ type: 'patch', v: 1, seq: ++seq, upserts, removed: [] })
+    patch: (upserts: SessionRef[], removed: string[] = []) =>
+      listener?.({ type: 'patch', v: 1, seq: ++seq, upserts, removed })
   }
 }
 
@@ -144,19 +160,30 @@ describe('live feed frames and poses (perf-2)', () => {
     vi.useRealTimers()
   })
 
+  // Newcomers fade in at their desks, so the walker is an idle agent heading for its game corner.
   it('emits no frame while only poses change', () => {
-    const environment = createEnvironment()
-    environment.hello([session('claude:a')])
-    vi.advanceTimersByTime(100)
-    environment.patch([session('claude:b')])
-    vi.advanceTimersByTime(100)
-    const arrived = environment.frames.length
-    const start = environment.feed.poses.read('claude:b')
-    vi.advanceTimersByTime(2_000)
-    const walked = environment.feed.poses.read('claude:b')
-    if (!start || !walked) throw new Error('the arriving agent has no pose')
+    const environment = createEnvironment(undefined, true)
+    const idle: SessionRef = {
+      ...session('claude:a'),
+      observation: {
+        sourceId: 'claude',
+        coverage: 'own',
+        observedAtMs: Date.now(),
+        staleAfterMs: 3_600_000
+      }
+    }
+    environment.hello([idle], [{ id: 'claude', ok: true, detail: '' }])
+    const isGaming = () => environment.frames.at(-1)?.agents[0]?.place === 'lounge'
+    for (let waited = 0; waited < LOUNGE_DELAY_MS + 5_000 && !isGaming(); waited += 100)
+      vi.advanceTimersByTime(100)
+    expect(isGaming()).toBe(true)
+    const setOut = environment.frames.length
+    const start = environment.feed.poses.read('claude:a')
+    vi.advanceTimersByTime(1_000)
+    const walked = environment.feed.poses.read('claude:a')
+    if (!start || !walked) throw new Error('the idle agent has no pose')
     expect(Math.hypot(walked.x - start.x, walked.z - start.z)).toBeGreaterThan(0.5)
-    expect(environment.frames).toHaveLength(arrived)
+    expect(environment.frames).toHaveLength(setOut)
   })
 
   it('emits a frame when an agent’s activity changes', () => {
@@ -184,5 +211,36 @@ describe('live feed frames and poses (perf-2)', () => {
     vi.advanceTimersByTime(100)
     expect(environment.frames).toHaveLength(before + 1)
     expect(environment.frames.at(-1)?.agents[0]?.attention).toBe('permission')
+  })
+
+  // Its robot shrinks over the fade; held back a tick, a leaver unmounts before it has shrunk.
+  it('sends the first view of a fade at once while out of focus', () => {
+    const environment = createEnvironment({ isHidden: false, isFocused: false })
+    environment.hello([session('claude:a'), session('claude:b')])
+    vi.advanceTimersByTime(100)
+    const before = environment.frames.length
+    environment.patch([], ['claude:b'])
+    vi.advanceTimersByTime(100)
+    expect(environment.frames).toHaveLength(before + 1)
+    const leaver = environment.frames.at(-1)?.agents.find((a) => a.agentKey === 'claude:b')
+    expect(leaver?.fade).toBeDefined()
+  })
+
+  // A newcomer's robot mounts unseen, so its fade-in waits for the blurred rate (Maya n3).
+  it('keeps the blurred rate while only newcomers fade in', () => {
+    const environment = createEnvironment({ isHidden: false, isFocused: false })
+    environment.hello([session('claude:a')])
+    vi.advanceTimersByTime(1_000)
+    const before = environment.frames.length
+    for (let index = 0; index < 10; index++) {
+      environment.patch([session(`claude:new-${index}`)])
+      vi.advanceTimersByTime(100)
+    }
+    const newcomers = environment.frames
+      .slice(before)
+      .flatMap((frame) => frame.agents)
+      .filter((agent) => agent.agentKey.startsWith('claude:new-'))
+    expect(newcomers.some((agent) => agent.fade !== undefined)).toBe(true)
+    expect(environment.frames.length - before).toBeLessThanOrEqual(5)
   })
 })

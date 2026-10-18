@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { QUALITY_LEVELS, type QualityLevel } from '../logic/quality'
 import type { FloorGeometry } from '../scene-model'
+import { CITY_LAYER_BUDGET } from '../themes/city-layer-budget.test-utils'
 import { getTheme } from '../themes/registry'
 import { everyElement, mergedDraws } from '../themes/scene.test-utils'
 import type { OfficeTheme } from '../themes/types'
@@ -22,7 +23,8 @@ vi.mock('react', async (original) => ({
 }))
 vi.mock('@react-three/fiber', () => ({ useFrame: () => {} }))
 vi.mock('../quality-store', () => ({
-  useQualityChoice: () => ({ pin: level.inUse, chosen: level.inUse })
+  useQualityChoice: () => ({ pin: level.inUse, chosen: level.inUse }),
+  useQualityLevel: () => level.inUse
 }))
 
 const edo = getTheme('neo-edo-steam')
@@ -41,10 +43,13 @@ function layerOn(floor: FloorGeometry, props: { hasVehicles?: boolean }) {
   )
 }
 
+const RINGS = 'work-trip-rings'
 const instancesOf = (layer: ReactNode): number =>
   everyElement(layer)
-    .filter((element) => element.type === 'instancedMesh')
+    .filter((element) => element.type === 'instancedMesh' && element.props.name !== RINGS)
     .reduce((sum, mesh) => sum + Number(mesh.props.args?.[2] ?? 0), 0)
+const ringsOf = (layer: ReactNode): number =>
+  everyElement(layer).filter((element) => element.props.name === RINGS).length
 
 describe.each(MOVER_FLOORS)('MoverLayer on %s', (_name, floor) => {
   it.each(QUALITY_LEVELS)('adds no more draws than the %s level’s table allows', (detail) => {
@@ -54,9 +59,12 @@ describe.each(MOVER_FLOORS)('MoverLayer on %s', (_name, floor) => {
     // The layer reads the level when it is expanded, so both counts are taken before it is reset.
     const { draws } = mergedDraws(layer)
     const instances = instancesOf(layer)
+    const rings = ringsOf(layer)
     level.inUse = 'full'
     expect(draws).toBeGreaterThan(0)
-    expect(draws).toBeLessThanOrEqual(citizenKinds + vehicleKinds)
+    // A work trip's ground ring is its own draw, at full only (CITY_LAYER_BUDGET).
+    expect(rings).toBe(CITY_LAYER_BUDGET['work-trips'].draws[detail])
+    expect(draws).toBeLessThanOrEqual(citizenKinds + vehicleKinds + rings)
     expect(instances).toBe(citizens + vehicles)
   })
 

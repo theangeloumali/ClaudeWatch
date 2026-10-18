@@ -16,7 +16,8 @@ function memoryStorage() {
   return {
     bytes,
     getItem: (key: string) => bytes.get(key) ?? null,
-    setItem: (key: string, value: string) => void bytes.set(key, value)
+    setItem: (key: string, value: string) => void bytes.set(key, value),
+    removeItem: (key: string) => void bytes.delete(key)
   }
 }
 
@@ -56,7 +57,7 @@ function pageOn(
     save = (document: unknown) => world.save(document),
     storage = memoryStorage()
   }: {
-    save?: (document: unknown) => WorldSaveReply
+    save?: (document: unknown) => WorldSaveReply | Promise<WorldSaveReply>
     storage?: ReturnType<typeof memoryStorage>
   } = {}
 ) {
@@ -132,10 +133,39 @@ describe('one saved city per host (health-13)', () => {
     storage.setItem(WORLD_DOCUMENT_STORAGE_KEY, JSON.stringify(city))
     open({ storage })
     await vi.waitFor(() => expect(world.current()).toEqual(city))
+    expect(storage.bytes.has(WORLD_DOCUMENT_STORAGE_KEY)).toBe(false)
     expect(open().store().get().document).toEqual(city)
   })
 
-  it('puts the host’s city back when the host refuses a save', async () => {
+  it.each([
+    ['not JSON', '{"version":2,'],
+    ['not a city', JSON.stringify({ version: 2, revision: 3, buildings: 'none' })]
+  ])(
+    'a corrupt legacy city (%s) is never uploaded, and the page starts from the host’s city',
+    (_label, legacy) => {
+      const save = vi.fn((document: unknown) => world.save(document))
+      const storage = memoryStorage()
+      storage.setItem(WORLD_DOCUMENT_STORAGE_KEY, legacy)
+      const page = open({ storage, save })
+      expect(save).not.toHaveBeenCalled()
+      expect(page.store().get()).toMatchObject({ error: null })
+      expect(page.store().get().document).toEqual(open().store().get().document)
+    }
+  )
+
+  it('a host-backed page writes nothing to localStorage and clears the old key', async () => {
+    const app = open()
+    const { document, revision } = app.store().get()
+    await app.store().save(renamed(document, 'Arranged'), revision)
+    expect(app.storage.bytes.size).toBe(0)
+    const storage = memoryStorage()
+    storage.setItem(WORLD_DOCUMENT_STORAGE_KEY, JSON.stringify(renamed(document, 'Stale')))
+    const viewer = open({ storage })
+    expect(viewer.store().get().document).toEqual(world.current())
+    expect(storage.bytes.has(WORLD_DOCUMENT_STORAGE_KEY)).toBe(false)
+  })
+
+  it('the editor sees a failed host save, and the host’s city comes back', async () => {
     const app = open()
     const shown = app.store().get()
     await app.store().save(renamed(shown.document, 'Arranged'), shown.revision)
@@ -144,10 +174,20 @@ describe('one saved city per host (health-13)', () => {
     })
     const { document, revision } = viewer.store().get()
     expect(await viewer.store().save(renamed(document, 'Refused'), revision)).toMatchObject({
-      success: true
+      success: false,
+      reason: 'not-permitted'
     })
-    await vi.waitFor(() =>
-      expect(viewer.store().get().document.buildings[0]?.displayName).toBe('Arranged')
-    )
+    expect(viewer.store().get()).toMatchObject({ error: 'not-permitted', unsaved: true })
+    expect(viewer.store().get().document.buildings[0]?.displayName).toBe('Arranged')
+  })
+
+  it('the editor sees a save the host never received', async () => {
+    const page = open({ save: () => Promise.reject(new Error('offline')) })
+    const { document, revision } = page.store().get()
+    expect(await page.store().save(renamed(document, 'Lost'), revision)).toMatchObject({
+      success: false,
+      reason: 'storage-write'
+    })
+    expect(page.store().get().document.buildings[0]?.displayName).not.toBe('Lost')
   })
 })

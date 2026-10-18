@@ -24,7 +24,6 @@ const requested = {
 it('holds a collision-safe yielding route for blocked converging traffic', () => {
   const passages = new BodyPassages()
   const options = {
-    isExiting: true,
     body: yielding,
     to: requested,
     obstacles: [leader],

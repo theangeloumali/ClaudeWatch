@@ -1,35 +1,9 @@
 import { bodyFits, type BodyFootprint } from '../../shared/office/body-footprints'
+import type { AgentView } from '../../shared/office/types'
 import { agentBody } from './agent-body'
-import { WALK_METRES_PER_SECOND, tickAgent, type AgentRecord } from './behaviour'
-import type { FloorLayout } from './layout'
-import { remainingRouteMetres } from './movement-recovery'
-import type { Point } from './path'
+import { returnToDesk, tickAgent, type AgentRecord } from './behaviour'
+import { deskOf, type FloorLayout } from './layout'
 import { floorElevation } from './world-floor-routes'
-
-// Work seats an agent within 20 s of calling it home (FOUND 7); the 2 s past this walk leave
-// room for a yield at its door.
-const RECALL_WALK_METRES = 18 * WALK_METRES_PER_SECOND
-
-// Whether work calling it home walks it; out in town, a walk too long for the call fades it
-// to its desk instead.
-export const walksHome = (agent: AgentRecord, route: readonly Point[]): boolean =>
-  agent.view.physicalFloorId !== null ||
-  (route.length > 0 && remainingRouteMetres(agent.view, route) <= RECALL_WALK_METRES)
-
-// At or bound for an outing, fading home from one, or walking home from one too far to make
-// work's call in time.
-export const isAwayForLeisure = (
-  agent: AgentRecord,
-  isFinished: boolean,
-  isFading: boolean
-): boolean =>
-  agent.state !== 'leaving' &&
-  (agent.view.place === 'lounge' ||
-    isFading ||
-    (!isFinished &&
-      agent.isReturningFromLeisure === true &&
-      agent.path.length > 0 &&
-      !walksHome(agent, agent.path)))
 
 // Seated at its desk once it is clear, or null while another body stands there.
 export function seatAtDesk(
@@ -37,19 +11,24 @@ export function seatAtDesk(
   floors: readonly FloorLayout[],
   obstacles: readonly BodyFootprint[]
 ): AgentRecord | null {
-  const floor = floors.find((candidate) => candidate.id === agent.view.floorId)
-  const desk = floor?.rooms
-    .find((room) => room.id === agent.view.roomId)
-    ?.slots.find((slot) => slot.id === agent.view.slotId)
-  if (!floor || !desk) return null
+  const home = deskOf(floors, agent.view)
+  if (!home) return null
+  const { floor, desk } = home
+  const recalled = returnToDesk(agent, desk.heading, [])
   const view = {
-    ...agent.view,
+    ...recalled.view,
     x: desk.x,
     z: desk.z,
     elevation: floorElevation(floor),
-    physicalFloorId: floor.id,
-    connectorId: undefined
+    physicalFloorId: floor.id
   }
   if (!bodyFits(agentBody(view), obstacles)) return null
-  return tickAgent({ ...agent, state: 'arriving', view, path: [], slotHeading: desk.heading }, 0)
+  return tickAgent({ ...recalled, view }, 0)
 }
+
+// A seat anywhere but the spot it faded on is a jump the renderer has to hide.
+export const isSeatedElsewhere = (faded: AgentView, seated: AgentView): boolean =>
+  faded.x !== seated.x ||
+  faded.z !== seated.z ||
+  (faded.elevation ?? 0) !== (seated.elevation ?? 0) ||
+  faded.physicalFloorId !== seated.physicalFloorId

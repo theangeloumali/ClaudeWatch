@@ -5,6 +5,7 @@ import type {
   InteractionResult,
   PeekResult,
   PermissionDecision,
+  ProjectTokens,
   ProviderId,
   SessionRef,
   SourceHealth
@@ -105,8 +106,12 @@ export interface OfficeFrame {
   sources: SourceHealth[]
   // Labels only (never an address); absent when accounts are not being watched.
   accounts?: AccountRef[]
+  // Today's tokens per project from the accounts ledger; absent on a host without one.
+  projectsToday?: readonly ProjectTokens[]
   feedReceivedAtMs?: number
   feedRevision?: number
+  // Moves when the agents change in anything but their poses; absent from feeds that keep none.
+  structureRevision?: number
   worldRevision?: number
   venues?: readonly WorldVenue[]
 }

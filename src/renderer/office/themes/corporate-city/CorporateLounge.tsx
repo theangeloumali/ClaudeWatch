@@ -1,3 +1,4 @@
+import { FACADE_LAYER_STEP_M } from '../../scene/building-window-parts'
 import { useMemo } from 'react'
 import type { LoungeGeometry } from '../../scene-model'
 import { firstClear, spotAt, type Footprint } from '../lounge-layout'
@@ -56,7 +57,11 @@ function coffeeCounterParts({ x, z, width, depth }: Footprint): PartSpec[] {
   return [
     box([x, 0.33, z], [width, 0.66, depth], materials.facade),
     box([x, 0.68, z], [width, 0.04, depth], palette.wood),
-    box([x, 0.3, z + depth / 2 - 0.004], [0.018, 0.54, 0.008], materials.frame),
+    box(
+      [x, 0.3, z + depth / 2 - 0.004 + FACADE_LAYER_STEP_M],
+      [0.018, 0.54, 0.008],
+      materials.frame
+    ),
     box([x - 0.26, 0.79, z], [0.26, 0.18, 0.24], materials.frame),
     box([x - 0.26, 0.8, z + 0.124], [0.18, 0.08, 0.012], materials.screen),
     box([x + 0.26, 0.75, z], [0.2, 0.1, 0.16], palette.paper)

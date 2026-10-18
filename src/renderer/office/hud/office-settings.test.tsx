@@ -13,7 +13,7 @@ const SWITCHES = [
   'Citizens',
   'Vehicles',
   'Ambient motion',
-  'Lounge trips',
+  'Game corner',
   'Your character'
 ]
 
@@ -32,12 +32,14 @@ function open() {
 
 const feature = (name: string): HTMLElement => screen.getByRole('switch', { name })
 
-it('offers one switch per feature, all on to begin with', () => {
+it('offers one switch per feature, all on to begin with, then Hide names, off', () => {
   open()
-  expect(screen.getAllByRole('switch').map((item) => item.getAttribute('aria-label'))).toEqual(
-    SWITCHES
-  )
+  expect(screen.getAllByRole('switch').map((item) => item.getAttribute('aria-label'))).toEqual([
+    ...SWITCHES,
+    'Hide names'
+  ])
   for (const name of SWITCHES) expect(feature(name)).toHaveAttribute('aria-checked', 'true')
+  expect(feature('Hide names')).toHaveAttribute('aria-checked', 'false')
 })
 
 it('says in a line what each feature is', () => {
@@ -47,6 +49,15 @@ it('says in a line what each feature is', () => {
     expect(description?.textContent?.length).toBeGreaterThan(20)
   }
   expect(within(dialog).getByText(/tram, a freight cart and a runabout/)).toBeInTheDocument()
+})
+
+it('keeps idle agents in the game corner under the setting a saved Off still turns off', () => {
+  const { dialog } = open()
+  expect(within(dialog).getByText('Game corner').nextElementSibling).toHaveTextContent(
+    'Idle agents walk to their office’s game corner and play. Off keeps them at their desks.'
+  )
+  fireEvent.click(feature('Game corner'))
+  expect(officeSettings.get()).toEqual({ ...DEFAULT_OFFICE_SETTINGS, loungeTrips: false })
 })
 
 it('switches a feature off at once and remembers it', () => {
@@ -127,8 +138,8 @@ it('can be worked from the keyboard: focus lands on the title and every control 
   expect(screen.getByRole('heading', { name: 'Office settings' })).toHaveFocus()
   const controls = within(dialog).getAllByRole('button')
   const switches = within(dialog).getAllByRole('switch')
-  // Six switches, four levels, restore and close: native buttons, so Tab, Space and Enter work.
-  expect(controls.length + switches.length).toBe(12)
+  // Seven switches, four levels, restore and close: native buttons, so Tab, Space and Enter work.
+  expect(controls.length + switches.length).toBe(13)
   // The sizes are native radios: one tab stop, arrow keys between them.
   const sizes = within(dialog).getAllByRole('radio')
   expect(sizes).toHaveLength(3)
@@ -142,7 +153,7 @@ it('can be worked from the keyboard: focus lands on the title and every control 
 
 it('closes on Escape from anywhere inside, and from its close button', () => {
   const { onClose } = open()
-  fireEvent.keyDown(feature('Lounge trips'), { key: 'Escape' })
+  fireEvent.keyDown(feature('Game corner'), { key: 'Escape' })
   expect(onClose).toHaveBeenCalledTimes(1)
   fireEvent.click(screen.getByRole('button', { name: 'Close settings' }))
   expect(onClose).toHaveBeenCalledTimes(2)

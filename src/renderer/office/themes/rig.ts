@@ -1,6 +1,7 @@
 import { useRef } from 'react'
-import type { Group, Mesh } from 'three'
+import { MathUtils, type Group, type Mesh } from 'three'
 import { steamPuffs, type RobotPose } from '../logic/character-pose'
+import { advanceSeat } from '../logic/seat-ease'
 import type { OfficeTheme, RobotRig, ThemePoseOptions } from './types'
 
 export function useRobotRig(): RobotRig {
@@ -26,8 +27,13 @@ export function useRobotRig(): RobotRig {
 }
 
 export function applyThemePose(rig: RobotRig, pose: RobotPose, options: ThemePoseOptions): void {
+  // Robots keep their height at a desk; only a gaming robot on its seat sinks into it.
+  const isSunk = options.mood === 'gaming' && options.seatPresence !== 'none'
+  const seatedness = advanceSeat(options.seat, isSunk, pose.bob, options)
+  const away = isSunk ? 1 - seatedness : seatedness
+  const fromY = isSunk ? 0 : (options.seat?.seatedY ?? pose.bob)
   if (rig.body.current) {
-    rig.body.current.position.y = pose.bob
+    rig.body.current.position.y = MathUtils.lerp(pose.bob, fromY, away)
     rig.body.current.rotation.z = pose.sway
     rig.body.current.rotation.x = pose.lean
   }

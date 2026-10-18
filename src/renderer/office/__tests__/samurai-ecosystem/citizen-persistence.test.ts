@@ -12,7 +12,8 @@ vi.mock('@react-three/fiber', () => ({
   }
 }))
 vi.mock('../../quality-store', () => ({
-  useQualityChoice: () => ({ pin: 'full', chosen: 'full' })
+  useQualityChoice: () => ({ pin: 'full', chosen: 'full' }),
+  useQualityLevel: () => 'full'
 }))
 
 it('keeps citizen positions through a feed frame that changes no ground or trip', () => {

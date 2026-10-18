@@ -27,6 +27,8 @@ export interface CullOutcome {
 export interface CullOptions {
   stackProjects: boolean
   cap: number
+  // Floating HUD chrome inside the safe area: a card under it counts as covered.
+  obstacles?: readonly Rect[]
 }
 
 const FLOOR_CULL: CullOptions = { stackProjects: true, cap: Number.POSITIVE_INFINITY }
@@ -78,12 +80,28 @@ function inside(rect: Rect, area: Rect): boolean {
   )
 }
 
+// Shifts a label straight down past chrome it sits under, else up above it; null when neither
+// keeps it clear and inside the area.
+export function clearOfObstacles(rect: Rect, area: Rect, obstacles: readonly Rect[]): Rect | null {
+  const blocker = obstacles.find((obstacle) => overlaps(rect, obstacle))
+  if (!blocker) return rect
+  const height = rect.bottom - rect.top
+  const below = { ...rect, top: blocker.bottom, bottom: blocker.bottom + height }
+  const above = { ...rect, top: blocker.top - height, bottom: blocker.top }
+  return (
+    [below, above].find(
+      (moved) => inside(moved, area) && !obstacles.some((obstacle) => overlaps(moved, obstacle))
+    ) ?? null
+  )
+}
+
 // Greedy screen-space culling, highest priority first. A card that would overlap a kept card,
 // sit under the HUD or pass the cap becomes a status dot over its robot, so no state is hidden.
+// A covered card spends no cap: the cap is for cards the owner can read.
 export function cullCards(
   candidates: readonly CullCandidate[],
   safeArea: Rect,
-  { stackProjects, cap }: CullOptions = FLOOR_CULL
+  { stackProjects, cap, obstacles = [] }: CullOptions = FLOOR_CULL
 ): CullOutcome {
   const kept: CullCandidate[] = []
   const involved = new Set<string>()
@@ -94,6 +112,7 @@ export function cullCards(
       continue
     }
     if (!inside(card.rect, safeArea)) continue
+    if (obstacles.some((obstacle) => overlaps(card.rect, obstacle))) continue
     const blocker = kept.find((other) => overlaps(card.rect, other.rect))
     if (blocker) {
       involved.add(card.agentKey)

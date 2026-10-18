@@ -46,9 +46,9 @@ const FEATURES: readonly Feature[] = [
   },
   {
     key: 'loungeTrips',
-    label: 'Lounge trips',
+    label: 'Game corner',
     description:
-      'Finished agents walk to their lounge. Off keeps them at their desks, with no walks.'
+      'Idle agents walk to their office’s game corner and play. Off keeps them at their desks.'
   },
   {
     key: 'player',
@@ -57,6 +57,13 @@ const FEATURES: readonly Feature[] = [
       'The figure you walk through the office. Off removes it, the Walk button and its key.'
   }
 ]
+
+const HIDE_NAMES: Feature = {
+  key: 'hideNames',
+  label: 'Hide names',
+  description:
+    'For recordings: roles such as Company A and Project A-1 stand in for company, project, session, teammate and account names. Your saved layout keeps the real names.'
+}
 
 const TOWN_SIZE_CHOICES: Record<TownSize, { label: string; description: string }> = {
   village: {
@@ -178,7 +185,7 @@ export function OfficeSettingsPanel({
               </button>
             </div>
           )}
-          {FEATURES.map(({ key, label, description }) => (
+          {[...FEATURES, HIDE_NAMES].map(({ key, label, description }) => (
             <SettingRow key={key} label={label} description={description}>
               <ToggleSwitch
                 label={label}

@@ -22,6 +22,7 @@ const ALL_OFF = {
   ambient: false,
   loungeTrips: false,
   player: false,
+  hideNames: true,
   townSize: 'village'
 }
 
@@ -34,6 +35,7 @@ describe('parseOfficeSettings', () => {
       ambient: true,
       loungeTrips: true,
       player: true,
+      hideNames: false,
       townSize: 'city'
     })
     expect(parseOfficeSettings(null)).toEqual(DEFAULT_OFFICE_SETTINGS)
@@ -98,6 +100,14 @@ describe('createOfficeSettingsStore', () => {
     expect(listener).toHaveBeenCalledOnce()
     expect(saved(storage)).toEqual({ ...DEFAULT_OFFICE_SETTINGS, citizens: false })
     expect(createOfficeSettingsStore(storage).get()).toEqual(store.get())
+  })
+
+  it('keeps names hidden across a restart, off until the owner turns it on', () => {
+    const storage = memoryStorage()
+    const store = createOfficeSettingsStore(storage)
+    expect(store.get().hideNames).toBe(false)
+    store.set('hideNames', true)
+    expect(createOfficeSettingsStore(storage).get().hideNames).toBe(true)
   })
 
   it('hands back the same object while nothing changed', () => {

@@ -34,7 +34,8 @@ export const OPENCODE_STATEMENTS = {
     WHERE session_id = ?
     ORDER BY time_created DESC, id DESC LIMIT 1`,
   messageParts: `
-    SELECT json_extract(data, '$.type') AS type,
+    SELECT id,
+           json_extract(data, '$.type') AS type,
            json_extract(data, '$.tool') AS tool,
            json_extract(data, '$.state.status') AS status
     FROM part INDEXED BY part_message_id_id_idx
@@ -69,7 +70,8 @@ export const OPENCODE_STATEMENTS = {
     ORDER BY time_created DESC, id DESC LIMIT 1`,
   // A message holds its own parts, oldest first.
   messagePartsV2: `
-    SELECT json_extract(part.value, '$.type') AS type,
+    SELECT json_extract(part.value, '$.id') AS id,
+           json_extract(part.value, '$.type') AS type,
            json_extract(part.value, '$.name') AS tool,
            json_extract(part.value, '$.state.status') AS status
     FROM session_message INDEXED BY sqlite_autoindex_session_message_1,

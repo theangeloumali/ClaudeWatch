@@ -74,7 +74,8 @@ describe('Corporate City town assets', () => {
           expectOnItsPlot(design, plot)
           const parts = design.build(plot)
           expect(parts, design.name).toEqual(design.build(plot))
-          expect(parts.length, design.name).toBeLessThanOrEqual(48)
+          // Four-sided curtains: the worst, three banded wings, is 82 parts.
+          expect(parts.length, design.name).toBeLessThanOrEqual(84)
           expect(
             parts.some((part) => part.color === plot.accent),
             design.name
@@ -157,7 +158,8 @@ describe('Corporate City town assets', () => {
     for (const figure of [...CORPORATE_TOWN.citizens, ...CORPORATE_TOWN.vehicles]) {
       const isVehicle = CORPORATE_TOWN.vehicles.some((vehicle) => vehicle === figure)
       const parts = figure.parts()
-      expect(parts.length, figure.name).toBeLessThanOrEqual(isVehicle ? 16 : 10)
+      // Vehicles are the extruded car kit: body, wheels and rims, lamps, cabin and pillars.
+      expect(parts.length, figure.name).toBeLessThanOrEqual(isVehicle ? 24 : 10)
       const triangles = parts.reduce(
         (count, { geometry }) =>
           count + (geometry.index?.count ?? geometry.getAttribute('position').count) / 3,

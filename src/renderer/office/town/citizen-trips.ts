@@ -3,8 +3,7 @@ import { attachDoor, sidewalkPath, type SidewalkNetwork } from '../../../shared/
 import { citySidewalks } from '../citizens/city-sidewalks'
 import type { CitizenRoute, RoutePoint } from '../citizens/route-pose'
 import { between, draw, hashOf, type Rect } from '../themes/lot-math'
-import { streetFootprint } from './distributed-town'
-import type { TownLot } from './town-lots'
+import { lotsWithDoors, type DooredLot, type TownLot } from './town-lots'
 import type { TownPlan } from './town-plan'
 import {
   MOVER_COUNTS,
@@ -45,8 +44,8 @@ interface OutAndBack {
 
 interface Ground {
   network: SidewalkNetwork
-  homes: TownLot[]
-  lotsOf: Record<Exclude<Destination, 'plaza'>, TownLot[]>
+  homes: DooredLot[]
+  lotsOf: Record<Exclude<Destination, 'plaza'>, DooredLot[]>
   // Where a citizen is in plain sight: the promenades and the parks.
   open: Rect[]
   // A plaza-bound citizen's stand: the door of a park, a market or a civic lot.
@@ -63,20 +62,9 @@ function sidewalkWalk(network: SidewalkNetwork, door: Point, goal: Point): OutAn
   return { out: [...out], back: back.slice(1, -1) }
 }
 
-// A lot whose street an office cut short has no kerb at its door: no one is sent there.
-function opensOnStreet(plan: TownPlan): (lot: TownLot) => boolean {
-  const streets = plan.roads.map(streetFootprint)
-  return ({ door }) =>
-    streets.some(
-      (street) =>
-        Math.abs(door.x - street.x) <= street.width / 2 &&
-        Math.abs(door.z - street.z) <= street.depth / 2
-    )
-}
-
 function groundOf(plan: TownPlan): Ground {
-  const sorted = plan.lots.filter(opensOnStreet(plan)).sort((a, b) => a.id.localeCompare(b.id))
-  const inZone = (zone: TownLot['zone']): TownLot[] => sorted.filter((lot) => lot.zone === zone)
+  const sorted = lotsWithDoors(plan.lots)
+  const inZone = (zone: TownLot['zone']): DooredLot[] => sorted.filter((lot) => lot.zone === zone)
   return {
     network: citySidewalks(plan).network,
     homes: inZone('residential'),
@@ -125,13 +113,13 @@ function openShare(points: readonly RoutePoint[], open: readonly Rect[]): number
 }
 
 interface Walk {
-  home: TownLot
+  home: DooredLot
   out: RoutePoint[]
   back: RoutePoint[]
   openShare: number
 }
 
-function walkBetween(ground: Ground, home: TownLot, goal: Point): Walk | null {
+function walkBetween(ground: Ground, home: DooredLot, goal: Point): Walk | null {
   const walk = sidewalkWalk(ground.network, home.door, goal)
   if (!walk) return null
   const { out, back } = walk

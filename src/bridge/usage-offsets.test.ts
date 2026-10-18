@@ -43,3 +43,21 @@ it('loads nothing from a missing or malformed file, and drops entries it cannot 
   )
   expect(await loadUsageOffsets(path)).toEqual(new Map([['/p/good.jsonl', offset]]))
 })
+
+it('keeps when a transcript’s conversation began beside its offset, and drops one it cannot trust', async () => {
+  const path = join(folder, 'usage-offsets.json')
+  const begun: UsageOffset = { ...offset, startedAtMs: 1_791_532_800_000 }
+  await saveUsageOffsets(path, new Map([['/p/begun.jsonl', begun]]))
+  expect(await loadUsageOffsets(path)).toEqual(new Map([['/p/begun.jsonl', begun]]))
+  await writeFile(
+    path,
+    JSON.stringify({
+      v: 1,
+      files: [
+        ['/p/older.jsonl', offset],
+        ['/p/bad-start.jsonl', { ...offset, startedAtMs: 'yesterday' }]
+      ]
+    })
+  )
+  expect(await loadUsageOffsets(path)).toEqual(new Map([['/p/older.jsonl', offset]]))
+})

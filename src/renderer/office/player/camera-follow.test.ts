@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { followShift, followStep } from './camera-follow'
+import { followShift, followSweep } from './camera-follow'
 
 const VIEWPORT = { width: 1200, height: 800 }
 
@@ -21,14 +21,14 @@ describe('followShift', () => {
   })
 })
 
-describe('followStep', () => {
+describe('followSweep', () => {
   // The 296/320px panel columns leave a safe span from x 320 to 856.
   const inView = { x: 600, y: 400 }
   const offScreen = { x: 3000, y: 400 }
   const frame = { viewport: VIEWPORT, zoom: 30, deltaSec: 1 / 60, isReducedMotion: false }
 
   it('asks for nothing while the player is in view', () => {
-    expect(followStep({ ...frame, onScreen: inView })).toEqual({
+    expect(followSweep({ ...frame, onScreen: inView })).toEqual({
       right: 0,
       down: 0,
       isSettled: true
@@ -36,7 +36,7 @@ describe('followStep', () => {
   })
 
   it('sweeps toward a player far out of view a frame at a time, and says it is not done', () => {
-    const step = followStep({ ...frame, onScreen: offScreen })
+    const step = followSweep({ ...frame, onScreen: offScreen })
     expect(step.isSettled).toBe(false)
     expect(step.right).toBeGreaterThan(0)
     expect(step.right * frame.zoom).toBeLessThan(100)
@@ -44,13 +44,13 @@ describe('followStep', () => {
   })
 
   it('takes the last of a sweep in one frame and is then done', () => {
-    const last = followStep({ ...frame, onScreen: { x: 802, y: 400 } })
+    const last = followSweep({ ...frame, onScreen: { x: 802, y: 400 } })
     expect(last.isSettled).toBe(true)
     expect(last.right * frame.zoom).toBeCloseTo(802 - (856 - 75))
   })
 
   it('cuts straight to the player under reduced motion', () => {
-    const step = followStep({ ...frame, onScreen: offScreen, isReducedMotion: true })
+    const step = followSweep({ ...frame, onScreen: offScreen, isReducedMotion: true })
     expect(step.isSettled).toBe(true)
     expect(step.right * frame.zoom).toBeCloseTo(3000 - (856 - 75))
   })

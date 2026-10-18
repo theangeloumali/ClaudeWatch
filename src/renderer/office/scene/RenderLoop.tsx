@@ -4,18 +4,20 @@ import { useEffect, useMemo, useRef } from 'react'
 import type { AgentView } from '../../../shared/office/types'
 import { officePoses } from '../../office-live/pose-store'
 import type { FrameMetrics } from '../frame-metrics'
+import { cityClock } from '../logic/city-clock'
 import {
   browserFrameEnv,
   startFrameGovernor,
   type FrameGovernor as Governor,
   type FramePace
 } from '../logic/frame-governor'
-import { levelForMachine, levelInUse } from '../logic/quality'
-import { chooseQuality, machineHints, useQualityChoice, watchQuality } from '../quality-store'
+import { levelForMachine } from '../logic/quality'
+import { chooseQuality, machineHints, useQualityLevel, watchQuality } from '../quality-store'
 
 const SMOOTHING = 0.1
 const INPUT_EVENTS = ['pointerdown', 'wheel', 'keydown'] as const
 const DATASET_INTERVAL_MS = 1000
+const CITY_CLOCK_PRIORITY = -1
 
 function rendererOf(context: WebGLRenderingContext | WebGL2RenderingContext): string | undefined {
   const info = context.getExtension('WEBGL_debug_renderer_info')
@@ -95,6 +97,10 @@ export function FrameGovernor({ pace, agents }: FrameGovernorProps) {
     chooseQuality(levelForMachine(machineHints(rendererOf(gl.getContext()))))
   }, [gl])
 
+  // Below every layer's priority 0, so each reader in a frame sees this frame's time. A
+  // negative priority leaves R3F rendering on its own (only a positive one takes it over).
+  useFrame(() => cityClock.tick(Date.now()), CITY_CLOCK_PRIORITY)
+
   // Asking from inside a frame is what chains display-rate frames; the governor alone only
   // asks from its own callback, which can land a frame late.
   useFrame((_, delta) => {
@@ -130,15 +136,63 @@ function writeDataset(
   }
 }
 
+const byteLengthOf = (data: unknown): number => {
+  if (typeof data === 'number') return data
+  return ArrayBuffer.isView(data) || data instanceof ArrayBuffer ? data.byteLength : 0
+}
+
+// A DataView or a plain buffer has no element size: its length is in bytes.
+const elementBytesOf = (data: unknown): number =>
+  ArrayBuffer.isView(data) &&
+  'BYTES_PER_ELEMENT' in data &&
+  typeof data.BYTES_PER_ELEMENT === 'number'
+    ? data.BYTES_PER_ELEMENT
+    : 1
+
+// Sized as the page probe sizes them, so the canvas reads in the same units as its baseline.
+// Returns what hands the context its own calls back.
+function countBufferUploads(
+  context: WebGLRenderingContext | WebGL2RenderingContext,
+  onUpload: (bytes: number) => void
+): () => void {
+  const { bufferData, bufferSubData } = context
+  context.bufferData = (...args: unknown[]): void => {
+    onUpload(byteLengthOf(args[1]))
+    Reflect.apply(bufferData, context, args)
+  }
+  // A dirty range is sent with its element count; a whole buffer without one.
+  context.bufferSubData = (...args: unknown[]): void => {
+    const length = args[4]
+    onUpload(
+      typeof length === 'number' && length > 0
+        ? length * elementBytesOf(args[2])
+        : byteLengthOf(args[2])
+    )
+    Reflect.apply(bufferSubData, context, args)
+  }
+  return () => {
+    context.bufferData = bufferData
+    context.bufferSubData = bufferSubData
+  }
+}
+
 // gl.info resets at the start of each render, so reading it in useFrame gives the previous frame's totals.
 // frameMs is the interval between frames (what the governor controls), not GPU time.
 // P10: the stats also land on the canvas once a second; sampledAtMs shows when a hidden window
 // stopped drawing and its stats went stale.
 export function MetricsProbe({ metrics }: { metrics: FrameMetrics }) {
-  const { pin, chosen } = useQualityChoice()
-  const quality = levelInUse(pin, chosen)
+  const renderer = useThree((state) => state.gl)
+  const quality = useQualityLevel()
   const written = useMemo(() => new Map<string, string>(), [])
   const lastSampleMs = useRef(Number.NEGATIVE_INFINITY)
+  const uploadedBytes = useRef(0)
+  useEffect(
+    () =>
+      countBufferUploads(renderer.getContext(), (bytes) => {
+        uploadedBytes.current += bytes
+      }),
+    [renderer]
+  )
   useFrame(({ gl }, delta) => {
     if (delta > 0) {
       metrics.frameMs += (delta * 1000 - metrics.frameMs) * SMOOTHING
@@ -146,6 +200,9 @@ export function MetricsProbe({ metrics }: { metrics: FrameMetrics }) {
     }
     metrics.drawCalls = gl.info.render.calls
     metrics.triangles = gl.info.render.triangles
+    // Like gl.info's counts, what the previous frame's render sent.
+    const uploadBytes = uploadedBytes.current
+    uploadedBytes.current = 0
     const nowMs = performance.now()
     if (nowMs - lastSampleMs.current < DATASET_INTERVAL_MS) return
     lastSampleMs.current = nowMs
@@ -154,6 +211,7 @@ export function MetricsProbe({ metrics }: { metrics: FrameMetrics }) {
       {
         drawCalls: String(metrics.drawCalls),
         triangles: String(metrics.triangles),
+        uploadBytes: String(uploadBytes),
         fps: String(Math.round(metrics.fps)),
         quality,
         sampledAtMs: String(Date.now())

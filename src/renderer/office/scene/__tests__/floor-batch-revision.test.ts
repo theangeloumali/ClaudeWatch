@@ -30,6 +30,7 @@ const roamed = (agents: readonly AgentView[]): AgentView[] =>
 function revisionOf(options: {
   agents: readonly AgentView[]
   selectedAgentKey?: string | null
+  spireStages?: ReadonlyMap<string, number>
 }): string {
   return useSceneFloorData({
     floor,
@@ -66,6 +67,14 @@ describe('floor batch revision', () => {
 
   it('a worker joining or leaving leaves the floor batch alone', () => {
     expect(revisionOf({ agents: crew(4) })).toBe(revisionOf({ agents: crew(3) }))
+  })
+
+  // Spires batch apart, city-wide, so a new stage rebuilds only them.
+  it('a spire stage change leaves the floor batch alone', () => {
+    const agents = crew(3)
+    expect(revisionOf({ agents, spireStages: new Map([['tower', 2]]) })).toBe(
+      revisionOf({ agents, spireStages: new Map([['tower', 1]]) })
+    )
   })
 
   it('entering overview rebuilds the floor batch, which drops detail', () => {

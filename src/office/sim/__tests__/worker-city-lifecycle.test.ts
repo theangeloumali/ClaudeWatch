@@ -4,89 +4,9 @@ import { buildLayout } from '../layout'
 import { session, subagent } from '../fixtures'
 import { resolveEffectiveWorld } from '../effective-world'
 import { createWorldDocument } from '../../../shared/office/world-document'
-import type { WorldVenue } from '../world-venues'
 
 // Full sim or scene builds: the 5 s default times out under multi-agent load (health-9).
 vi.setConfig({ testTimeout: 60_000 })
-
-it('lets an eligible idle worker leave its actual office door, reach the arcade, and return to work', () => {
-  const actor = {
-    ...session('worker'),
-    observation: {
-      sourceId: 'source',
-      coverage: 'own' as const,
-      observedAtMs: 0,
-      staleAfterMs: 300_000
-    }
-  }
-  const document = createWorldDocument(buildLayout([actor], undefined), [actor])
-  const arcade = document.venues.find((venue) => venue.kind === 'arcade')
-  if (!arcade) throw new Error('Fixture has no arcade')
-  const venue: WorldVenue = {
-    id: arcade.id,
-    kind: arcade.kind,
-    capacity: arcade.capacity,
-    entrance: {
-      x: arcade.footprint.x + arcade.entrance.x,
-      z: arcade.footprint.z + arcade.entrance.z
-    },
-    slots: arcade.slots.map((slot) => ({
-      ...slot,
-      x: arcade.footprint.x + slot.x,
-      z: arcade.footprint.z + slot.z
-    }))
-  }
-  const world = new World({
-    now: () => 0,
-    resolveLayout: (base, current) => resolveEffectiveWorld(base, document, current),
-    getVenueTargets: () => [venue]
-  })
-  world.apply({
-    type: 'hello',
-    v: 1,
-    snapshot: {
-      rev: 1,
-      generatedAtMs: 0,
-      sessions: [actor],
-      sources: [{ id: 'source', ok: true, detail: '' }]
-    }
-  })
-  const home = world.step(0)[0]
-  // One-way sidewalks (A3) make the arcade a 147 s walk from this office.
-  const walkTicks = 3000
-  let hasReachedStreet = false
-  let hasReachedArcade = false
-  for (let tick = 0; tick < walkTicks; tick++) {
-    const current = world.step(100)[0]
-    hasReachedStreet ||= current.physicalFloorId === null
-    hasReachedArcade ||=
-      current.physicalFloorId === null &&
-      venue.slots.some((slot) => Math.hypot(current.x - slot.x, current.z - slot.z) < 0.02)
-    if (hasReachedArcade) break
-  }
-  const visitor = world.step(0)[0]
-  expect(hasReachedStreet).toBe(true)
-  expect(hasReachedArcade).toBe(true)
-  expect(visitor.physicalFloorId).toBeNull()
-  expect(
-    venue.slots.some((slot) => Math.hypot(visitor.x - slot.x, visitor.z - slot.z) < 0.02)
-  ).toBe(true)
-  world.apply({
-    type: 'patch',
-    v: 1,
-    seq: 2,
-    removed: [],
-    upserts: [{ ...actor, activity: 'thinking' }]
-  })
-  for (let tick = 0; tick < walkTicks; tick++) world.step(100)
-  expect(world.step(0)[0]).toMatchObject({
-    physicalFloorId: home.floorId,
-    activity: 'thinking',
-    x: home.x,
-    z: home.z
-  })
-  expect(world.step(0)[0].venueId).toBeUndefined()
-})
 
 it.each([8, 20, 40])(
   'gives %i late teammates/subagents distinct desks and gets every working body to its seat',

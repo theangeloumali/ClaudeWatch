@@ -13,6 +13,23 @@ export function floorElevation(floor: FloorGeometry): number {
     : 0
 }
 
+// A storey's building; a lone storey is its own building.
+export const buildingKeyOf = (floor: FloorGeometry): string => floor.buildingId ?? floor.floorId
+
+// The shell's group name, which the company lens reads its building from.
+export const buildingGroupName = (buildingId: string): string => `physical-building:${buildingId}`
+
+export interface BuildingStoreys {
+  ground: FloorGeometry
+  top: FloorGeometry
+}
+
+export function groundAndTop(floors: readonly FloorGeometry[]): BuildingStoreys | null {
+  if (floors.length === 0) return null
+  const ordered = [...floors].sort((left, right) => floorElevation(left) - floorElevation(right))
+  return { ground: ordered[0], top: ordered[ordered.length - 1] }
+}
+
 export function agentElevation(agent: AgentView): number {
   return 'elevation' in agent &&
     typeof agent.elevation === 'number' &&

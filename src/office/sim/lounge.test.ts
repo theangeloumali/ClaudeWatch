@@ -1,12 +1,15 @@
 import { expect, it } from 'vitest'
 import { createAgent, goToLounge, LOUNGE_DELAY_MS, setFinished, tickAgent } from './behaviour'
 import { session } from './fixtures'
-import { loungeSeats } from './lounge'
+import { loungesByRoom, loungeSeats } from './lounge'
+import { buildLayout } from './layout'
+import { resolveEffectiveWorld } from './effective-world'
+import { createWorldDocument } from '../../shared/office/world-document'
 import { lounge } from './rooms'
 
 const desk = { floorId: 'hq', roomId: 'room', slotId: 'desk_main', x: 0, z: 0, heading: 0 }
 const waiting = (key: string) =>
-  tickAgent(setFinished(createAgent(session(key), desk, []), true), LOUNGE_DELAY_MS)
+  tickAgent(setFinished(createAgent(session(key), desk, false), true), LOUNGE_DELAY_MS)
 const loungeWith = (seats: number) => new Map([['room', lounge('company:c', 0, 0, seats, false)]])
 
 it('leaves an agent at its desk while the lounge is full', () => {
@@ -46,6 +49,32 @@ it('moves a sitter whose seat is gone before it seats a newcomer', () => {
 })
 
 it('says nothing about agents that are working at their desks', () => {
-  const working = tickAgent(createAgent(session('a'), desk, []), LOUNGE_DELAY_MS)
+  const working = tickAgent(createAgent(session('a'), desk, false), LOUNGE_DELAY_MS)
   expect(loungeSeats([working], loungeWith(4)).size).toBe(0)
+})
+
+// A room moved into another company's building sits on that building's floor and plays there.
+it("gives a room moved into another company's building that floor's corner", () => {
+  const sessions = [
+    session('claude:work', 'p_a'),
+    { ...session('claude:side', 'p_x'), companyKey: 'c_side', companyLabel: 'Side' }
+  ]
+  const base = buildLayout(sessions, undefined)
+  const document = createWorldDocument(base, sessions)
+  const host = document.buildings.find((building) => building.companyKey === 'c_work')!
+  const moved = document.rooms.find((room) => room.target === 'session:claude:side')!
+  // Grown so the corner still fits east of both offices.
+  host.footprint.width += 16
+  moved.buildingId = host.id
+  moved.position = { x: 2.2, z: 0 }
+  const floor = resolveEffectiveWorld(base, document, sessions).floors.find((candidate) =>
+    candidate.rooms.some((room) => room.sessionKey === 'claude:side')
+  )!
+  const room = floor.rooms.find((candidate) => candidate.sessionKey === 'claude:side')!
+  expect({
+    company: room.companyKey,
+    floor: floor.buildingId,
+    corner: floor.zones[0].lounge?.id
+  }).toEqual({ company: 'c_side', floor: host.id, corner: `${floor.id}:games` })
+  expect(loungesByRoom(floor).get(room.id)?.id).toBe(`${floor.id}:games`)
 })

@@ -4,9 +4,9 @@ import type { CitizenRoute, RoutePoint } from '../citizens/route-pose'
 import { between, draw, hashOf } from '../themes/lot-math'
 import { reversed, roadNet, roadPath, type Leg, type RoadNet } from './road-net'
 import type { VehicleRole } from './town-dress'
-import type { TownLot } from './town-lots'
+import { lotsWithDoors, type DooredLot } from './town-lots'
 import type { TownPlan } from './town-plan'
-import { type TownInput, type Trip } from './town-trips'
+import type { TownInput, Trip } from './town-trips'
 import { closedLoop, lengthOf, secondsAt, sidePath } from './trip-paths'
 
 // The order vehicles are sent out in: a smaller level takes the first of them. The first six
@@ -26,6 +26,8 @@ const FLEET: readonly VehicleRole[] = [
   'runabout'
 ]
 const fleetOf = (role: VehicleRole): number => FLEET.filter((each) => each === role).length
+// The fewest vehicles that still send out the first freight cart.
+export const FLEET_TO_FIRST_FREIGHT = FLEET.indexOf('freight') + 1
 
 // One speed to a line, so nothing on it catches up with the one ahead.
 const TRANSIT_M_PER_SEC = 3.2
@@ -78,12 +80,15 @@ function cityVehicleLoop(options: {
 
 interface Yards {
   net: RoadNet
-  workshops: TownLot[]
-  markets: TownLot[]
+  workshops: DooredLot[]
+  markets: DooredLot[]
 }
 
 // From a workshop's kerb to a market's and back, with a pause to load and one to unload.
-function freightRun(yards: Yards, seed: number): { workshop: TownLot; route: CitizenRoute } | null {
+function freightRun(
+  yards: Yards,
+  seed: number
+): { workshop: DooredLot; route: CitizenRoute } | null {
   const { net, workshops, markets } = yards
   if (workshops.length === 0 || markets.length === 0) return null
   for (let attempt = 0; attempt < FREIGHT_DRAWS; attempt++) {
@@ -105,7 +110,7 @@ function freightRun(yards: Yards, seed: number): { workshop: TownLot; route: Cit
 // The first `count` of the town's vehicles, every one in the floor's theme.
 export function vehicleTrips(town: TownInput, count: number): Trip[] {
   const { plan, floorThemeId } = town
-  const sorted = [...plan.lots].sort((a, b) => a.id.localeCompare(b.id))
+  const sorted = lotsWithDoors(plan.lots)
   const yards: Yards = {
     net: roadNet(plan),
     workshops: sorted.filter((lot) => lot.zone === 'workshop'),

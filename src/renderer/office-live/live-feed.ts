@@ -9,6 +9,7 @@ import { listThemes } from '../office/themes/registry'
 import { isJsonObject } from '../../shared/json-object'
 import { applyFeed } from '../../shared/office/apply-feed'
 import type {
+  AgentView,
   FocusResult,
   FeedMessage,
   InteractionResult,
@@ -21,8 +22,10 @@ import type {
 import { officeSettings, type OfficeSettingsStore } from '../office/logic/office-settings'
 import { browserVisibilityEnv, type VisibilityEnv } from '../office/logic/frame-governor'
 import type { FloorGeometry, OfficeFeed, OfficeFrame } from '../office/scene-model'
+import { cityEvents, type CityEventLog } from './city-events'
 import { toFloorGeometry } from './layout-geometry'
 import { officePoses, poseOf, structuralKey, type PoseStore } from './pose-store'
+import { createGamingCheck } from '../office/scene/worker-seat-presence'
 
 export interface FeedSource {
   ready(): Promise<void>
@@ -43,6 +46,7 @@ export interface FeedSource {
 interface LayoutStorage {
   getItem(key: string): string | null
   setItem(key: string, value: string): void
+  removeItem?(key: string): void
 }
 
 const LAYOUT_KEY = 'claudewatch.office.layout'
@@ -102,6 +106,7 @@ export function createLiveFeed(
     settings?: Pick<OfficeSettingsStore, 'get' | 'subscribe'>
     visibility?: VisibilityEnv
     poses?: PoseStore
+    events?: Pick<CityEventLog, 'observe'>
   }
 ): LiveFeed {
   const now = options.now ?? Date.now
@@ -109,6 +114,7 @@ export function createLiveFeed(
   const visibility = options.visibility ?? browserVisibilityEnv()
   const listeners = new Set<(frame: OfficeFrame) => void>()
   const poses = options.poses ?? officePoses
+  const events = options.events ?? cityEvents
   let stop: (() => void) | null = null
   let currentWorld: World | null = null
   let documentStore: WorldDocumentStore | null = null
@@ -132,22 +138,7 @@ export function createLiveFeed(
       now,
       saved,
       loungeTrips: settings.get().loungeTrips,
-      resolveLayout,
-      getVenueTargets: () =>
-        (resolvedLayout?.effectiveVenues ?? []).map((venue) => ({
-          id: venue.id,
-          kind: venue.kind,
-          capacity: venue.capacity,
-          entrance: {
-            x: venue.footprint.x + venue.entrance.x,
-            z: venue.footprint.z + venue.entrance.z
-          },
-          slots: venue.slots.map((slot) => ({
-            ...slot,
-            x: slot.x + venue.footprint.x,
-            z: slot.z + venue.footprint.z
-          }))
-        }))
+      resolveLayout
     })
     currentWorld = world
     // A running office follows the switch: the next step walks agents back, or lets them go.
@@ -163,7 +154,20 @@ export function createLiveFeed(
       lastTick = now()
     })
     let lastAgents = ''
+    let lastGamers = ''
+    let gaming = { floors, isGaming: createGamingCheck(floors) }
+    // A walk moves poses only; a gamer sitting down changes its card, so it needs a frame.
+    const gamersOf = (agents: readonly AgentView[]): string => {
+      if (gaming.floors !== floors) gaming = { floors, isGaming: createGamingCheck(floors) }
+      return agents
+        .filter(gaming.isGaming)
+        .map((agent) => agent.agentKey)
+        .join('\n')
+    }
+    let structureRevision = 0
     let lastFrameAtMs = Number.NEGATIVE_INFINITY
+    let sentFading = new Set<string>()
+    let sentKeys = new Set<string>()
     let isDirty = true
     let offDocument: (() => void) | undefined
     let documentRevision = -1
@@ -187,6 +191,7 @@ export function createLiveFeed(
         world.apply(message)
         snapshot = null
         isDirty = true
+        events.observe('resync', [], now())
         return
       }
       const nextSnapshot = applyFeed(snapshot, message)
@@ -194,6 +199,14 @@ export function createLiveFeed(
       snapshot = nextSnapshot
       lastKnownSnapshot = snapshot
       feedReceivedAtMs = now()
+      // After the fold, so a duplicate or late patch never reaches the event log.
+      events.observe(
+        message.type,
+        snapshot.sessions,
+        feedReceivedAtMs,
+        snapshot.projectsToday,
+        snapshot.sources
+      )
       feedRevision = snapshot.rev
       if (message.type === 'hello') receiveHostWorld(hostStorage, snapshot)
       if (!documentStore) {
@@ -235,6 +248,7 @@ export function createLiveFeed(
       if (isStopped) return
       snapshot = null
       world.apply({ type: 'resync' })
+      events.observe('resync', [], now())
       isDirty = true
     })
 
@@ -249,12 +263,26 @@ export function createLiveFeed(
       for (const agent of agents) poses.write(agent.agentKey, poseOf(agent))
       // A walk moves poses only: the scene reads those each drawn frame, without React (perf-2).
       const agentsKey = structuralKey(agents)
-      if (!isDirty && agentsKey === lastAgents) return
-      if (!visibility.read().isFocused && tick - lastFrameAtMs < BLURRED_FRAME_GAP_MS) return
+      const gamers = gamersOf(agents)
+      if (!isDirty && agentsKey === lastAgents && gamers === lastGamers) return
+      // A fade on a robot already drawn goes out at once: it shrinks over it, and a leaver held
+      // back a tick would unmount before it had shrunk away. A newcomer mounts unseen anyway.
+      const fading = new Set(agents.filter((a) => a.fade !== undefined).map((a) => a.agentKey))
+      const startsFade = [...fading].some((key) => !sentFading.has(key) && sentKeys.has(key))
+      if (
+        !startsFade &&
+        !visibility.read().isFocused &&
+        tick - lastFrameAtMs < BLURRED_FRAME_GAP_MS
+      )
+        return
+      sentFading = fading
+      sentKeys = new Set(agents.map((agent) => agent.agentKey))
       isDirty = false
+      if (agentsKey !== lastAgents) structureRevision += 1
       lastAgents = agentsKey
+      lastGamers = gamers
       lastFrameAtMs = tick
-      poses.retain(new Set(agents.map((agent) => agent.agentKey)))
+      poses.retain(sentKeys)
       const frame: OfficeFrame = {
         floors,
         agents,
@@ -262,8 +290,10 @@ export function createLiveFeed(
         connected: snapshot !== null,
         sources: lastKnownSnapshot?.sources ?? [],
         accounts: lastKnownSnapshot?.accounts,
+        projectsToday: lastKnownSnapshot?.projectsToday,
         feedReceivedAtMs,
         feedRevision,
+        structureRevision,
         worldRevision: documentRevision,
         venues: resolvedLayout?.effectiveVenues
       }

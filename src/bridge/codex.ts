@@ -78,6 +78,13 @@ const OUTPUTS = new Set([
 ])
 const THINKING = new Set(['reasoning', 'agent_reasoning', 'agent_message', 'task_started'])
 const DEFAULT_CALL_NAME: Record<string, string> = { local_shell_call: 'exec_command' }
+// Turn edges say nothing of whether the model got through; a retry hits the limit again.
+const TURN_EDGES = new Set(['task_started', 'task_complete', 'turn_aborted'])
+const LIMIT_ERRORS = ['usage_limit_exceeded', 'rate_limit_exceeded']
+
+// A plain error kind is written as its name, one with details as an object keyed by it.
+const isLimitError = (info: unknown): boolean =>
+  LIMIT_ERRORS.some((kind) => info === kind || object(info)?.[kind] !== undefined)
 
 export function parseCodexActivity(tail: string): {
   activity: AgentActivity
@@ -88,6 +95,7 @@ export function parseCodexActivity(tail: string): {
   let activity: AgentActivity = 'idle'
   let attention: AgentAttention = 'none'
   let updatedAtMs = 0
+  let isLimited = false
   const openCalls = new Map<string, CurrentTool>()
   for (const line of tail.split('\n')) {
     const record = jsonObject(line)
@@ -96,10 +104,18 @@ export function parseCodexActivity(tail: string): {
     const type = typeof payload?.type === 'string' ? payload.type : ''
     const callId = payload?.call_id ?? payload?.id
     const callKey = typeof callId === 'string' ? callId : 'unknown'
+    if (type === 'error') {
+      isLimited ||= isLimitError(payload?.codex_error_info)
+      continue
+    }
     if (CALLS.has(type)) {
       // A shell call carries no name of its own.
       const name = isLabel(payload?.name) ? payload.name : (DEFAULT_CALL_NAME[type] ?? 'unknown')
-      openCalls.set(callKey, { name, category: toolCategory(name) })
+      openCalls.set(callKey, {
+        name,
+        category: toolCategory(name),
+        ...(isLabel(callId) && { callId })
+      })
     } else if (OUTPUTS.has(type)) {
       // Outputs close their own call, not another tool still running in parallel.
       openCalls.delete(callKey)
@@ -110,6 +126,7 @@ export function parseCodexActivity(tail: string): {
       openCalls.clear()
       activity = 'idle'
     } else continue
+    if (!TURN_EDGES.has(type)) isLimited = false
     attention = type === 'task_complete' ? 'done' : 'none'
     const timestamp = typeof record.timestamp === 'string' ? Date.parse(record.timestamp) : 0
     updatedAtMs = Number.isFinite(timestamp) ? timestamp : 0
@@ -118,7 +135,7 @@ export function parseCodexActivity(tail: string): {
   const needsAnswer = currentTool?.name === 'request_user_input' || currentTool?.name === 'question'
   return {
     activity: needsAnswer ? 'idle' : currentTool ? toolActivity(currentTool.category) : activity,
-    attention: needsAnswer ? 'question' : attention,
+    attention: needsAnswer ? 'question' : isLimited ? 'limited' : attention,
     updatedAtMs,
     currentTool
   }
@@ -475,27 +492,23 @@ export async function collectCodex(
       if (now - rollout.mtimeMs >= OPEN_TOOL_HOLD_MS) break
       await showHosted({ rollout })
     }
-    // Totals are finalized only after every retained parent has been shown.
-    applyCodexSubagentTotals(sessions, memory.childTotals)
-    children = codexChildTotals(sessions, memory.childTotals)
     for (const id of known.keys()) if (!live.has(id)) known.delete(id)
     forgetExited(processes, folders, placeholders)
-    for (const [path, { session }] of tails) {
-      if (liveTails.has(path)) continue
+    // The newest usage read for each rollout this tick, by path.
+    const newestUsage = new Map<string, SessionUsage | null>()
+    const departedRoots: SessionRef[] = []
+    for (const [path, tail] of tails) {
+      if (liveTails.has(path)) {
+        newestUsage.set(path, tail.usage)
+        continue
+      }
       tails.delete(path)
+      if (tail.session) departedRoots.push(tail.session)
       try {
-        // Its last turn may have been written after the last look that found its process.
-        const usage = session && parseCodexUsage(await io.readTail(path))
-        const total =
-          usage &&
-          codexTotalOf({
-            ...session,
-            usage: {
-              ...usage,
-              subagents: session?.usage?.subagents ?? usage.subagents,
-              spawned: session?.usage?.spawned ?? usage.spawned
-            }
-          })
+        // Its last turn may have been written after the last look that found it.
+        const usage = parseCodexUsage(await io.readTail(path))
+        newestUsage.set(path, usage)
+        const total = usage && tail.session && codexTotalOf({ ...tail.session, usage })
         if (total) departed.push(total)
       } catch (error) {
         if (isMissing(error)) continue
@@ -503,6 +516,16 @@ export async function collectCodex(
         health.detail = 'rollout read failed'
       }
     }
+    // A child's total takes its last turn before its parent can be pruned, shown or not.
+    for (const counted of memory.childTotals.values())
+      for (const [childId, child] of counted) {
+        const usage = newestUsage.get(child.path)
+        if (usage) counted.set(childId, { ...child, counts: usage.own })
+      }
+    departed.push(...codexChildTotals(departedRoots, memory.childTotals))
+    // Totals are finalized only after every retained parent has been shown.
+    applyCodexSubagentTotals(sessions, memory.childTotals)
+    children = codexChildTotals(sessions, memory.childTotals)
   } catch {
     health.ok = false
     health.detail = 'discovery failed'

@@ -11,7 +11,6 @@ import { mergeActiveWorldDocument } from '../../shared/office/world-document-lay
 import { buildEffectiveFloors } from './effective-world-floors'
 import { cityScenerySites } from '../../shared/office/city-scenery'
 import { cityVenueSite } from '../../shared/office/city-access'
-import { districtStreets } from '../../shared/office/district-streets'
 
 // The session fields resolveEffectiveWorld reads; of `subagents`, only the count. Tokens,
 // activity and observation never change the world, so a message carrying only those reuses it.
@@ -74,7 +73,6 @@ export function resolveEffectiveWorld(
     floors,
     effectiveVenues: effective.venues,
     streetBlocks,
-    streets: districtStreets({ sites: groundSites, obstacles: [...groundSites, ...streetBlocks] }),
     reservations: Object.fromEntries(
       Object.entries(baseline.reservations).map(([key, held]) => [
         key,

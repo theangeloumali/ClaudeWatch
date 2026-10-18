@@ -11,8 +11,6 @@ export function agentBody(view: AgentView): BodyFootprint {
     x: view.x,
     z: view.z,
     elevation: view.elevation ?? 0,
-    connectorId:
-      'connectorId' in view && typeof view.connectorId === 'string' ? view.connectorId : undefined,
     radius: view.isSubagent ? SUBAGENT_BODY_RADIUS : WORKER_BODY_RADIUS
   }
 }

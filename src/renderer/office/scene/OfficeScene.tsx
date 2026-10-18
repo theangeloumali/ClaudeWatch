@@ -18,6 +18,7 @@ import { CardProjector, type CardAnchors } from './CardProjector'
 import { NameCardLayer } from './NameCards'
 import { FrameGovernor, MetricsProbe } from './RenderLoop'
 import { BatchedScene } from './BatchedScene'
+import { CompanyLens } from './CompanyLens'
 import type { SceneEditTarget } from './ZonePickers'
 import { MultiFloorLayer } from './MultiFloorLayer'
 import { VenueLayer } from './VenueLayer'
@@ -26,6 +27,8 @@ import type { WorldVenue } from '../../../shared/office/world-document'
 import { floorEnvelope, groundEnvelope } from './all-floor-model'
 import { useSceneFloorData } from './use-scene-floor-data'
 import { MoverLayer } from '../citizens/MoverLayer'
+import { railwayReach } from '../town/railway-plan'
+import { RailwayLayer } from './RailwayStructures'
 import { PlayerLayer } from '../player/PlayerLayer'
 import { PlayerLabels, PlayerLabelProjector } from '../player/PlayerLabels'
 import { sendPlayer, type Player } from '../player/walking'
@@ -40,7 +43,16 @@ import { OfficeNameLayer, OfficeNameProjector, type OfficeNameAnchors } from './
 import { SceneBodies } from './BodySpace'
 import { BodyObstacleSync } from './BodyObstacleSync'
 import { ShaderPrewarm } from './ShaderPrewarm'
+import { SpireStageFeed } from './SpireStageFeed'
+import { useSpireStages } from '../logic/city-signal-store'
+import { CitySigns } from './CitySigns'
+import { LeaderCrowns } from './LeaderCrowns'
+import { ConstructionRig } from './ConstructionRig'
 import type { BodyFootprint } from '../../../shared/office/body-footprints'
+import { CityBeacons } from './CityBeacons'
+import { markClipBox } from './city-marks'
+import { CityParticles } from './CityParticles'
+import { DoneFlags } from './DoneFlags'
 
 interface OfficeSceneProps {
   // The floor's default: zones without a company or project theme inherit it.
@@ -70,6 +82,7 @@ interface OfficeSceneProps {
   onFit?: () => void
   onManualCameraMove?: () => void
   isCameraManuallyOwned?: boolean
+  followedAgentKey?: string | null
   selectedWorkstation?: WorkstationSpec
   metrics: FrameMetrics
   onSelectAgent: (agentKey: string | null) => void
@@ -131,6 +144,7 @@ function OfficeScene(props: OfficeSceneProps) {
   bodies.setWorkers(agents)
   const [officeAnchors] = useState<OfficeNameAnchors>(() => new Map())
   const [canvasRoot, setCanvasRoot] = useState<RootState | null>(null)
+  const spireStages = useSpireStages()
   const { surfaces, groups, townFloor, officeLabels, displays, revision } = useSceneFloorData(props)
   const visibleCards = useMemo(() => {
     const isCityView = props.viewMode === 'city'
@@ -204,7 +218,8 @@ function OfficeScene(props: OfficeSceneProps) {
   )
   const sceneBox = useMemo(
     () => ({
-      ...reach,
+      // The railway ring stands outside the city: Horizon's planes must reach it (N5).
+      ...(settings.town ? railwayReach(reach, town.plan) : reach),
       minY: 0,
       maxY: Math.max(
         MAX_LOT_HEIGHT_M,
@@ -212,8 +227,9 @@ function OfficeScene(props: OfficeSceneProps) {
         ...town.plan.lots.map((lot) => lot.maxHeight)
       )
     }),
-    [reach, surfaces, town.plan.lots]
+    [reach, surfaces, town.plan, settings.town]
   )
+  const clipBox = useMemo(() => markClipBox(sceneBox), [sceneBox])
   const liveSessionKeys = useMemo(
     () => new Set(props.sessions.map((session) => session.key)),
     [props.sessions]
@@ -245,10 +261,7 @@ function OfficeScene(props: OfficeSceneProps) {
           }
         />
         <directionalLight position={[10, 20, 6]} intensity={isCyberpunkTheme ? 0.85 : 1.8} />
-        <Horizon
-          box={sceneBox}
-          color={isCyberpunkTheme ? theme.palette.ink : theme.palette.stone}
-        />
+        <Horizon box={clipBox} color={isCyberpunkTheme ? theme.palette.ink : theme.palette.stone} />
         {settings.town && <TownGround plan={town.plan} dress={dressOf(theme)} />}
         {settings.town && displayedVenues && (
           <VenueLayer
@@ -259,6 +272,7 @@ function OfficeScene(props: OfficeSceneProps) {
             onSelect={props.onSelectVenue}
           />
         )}
+        <SpireStageFeed />
         <BatchedScene revision={revision}>
           <MultiFloorLayer
             floors={surfaces}
@@ -270,7 +284,6 @@ function OfficeScene(props: OfficeSceneProps) {
             viewMode={props.viewMode}
             focusedFloorId={props.focusedFloorId}
             focusedRoomId={props.focusedRoomId}
-            venues={displayedVenues}
             isReducedMotion={isReducedMotion}
             selectedAgentKey={selectedAgentKey}
             speakingAgentKey={speakingAgentKey}
@@ -280,10 +293,24 @@ function OfficeScene(props: OfficeSceneProps) {
             onWalk={walkTo}
             onEditTarget={props.onEditTarget}
             onFocusFloor={props.onFocusFloor}
+            spireStages={spireStages}
           />
+          <CompanyLens floors={surfaces} palette={theme.palette} />
         </BatchedScene>
-        {!props.isLayoutPreview && band !== 'building' && (
-          <WorkstationScreens displays={visibleWorkstationDisplays(displays, selectedAgentKey)} />
+        {!props.isLayoutPreview && (
+          <>
+            <CitySigns
+              venues={settings.town ? displayedVenues : undefined}
+              palette={theme.palette}
+            />
+            <LeaderCrowns agents={agents} sessions={props.sessions} palette={theme.palette} />
+            <ConstructionRig floors={props.allFloors} theme={theme} />
+            {band !== 'building' && (
+              <WorkstationScreens
+                displays={visibleWorkstationDisplays(displays, selectedAgentKey)}
+              />
+            )}
+          </>
         )}
         {settings.town && (
           <>
@@ -305,6 +332,13 @@ function OfficeScene(props: OfficeSceneProps) {
             )}
           </>
         )}
+        {settings.town && (
+          <RailwayLayer
+            plan={town.plan}
+            palette={theme.palette}
+            hasTrains={settings.vehicles && !props.isLayoutPreview}
+          />
+        )}
         {!props.isLayoutPreview && settings.citizens && settings.town && (
           <MoverLayer
             floor={townFloor}
@@ -315,6 +349,13 @@ function OfficeScene(props: OfficeSceneProps) {
             hasVehicles={settings.vehicles}
             bodies={bodies}
           />
+        )}
+        {!props.isLayoutPreview && (
+          <>
+            <CityBeacons floors={props.allFloors} palette={theme.palette} band={band} />
+            <CityParticles palette={theme.palette} band={band} />
+            <DoneFlags palette={theme.palette} band={band} />
+          </>
         )}
         {!props.isLayoutPreview && player && (
           <PlayerLayer
@@ -371,6 +412,7 @@ function OfficeScene(props: OfficeSceneProps) {
           hasInspector={selectedAgentKey !== null}
           inspectorLayout={props.inspectorLayout}
           onBandChange={setBand}
+          followedAgentKey={props.followedAgentKey}
           viewMode={props.viewMode}
           focusedFloorId={props.focusedFloorId}
         />

@@ -27,7 +27,7 @@ vi.mock('react', async (original) => ({
 vi.mock('@react-three/fiber', () => ({ useFrame: () => undefined }))
 vi.mock('@react-three/drei', () => ({ CameraControlsImpl: class {} }))
 vi.mock('../scene/textures', () => ({
-  signTexture: () => new Texture(),
+  useSignTexture: () => new Texture(),
   blobShadowTexture: () => new Texture()
 }))
 

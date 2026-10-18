@@ -4,7 +4,7 @@ import type { WallSegment } from '../logic/room-layout'
 import { zoneSignPlacement, zoneWalls } from '../logic/zone-model'
 import type { ZoneGeometry } from '../scene-model'
 import { Matte } from '../scene/InstancedParts'
-import { signTexture } from '../scene/textures'
+import { useSignTexture } from '../scene/textures'
 import { box, Parts, type PartSpec } from './parts'
 import type { FloorProps, ThemePalette } from './types'
 
@@ -71,7 +71,7 @@ function Sign({
   height: number
 }) {
   const place = zoneSignPlacement(zone)
-  const texture = useMemo(() => signTexture(zone.label), [zone.label])
+  const texture = useSignTexture(zone.label)
   // Two single-sided faces instead of DoubleSide, so the name never reads mirrored from behind.
   return (
     <group position={[place.x, y, place.z]} rotation={[0, place.rotationY, 0]}>

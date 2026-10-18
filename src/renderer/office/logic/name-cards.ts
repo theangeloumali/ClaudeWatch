@@ -2,6 +2,7 @@ import type { AgentView } from '../../../shared/office/types'
 import { parseAgentKey } from '../../../shared/office/agent-key'
 import type { OfficeFrame } from '../scene-model'
 import { physicalFloorId } from '../scene/all-floor-model'
+import { createGamingCheck } from '../scene/worker-seat-presence'
 import { agentCountLabel, sessionForAgent } from './floor-model'
 import { DESK_REACH } from './room-layout'
 import {
@@ -11,6 +12,7 @@ import {
   isActivityAvailable,
   isAgentActivityAvailable,
   LEAVING_LABEL,
+  PLAYING_GAMES_LABEL,
   summariseActivity
 } from './activity-summary'
 
@@ -76,6 +78,8 @@ export function buildNameCards(
   selectedAgentKey: string | null
 ): NameCard[] {
   const seen = new Set<string>()
+  // Seated in its game corner; an agent that needs you or has failed shows that instead.
+  const isGaming = createGamingCheck(frame.floors)
   const cards = frame.agents
     .filter((agent) => {
       if (floorId !== null && physicalFloorId(agent) !== floorId) return false
@@ -93,12 +97,11 @@ export function buildNameCards(
       const isLeaving = agent.place === 'leaving'
       const isAvailable =
         !isLeaving && session !== undefined && isAgentActivityAvailable(frame, agent)
-      const detail = (toolName?: string): string =>
-        isLeaving
-          ? LEAVING_LABEL
-          : isAvailable
-            ? agentActivityDetail(agent, toolName)
-            : ACTIVITY_UNAVAILABLE_LABEL
+      const detail = (toolName?: string): string => {
+        if (isLeaving) return LEAVING_LABEL
+        if (!isAvailable) return ACTIVITY_UNAVAILABLE_LABEL
+        return isGaming(agent) ? PLAYING_GAMES_LABEL : agentActivityDetail(agent, toolName)
+      }
       const meta = {
         projectKey: session?.projectKey ?? null,
         updatedAtMs: session?.updatedAtMs ?? 0,

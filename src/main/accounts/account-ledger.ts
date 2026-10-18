@@ -5,9 +5,15 @@ import {
   codexTotalOf,
   type UsageDelta
 } from '../../shared/accounts'
-import type { OfficeSnapshot, SessionRef } from '../../shared/office/types'
+import type { OfficeSnapshot, ProjectTokens, SessionRef } from '../../shared/office/types'
 import { mergeOrcaAccounts, setAlias, upsertClaudeAccount } from './account-records'
-import { decorateSession, decorateSnapshot, officeAccounts, toAccountsState } from './accounts-view'
+import {
+  decorateSession,
+  decorateSnapshot,
+  officeAccounts,
+  projectsToday,
+  toAccountsState
+} from './accounts-view'
 import {
   countCodexSessions,
   countUsage,
@@ -37,8 +43,8 @@ const ORCA_INTERVAL_MS = 5 * 60_000
 const ORCA_MIN_GAP_MS = 30_000
 // A name the owner typed, or a change of sign-in, is written within this long.
 const SAVE_DELAY_MS = 30_000
-// Counted tokens wait longer: after a crash the bridge reports every live transcript again and
-// they are counted again. Only what a session spent and then exited within the wait is lost.
+// Counted tokens wait longer: the bridge saves its offsets only past what was saved here, so
+// after a crash it reports those lines again. Only a session that exited within the wait is lost.
 const USAGE_SAVE_DELAY_MS = 2 * 60_000
 // How long the sign-in has been watched changes at every look and is written this often, and
 // at quit: after a restart it is where the open span ends if another account is then found.
@@ -68,9 +74,18 @@ export class AccountLedger {
   private hasLoadFailed = false
   private shownToOffice = JSON.stringify(null)
   private shownDay = ''
+  // Bumped by every count, so the feed walks today's buckets once per change, not per patch.
+  private revision = 0
+  private todayTotals: {
+    state: LedgerState
+    revision: number
+    day: string
+    totals: ProjectTokens[]
+  } | null = null
   private readonly listeners = new Set<(state: AccountsState) => void>()
   private readonly officeListeners = new Set<() => void>()
   private readonly watchingListeners = new Set<() => void>()
+  private readonly durableListeners = new Set<() => void>()
 
   constructor(private readonly options: AccountLedgerOptions) {
     this.isWatching = options.isWatching
@@ -115,10 +130,19 @@ export class AccountLedger {
     this.save()
     // Dropped, so switching back on starts from the file exactly as a restart does.
     this.state = null
+    this.todayTotals = null
     this.hasSampled = false
     this.waiting = []
     this.waitingTotals = []
     this.publish()
+  }
+
+  // Fires when every usage line handed over so far is on disk or deliberately not counted.
+  onUsageDurable(listener: () => void): () => void {
+    this.durableListeners.add(listener)
+    return () => {
+      this.durableListeners.delete(listener)
+    }
   }
 
   onChange(listener: (state: AccountsState) => void): () => void {
@@ -158,7 +182,26 @@ export class AccountLedger {
 
   decorateSession = (session: SessionRef): SessionRef => decorateSession(this.tracked, session)
 
+  // What `decorate` adds as today's totals, without building a snapshot around them.
+  projectsToday = (): ProjectTokens[] | undefined => {
+    const state = this.tracked
+    if (!state) return undefined
+    const now = Date.now()
+    const day = dayKey(now)
+    const cached = this.todayTotals
+    if (cached?.state === state && cached.revision === this.revision && cached.day === day)
+      return cached.totals
+    const totals = projectsToday(state, now)
+    this.todayTotals = { state, revision: this.revision, day, totals }
+    return totals
+  }
+
   ingestBridgeMessage(message: unknown): void {
+    this.countBridgeMessage(message)
+    this.announceDurable()
+  }
+
+  private countBridgeMessage(message: unknown): void {
     if (!this.isWatching) return
     const deltas = toUsageDeltas(message)
     const totals = toCodexTotals(message)
@@ -220,6 +263,7 @@ export class AccountLedger {
     if (before !== JSON.stringify([state.accounts, state.spans])) return this.changed()
     if (hasCounted) this.counted()
     if (isFirstLook || dayKey(now) !== this.shownDay) this.publish()
+    this.announceDurable()
   }
 
   private load(): boolean {
@@ -260,6 +304,7 @@ export class AccountLedger {
   }
 
   private changed(): void {
+    this.revision++
     this.saveWithin(SAVE_DELAY_MS)
     this.publish()
   }
@@ -267,6 +312,7 @@ export class AccountLedger {
   // Tokens were counted and nothing else changed: the Office hears at once of an account that
   // came with them, the dashboard's totals follow in one batch.
   private counted(): void {
+    this.revision++
     this.saveWithin(USAGE_SAVE_DELAY_MS)
     this.publishToOffice()
     this.publishTimer ??= setTimeout(() => this.publish(), PUBLISH_DELAY_MS)
@@ -291,6 +337,14 @@ export class AccountLedger {
     } catch {
       console.error('[accounts] the ledger could not be saved')
     }
+    this.announceDurable()
+  }
+
+  // Lines dropped by a ledger that could not be read are not durable: a restart reports them.
+  private announceDurable(): void {
+    const isHolding = this.waiting.length > 0 || (this.isWatching && !this.state)
+    if (this.isUnsaved || isHolding) return
+    for (const listener of this.durableListeners) listener()
   }
 
   private publish(): void {

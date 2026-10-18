@@ -1,6 +1,7 @@
 import { Mesh, OrthographicCamera, Vector3 } from 'three'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { ISO_POLAR, ISO_START_AZIMUTH, type SceneBox } from '../logic/camera-bands'
+import { markHeadroomM } from './city-marks'
 import { Horizon } from './Horizon'
 
 interface FrameState {
@@ -95,4 +96,17 @@ it('lays the ground under the middle of the view, wider than the window', () => 
   expect(plane.position.y).toBe(BOX.minY)
   expect(Math.abs(plane.position.z - 150)).toBeLessThan(1)
   expect(plane.scale.x).toBeGreaterThan(SIZE.width / camera.zoom)
+})
+
+it('keeps room over its box for marks sized on screen, more as the camera pulls out', () => {
+  for (const zoom of [34, 8, 2, 0.5, 0.1]) {
+    const camera = cameraOverCorner()
+    camera.zoom = zoom
+    camera.updateProjectionMatrix()
+    runFrame(camera, null)
+    const upY = new Vector3(0, 1, 0).applyQuaternion(camera.quaternion).y
+    // Over the box's nearest corner, the first to cross the near plane.
+    const mark = new Vector3(190, BOX.maxY + markHeadroomM(zoom, upY), 190).project(camera)
+    expect(Math.abs(mark.z)).toBeLessThanOrEqual(1)
+  }
 })

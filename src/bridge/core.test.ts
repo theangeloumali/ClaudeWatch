@@ -13,8 +13,9 @@ describe('transcript', () => {
   it('pairs by id, preserves earlier open tools, and drops all content', async () => {
     const tail = await readFile(new URL('./__fixtures__/transcript.jsonl', import.meta.url), 'utf8')
     expect(parseTranscript(tail)).toEqual({
-      tool: { name: 'Read', category: 'read' },
-      error: true
+      tool: { name: 'Read', category: 'read', callId: 'a' },
+      error: true,
+      limit: null
     })
     const ref = sessionFromRegistry(registryEntry(), parseTranscript(tail), [], '/repo', null)
     expect(JSON.stringify(ref)).not.toMatch(/SECRET_PROMPT|SECRET_INPUT|SECRET_RESULT/)
@@ -224,7 +225,7 @@ it('unknown tool names cannot access inherited category entries', () => {
 it('registry idle status overrides unfinished tools from the bounded tail', () => {
   const ref = sessionFromRegistry(
     { ...registryEntry(), status: 'idle' },
-    { tool: { name: 'Bash', category: 'run' }, error: false },
+    { tool: { name: 'Bash', category: 'run' }, error: false, limit: null },
     [],
     '/repo',
     null
@@ -235,7 +236,7 @@ it('registry idle status overrides unfinished tools from the bounded tail', () =
 it('clears failed-tool attention when Claude becomes idle', () => {
   const ref = sessionFromRegistry(
     { ...registryEntry(), status: 'idle' },
-    { tool: null, error: true },
+    { tool: null, error: true, limit: null },
     [],
     '/company/repo',
     '/company/repo/.claude/.worktree/task'
@@ -253,16 +254,17 @@ it('shows a busy lead with live subagents and no open tool as delegating, not th
   const crew = [{ id: 'a1', type: 'ravi', activity: 'editing' as const }]
   const busy = { ...registryEntry(), status: 'busy' as const }
   expect(
-    sessionFromRegistry(busy, { tool: null, error: false }, crew, '/repo', null).activity
+    sessionFromRegistry(busy, { tool: null, error: false, limit: null }, crew, '/repo', null)
+      .activity
   ).toBe('delegating')
-  expect(sessionFromRegistry(busy, { tool: null, error: false }, [], '/repo', null).activity).toBe(
-    'thinking'
-  )
+  expect(
+    sessionFromRegistry(busy, { tool: null, error: false, limit: null }, [], '/repo', null).activity
+  ).toBe('thinking')
 })
 
 it('strips control and bidi override characters from a Claude session name and its folder', () => {
   const named = { ...registryEntry(), name: 'fix\u202E the\u0007 bug\u2069' }
-  const tool = { tool: null, error: false }
+  const tool = { tool: null, error: false, limit: null }
   expect(sessionFromRegistry(named, tool, [], '/repo', null).name).toBe('fix the bug')
   const unnamed = { ...registryEntry(), name: '', cwd: '/x/ap\u2066p\u0000' }
   expect(sessionFromRegistry(unnamed, tool, [], '/repo', null).name).toBe('app')

@@ -1,5 +1,5 @@
 import { cityScenerySites, type CityScenerySite } from '../../../shared/office/city-scenery'
-import { gapBetween, hashOf, rectOf, type Rect } from '../themes/lot-math'
+import { contains, gapBetween, hashOf, rectOf, type Rect } from '../themes/lot-math'
 import {
   CITY_MAIN_CORRIDOR_METRES,
   cityBlocksFor,
@@ -80,6 +80,11 @@ export function distributedTown(town: CampusTown, protectedSites: readonly Distr
   const grid = cityGrid(protectedSites)
   const zoneOf = (index: number): TownDistrict => FRONTAGE_USES[index % FRONTAGE_USES.length]
   const landmarks = landmarkIds(sites, zoneOf)
+  const roads = districtStreets({
+    sites: protectedSites,
+    obstacles: [...protectedSites, ...sites]
+  })
+  const roadSites = roads.map(streetFootprint)
   const lots: TownLot[] = sites.map((site, index) => {
     const seed = hashOf(site.id)
     const zone = zoneOf(index)
@@ -95,17 +100,17 @@ export function distributedTown(town: CampusTown, protectedSites: readonly Distr
     const sidewalk =
       line * (isSideways ? grid.pitchX : grid.pitchZ) +
       (isPositive ? -1 : 1) * (width / 2 - SIDEWALK_M[frontage] / 2)
+    const kerb = { x: isSideways ? sidewalk : site.x, z: isSideways ? site.z : sidewalk }
+    const isOnStreet = roadSites.some((street) => contains(street, { ...kerb, width: 0, depth: 0 }))
     return {
       ...site,
       seed,
       blockId: site.id,
       facing: site.facing,
       frontage,
-      // Trips begin at the public kerb, not on a blocked building footprint.
-      door: {
-        x: isSideways ? sidewalk : site.x,
-        z: isSideways ? site.z : sidewalk
-      },
+      // Trips begin at the public kerb, not on a blocked building footprint; where an office cut
+      // the street in front short there is no kerb, and no one is sent.
+      door: isOnStreet ? kerb : null,
       zone,
       kind: 'building',
       maxHeight:
@@ -118,11 +123,6 @@ export function distributedTown(town: CampusTown, protectedSites: readonly Distr
       isLandmark: landmarks.has(site.id)
     }
   })
-  const roads = districtStreets({
-    sites: protectedSites,
-    obstacles: [...protectedSites, ...sites]
-  })
-  const roadSites = roads.map(streetFootprint)
   const blocks = cityBlocksFor(protectedSites).map((block) => ({
     ...block,
     zone: 'workshop' as const

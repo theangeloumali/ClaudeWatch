@@ -1,8 +1,8 @@
 import { expect, it } from 'vitest'
 import { World } from '../world'
 import { buildLayout, type LayoutMap } from '../layout'
-import { session } from '../fixtures'
-import type { SessionRef } from '../../../shared/office/types'
+import { session, subagent } from '../fixtures'
+import type { AgentView, SessionRef } from '../../../shared/office/types'
 
 const sessions = [
   session('claude:lower', 'lower-project'),
@@ -80,4 +80,54 @@ it('does not remove or duplicate a worker when activity updates on different sto
     elevation: 5.5,
     activity: 'editing'
   })
+})
+
+it('fades an upper-storey crew in at its desk and out there, never on the lift', () => {
+  const lead: SessionRef = { ...sessions[1], activity: 'running', subagents: [] }
+  const world = new World({ resolveLayout, loungeTrips: false })
+  world.apply({
+    type: 'hello',
+    v: 1,
+    snapshot: { rev: 1, generatedAtMs: 1000, sessions: [sessions[0], lead], sources: [] }
+  })
+  let sequence = 1
+  const crew = (ids: string[]) =>
+    world.apply({
+      type: 'patch',
+      v: 1,
+      seq: ++sequence,
+      removed: [],
+      upserts: [{ ...lead, subagents: ids.map((id) => ({ ...subagent(id), activity: 'running' })) }]
+    })
+  const samples: AgentView[] = []
+  const follow = (id: string, ticks: number) => {
+    let view: AgentView | undefined
+    for (let tick = 0; tick < ticks; tick++) {
+      view = world.step(100).find((agent) => agent.agentKey === `${lead.key}#${id}`)
+      if (view) samples.push(view)
+    }
+    return view
+  }
+  const isSeated = (view: AgentView | undefined) => {
+    const seat = world
+      .layout()
+      .floors.find((floor) => floor.id === view?.floorId)
+      ?.rooms.find((room) => room.id === view?.roomId)
+      ?.slots.find((slot) => slot.id === view?.slotId)
+    return (
+      view?.physicalFloorId === view?.floorId &&
+      view?.fade === undefined &&
+      !!seat &&
+      Math.hypot(view!.x - seat.x, view!.z - seat.z) < 0.02
+    )
+  }
+  crew(['rider'])
+  expect(isSeated(follow('rider', 6))).toBe(true)
+  crew([])
+  expect(follow('rider', 6)).toBeUndefined()
+  crew(['next'])
+  const next = follow('next', 6)
+  expect(next).toMatchObject({ physicalFloorId: 'building:one:2', elevation: 5.5 })
+  expect(isSeated(next)).toBe(true)
+  expect(samples.filter((view) => view.physicalFloorId !== 'building:one:2')).toEqual([])
 })

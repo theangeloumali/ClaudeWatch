@@ -10,10 +10,10 @@ import {
   updateAgent,
   wantsLounge
 } from './behaviour'
-import { session } from './fixtures'
+import { session, walkingAgent } from './fixtures'
 
 it('starts the done dwell at arrival and does not restart it on duplicate updates', () => {
-  let agent = createAgent(
+  let agent = walkingAgent(
     { ...session('a'), attention: 'done' },
     { floorId: 'p_a', roomId: 'a', slotId: 'desk_main', x: 1, z: 0, heading: 0 },
     [
@@ -29,7 +29,7 @@ it('starts the done dwell at arrival and does not restart it on duplicate update
 })
 
 it('finishes arriving when attention changes while walking', () => {
-  let agent = createAgent(
+  let agent = walkingAgent(
     session('a'),
     { floorId: 'p_a', roomId: 'a', slotId: 'desk_main', x: 1, z: 0, heading: 0.5 },
     [
@@ -49,7 +49,7 @@ it('shows done briefly, then resumes working', () => {
   let agent = createAgent(
     session('a'),
     { floorId: 'p_a', roomId: 'a', slotId: 'desk_main', x: 0, z: 0, heading: 0 },
-    []
+    false
   )
   agent = updateAgent(tickAgent(agent, 0), 'idle', 'done')
   expect(tickAgent(agent, 1400).state).toBe('done')
@@ -57,7 +57,7 @@ it('shows done briefly, then resumes working', () => {
 })
 
 it('coalesces activities until the 1.5 second dwell ends', () => {
-  let agent = createAgent(
+  let agent = walkingAgent(
     session('a'),
     { floorId: 'p_a', roomId: 'a', slotId: 'desk_main', x: 0, z: 0, heading: 0 },
     [{ x: 0, z: 0 }]
@@ -75,7 +75,7 @@ it('applies attention immediately and keeps facing the camera, as its seat does'
   const agent = createAgent(
     session('a'),
     { floorId: 'p_a', roomId: 'a', slotId: 'desk_main', x: 0, z: 0, heading: 0.5 },
-    []
+    false
   )
   const next = updateAgent(agent, 'editing', 'permission')
   expect(next.state).toBe('needs_you')
@@ -87,7 +87,7 @@ const desk = { floorId: 'hq', roomId: 'a', slotId: 'desk_main', x: 0, z: 0, head
 const loungeSeat = { id: 'lounge_seat_0', x: 2, z: 0, heading: 0 }
 
 it('wants the lounge only once a finished agent has waited the whole delay', () => {
-  let agent = setFinished(createAgent(session('a'), desk, []), true)
+  let agent = setFinished(createAgent(session('a'), desk, false), true)
   agent = tickAgent(agent, LOUNGE_DELAY_MS - 100)
   expect(wantsLounge(agent)).toBe(false)
   // A repeated update does not restart the wait.
@@ -98,12 +98,12 @@ it('wants the lounge only once a finished agent has waited the whole delay', () 
 })
 
 it('never wants the lounge while working, however long it runs', () => {
-  const agent = tickAgent(createAgent(session('a'), desk, []), LOUNGE_DELAY_MS * 3)
+  const agent = tickAgent(createAgent(session('a'), desk, false), LOUNGE_DELAY_MS * 3)
   expect(wantsLounge(agent)).toBe(false)
 })
 
 it('is in the lounge from setting off until setting off back, and keeps its desk', () => {
-  let agent = setFinished(createAgent({ ...session('a'), attention: 'done' }, desk, []), true)
+  let agent = setFinished(createAgent({ ...session('a'), attention: 'done' }, desk, false), true)
   agent = goToLounge(tickAgent(agent, LOUNGE_DELAY_MS), loungeSeat, [
     { x: 0, z: 0 },
     { x: 2, z: 0 }
@@ -123,9 +123,9 @@ it('is in the lounge from setting off until setting off back, and keeps its desk
   expect(agent.view).toMatchObject({ x: 0, heading: desk.heading })
 })
 
-it('gives up its lounge seat when its session ends', () => {
-  const lounging = goToLounge(createAgent(session('a'), desk, []), loungeSeat, [{ x: 2, z: 0 }])
-  const leaving = leaveAgent(lounging, [{ x: 9, z: 9 }])
+it('gives up its lounge seat and stops walking when its session ends', () => {
+  const lounging = goToLounge(createAgent(session('a'), desk, false), loungeSeat, [{ x: 2, z: 0 }])
+  const leaving = leaveAgent(lounging)
   expect('place' in leaving.view).toBe(false)
-  expect(leaving.loungeSeatId).toBeNull()
+  expect({ seat: leaving.loungeSeatId, path: leaving.path }).toEqual({ seat: null, path: [] })
 })

@@ -117,21 +117,61 @@ const WHITE = new Color(1, 1, 1)
 const tint = new Color()
 const ownTint = new Color()
 
+// The colour a source part draws in when nothing re-tints it.
+function ownColorOf({ mesh, material }: SourceMesh, part: number, out: Color): Color {
+  out.copy(colorOf(material) ?? WHITE)
+  if (mesh instanceof InstancedMesh && mesh.instanceColor) {
+    mesh.getColorAt(part, ownTint)
+    out.multiply(ownTint)
+  }
+  return out
+}
+
 function tintInstances(batch: InstancedMesh, sources: readonly SourceMesh[]): void {
   let index = 0
-  for (const { mesh, material, count } of sources) {
-    const base = colorOf(material) ?? WHITE
-    for (let part = 0; part < count; part++) {
-      tint.copy(base)
-      if (mesh instanceof InstancedMesh && mesh.instanceColor) {
-        mesh.getColorAt(part, ownTint)
-        tint.multiply(ownTint)
-      }
-      batch.setColorAt(index++, tint)
-    }
-  }
+  for (const source of sources)
+    for (let part = 0; part < source.count; part++)
+      batch.setColorAt(index++, ownColorOf(source, part, tint))
   if (batch.instanceColor) batch.instanceColor.needsUpdate = true
 }
+
+// What a source part draws in place of its own colour; null keeps its own.
+type TintOf = (mesh: Mesh, own: Color) => Color | null
+
+const COLOR_FLOATS = 3
+
+const isDrawn = (drawn: ArrayLike<number>, at: number, color: Color): boolean =>
+  drawn[at] === Math.fround(color.r) &&
+  drawn[at + 1] === Math.fround(color.g) &&
+  drawn[at + 2] === Math.fround(color.b)
+
+// Writes only the parts whose colour changes and uploads their span; no batch is rebuilt.
+export function retintBatches(batches: readonly MeshBatch[], tintOf: TintOf): void {
+  for (const { mesh: batch, sources, tinted } of batches) {
+    const colors = batch.instanceColor
+    if (!tinted || !colors) continue
+    let first = -1
+    let last = -1
+    let index = 0
+    for (const source of sources)
+      for (let part = 0; part < source.count; part++, index++) {
+        const own = ownColorOf(source, part, tint)
+        const next = tintOf(source.mesh, own) ?? own
+        if (isDrawn(colors.array, index * COLOR_FLOATS, next)) continue
+        batch.setColorAt(index, next)
+        if (first < 0) first = index
+        last = index
+      }
+    if (first < 0) continue
+    colors.addUpdateRange(first * COLOR_FLOATS, (last - first + 1) * COLOR_FLOATS)
+    colors.needsUpdate = true
+  }
+}
+
+// Each root's live batches, for layers that re-tint what a BatchedScene already draws.
+const rootBatches = new WeakMap<Object3D, readonly MeshBatch[]>()
+
+export const batchesOf = (root: Object3D): readonly MeshBatch[] => rootBatches.get(root) ?? []
 
 export function createMeshBatches(root: Group): MeshBatch[] {
   const groups = new Map<string, SourceMesh[]>()
@@ -179,6 +219,7 @@ export function createMeshBatches(root: Group): MeshBatch[] {
     for (const source of batch.sources) index = drawSource(batch.mesh, source, index)
     batch.mesh.instanceMatrix.needsUpdate = true
   }
+  rootBatches.set(root, batches)
   return batches
 }
 
@@ -187,7 +228,8 @@ const inverseRoot = new Matrix4()
 const placed = new Matrix4()
 const matrix = new Matrix4()
 const instance = new Matrix4()
-const hidden = new Matrix4().makeScale(0, 0, 0)
+// A zero-scale instance: drawn, but nothing shows.
+export const HIDDEN_MATRIX = new Matrix4().makeScale(0, 0, 0)
 
 // The root of the pass in progress: set by prepareRoot with inverseRoot.
 let passRoot: Object3D | null = null
@@ -221,7 +263,7 @@ function drawSource(batch: InstancedMesh, source: SourceMesh, index: number): nu
       source.mesh.getMatrixAt(part, instance)
       matrix.multiplyMatrices(placed, instance)
     } else matrix.copy(placed)
-    batch.setMatrixAt(index + part, isShown ? matrix : hidden)
+    batch.setMatrixAt(index + part, isShown ? matrix : HIDDEN_MATRIX)
   }
   source.drawnMatrix.copy(source.mesh.matrixWorld)
   source.drawnInstances = instanceVersionOf(source.mesh)
@@ -259,6 +301,7 @@ export function updateMeshBatches(root: Group, batches: readonly MeshBatch[]): v
 }
 
 export function releaseMeshBatches(root: Group, batches: readonly MeshBatch[]): void {
+  if (rootBatches.get(root) === batches) rootBatches.delete(root)
   for (const batch of batches) {
     for (const source of batch.sources) source.mesh.layers.mask = source.layerMask
     root.remove(batch.mesh)

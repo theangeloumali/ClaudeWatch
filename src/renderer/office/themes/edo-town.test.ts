@@ -13,7 +13,7 @@ import { LIVE_FLOORS } from './floors.test-utils'
 import { makeGeometry } from './geometry-audit.test-utils'
 import type { PartSpec } from './parts'
 import type { Vector } from './primitives'
-import { luminance } from './town-bounds.test-utils'
+import { luminance } from './contrast'
 import { describeTownDress } from './town-dress.test-utils'
 import { UNIT_SHAPES } from './unit-parts'
 

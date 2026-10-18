@@ -1,5 +1,6 @@
 import type { AgentView } from '../../../shared/office/types'
 import type { ThemeZoneGroup } from '../logic/office-themes'
+import type { OfficeTheme } from '../themes/types'
 import { physicalFloorId } from './all-floor-model'
 import { AUTHORED_WORKER_LIMIT } from './scene-density'
 
@@ -29,3 +30,13 @@ export function crewBatchRevision(options: {
     options.agents.length > AUTHORED_WORKER_LIMIT ? options.selectedAgentKey : null
   return JSON.stringify([options.themeId, zoneThemesKey(options.zoneGroups), roster, modelSwapKey])
 }
+
+export interface CitySpire {
+  buildingId: string
+  stage: number
+  theme: OfficeTheme
+}
+
+// What the city's spire batch draws: each office's modules and their theme colours (perf-11).
+export const spireBatchRevision = (spires: readonly CitySpire[]): string =>
+  JSON.stringify(spires.map(({ buildingId, stage, theme }) => [buildingId, stage, theme.id]))

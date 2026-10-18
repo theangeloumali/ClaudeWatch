@@ -1,4 +1,4 @@
-import type { LayoutMap } from '../../office/sim/layout'
+import { eastCornerBand } from '../../office/sim/game-corner'
 import { WORLD_DOCUMENT_LIMITS } from './world-document-limits'
 import type { WorldDocument, WorldRoom } from './world-document-types'
 
@@ -8,27 +8,15 @@ const ROOM_EDGE_METRES = 2
 const ENTRY_HALL_METRES = 4
 
 // dry-new: footprint packing moves buildings; consolidation must preserve desks while packing rooms.
-export function singleFloorWorldDocument(
-  document: WorldDocument,
-  layout: LayoutMap
-): WorldDocument {
+export function singleFloorWorldDocument(document: WorldDocument): WorldDocument {
   const consolidated = structuredClone(document)
-  const companies = layout.floors.flatMap((floor) => floor.zones)
   for (const building of consolidated.buildings) {
     const rooms = consolidated.rooms.filter((room) => room.buildingId === building.id)
-    const company = companies.find((zone) => zone.companyKey === building.companyKey)
-    const firstProject = company?.children.toSorted(
-      (first, second) => first.index - second.index
-    )[0]
-    const lounge = firstProject?.projectKey === building.projectKey ? company?.lounge : undefined
     const packed = packRooms(rooms)
-    const loungeBand = lounge ? lounge.width + ROOM_GAP_METRES + 3 : 0
-    const width = Math.max(12, packed.width + ROOM_EDGE_METRES * 2 + loungeBand)
-    const depth = Math.max(
-      12,
-      packed.depth + ENTRY_HALL_METRES + ROOM_EDGE_METRES,
-      (lounge?.depth ?? 0) + 6
-    )
+    // East of the offices, the edge margin is the corner's room gap and wall margin both.
+    const cornerBand = eastCornerBand(rooms.flatMap((room) => room.desks).length)
+    const width = Math.max(12, packed.width + ROOM_EDGE_METRES * 2 + cornerBand)
+    const depth = Math.max(12, packed.depth + ENTRY_HALL_METRES + ROOM_EDGE_METRES)
     if (
       width > WORLD_DOCUMENT_LIMITS.buildingMetres ||
       depth > WORLD_DOCUMENT_LIMITS.buildingMetres
@@ -45,7 +33,7 @@ export function singleFloorWorldDocument(
     building.footprint.width = width
     building.footprint.depth = depth
     building.entrance = { x: 0, z: -depth / 2 }
-    // Keep the legacy transfer landing until existing upper-floor bodies finish their descent.
+    // Agents fade between storeys; the landing stays as the floor's elevator and the player's lift.
     building.connector = { x: -width / 2 + 2, z: -depth / 2 + 2, width: 2, depth: 2 }
   }
   return consolidated

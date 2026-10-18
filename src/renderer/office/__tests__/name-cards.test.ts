@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import type { AgentView } from '../../../shared/office/types'
+import { ACTIVITY_UNAVAILABLE_LABEL, PLAYING_GAMES_LABEL } from '../logic/activity-summary'
 import { buildNameCards, buildProjectStacks, MAX_NAME_CARDS } from '../logic/name-cards'
+import { gameCornerFixture } from '../themes/game-corner.test-utils'
 import { makeAgent, makeFloor, makeFrame, makeRoom, makeSession, makeZone } from './fixtures'
 
 const floor = makeFloor({
@@ -52,6 +55,80 @@ describe('buildNameCards', () => {
     const office = cards.find((card) => card.agentKey === 'a')
     expect(office?.x).toBeCloseTo(1)
     expect(office?.z).toBeGreaterThan(2)
+  })
+
+  describe('an agent in its game corner', () => {
+    const corner = gameCornerFixture(Math.PI, 4, { x: 10, z: 10 })
+    const [seat] = corner.seats
+    const cornerFloor = {
+      ...floor,
+      zones: [makeZone({ id: 'c', kind: 'company', lounge: corner })]
+    }
+    const gamer = (overrides: Partial<AgentView> = {}) =>
+      makeAgent({
+        agentKey: 'a',
+        roomId: 'r1',
+        activity: 'idle',
+        place: 'lounge',
+        x: seat.x,
+        z: seat.z,
+        ...overrides
+      })
+    const cardOf = (agent: ReturnType<typeof makeAgent>, sources = frame.sources) =>
+      buildNameCards(
+        makeFrame({
+          floors: [cornerFloor],
+          sources,
+          sessions: [
+            makeSession({ key: 'a', activity: agent.activity, attention: agent.attention })
+          ],
+          agents: [agent]
+        }),
+        'f1',
+        null
+      ).find((card) => card.agentKey === 'a')
+
+    it.each(['done', 'none'] as const)(
+      'reads Playing games when idle with attention %s',
+      (attention) => {
+        expect(cardOf(gamer({ attention }))).toMatchObject({
+          detail: PLAYING_GAMES_LABEL,
+          isAvailable: true
+        })
+        expect(PLAYING_GAMES_LABEL).toBe('Playing games')
+      }
+    )
+
+    // The sim seats a finished turn in the corner whatever its last activity was.
+    it('reads Playing games for a finished turn whose last activity was not idle', () => {
+      expect(cardOf(gamer({ activity: 'editing', attention: 'done' }))?.detail).toBe(
+        PLAYING_GAMES_LABEL
+      )
+    })
+
+    // The sim marks the trip at its start; the walk across the floor is not yet play.
+    it('reads its usual at-rest label on the walk to the corner, until it sits', () => {
+      const walking = gamer({ attention: 'done', x: seat.x + 3, z: seat.z + 2 })
+      const atDesk = cardOf({ ...walking, place: undefined })?.detail
+      expect(atDesk).not.toBe(PLAYING_GAMES_LABEL)
+      expect(cardOf(walking)?.detail).toBe(atDesk)
+      expect(cardOf({ ...walking, x: seat.x, z: seat.z })?.detail).toBe(PLAYING_GAMES_LABEL)
+    })
+
+    it('shows what it needs instead when it needs you', () => {
+      expect(cardOf(gamer({ attention: 'permission' }))?.detail).not.toBe(PLAYING_GAMES_LABEL)
+    })
+
+    it('never claims games at a desk, or while its activity cannot be seen', () => {
+      expect(cardOf(gamer({ place: undefined, attention: 'done' }))?.detail).not.toBe(
+        PLAYING_GAMES_LABEL
+      )
+      const down = [{ id: 'claude', ok: false, detail: 'down', checkedAtMs: 0, staleAfterMs: 1 }]
+      expect(cardOf(gamer({ attention: 'done' }), down)).toMatchObject({
+        detail: ACTIVITY_UNAVAILABLE_LABEL,
+        isAvailable: false
+      })
+    })
   })
 
   it('keeps the card over an agent that is in the lounge, where there is no desk', () => {

@@ -174,7 +174,8 @@ it('posts no usage for a transcript line older than the ledger keeps', async () 
           atMs: Date.now() - 60_000,
           counts: expect.objectContaining({ output: 10 })
         })
-      ]
+      ],
+      1
     ]
   ])
   // The session's own counter still holds every line.

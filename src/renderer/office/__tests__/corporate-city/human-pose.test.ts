@@ -1,6 +1,7 @@
 import { Group, Mesh, Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
 import { robotPose, type RobotMood } from '../../logic/character-pose'
+import { createSeatEase, SEAT_EASE_SEC } from '../../logic/seat-ease'
 import {
   applyHumanPose,
   HUMAN_STRIDE_METRES,
@@ -48,7 +49,7 @@ describe('human seated and walking poses', () => {
     'reading',
     'thinking',
     'needs-you',
-    'lounging'
+    'gaming'
   ]
   for (const mood of SEATED_MOODS) {
     it(`holds articulated seated ${mood} under reduced motion`, () => {
@@ -73,18 +74,39 @@ describe('human seated and walking poses', () => {
     expect(elbowY).toBeLessThan(0.55)
   })
 
-  it('distinguishes reading, thinking, waiting and lounge without invented moods', () => {
+  it('distinguishes reading, thinking, waiting and gaming without invented moods', () => {
     const reading = poseFor('reading')
     const thinking = poseFor('thinking')
     const waiting = poseFor('needs-you')
-    const lounge = poseFor('lounging')
     expect(reading.isReading).toBe(true)
     expect(reading.headPitch).toBeGreaterThan(0)
     expect(thinking.rightElbow).not.toBe(reading.rightElbow)
     expect(waiting.needsAttention).toBe(true)
     expect(waiting.rightArm).toBeLessThan(-2)
-    expect(lounge.bodyPitch).toBeLessThan(0)
-    expect(lounge.isReading).toBe(false)
+    expect(poseFor('gaming').isReading).toBe(false)
+  })
+
+  it('games with both hands out on a controller, leaning in and looking up at the screen', () => {
+    const gaming = poseFor('gaming', { isReducedMotion: true })
+    expect(gaming.bodyPitch).toBeGreaterThan(0)
+    expect(gaming.headPitch + gaming.bodyPitch).toBeLessThan(0)
+    for (const side of ['left', 'right'] as const) {
+      const shoulder = gaming[`${side}Arm`]
+      const elbow = gaming[`${side}Elbow`]
+      expect(shoulder).toBeLessThan(-0.6)
+      // The forearm rises from the elbow, so the hands meet in front of the chest.
+      expect(shoulder + elbow + gaming.bodyPitch).toBeLessThan(-Math.PI / 2)
+    }
+    expect(gaming.leftArm).toBeCloseTo(gaming.rightArm)
+  })
+
+  it('bobs a little while gaming, and not at all under reduced motion', () => {
+    const heights = [0.1, 0.4, 0.7, 1.0].map((time) => poseFor('gaming', { time }).bodyY)
+    expect(Math.max(...heights) - Math.min(...heights)).toBeGreaterThan(0.002)
+    expect(Math.max(...heights) - Math.min(...heights)).toBeLessThan(0.03)
+    expect(poseFor('gaming', { time: 0.1, isReducedMotion: true }).bodyY).toBe(
+      poseFor('gaming', { time: 0.7, isReducedMotion: true }).bodyY
+    )
   })
 
   it('rests idle hands above the thighs and brings the thinking hand to the chin', () => {
@@ -201,5 +223,73 @@ describe('human seated and walking poses', () => {
     delete rig.rightKnee
     const settings = options('idle')
     expect(() => applyHumanPose(rig, robotPose('idle', 0, 0), settings)).not.toThrow()
+  })
+})
+
+describe('easing between standing and sitting', () => {
+  // Six frames make up the ease exactly.
+  const FRAME_SEC = SEAT_EASE_SEC / 6
+  const SEATS = [
+    { seat: 'desk', mood: 'working', place: { seatPresence: 'workstation' } },
+    { seat: 'beanbag', mood: 'gaming', place: { seatPresence: 'lounge', isInLounge: true } }
+  ] as const
+  const STANDING_Y = HUMAN_PIVOT.body[1]
+  const figure = () => ({ rig: rigFixture(), seat: createSeatEase() })
+  type Figure = ReturnType<typeof figure>
+
+  function drawFrame({ rig, seat }: Figure, mood: RobotMood, overrides: Partial<ThemePoseOptions>) {
+    const settings = options(mood, { delta: FRAME_SEC, seat, ...overrides })
+    applyHumanPose(rig, robotPose(mood, settings.time, settings.phase, settings), settings)
+    return rig.body.current?.position.y ?? Number.NaN
+  }
+  const stand = (drawn: Figure, overrides: Partial<ThemePoseOptions> = {}) =>
+    drawFrame(drawn, 'walking', { isMoving: true, travelDistance: 0, ...overrides })
+  const frames = (count: number, draw: () => number) => Array.from({ length: count }, draw)
+
+  for (const { seat, mood, place } of SEATS) {
+    it(`sinks onto the ${seat} only over the ease, folding the legs as it goes`, () => {
+      const drawn = figure()
+      stand(drawn)
+      const seatedY = poseFor(mood, place).bodyY
+      const heights = frames(6, () => drawFrame(drawn, mood, place))
+      expect(heights[0]).toBeLessThan(STANDING_Y)
+      for (const height of heights.slice(0, 5)) expect(height).toBeGreaterThan(seatedY)
+      heights.slice(1).forEach((height, index) => expect(height).toBeLessThan(heights[index]))
+      expect(heights[5]).toBe(seatedY)
+      expect(drawn.rig.leftKnee?.current?.rotation.x).toBeCloseTo(Math.PI / 2)
+    })
+
+    it(`bends the knees part way on the first frame onto the ${seat}`, () => {
+      const drawn = figure()
+      stand(drawn)
+      drawFrame(drawn, mood, place)
+      const knee = drawn.rig.leftKnee?.current?.rotation.x ?? Number.NaN
+      expect(knee).toBeGreaterThan(0)
+      expect(knee).toBeLessThan(Math.PI / 2)
+    })
+
+    it(`stands up from the ${seat} over the same ease`, () => {
+      const drawn = figure()
+      const seatedY = drawFrame(drawn, mood, place)
+      const heights = frames(6, () => stand(drawn))
+      expect(heights[0]).toBeGreaterThan(seatedY)
+      for (const height of heights.slice(0, 5)) expect(height).toBeLessThan(STANDING_Y)
+      heights.slice(1).forEach((height, index) => expect(height).toBeGreaterThan(heights[index]))
+      expect(heights[5]).toBe(STANDING_Y)
+      expect(drawn.rig.leftKnee?.current?.scale.y).toBe(1)
+    })
+
+    it(`snaps onto and off the ${seat} under reduced motion`, () => {
+      const drawn = figure()
+      const still = { ...place, isReducedMotion: true }
+      stand(drawn, { isReducedMotion: true })
+      expect(drawFrame(drawn, mood, still)).toBe(poseFor(mood, still).bodyY)
+      expect(stand(drawn, { isReducedMotion: true })).toBe(STANDING_Y)
+    })
+  }
+
+  it('draws a figure first seen in its seat already seated', () => {
+    const place = { seatPresence: 'workstation' } as const
+    expect(drawFrame(figure(), 'working', place)).toBe(poseFor('working', place).bodyY)
   })
 })

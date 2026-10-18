@@ -1,3 +1,4 @@
+import { dayKey } from '../../shared/day-key'
 import { addCounts } from '../../shared/office/token-counts'
 import type { AccountLimit, AccountSource } from '../../shared/accounts'
 import type { AccountConfidence, ProviderId, TokenCounts } from '../../shared/office/types'
@@ -73,11 +74,7 @@ export function emptyLedger(now: number): LedgerState {
   }
 }
 
-export function dayKey(atMs: number): string {
-  const date = new Date(atMs)
-  const twoDigits = (value: number): string => String(value).padStart(2, '0')
-  return `${date.getFullYear()}-${twoDigits(date.getMonth() + 1)}-${twoDigits(date.getDate())}`
-}
+export { dayKey }
 
 // The first of the seven local days the Accounts view counts as its week, today included.
 export function weekStartKey(now: number): string {

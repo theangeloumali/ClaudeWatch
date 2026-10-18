@@ -20,6 +20,10 @@ export type CameraRequest =
   | { kind: 'workstation'; agentKey: string; nonce: number }
   | { kind: 'city'; nonce: number }
   | { kind: 'player'; position: { x: number; z: number }; nonce: number }
+  // A map tap or arrow key: pans to the ground point and keeps the zoom and heading.
+  | { kind: 'point'; x: number; z: number; nonce: number }
+  // Frames the agent close, by zoom, then rides along with its live pose.
+  | { kind: 'follow'; agentKey: string; nonce: number }
 
 export interface OfficeState {
   frame: OfficeFrame | null
@@ -38,6 +42,10 @@ export interface OfficeState {
   isWalking: boolean
   isCameraManuallyOwned: boolean
   cameraRequest: CameraRequest | null
+  // A clear view for recordings; not saved, so a restart shows the panels again.
+  arePanelsHidden: boolean
+  // The agent the camera rides along with; any other camera input ends it.
+  followedAgentKey: string | null
 }
 
 export type OfficeAction =
@@ -49,6 +57,8 @@ export type OfficeAction =
   | { type: 'company-numbered'; number: number }
   | { type: 'agent-selected'; agentKey: string | null }
   | { type: 'agent-flown'; agentKey: string }
+  // Toggles: following the followed agent again stops.
+  | { type: 'agent-followed'; agentKey: string }
   | { type: 'session-opened'; sessionKey: string }
   | { type: 'review-opened'; sessionKey: string }
   | { type: 'review-closed' }
@@ -62,11 +72,13 @@ export type OfficeAction =
   | { type: 'camera-workstation' }
   | { type: 'camera-manually-moved' }
   | { type: 'camera-player'; position: { x: number; z: number } }
+  | { type: 'camera-pointed'; x: number; z: number }
   | { type: 'view-set'; view: OfficeState['viewMode'] }
   | { type: 'walls-set'; mode: WallsMode }
   | { type: 'roofs-toggled' }
   | { type: 'list-toggled' }
   | { type: 'metrics-toggled' }
+  | { type: 'panels-toggled' }
   | { type: 'walk-toggled' }
   | { type: 'zone-walked'; zoneId: string }
 
@@ -83,7 +95,9 @@ export const INITIAL_OFFICE_STATE: OfficeState = {
   viewMode: 'city',
   isWalking: false,
   isCameraManuallyOwned: false,
-  cameraRequest: null
+  cameraRequest: null,
+  arePanelsHidden: false,
+  followedAgentKey: null
 }
 
 function nextNonce(state: OfficeState): number {
@@ -112,12 +126,48 @@ function flyTo(state: OfficeState, agentKey: string): OfficeState {
 function receiveFrame(state: OfficeState, frame: OfficeFrame): OfficeState {
   const hasFocusedFloor = frame.floors.some((floor) => floor.floorId === state.focusedFloorId)
   const hasSelectedAgent = frame.agents.some((agent) => agent.agentKey === state.selectedAgentKey)
+  // Ends at the walk out, not on removal, so the camera never chases an empty spot.
+  const isFollowedStaying = frame.agents.some(
+    (agent) => agent.agentKey === state.followedAgentKey && agent.place !== 'leaving'
+  )
   return {
     ...state,
     frame,
     focusedFloorId: hasFocusedFloor ? state.focusedFloorId : defaultFloorId(frame),
-    selectedAgentKey: hasSelectedAgent ? state.selectedAgentKey : null
+    selectedAgentKey: hasSelectedAgent ? state.selectedAgentKey : null,
+    followedAgentKey: isFollowedStaying ? state.followedAgentKey : null
   }
+}
+
+function follow(state: OfficeState, agentKey: string): OfficeState {
+  if (state.followedAgentKey === agentKey) return { ...state, followedAgentKey: null }
+  const agent = state.frame?.agents.find((candidate) => candidate.agentKey === agentKey)
+  if (!agent || agent.place === 'leaving') return state
+  return {
+    ...state,
+    focusedFloorId: physicalFloorId(agent) ?? agent.floorId,
+    selectedAgentKey: agentKey,
+    viewMode: 'office',
+    isWalking: false,
+    isCameraManuallyOwned: false,
+    followedAgentKey: agentKey,
+    cameraRequest: { kind: 'follow', agentKey, nonce: nextNonce(state) }
+  }
+}
+
+// Manual input, walking or any other camera command takes the camera, so Follow ends.
+function endsFollow(state: OfficeState, next: OfficeState, action: OfficeAction): boolean {
+  return (
+    next.followedAgentKey !== null &&
+    (action.type === 'camera-manually-moved' ||
+      next.isWalking ||
+      (next.cameraRequest !== state.cameraRequest && next.cameraRequest?.kind !== 'follow'))
+  )
+}
+
+export function officeReducer(state: OfficeState, action: OfficeAction): OfficeState {
+  const next = reduce(state, action)
+  return endsFollow(state, next, action) ? { ...next, followedAgentKey: null } : next
 }
 
 function openNextAttention(state: OfficeState): OfficeState {
@@ -153,7 +203,7 @@ function companyZoneAt(state: OfficeState, number: number): string | undefined {
   return companies[number - 1]?.id
 }
 
-export function officeReducer(state: OfficeState, action: OfficeAction): OfficeState {
+function reduce(state: OfficeState, action: OfficeAction): OfficeState {
   switch (action.type) {
     case 'frame-received':
       return receiveFrame(state, action.frame)
@@ -208,6 +258,8 @@ export function officeReducer(state: OfficeState, action: OfficeAction): OfficeS
     }
     case 'agent-flown':
       return flyTo(state, action.agentKey)
+    case 'agent-followed':
+      return follow(state, action.agentKey)
     case 'session-opened': {
       const agent = state.frame ? mainAgentForSession(state.frame, action.sessionKey) : undefined
       return agent ? flyTo(state, agent.agentKey) : state
@@ -266,6 +318,12 @@ export function officeReducer(state: OfficeState, action: OfficeAction): OfficeS
         isCameraManuallyOwned: false,
         cameraRequest: { kind: 'player', position: action.position, nonce: nextNonce(state) }
       }
+    case 'camera-pointed':
+      return {
+        ...state,
+        isCameraManuallyOwned: true,
+        cameraRequest: { kind: 'point', x: action.x, z: action.z, nonce: nextNonce(state) }
+      }
     case 'camera-workstation': {
       const agent = state.frame?.agents.find(
         (candidate) => candidate.agentKey === state.selectedAgentKey
@@ -307,6 +365,8 @@ export function officeReducer(state: OfficeState, action: OfficeAction): OfficeS
       return { ...state, isListView: !state.isListView }
     case 'metrics-toggled':
       return { ...state, isMetricsVisible: !state.isMetricsVisible }
+    case 'panels-toggled':
+      return { ...state, arePanelsHidden: !state.arePanelsHidden }
     case 'walk-toggled':
       return { ...state, isWalking: !state.isWalking, isCameraManuallyOwned: false }
     // The camera goes with the player, so the office is marked current without a flight.

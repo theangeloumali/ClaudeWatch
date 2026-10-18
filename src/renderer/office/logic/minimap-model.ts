@@ -1,7 +1,10 @@
 import { parseAgentKey } from '../../../shared/office/agent-key'
 import { withLivePose } from '../../office-live/pose-store'
 import { floorEnvelope, physicalFloorId } from '../scene/all-floor-model'
+import { shownRailway } from '../town/railway-plan'
+import { railwayStations } from '../town/railway-stations'
 import type { FloorGeometry, OfficeFrame } from '../scene-model'
+import type { MapPoint } from './office-view'
 import { boundsOfZone, type Bounds } from './zone-framing'
 
 interface MinimapPlayer {
@@ -37,13 +40,24 @@ interface MinimapWorker extends MinimapPlayer {
   isSelected: boolean
 }
 
+// The ring the scene draws, as a dashed line with its stations; city view only.
+interface MinimapRailway {
+  ring: readonly MapPoint[]
+  stations: readonly MapPoint[]
+}
+
 export interface MinimapModel {
   bounds: Bounds | null
+  railway: MinimapRailway | null
   floors: MinimapFloor[]
   rooms: MinimapFootprint[]
   workers: MinimapWorker[]
   player: MinimapPlayer | null
 }
+
+// Where `value` sits between `low` and `high`, as a CSS percentage on the map.
+export const percentAlong = (value: number, low: number, high: number): string =>
+  `${((value - low) / (high - low)) * 100}%`
 
 // dry-new: camera framing projects isometrically; this composes a north-up, world-metre map.
 export function buildMinimapModel(input: MinimapInput): MinimapModel {
@@ -53,8 +67,12 @@ export function buildMinimapModel(input: MinimapInput): MinimapModel {
       (input.viewMode === 'city' || floor.floorId === input.focusedFloorId)
   )
   const envelope = floorEnvelope(represented)
-  const bounds = envelope && validBounds(envelope)
-  if (!bounds) return { bounds: null, floors: [], rooms: [], workers: [], player: null }
+  const floorBounds = envelope && validBounds(envelope)
+  if (!floorBounds)
+    return { bounds: null, railway: null, floors: [], rooms: [], workers: [], player: null }
+  const railway = input.viewMode === 'city' ? mapRailway() : null
+  // Framed whole, never clamped to the map's edge (ClearSpent 6fe66a7b).
+  const bounds = railway ? withPoints(floorBounds, railway.ring) : floorBounds
   const floors = represented.flatMap((floor) => {
     const footprint = validBounds(floor)
     if (!footprint) return []
@@ -87,6 +105,7 @@ export function buildMinimapModel(input: MinimapInput): MinimapModel {
   const surface = { floors, bounds, viewMode: input.viewMode }
   return {
     bounds,
+    railway,
     floors,
     rooms,
     workers: input.isPreview ? [] : currentWorkers(input, surface),
@@ -169,4 +188,22 @@ function containsRectangle(outer: Bounds, inner: Bounds): boolean {
     containsPoint(outer, { x: inner.minX, z: inner.minZ }) &&
     containsPoint(outer, { x: inner.maxX, z: inner.maxZ })
   )
+}
+
+function mapRailway(): MinimapRailway | null {
+  const railway = shownRailway.current()
+  if (!railway) return null
+  return {
+    ring: railway.centre.points,
+    stations: railwayStations(railway).map((station) => station.centre)
+  }
+}
+
+function withPoints(bounds: Bounds, points: readonly MapPoint[]): Bounds {
+  return {
+    minX: Math.min(bounds.minX, ...points.map((point) => point.x)),
+    maxX: Math.max(bounds.maxX, ...points.map((point) => point.x)),
+    minZ: Math.min(bounds.minZ, ...points.map((point) => point.z)),
+    maxZ: Math.max(bounds.maxZ, ...points.map((point) => point.z))
+  }
 }

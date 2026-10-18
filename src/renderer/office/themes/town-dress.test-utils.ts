@@ -15,10 +15,10 @@ import {
   expectOnItsPlot,
   GROUND_SLACK_M,
   HEX,
-  luminance,
   sizeOf,
   TEST_ACCENT
 } from './town-bounds.test-utils'
+import { luminance } from './contrast'
 
 export { heightOf } from './town-bounds.test-utils'
 

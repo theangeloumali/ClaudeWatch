@@ -185,3 +185,16 @@ it('keeps saved storeys and labels when a new project needs a non-conflicting ge
   ).toBe(true)
   expect(saved).toEqual(before)
 })
+
+// A building is one project's; its company zone names the company, so two of its projects'
+// buildings never rename the company after themselves.
+it('a company zone keeps the company’s name in every project building', () => {
+  const sessions = [session('one', 'p_a'), session('two', 'p_b')]
+  const layout = buildLayout(sessions, undefined)
+  const effective = resolveEffectiveWorld(layout, createWorldDocument(layout, sessions), sessions)
+  const companies = effective.floors.flatMap((floor) =>
+    floor.zones.filter((zone) => zone.kind === 'company')
+  )
+  expect(companies.length).toBeGreaterThan(1)
+  for (const company of companies) expect(company.displayLabel ?? company.label).toBe('Work')
+})

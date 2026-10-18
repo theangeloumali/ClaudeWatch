@@ -1,6 +1,5 @@
 import { useMemo, useRef } from 'react'
 import type { AgentView } from '../../../shared/office/types'
-import type { WorldVenue } from '../../../shared/office/world-document'
 import type { FloorGeometry } from '../scene-model'
 import type { OfficeTheme } from '../themes/types'
 import type { WallsMode } from '../logic/room-layout'
@@ -12,13 +11,14 @@ import {
 } from '../logic/office-themes'
 import { getTheme } from '../themes/registry'
 import { BatchedScene } from './BatchedScene'
-import { crewBatchRevision } from './batch-revision'
+import { crewBatchRevision, type CitySpire } from './batch-revision'
 import { FloorView } from './FloorView'
 import { RobotCrew, type RobotMotion } from './Robot'
-import { floorElevation, partitionPhysicalAgents } from './all-floor-model'
+import { buildingKeyOf, floorElevation, partitionPhysicalAgents } from './all-floor-model'
 import { ZonePickers, type SceneEditTarget } from './ZonePickers'
 import { AUTHORED_WORKER_LIMIT } from './scene-density'
 import { PhysicalBuildingShell } from './PhysicalBuildingShell'
+import { TokenSpires } from './TokenSpire'
 
 export function physicalZoneGroups(options: {
   floor: FloorGeometry
@@ -66,7 +66,7 @@ export function MultiFloorLayer({
   viewMode = 'office',
   focusedFloorId,
   focusedRoomId,
-  venues
+  spireStages
 }: {
   floors: readonly FloorGeometry[]
   agents: readonly AgentView[]
@@ -86,20 +86,23 @@ export function MultiFloorLayer({
   viewMode?: 'city' | 'office'
   focusedFloorId?: string | null
   focusedRoomId?: string | null
-  venues?: readonly WorldVenue[]
+  spireStages?: ReadonlyMap<string, number>
 }) {
   const partition = useMemo(() => partitionPhysicalAgents(floors, agents), [floors, agents])
   const motions = useRef(new Map<string, RobotMotion>()).current
   const allGroups = useMemo(() => [...groups.values()].flat(), [groups])
-  const buildings = useMemo(
-    () => Map.groupBy(floors, (floor) => floor.buildingId ?? floor.floorId),
-    [floors]
-  )
+  const buildings = useMemo(() => Map.groupBy(floors, buildingKeyOf), [floors])
+  const themeOf = (buildingFloors: readonly FloorGeometry[]): OfficeTheme =>
+    getTheme(groups.get(buildingFloors[0].floorId)?.[0]?.themeId ?? floorTheme.id)
+  const spires: CitySpire[] = [...buildings].flatMap(([buildingId, buildingFloors]) => {
+    const stage = spireStages?.get(buildingId) ?? 0
+    return stage > 0 ? [{ buildingId, stage, theme: themeOf(buildingFloors) }] : []
+  })
   const focused = floors.find((floor) => floor.floorId === focusedFloorId) ?? floors[0]
   // Opening roofs keeps storeys in place; explicit drill-down still clips higher floors.
   const isWithinDrillDown = (floor: FloorGeometry) =>
     viewMode !== 'office' ||
-    (floor.buildingId ?? floor.floorId) !== (focused?.buildingId ?? focused?.floorId) ||
+    buildingKeyOf(floor) !== (focused && buildingKeyOf(focused)) ||
     floorElevation(floor) <= floorElevation(focused ?? floor)
   const isOverview = agents.length > AUTHORED_WORKER_LIMIT
   const crewRevision = useMemo(
@@ -124,7 +127,6 @@ export function MultiFloorLayer({
     onFly,
     motions,
     floors,
-    venues,
     isOverview
   }
   return (
@@ -133,7 +135,7 @@ export function MultiFloorLayer({
         <PhysicalBuildingShell
           key={buildingId}
           floors={buildingFloors}
-          theme={getTheme(groups.get(buildingFloors[0].floorId)?.[0]?.themeId ?? floorTheme.id)}
+          theme={themeOf(buildingFloors)}
           focusedFloorId={viewMode === 'office' ? focused?.floorId : null}
           areRoofsVisible={areRoofsVisible}
           wallsMode={wallsMode}
@@ -184,6 +186,9 @@ export function MultiFloorLayer({
         ))}
         {partition.transit.length > 0 && <RobotCrew {...crewProps} agents={partition.transit} />}
       </BatchedScene>
+      {spires.length > 0 && (
+        <TokenSpires spires={spires} floors={floors} palette={floorTheme.palette} />
+      )}
     </>
   )
 }

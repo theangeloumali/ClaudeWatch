@@ -23,7 +23,7 @@ vi.mock('react', async (original) => ({
   useRef: (current: object) => ({ current })
 }))
 vi.mock('@react-three/fiber', () => ({ useFrame: () => undefined }))
-vi.mock('../../scene/textures', () => ({ signTexture: () => new Texture() }))
+vi.mock('../../scene/textures', () => ({ useSignTexture: () => new Texture() }))
 
 function rig(): RobotRig {
   return {
@@ -55,7 +55,7 @@ describe('Samurai Empire world contract', () => {
     'thinking',
     'needs-you',
     'walking',
-    'lounging'
+    'gaming'
   ]
 
   it.each(moods)('applies the shared articulated %s posture to the Samurai rig', (mood) => {
@@ -83,7 +83,7 @@ describe('Samurai Empire world contract', () => {
       delta: 0.1,
       isReducedMotion: true,
       isMoving: mood === 'walking',
-      isInLounge: mood === 'lounging'
+      isInLounge: mood === 'gaming'
     }
     samuraiEmpire.robot.applyPose?.(modelRig, robotPose(mood, 0.5, 0, options), options)
     expect(modelRig.gear.current?.visible).toBe(mood === 'reading')

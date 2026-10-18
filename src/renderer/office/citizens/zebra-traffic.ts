@@ -27,16 +27,18 @@ export interface ZebraTraffic {
 }
 
 export function zebraTraffic(trips: readonly Trip[], sidewalks: CitySidewalks): ZebraTraffic {
-  const { crossings, network } = sidewalks
   return {
-    crossings,
-    zebras: network.zebras,
-    passes: trips.map((trip) =>
-      trip.kind === 'citizen' || !trip.route.isLoop
-        ? []
-        : zebraPasses(trip.route, crossings, network.zebras)
-    )
+    crossings: sidewalks.crossings,
+    zebras: sidewalks.network.zebras,
+    passes: trips.map((trip) => tripPasses(trip, sidewalks))
   }
+}
+
+// Where one trip drives over the zebras: an ambient loop, or a work trip swapped into its slot.
+export function tripPasses(trip: Trip, sidewalks: CitySidewalks): ZebraPass[] {
+  return trip.kind === 'citizen' || !trip.route.isLoop
+    ? []
+    : zebraPasses(trip.route, sidewalks.crossings, sidewalks.network.zebras)
 }
 
 const isInside = (rect: WorldFootprint, point: RoutePoint): boolean =>

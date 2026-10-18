@@ -17,6 +17,7 @@ import { type ProcessRow, readProcessTable } from './process-table'
 import { diff, emptySnapshot, reduce } from './reducer'
 import { TeammateSource } from './teammates'
 import { UsageThrottle } from './usage-throttle'
+import { UsageCheckpoint } from './usage-checkpoint'
 import { loadUsageOffsets, saveUsageOffsets } from './usage-offsets'
 import { type TranscriptDelta, UsageTracker } from './usage-tracker'
 
@@ -31,7 +32,8 @@ export interface PollerOptions {
   opencodeRoot?: string
   now?: () => number
   // Hears the tokens every tick added, line by line, for whoever attributes them to an account.
-  onUsage?: (deltas: UsageDelta[]) => void
+  // Offsets past a hand-over are saved only once `usageDurable` says the listener wrote it.
+  onUsage?: (deltas: UsageDelta[], handover: number) => void
   // Hears every Codex total that changed, unheld: a Codex session keeps a running total, not lines.
   onCodexTotals?: (totals: CodexTotal[]) => void
   // Whether a Codex session is given the hashed key of its account: only while accounts are watched.
@@ -51,6 +53,7 @@ export class BridgePoller {
   private readonly teammates: TeammateSource
   private readonly usage: UsageTracker
   private readonly throttle = new UsageThrottle()
+  private readonly checkpoint = new UsageCheckpoint()
   // The project of each session whose lines are still being reported: one that left is not in
   // the tick that reads its last lines.
   private readonly projects = new Map<string, Pick<UsageDelta, 'projectKey' | 'projectLabel'>>()
@@ -89,6 +92,10 @@ export class BridgePoller {
       this.pending = null
     })
     return this.pending
+  }
+  // The usage listener has every line up to `handover` on disk.
+  usageDurable(handover: number): void {
+    this.checkpoint.markDurable(handover)
   }
   // True until every live transcript has been counted; a one-shot run waits on it.
   get isCountingUsage(): boolean {
@@ -165,12 +172,17 @@ export class BridgePoller {
   }
 
   // Once caught up, then every half minute; a save that fails leaves the last one in place.
+  // With a usage listener, never past a hand-over it has not yet written.
   private async saveUsage(now: number, wasBehind: boolean): Promise<void> {
     if (!this.usageOffsetsPath) return
     const hasCaughtUp = wasBehind && !this.usage.isBehind
     if (!hasCaughtUp && Math.abs(now - this.offsetsSavedAtMs) < SAVE_OFFSETS_EVERY_MS) return
+    const offsets = this.onUsage
+      ? this.checkpoint.savable(() => this.usage.offsets())
+      : this.usage.offsets()
+    if (!offsets) return
     this.offsetsSavedAtMs = now
-    await saveUsageOffsets(this.usageOffsetsPath, this.usage.offsets()).catch(() => undefined)
+    await saveUsageOffsets(this.usageOffsetsPath, offsets).catch(() => undefined)
   }
 
   private async scanUsage(claude: ClaudeBatch, now: number, budgetBytes?: number): Promise<void> {
@@ -194,7 +206,7 @@ export class BridgePoller {
     const live = new Set(claude.sessions.map((session) => session.key))
     for (const key of this.projects.keys())
       if (!live.has(key) && !this.usage.isLeaving(key)) this.projects.delete(key)
-    if (deltas.length) this.onUsage(deltas)
+    if (deltas.length) this.onUsage(deltas, this.checkpoint.handOver(this.usage.offsets()))
   }
   async start(post: (message: FeedMessage) => void): Promise<() => void> {
     let previous = await this.tick()

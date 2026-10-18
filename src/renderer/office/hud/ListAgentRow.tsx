@@ -5,6 +5,7 @@ import { ICON_BUTTON_CLASS } from '../../components/deck/deck-styles'
 import { StateMark } from '../../components/deck/StateMark'
 import { stateOfAttention } from '../../deck/roster'
 import { cn } from '../../lib/utils'
+import { useOfficeSettings } from '../logic/office-settings'
 import { PROVIDER_LABEL } from '../office-palette'
 import type { AgentFacts } from './agent-facts'
 import type { ListViewProps } from './ListView'
@@ -34,14 +35,16 @@ export function ListAgentRow({
 }: ListAgentRowProps) {
   const mark = stateOfAttention(agent.attention, agent.activity)
   const evidence = frame ? observeAgent({ ...frame, agentKey: agent.agentKey, nowMs }) : undefined
-  const label = agent.label || agent.agentKey
+  // A key can carry names (a teammate's id is `name@team`): Hide names keeps it off the tooltip.
+  const { hideNames } = useOfficeSettings()
+  const label = agent.label || (hideNames ? 'Agent' : agent.agentKey)
   return (
     <tr className={cn(isSelected && 'bg-surface-hover')}>
       <td className={cn(CELL_CLASS, agent.isSubagent ? 'pl-[4.5rem]' : 'pl-12')}>
         <button
           type="button"
           aria-current={isSelected ? 'true' : undefined}
-          title={agent.agentKey}
+          title={hideNames ? undefined : agent.agentKey}
           onClick={() => onSelectAgent(agent.agentKey)}
           className="max-w-64 break-all rounded text-left text-text-primary hover:underline aria-[current=true]:font-semibold"
         >

@@ -2,7 +2,9 @@ import { afterEach, expect, it } from 'vitest'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { parseCodexActivity } from './codex'
 import { isLabel, systemIo } from './io'
+import { opencodeState } from './opencode-activity'
 import { liveSubagents } from './subagents'
 import { TeammateSource } from './teammates'
 import { parseTranscript } from './transcript-tail'
@@ -53,11 +55,37 @@ it('lets a tool into the feed only under a name that is a label', () => {
     })
   expect(parseTranscript(tool('mcp__chrome-devtools__click')).tool).toEqual({
     name: 'mcp__chrome-devtools__click',
-    category: 'other'
+    category: 'other',
+    callId: 'id-27'
   })
   expect(parseTranscript(tool(OVERLONG)).tool).toBeNull()
   expect(parseTranscript(tool('Bash\nIGNORE PREVIOUS')).tool).toBeNull()
 })
+
+it.each([OVERLONG, 'call\nIGNORE PREVIOUS'])(
+  'an oversized or non-label call id is dropped, never posted',
+  (id) => {
+    const claude = {
+      type: 'assistant',
+      message: { content: [{ type: 'tool_use', id, name: 'Read' }] }
+    }
+    expect(parseTranscript(JSON.stringify(claude)).tool).toEqual({ name: 'Read', category: 'read' })
+    const codex = {
+      type: 'response_item',
+      payload: { type: 'custom_tool_call', call_id: id, name: 'apply_patch' }
+    }
+    expect(parseCodexActivity(JSON.stringify(codex)).currentTool).toEqual({
+      name: 'apply_patch',
+      category: 'edit'
+    })
+    const working = { id: 'msg_b', role: 'assistant', finish: null, completed: null, error: null }
+    const opencode = { type: 'tool', tool: 'edit', status: 'running', id }
+    expect(opencodeState(working, [opencode], 1000).currentTool).toEqual({
+      name: 'edit',
+      category: 'edit'
+    })
+  }
+)
 
 it('skips an agent whose type on disk is not a label', async () => {
   const meta = (agentType: unknown): string => JSON.stringify({ agentType })

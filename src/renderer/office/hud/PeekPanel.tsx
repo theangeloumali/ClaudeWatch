@@ -5,6 +5,7 @@ import { BUTTON_QUIET_COMPACT_CLASS } from '../../components/deck/deck-styles'
 import { useOfficeNow } from '../use-office-now'
 import { cn } from '../../lib/utils'
 import { failureMessage } from '../logic/interactions'
+import { useOfficeSettings } from '../logic/office-settings'
 import { ScreenExcerpt } from './ScreenExcerpt'
 import { useRequest } from './use-request'
 
@@ -67,6 +68,8 @@ function PeekCapture({
   const [request, run] = useRequest(FAILED)
   const [receivedAtMs, setReceivedAtMs] = useState<number>()
   const nowMs = useOfficeNow()
+  // Agent keys can carry names (a teammate's id is `name@team`); Hide names hides them too.
+  const { hideNames } = useOfficeSettings()
   const result = request.status === 'done' ? request.result : null
   const capturedAtMs = validTimestamp(result?.capturedAtMs)
   const expiryBase =
@@ -121,18 +124,25 @@ function PeekCapture({
           </p>
           <p className="break-all text-xs text-text-secondary">
             Capture target{result.targetAgentKey ? '' : ' (requested)'}:{' '}
-            {result.targetAgentKey ?? agentKey}
+            {hideNames ? 'Hidden' : (result.targetAgentKey ?? agentKey)}
           </p>
           <p className="break-all text-xs text-text-secondary">
             {result.terminal
-              ? `Terminal: ${result.terminal.ownerAgentKey} · pane ${result.terminal.paneKey} · PID ${result.terminal.pid} · incarnation ${result.terminal.incarnationId}`
+              ? `Terminal: ${hideNames ? 'Hidden' : result.terminal.ownerAgentKey} · pane ${result.terminal.paneKey} · PID ${result.terminal.pid} · incarnation ${result.terminal.incarnationId}`
               : 'Terminal provenance unavailable'}
           </p>
-          <ScreenExcerpt
-            lines={result.lines
-              .slice(0, MAX_CAPTURE_LINES)
-              .map((line) => line.slice(0, MAX_LINE_CHARS))}
-          />
+          {/* A terminal can print anything, a project path or a client's name included. */}
+          {hideNames ? (
+            <p className="text-xs text-text-secondary">
+              Screen text is hidden while names are hidden.
+            </p>
+          ) : (
+            <ScreenExcerpt
+              lines={result.lines
+                .slice(0, MAX_CAPTURE_LINES)
+                .map((line) => line.slice(0, MAX_LINE_CHARS))}
+            />
+          )}
         </>
       )}
       <p aria-live="polite" className="text-xs text-text-secondary">

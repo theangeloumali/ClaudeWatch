@@ -60,7 +60,12 @@ function insertV2Message(
 ): void {
   const content = [
     { type: 'text', text: PRIVATE_TEXT },
-    { type: 'tool', name: 'read', state: { status: 'running', input: PRIVATE_TEXT } }
+    {
+      type: 'tool',
+      id: `call_${row.sessionId}`,
+      name: 'read',
+      state: { status: 'running', input: PRIVATE_TEXT }
+    }
   ]
   db.prepare('INSERT INTO session_message VALUES (?, ?, 1, ?, ?, ?, ?)').run(
     `msg_${row.sessionId}`,
@@ -252,6 +257,16 @@ it('discovers V2 beside legacy tables using streaming message freshness', async 
     ]
   })
   expect(batch.sessions[0].subagents).toHaveLength(1)
+})
+
+it('gives each running tool its own part id as its call id', async () => {
+  const [root] = (await setup(workingFamily).collect()).sessions
+  expect(root.currentTool).toEqual({ name: 'read', category: 'read', callId: 'call_root' })
+  expect(root.subagents[0].currentTool).toEqual({
+    name: 'read',
+    category: 'read',
+    callId: 'call_child'
+  })
 })
 
 it('keeps prompt and tool arguments out of query rows and the feed', async () => {

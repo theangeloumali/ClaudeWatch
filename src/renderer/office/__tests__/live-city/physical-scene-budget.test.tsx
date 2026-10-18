@@ -37,11 +37,12 @@ vi.mock('react', async (original) => ({
 vi.mock('@react-three/fiber', () => ({ useFrame: () => undefined }))
 vi.mock('@react-three/drei', () => ({ CameraControlsImpl: class {} }))
 vi.mock('../../quality-store', () => ({
-  useQualityChoice: () => ({ pin: 'full', chosen: 'full' })
+  useQualityChoice: () => ({ pin: 'full', chosen: 'full' }),
+  useQualityLevel: () => 'full'
 }))
 vi.mock('../../scene/monitor-texture', () => ({ monitorTexture: () => new Texture() }))
 vi.mock('../../scene/textures', () => ({
-  signTexture: () => new Texture(),
+  useSignTexture: () => new Texture(),
   blobShadowTexture: () => new Texture()
 }))
 

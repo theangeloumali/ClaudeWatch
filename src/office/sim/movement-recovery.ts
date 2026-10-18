@@ -4,94 +4,112 @@ const PROGRESS_METRES = 0.05
 const REPATH_YIELD_TICKS = 10
 // A passing detour lasts eight seconds; allow it to finish before treating a waypoint as stuck.
 const STALLED_TICKS = 120
-// How long a walker may yield without gaining ground on its route before it counts as stuck.
-export const BODY_BLOCKED_LIMIT_SEC = 15
-const BODY_BLOCKED_TICKS = BODY_BLOCKED_LIMIT_SEC * 10
-// Gridlocked bodies jitter by centimetres; only real headway restarts the count.
-const BLOCKED_PROGRESS_METRES = 0.5
+// Retries a stalled walker gets, a second apart, before it gives up on its route.
+const STALLED_RETRIES = 2
+// How much nearer its destination a walker must get for its retries to have worked.
+const GROUND_METRES = 1
 
 interface Progress {
+  position: Point
   waypoint: Point
+  destination: Point
   distance: number
   stalledTicks: number
+  // Ticks turned aside since it last gained on its waypoint: free steps between do not count.
   yieldedTicks: number
+  // Retries made while stalled since the walker last gained ground, and how far it then was.
+  fruitlessRetries: number
+  groundDistance: number
 }
 
-// dry-new: no shared polyline length; recovery measures headway along the whole route.
-export function remainingRouteMetres(position: Point, route: readonly Point[]): number {
-  let metres = 0
-  let from = position
-  for (const point of route) {
-    metres += Math.hypot(point.x - from.x, point.z - from.z)
-    from = point
-  }
-  return metres
-}
+const gap = (from: Point, to: Point): number => Math.hypot(to.x - from.x, to.z - from.z)
+const isSamePoint = (first: Point, second: Point): boolean =>
+  first.x === second.x && first.z === second.z
 
 // dry-new: body clearance is stateless; recovery also needs sustained progress toward a waypoint.
 export class MovementRecovery {
   private readonly progress = new Map<string, Progress>()
-  // Kept apart from `progress`: a repath or a new waypoint must not restart it (seating-2).
-  private readonly blocked = new Map<string, { remaining: number; ticks: number }>()
 
   clear(id: string): void {
     this.progress.delete(id)
-    this.blocked.delete(id)
   }
 
+  // Only walking toward a waypoint restarts the stall clock: a retry or a new route does not.
   record({
     id,
     position,
-    waypoint,
-    hasYielded,
-    remaining
+    path,
+    hasYielded
   }: {
     id: string
     position: Point
-    waypoint?: Point
+    path: readonly Point[]
     hasYielded: boolean
-    // Route metres still to walk, measured from `position`.
-    remaining: number
-  }): { canRepath: boolean; isStalled: boolean; isBodyBlocked: boolean } {
-    if (!waypoint) {
+  }): { canRepath: boolean; isStalled: boolean; isStuck: boolean } {
+    const waypoint = path[0]
+    const destination = path.at(-1)
+    if (!waypoint || !destination) {
       this.clear(id)
-      return { canRepath: false, isStalled: false, isBodyBlocked: false }
+      return { canRepath: false, isStalled: false, isStuck: false }
     }
-    const blocked = this.blocked.get(id)
-    if (!blocked) this.blocked.set(id, { remaining, ticks: hasYielded ? 1 : 0 })
-    else if (remaining < blocked.remaining - BLOCKED_PROGRESS_METRES)
-      this.blocked.set(id, { remaining, ticks: 0 })
-    else if (hasYielded) blocked.ticks += 1
     const previous = this.progress.get(id)
-    const yieldedTicks = hasYielded ? (previous?.yieldedTicks ?? 0) + 1 : 0
-    const distance = Math.hypot(waypoint.x - position.x, waypoint.z - position.z)
+    const yieldedTicks = (previous?.yieldedTicks ?? 0) + (hasYielded ? 1 : 0)
+    const distance = gap(position, waypoint)
     let progress = previous
-    if (!progress || progress.waypoint.x !== waypoint.x || progress.waypoint.z !== waypoint.z) {
-      progress = { waypoint: { ...waypoint }, distance, stalledTicks: 0, yieldedTicks }
+    if (!progress || !isSamePoint(progress.destination, destination)) {
+      progress = {
+        position,
+        waypoint: { ...waypoint },
+        destination: { ...destination },
+        distance,
+        stalledTicks: 0,
+        yieldedTicks,
+        fruitlessRetries: 0,
+        groundDistance: 0
+      }
       this.progress.set(id, progress)
     } else {
-      progress.yieldedTicks = yieldedTicks
-      if (distance < progress.distance - PROGRESS_METRES) {
-        progress.distance = distance
-        progress.stalledTicks = 0
-      } else progress.stalledTicks += 1
+      Object.assign(progress, { position, yieldedTicks })
+      if (
+        !isSamePoint(progress.waypoint, waypoint) ||
+        distance < progress.distance - PROGRESS_METRES
+      )
+        Object.assign(progress, {
+          waypoint: { ...waypoint },
+          distance,
+          stalledTicks: 0,
+          yieldedTicks: 0
+        })
+      else progress.stalledTicks += 1
+      if (gap(position, destination) <= progress.groundDistance - GROUND_METRES)
+        progress.fruitlessRetries = 0
     }
-    const isStalled = progress.stalledTicks >= STALLED_TICKS
+    const stalledFor = progress.stalledTicks - STALLED_TICKS
+    const isStalled = stalledFor >= 0
     return {
       canRepath:
-        isStalled ||
-        (yieldedTicks >= REPATH_YIELD_TICKS && yieldedTicks % REPATH_YIELD_TICKS === 0),
+        (isStalled && stalledFor % REPATH_YIELD_TICKS === 0) ||
+        (hasYielded &&
+          progress.yieldedTicks > 0 &&
+          progress.yieldedTicks % REPATH_YIELD_TICKS === 0),
       isStalled,
-      isBodyBlocked: this.isBodyBlocked(id)
+      isStuck: isStalled && progress.fruitlessRetries >= STALLED_RETRIES
     }
   }
 
-  isBodyBlocked(id: string): boolean {
-    return (this.blocked.get(id)?.ticks ?? 0) >= BODY_BLOCKED_TICKS
-  }
-
-  retried(id: string): void {
+  // A stalled retry counts against the walker; a new route starts where it stands, so its
+  // waypoint is the next point on, measured afresh.
+  retried(id: string, path: readonly Point[]): void {
     const progress = this.progress.get(id)
-    if (progress) progress.stalledTicks = 0
+    if (!progress) return
+    if (progress.stalledTicks >= STALLED_TICKS) {
+      if (!progress.fruitlessRetries)
+        progress.groundDistance = gap(progress.position, progress.destination)
+      progress.fruitlessRetries += 1
+    }
+    const waypoint = path.find((point) => gap(progress.position, point) > 1e-6)
+    if (!waypoint || isSamePoint(waypoint, progress.waypoint)) return
+    progress.waypoint = { ...waypoint }
+    progress.distance = gap(progress.position, waypoint)
   }
 }

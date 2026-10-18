@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import type { WorldDocumentStore } from '../../office-live/world-document-store'
-import type { WorldDocument } from '../../../shared/office/world-document'
+import type { WorldBuilding, WorldDocument, WorldRoom } from '../../../shared/office/world-document'
 import { arrangeWorldDocument } from '../../../shared/office/world-document-placement'
 import { singleFloorWorldDocument } from '../../../shared/office/world-document-single-floor'
-import { buildLayout } from '../../../office/sim/layout'
 import type { OfficeFrame } from '../scene-model'
 import type { SceneEditTarget } from '../scene/ZonePickers'
 import {
@@ -14,10 +13,12 @@ import { FIELD_CLASS } from '../hud/hud-styles'
 import { WorldRoomFields } from './WorldRoomFields'
 import { WorldBuildingFields } from './WorldBuildingFields'
 import { editableRoomGeometry, editedWorldRoom } from './world-editor-room'
+import { worldTargetRole, type RoleBook } from '../logic/role-names'
 
 export function WorldEditor({
   store,
   frame,
+  roles = null,
   target,
   onPreview,
   onClose,
@@ -25,6 +26,8 @@ export function WorldEditor({
 }: {
   store: WorldDocumentStore
   frame: OfficeFrame
+  // Names hidden: the dialog shows roles and locks the name fields; the draft keeps real names.
+  roles?: RoleBook | null
   target?: SceneEditTarget | null
   onPreview: (document: WorldDocument | null) => void
   onClose: () => void
@@ -54,6 +57,10 @@ export function WorldEditor({
   const room = draft.rooms.find((candidate) => candidate.id === roomId)
   const building =
     draft.buildings.find((candidate) => candidate.id === room?.buildingId) ?? draft.buildings[0]
+  const roomName = (candidate: WorldRoom): string =>
+    roles ? worldTargetRole(candidate.target, roles) : (candidate.displayName ?? candidate.target)
+  const buildingName = (candidate: WorldBuilding): string =>
+    roles ? roles.project(candidate.companyKey, candidate.projectKey) : candidate.displayName
   const canSaveDraft = state.draft !== null && JSON.stringify(state.draft) === JSON.stringify(draft)
   useEffect(
     () =>
@@ -156,8 +163,7 @@ export function WorldEditor({
     store.cancel()
     onPreview(null)
     try {
-      const baseline = buildLayout([...frame.sessions], undefined)
-      setDraft(arrangeWorldDocument(singleFloorWorldDocument(draft, baseline)))
+      setDraft(arrangeWorldDocument(singleFloorWorldDocument(draft)))
       setNotice('Single-floor city draft ready. Preview it, then Save locally to apply.')
     } catch (error) {
       setNotice(
@@ -191,6 +197,11 @@ export function WorldEditor({
       <p role="status" className="mb-4 text-sm text-text-secondary">
         {notice}
       </p>
+      {roles && (
+        <p className="mb-4 text-sm text-text-secondary">
+          Names are hidden, so name fields are locked. Turn off Hide names in Settings to rename.
+        </p>
+      )}
       <label className="mb-4 flex flex-col gap-1 text-xs text-text-secondary">
         Room to edit
         <select
@@ -200,7 +211,7 @@ export function WorldEditor({
         >
           {draft.rooms.map((candidate) => (
             <option key={candidate.id} value={candidate.id}>
-              {candidate.displayName ?? candidate.target}
+              {roomName(candidate)}
             </option>
           ))}
         </select>
@@ -218,7 +229,7 @@ export function WorldEditor({
             >
               {draft.buildings.map((candidate) => (
                 <option key={candidate.id} value={candidate.id}>
-                  {candidate.displayName}
+                  {buildingName(candidate)}
                 </option>
               ))}
             </select>
@@ -235,6 +246,7 @@ export function WorldEditor({
               frame.sessions.find((session) => room.target === `session:${session.key}`)?.name ??
                 room.target
             )}
+            maskedName={roles ? roomName(room) : undefined}
             onChange={(changes) => changeRoom(editedWorldRoom(room, changes))}
           />
           <p className="my-3 text-xs text-text-secondary">
@@ -245,6 +257,7 @@ export function WorldEditor({
       {building && (
         <WorldBuildingFields
           building={building}
+          maskedName={roles ? buildingName(building) : undefined}
           onChange={(updated) =>
             setDraft((current) => ({
               ...current,

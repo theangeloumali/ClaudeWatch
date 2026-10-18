@@ -1,10 +1,11 @@
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
-import { Object3D, type InstancedMesh } from 'three'
-import { levelInUse } from '../logic/quality'
+import { Object3D, RingGeometry, type InstancedMesh } from 'three'
+import { cityEvents } from '../../office-live/city-events'
+import { workTripStore } from '../../office-live/work-trip-store'
 import { groundHeight } from '../player/walk-ground'
 import type { Player } from '../player/walking'
-import { useQualityChoice } from '../quality-store'
+import { useQualityLevel } from '../quality-store'
 import type { FloorGeometry } from '../scene-model'
 import { getTheme } from '../themes/registry'
 import type { OfficeTheme } from '../themes/types'
@@ -12,14 +13,14 @@ import type { TownPlan } from '../town/town-plan'
 import { townTrips } from '../town/town-trips'
 import { citizenGeometry } from './figure-parts'
 import { moverFigure, moverKinds } from './mover-kinds'
-import { routePose, turnToward } from './route-pose'
+import { routePose, turnToward, type CitizenPose } from './route-pose'
 import { SceneBodies } from '../scene/BodySpace'
 import { citizenBodyId } from './crowd-movement'
 import { moverClock, moverRouteKey, type MoverClock } from './mover-clock'
 import { CITIZEN_BODY_RADIUS } from '../../../shared/office/body-footprints'
-import { citizenGround, citySidewalks } from './city-sidewalks'
+import { citizenGround } from './city-sidewalks'
 import { stepMovers } from './mover-step'
-import { zebraTraffic } from './zebra-traffic'
+import { createWorkFleet, type WorkCarry, type WorkFleet } from './work-fleet'
 
 interface MoverLayerProps {
   floor: FloorGeometry
@@ -37,6 +38,8 @@ const MAX_STEP_SEC = 0.25
 const TURN_PER_SEC = 7
 const STRIDE_M = 0.3
 const BOB_M = 0.02
+// A work trip's ground ring, just clear of the road paint.
+const RING_LIFT_M = 0.04
 const scratch = new Object3D()
 
 // The town's citizens and vehicles: one instanced draw per kind of figure, moved by writing
@@ -46,8 +49,7 @@ export function MoverLayer(props: MoverLayerProps) {
   const { hasVehicles } = props
   const bodies = useMemo(() => props.bodies ?? new SceneBodies(), [props.bodies])
   const ground = useMemo(() => citizenGround(plan), [plan])
-  const { pin, chosen } = useQualityChoice()
-  const detail = levelInUse(pin, chosen)
+  const detail = useQualityLevel()
   const trips = useMemo(() => {
     return townTrips({ plan, floorThemeId: floorTheme.id, detail, hasVehicles })
   }, [plan, floorTheme.id, detail, hasVehicles])
@@ -62,9 +64,13 @@ export function MoverLayer(props: MoverLayerProps) {
 
   const meshesRef = useRef<(InstancedMesh | null)[]>([])
   const clockRef = useRef<MoverClock | undefined>(undefined)
+  const fleetRef = useRef<WorkFleet | undefined>(undefined)
+  const carriedRef = useRef<WorkCarry[]>([])
   const tripsKey = trips.map(moverRouteKey).join('|')
   // Presentation changes retain each unchanged route, even when the total mover count changes.
   const clock = useMemo(() => {
+    // Trips under way hand their loops back first, so the new clock keeps each slot's place.
+    carriedRef.current.push(...(fleetRef.current?.release() ?? []))
     const next = moverClock({
       trips,
       space: bodies,
@@ -75,13 +81,30 @@ export function MoverLayer(props: MoverLayerProps) {
     return next
   }, [tripsKey, bodies])
 
-  const traffic = useMemo(() => zebraTraffic(trips, citySidewalks(plan)), [trips, plan])
+  // Work trips borrow fleet slots and re-route from where they stand after a relayout.
+  const fleet = useMemo(() => {
+    carriedRef.current.push(...(fleetRef.current?.release() ?? []))
+    const next = createWorkFleet({ plan, trips, clock, carried: carriedRef.current.splice(0) })
+    fleetRef.current = next
+    return next
+  }, [plan, trips, clock])
+  const vehicleSlots = useMemo(
+    () => trips.flatMap((trip, index) => (trip.kind === 'citizen' ? [] : [index])),
+    [trips]
+  )
+  const hasRings = detail === 'full' && vehicleSlots.length > 0
+  const ringGeometry = useMemo(() => new RingGeometry(1.2, 1.6, 20).rotateX(-Math.PI / 2), [])
+  useEffect(() => () => ringGeometry.dispose(), [ringGeometry])
+  const ringsRef = useRef<InstancedMesh | null>(null)
+  // The ring instances lit last frame; null until a new mesh's first write.
+  const ringsShown = useRef<readonly number[] | null>(null)
 
   const place = (deltaSec: number): void => {
     const { moved, headings } = clock
+    const { trips: movers, traffic } = fleet
     if (deltaSec > 0)
       stepMovers({
-        trips,
+        trips: movers,
         clock,
         space: bodies,
         ground,
@@ -91,11 +114,13 @@ export function MoverLayer(props: MoverLayerProps) {
         traffic,
         deltaSec
       })
+    fleet.settle()
+    const posed: CitizenPose[] = []
     kinds.forEach((kind, kindIndex) => {
       const mesh = meshesRef.current[kindIndex]
       const isVehicle = kind.kind !== 'citizen'
       kind.members.forEach((index, instance) => {
-        const { route, speed } = trips[index]
+        const { route, speed } = movers[index]
         const pose = isVehicle
           ? routePose(route, moved[index] * speed, speed)
           : clock.positions[index]
@@ -109,6 +134,7 @@ export function MoverLayer(props: MoverLayerProps) {
           isVehicle || !clock.isWalking[index]
             ? 0
             : Math.abs(Math.sin((clock.strides[index] / STRIDE_M) * Math.PI)) * BOB_M
+        posed[index] = pose
         scratch.position.set(pose.x, groundHeight(floor, pose) + bob, pose.z)
         scratch.rotation.y = headings[index]
         // Gone indoors: there, but nothing of it drawn.
@@ -118,6 +144,25 @@ export function MoverLayer(props: MoverLayerProps) {
       })
       if (mesh) mesh.instanceMatrix.needsUpdate = true
     })
+    const rings = ringsRef.current
+    const working = fleet.inFlight()
+    const shown = ringsShown.current
+    if (!rings || (working.length === 0 && shown?.length === 0)) return
+    const lit = working.map((slot) => vehicleSlots.indexOf(slot))
+    // Only the rings lit now or last frame change; a new mesh has every one to clear.
+    const changed = shown === null ? vehicleSlots.keys() : new Set([...shown, ...lit])
+    rings.instanceMatrix.clearUpdateRanges()
+    for (const instance of changed) {
+      const pose = posed[vehicleSlots[instance]]
+      scratch.position.set(pose.x, groundHeight(floor, pose) + RING_LIFT_M, pose.z)
+      scratch.rotation.y = 0
+      scratch.scale.setScalar(lit.includes(instance) && !pose.isIndoors ? 1 : 0)
+      scratch.updateMatrix()
+      rings.setMatrixAt(instance, scratch.matrix)
+      if (shown !== null) rings.instanceMatrix.addUpdateRange(instance * 16, 16)
+    }
+    rings.instanceMatrix.needsUpdate = true
+    ringsShown.current = lit
   }
 
   // Placed on every commit: under reduced motion this is where they stay, where their loops start.
@@ -133,7 +178,9 @@ export function MoverLayer(props: MoverLayerProps) {
       })
   }, [clock, bodies, trips, ground])
   useFrame((_state, deltaSec) => {
-    if (!isReducedMotion) place(Math.min(deltaSec, MAX_STEP_SEC))
+    if (isReducedMotion) return
+    for (const request of workTripStore.take(cityEvents.active())) fleet.dispatch(request)
+    place(Math.min(deltaSec, MAX_STEP_SEC))
   })
 
   return (
@@ -150,6 +197,19 @@ export function MoverLayer(props: MoverLayerProps) {
           <meshStandardMaterial vertexColors roughness={0.85} metalness={0.05} />
         </instancedMesh>
       ))}
+      {hasRings && (
+        <instancedMesh
+          name="work-trip-rings"
+          ref={(mesh) => {
+            ringsRef.current = mesh
+            ringsShown.current = null
+          }}
+          args={[ringGeometry, undefined, vehicleSlots.length]}
+          frustumCulled={false}
+        >
+          <meshStandardMaterial color={floorTheme.palette.glow} roughness={0.6} metalness={0} />
+        </instancedMesh>
+      )}
     </>
   )
 }

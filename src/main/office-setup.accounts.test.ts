@@ -39,10 +39,12 @@ const accounts = {
     accounts: [ACCOUNT]
   }),
   onOfficeChange: vi.fn(() => () => {}),
+  projectsToday: () => undefined,
   isWatchingAccounts: false,
-  onWatchingChange: vi.fn((_listener: () => void) => () => {})
+  onWatchingChange: vi.fn((_listener: () => void) => () => {}),
+  onUsageDurable: vi.fn((_listener: () => void) => vi.fn())
 }
-const bridge = { on: vi.fn(), kill: vi.fn() }
+const bridge = { on: vi.fn(), kill: vi.fn(), postMessage: vi.fn() }
 const bridgeSays = (message: unknown): void => {
   for (const [event, listener] of bridge.on.mock.calls) if (event === 'message') listener(message)
 }
@@ -103,4 +105,23 @@ it('serves the snapshot with each session’s account and the account list', () 
     accounts: [ACCOUNT],
     sessions: [{ key: 'claude:a', accountKey: ACCOUNT.key, accountConfidence: 'inferred' }]
   })
+})
+
+it('tells the bridge the latest hand-over once the ledger has it on disk, and only once', () => {
+  const ledgerSaved = accounts.onUsageDurable.mock.calls[0][0]
+  ledgerSaved()
+  expect(bridge.postMessage).not.toHaveBeenCalled()
+  bridgeSays({ type: 'usage', v: 1, handover: 1, deltas: [] })
+  bridgeSays({ type: 'usage', v: 1, handover: 2, deltas: [] })
+  ledgerSaved()
+  ledgerSaved()
+  expect(bridge.postMessage.mock.calls).toEqual([[{ type: 'usage-durable', handover: 2 }]])
+})
+
+it('stops answering a bridge once it has exited', () => {
+  const unsubscribe = accounts.onUsageDurable.mock.results[0]?.value
+  office.stop()
+  expect(unsubscribe).not.toHaveBeenCalled()
+  for (const [event, listener] of bridge.on.mock.calls) if (event === 'exit') listener(0)
+  expect(unsubscribe).toHaveBeenCalledOnce()
 })
