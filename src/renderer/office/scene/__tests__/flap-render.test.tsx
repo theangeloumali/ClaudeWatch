@@ -62,7 +62,7 @@ function mount(agent: AgentView) {
   return { root, presence, show: (view: AgentView) => rerender(robotFor(view)) }
 }
 
-// live-feed's frame gaps: every tick in focus, 200 ms blurred, and one stalled 1 s step.
+// How the views reach the robot: every tick, held back as a slow commit can, or one stalled step.
 interface Delivery {
   frameGapMs: number
   flapAfterTicks: number
@@ -125,7 +125,7 @@ function playFlap({ frameGapMs, flapAfterTicks, firstStepMs }: Delivery) {
 it.each<[string, Delivery]>([
   ['each tick', { frameGapMs: 0, flapAfterTicks: 2 }],
   // Back before its fade ever showed: the fade's frame is held, its seat's is not.
-  ['at the blurred rate', { frameGapMs: 200, flapAfterTicks: 0 }],
+  ['with its fade held back a tick', { frameGapMs: 200, flapAfterTicks: 0 }],
   ['in one stalled step', { frameGapMs: 0, flapAfterTicks: 0, firstStepMs: 1000 }]
 ])('never draws a flapped gamer moving or popping while it can be seen (%s)', (_, delivery) => {
   const { drawnWhileVisible, jumpScales, largestScaleStep } = playFlap(delivery)
@@ -134,4 +134,31 @@ it.each<[string, Delivery]>([
   expect(jumpScales).toHaveLength(1)
   expect(jumpScales[0]).toBeLessThanOrEqual(1e-9)
   expect(largestScaleStep).toBeLessThanOrEqual(SHRINK_STEP + 1e-9)
+})
+
+// A leaver has no reseat to wait for: its robot unmounts with the frame that drops it. live-feed
+// sends a fade's first view at once, so the shrink always has the whole fade.
+it('a leaver has shrunk away by the frame that removes it', () => {
+  const city = new CityWorld((now) => [observed(KEY, 'p_a', now)])
+  let gaming: AgentView | undefined
+  city.run(
+    LOUNGE_DELAY_MS + 30_000,
+    (views) => void (gaming = views.find((v) => v.agentKey === KEY))
+  )
+  officePoses.write(KEY, poseOf(gaming!))
+  const { presence, show } = mount(gaming!)
+  let scaleWhenRemoved: number | undefined
+  city.patch([], [KEY])
+  for (let tick = 0; tick < 10; tick++) {
+    const view = city.step().find((v) => v.agentKey === KEY)
+    if (!view) {
+      scaleWhenRemoved = presence.scale.x
+      break
+    }
+    officePoses.write(KEY, poseOf(view))
+    show(view)
+    for (let i = 0; i < 6; i++) frames.callbacks.at(-1)?.({ clock: { elapsedTime: 0 } }, FRAME_S)
+  }
+
+  expect(scaleWhenRemoved).toBeLessThanOrEqual(1e-9)
 })

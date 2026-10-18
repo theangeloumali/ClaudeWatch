@@ -145,8 +145,8 @@ function createEnvironment(
         v: 1,
         snapshot: { rev: seq, generatedAtMs: Date.now(), sessions, sources }
       }),
-    patch: (upserts: SessionRef[]) =>
-      listener?.({ type: 'patch', v: 1, seq: ++seq, upserts, removed: [] })
+    patch: (upserts: SessionRef[], removed: string[] = []) =>
+      listener?.({ type: 'patch', v: 1, seq: ++seq, upserts, removed })
   }
 }
 
@@ -211,5 +211,18 @@ describe('live feed frames and poses (perf-2)', () => {
     vi.advanceTimersByTime(100)
     expect(environment.frames).toHaveLength(before + 1)
     expect(environment.frames.at(-1)?.agents[0]?.attention).toBe('permission')
+  })
+
+  // Its robot shrinks over the fade; held back a tick, a leaver unmounts before it has shrunk.
+  it('sends the first view of a fade at once while out of focus', () => {
+    const environment = createEnvironment({ isHidden: false, isFocused: false })
+    environment.hello([session('claude:a'), session('claude:b')])
+    vi.advanceTimersByTime(100)
+    const before = environment.frames.length
+    environment.patch([], ['claude:b'])
+    vi.advanceTimersByTime(100)
+    expect(environment.frames).toHaveLength(before + 1)
+    const leaver = environment.frames.at(-1)?.agents.find((a) => a.agentKey === 'claude:b')
+    expect(leaver?.fade).toBeDefined()
   })
 })
