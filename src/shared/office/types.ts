@@ -181,6 +181,9 @@ export interface AgentView {
   place?: 'lounge' | 'leaving'
   // How far a departing agent has faded out where it stands, 0–1; absent while fully here.
   fade?: number
+  // Times the sim seated it away from where it faded, absent until the first. One step can
+  // span a whole fade, so this count, not `fade`, tells the renderer to hide the jump.
+  reseats?: number
 }
 
 // How long a departing agent takes to fade out where it stands.

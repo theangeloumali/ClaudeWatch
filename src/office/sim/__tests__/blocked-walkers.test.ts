@@ -10,6 +10,7 @@ import { LOUNGE_DELAY_MS } from '../behaviour'
 import { deskOf } from '../layout'
 import { floorElevation } from '../world-floor-routes'
 import { CityWorld, observed } from './city-harness'
+import { TICK_MS } from './door-invariants'
 
 // Full sim runs: the 5 s default times out under load (health-9).
 vi.setConfig({ testTimeout: 60_000 })
@@ -22,6 +23,8 @@ const MAX_STEP_METRES = 0.140001
 const CALLED_HOME_WITHIN_MS = 27_000
 // Measured 14.0 s: a 12 s stall and two retries a second apart, then the fade.
 const SET_OUT_WITHIN_MS = 16_000
+// live-feed's longest step: the sim runs ten ticks in it, more than a whole fade.
+const STALLED_STEP_MS = 1000
 
 const working = (nowMs: number): SessionRef => ({
   ...observed(GAMER, 'p_a', nowMs),
@@ -80,6 +83,38 @@ describe('a walker blocked for good fades home instead of standing forever', () 
       movedWhileFaded: followed.movedWhileFaded
     }).toEqual({ isSeated: true, isWalking: true, movedWhileFaded: 0 })
     expect(followed.doneAtMs).toBeLessThanOrEqual(CALLED_HOME_WITHIN_MS)
+  })
+
+  // A stalled frame can run the stall, the fade and the seat in one step; the count still shows it.
+  it('counts the reseat of a walker whose whole fade home fits in one step', () => {
+    const calledHome = () => {
+      const { city, crate } = gamerWorld()
+      city.run(SETTLE_MS, () => {})
+      city.world.setBodyObstacles([crate])
+      city.patch([working(city.clock)])
+      return city
+    }
+    let fadeAtMs = 0
+    calledHome().run(60_000, (frame, elapsedMs) => {
+      if (frame.find((view) => view.agentKey === GAMER)?.fade === undefined) return false
+      fadeAtMs = elapsedMs
+      return true
+    })
+    expect(fadeAtMs).toBeGreaterThan(0)
+    const city = calledHome()
+    city.run(fadeAtMs - TICK_MS, () => {})
+    const stalled = city.world.step(0).find((view) => view.agentKey === GAMER)!
+    const desk = deskOf(city.world.layout().floors, stalled)!.desk
+    expect(stalled.fade).toBeUndefined()
+    expect(Math.hypot(stalled.x - desk.x, stalled.z - desk.z)).toBeGreaterThan(WORKER_BODY_RADIUS)
+    city.clock += STALLED_STEP_MS
+    const seated = city.world.step(STALLED_STEP_MS).find((view) => view.agentKey === GAMER)
+
+    expect({ isSeated: city.isSeated(seated), fade: seated?.fade }).toEqual({
+      isSeated: true,
+      fade: undefined
+    })
+    expect(seated?.reseats).toBe((stalled.reseats ?? 0) + 1)
   })
 
   // Back at its desk it waits the lounge delay again, rather than walk straight back out.
