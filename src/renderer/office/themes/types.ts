@@ -1,6 +1,7 @@
 import type { ComponentType, RefObject } from 'react'
 import type { BufferGeometry, Group, Mesh } from 'three'
 import type { RobotMood, RobotPose } from '../logic/character-pose'
+import type { SeatEase } from '../logic/seat-ease'
 import type { AgentView, ProviderId } from '../../../shared/office/types'
 import type {
   DeskSlot,
@@ -68,6 +69,8 @@ export interface ThemePoseOptions {
   isSubagent?: boolean
   isInLounge?: boolean
   seatPresence?: 'workstation' | 'lounge' | 'none'
+  // The figure's sit or stand, carried across frames and advanced by the pose adapter.
+  seat?: SeatEase
 }
 
 // Root translation, scale, hit capsule and selection remain owned by Robot's controller.
