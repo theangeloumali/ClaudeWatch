@@ -6,6 +6,8 @@ export interface AgentPose {
   z: number
   heading: number
   elevation: number
+  // The view's reseat count, so a frame never sees a desk pose before the reseat that put it there.
+  reseats?: number
 }
 
 export interface PoseStore {
@@ -17,7 +19,11 @@ export interface PoseStore {
 }
 
 const isSamePose = (a: AgentPose, b: AgentPose): boolean =>
-  a.x === b.x && a.z === b.z && a.heading === b.heading && a.elevation === b.elevation
+  a.x === b.x &&
+  a.z === b.z &&
+  a.heading === b.heading &&
+  a.elevation === b.elevation &&
+  a.reseats === b.reseats
 
 export function createPoseStore(): PoseStore {
   const poses = new Map<string, AgentPose>()
@@ -41,7 +47,8 @@ export const poseOf = (agent: AgentView): AgentPose => ({
   x: agent.x,
   z: agent.z,
   heading: agent.heading,
-  elevation: agent.elevation ?? 0
+  elevation: agent.elevation ?? 0,
+  reseats: agent.reseats
 })
 
 // The live pose where the store has one, else the one the frame carried.

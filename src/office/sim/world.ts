@@ -27,7 +27,7 @@ import { MovementRecovery } from './movement-recovery'
 import { placements, type Placement } from './placements'
 import { FloorRoutes, floorElevation } from './world-floor-routes'
 import { reconcileLeisure } from './world-leisure'
-import { seatAtDesk } from './world-recall'
+import { isSeatedElsewhere, seatAtDesk } from './world-recall'
 import { TickCrowd } from './tick-crowd'
 import {
   recoverWorkerRoute,
@@ -52,6 +52,8 @@ export class World {
   private readonly fading = new Map<string, number>()
   // Unseen, so no body until their desk takes them: newcomers fading in, recalls fully faded.
   private readonly arrivals = new Set<string>()
+  // Each agent's count of seats away from where it faded, which its views carry.
+  private readonly reseats = new Map<string, number>()
   private readonly passages = new BodyPassages()
   // Who waited on whom last tick, and who could have stepped; one of each cycle steps now.
   private waitEdges = new Map<string, string>()
@@ -396,6 +398,8 @@ export class World {
     this.arrivals.add(key)
     const seated = seatAtDesk(agent, this.map.floors, crowd.bodies)
     if (!seated) return
+    if (isSeatedElsewhere(agent.view, seated.view))
+      this.reseats.set(key, (this.reseats.get(key) ?? 0) + 1)
     this.agents.set(key, crowd.updated(seated))
     this.fading.delete(key)
     this.arrivals.delete(key)
@@ -408,6 +412,7 @@ export class World {
     this.recovery.clear(key)
     this.passages.clear(key)
     this.fading.delete(key)
+    this.reseats.delete(key)
   }
 
   step(dtMs: number): AgentView[] {
@@ -443,6 +448,8 @@ export class World {
           a.state === 'leaving' ? { ...a.view, place: 'leaving' } : { ...a.view }
         const fadedMs = this.fading.get(a.view.agentKey)
         if (fadedMs !== undefined) view.fade = fadedMs / DEPARTURE_FADE_MS
+        const reseats = this.reseats.get(a.view.agentKey)
+        if (reseats) view.reseats = reseats
         return view
       })
   }

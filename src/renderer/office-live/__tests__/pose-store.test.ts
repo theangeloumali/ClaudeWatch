@@ -6,7 +6,7 @@ import { createOfficeSettingsStore } from '../../office/logic/office-settings'
 import type { PageVisibility } from '../../office/logic/frame-governor'
 import type { OfficeFrame } from '../../office/scene-model'
 import { createLiveFeed, type FeedSource } from '../live-feed'
-import { createPoseStore, officePoses, structuralKey, withLivePose } from '../pose-store'
+import { createPoseStore, officePoses, poseOf, structuralKey, withLivePose } from '../pose-store'
 
 const agent = (overrides: Partial<AgentView> = {}): AgentView => ({
   agentKey: 'claude:a',
@@ -41,6 +41,18 @@ describe('createPoseStore', () => {
     expect(poses.version()).toBe(moved)
     poses.write('claude:a', { x: 1.1, z: 2, heading: 0, elevation: 0 })
     expect(poses.version()).toBe(moved + 1)
+  })
+
+  // The frame loop reads the reseat with the desk pose it explains, before React hears of it.
+  it('keeps a reseat even where the pose it lands with has not moved', () => {
+    const poses = createPoseStore()
+    poses.write('claude:a', poseOf(agent()))
+    const before = poses.version()
+    poses.write('claude:a', poseOf(agent({ reseats: 1 })))
+    expect({ reseats: poses.read('claude:a')?.reseats, version: poses.version() }).toEqual({
+      reseats: 1,
+      version: before + 1
+    })
   })
 
   it('forgets agents that left the roster', () => {
@@ -83,7 +95,8 @@ describe('structuralKey', () => {
     ['attention', { attention: 'permission' }],
     ['label', { label: 'renamed' }],
     ['physical floor', { physicalFloorId: null }],
-    ['fade start', { fade: 0 }]
+    ['fade start', { fade: 0 }],
+    ['reseat count', { reseats: 1 }]
   ])('changes with the %s', (_name, change) => {
     expect(structuralKey([agent(change)])).not.toBe(reference)
   })
@@ -132,8 +145,8 @@ function createEnvironment(
         v: 1,
         snapshot: { rev: seq, generatedAtMs: Date.now(), sessions, sources }
       }),
-    patch: (upserts: SessionRef[]) =>
-      listener?.({ type: 'patch', v: 1, seq: ++seq, upserts, removed: [] })
+    patch: (upserts: SessionRef[], removed: string[] = []) =>
+      listener?.({ type: 'patch', v: 1, seq: ++seq, upserts, removed })
   }
 }
 
@@ -198,5 +211,18 @@ describe('live feed frames and poses (perf-2)', () => {
     vi.advanceTimersByTime(100)
     expect(environment.frames).toHaveLength(before + 1)
     expect(environment.frames.at(-1)?.agents[0]?.attention).toBe('permission')
+  })
+
+  // Its robot shrinks over the fade; held back a tick, a leaver unmounts before it has shrunk.
+  it('sends the first view of a fade at once while out of focus', () => {
+    const environment = createEnvironment({ isHidden: false, isFocused: false })
+    environment.hello([session('claude:a'), session('claude:b')])
+    vi.advanceTimersByTime(100)
+    const before = environment.frames.length
+    environment.patch([], ['claude:b'])
+    vi.advanceTimersByTime(100)
+    expect(environment.frames).toHaveLength(before + 1)
+    const leaver = environment.frames.at(-1)?.agents.find((a) => a.agentKey === 'claude:b')
+    expect(leaver?.fade).toBeDefined()
   })
 })

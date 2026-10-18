@@ -3,7 +3,7 @@ import { createElement } from 'react'
 import { Euler, Vector3 } from 'three'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { officePoses, poseOf, structuralKey } from '../../../office-live/pose-store'
-import type { AgentView } from '../../../../shared/office/types'
+import { DEPARTURE_FADE_MS, SIM_TICK_MS, type AgentView } from '../../../../shared/office/types'
 import { themeForTeam } from '../../themes/registry'
 import { Robot } from '../Robot'
 import { CityWorld, observed } from '../../../../office/sim/__tests__/city-harness'
@@ -62,7 +62,17 @@ function mount(agent: AgentView) {
   return { root, presence, show: (view: AgentView) => rerender(robotFor(view)) }
 }
 
-it('never draws a flapped gamer moving while it can be seen', () => {
+// How the views reach the robot: every tick, held back as a slow commit can, or one stalled step.
+interface Delivery {
+  frameGapMs: number
+  flapAfterTicks: number
+  firstStepMs?: number
+}
+const FRAME_S = 1 / 60
+// The shrink is the faster ease, so no frame may change size by more than one of its steps.
+const SHRINK_STEP = (FRAME_S * 1000) / (DEPARTURE_FADE_MS - SIM_TICK_MS)
+
+function playFlap({ frameGapMs, flapAfterTicks, firstStepMs }: Delivery) {
   const city = new CityWorld((now) => [observed(KEY, 'p_a', now)])
   let seated: AgentView | undefined
   city.run(
@@ -73,33 +83,82 @@ it('never draws a flapped gamer moving while it can be seen', () => {
   officePoses.write(KEY, poseOf(seated!))
   const { root, presence, show } = mount(seated!)
   let lastKey = structuralKey([seated!])
+  let sinceFrameMs = 0
   let drawnWhileVisible = 0
+  let largestScaleStep = 0
   // The drawn size at each teleport: it should already have shrunk away, not pop out.
   const jumpScales: number[] = []
-  const tick = () => {
-    // As live-feed does: poses every tick, the agent prop only when its structure changes.
-    const view = city.step().find((v) => v.agentKey === KEY)!
+  const draw = (views: AgentView[], stepMs: number) => {
+    // As live-feed does: poses every step, the agent prop only when its structure changes.
+    const view = views.find((v) => v.agentKey === KEY)!
     officePoses.write(KEY, poseOf(view))
+    sinceFrameMs += stepMs
     const key = structuralKey([view])
-    if (key !== lastKey) show(view)
-    lastKey = key
+    if (key !== lastKey && sinceFrameMs >= frameGapMs) {
+      show(view)
+      lastKey = key
+      sinceFrameMs = 0
+    }
     for (let i = 0; i < 6; i++) {
       const before = root.position.clone()
       const scaleBefore = presence.scale.x
-      frames.callbacks.at(-1)?.({ clock: { elapsedTime: 0 } }, 1 / 60)
+      frames.callbacks.at(-1)?.({ clock: { elapsedTime: 0 } }, FRAME_S)
       const step = before.distanceTo(root.position)
+      largestScaleStep = Math.max(largestScaleStep, Math.abs(presence.scale.x - scaleBefore))
       // A glide: drawn at both ends of a small step. A one-frame jump is a teleport, counted apart.
       if (scaleBefore > 0 && presence.scale.x > 0 && step < 1) drawnWhileVisible += step
       if (step >= 1) jumpScales.push(scaleBefore)
     }
   }
+  const tick = () => draw(city.step(), SIM_TICK_MS)
   city.patch([], [KEY])
-  tick()
-  tick()
+  for (let i = 0; i < flapAfterTicks; i++) tick()
   city.patch([{ ...observed(KEY, 'p_a', city.clock), activity: 'thinking' }])
-  for (let i = 0; i < 12; i++) tick()
+  if (firstStepMs) {
+    city.clock += firstStepMs
+    draw(city.world.step(firstStepMs), firstStepMs)
+  }
+  for (let i = 0; i < 16; i++) tick()
+  return { drawnWhileVisible, jumpScales, largestScaleStep }
+}
+
+it.each<[string, Delivery]>([
+  ['each tick', { frameGapMs: 0, flapAfterTicks: 2 }],
+  // Back before its fade ever showed: the fade's frame is held, its seat's is not.
+  ['with its fade held back a tick', { frameGapMs: 200, flapAfterTicks: 0 }],
+  ['in one stalled step', { frameGapMs: 0, flapAfterTicks: 0, firstStepMs: 1000 }]
+])('never draws a flapped gamer moving or popping while it can be seen (%s)', (_, delivery) => {
+  const { drawnWhileVisible, jumpScales, largestScaleStep } = playFlap(delivery)
 
   expect(drawnWhileVisible).toBeLessThan(0.05)
   expect(jumpScales).toHaveLength(1)
-  expect(jumpScales[0]).toBeLessThanOrEqual(0.05)
+  expect(jumpScales[0]).toBeLessThanOrEqual(1e-9)
+  expect(largestScaleStep).toBeLessThanOrEqual(SHRINK_STEP + 1e-9)
+})
+
+// A leaver has no reseat to wait for: its robot unmounts with the frame that drops it. live-feed
+// sends a fade's first view at once, so the shrink always has the whole fade.
+it('a leaver has shrunk away by the frame that removes it', () => {
+  const city = new CityWorld((now) => [observed(KEY, 'p_a', now)])
+  let gaming: AgentView | undefined
+  city.run(
+    LOUNGE_DELAY_MS + 30_000,
+    (views) => void (gaming = views.find((v) => v.agentKey === KEY))
+  )
+  officePoses.write(KEY, poseOf(gaming!))
+  const { presence, show } = mount(gaming!)
+  let scaleWhenRemoved: number | undefined
+  city.patch([], [KEY])
+  for (let tick = 0; tick < 10; tick++) {
+    const view = city.step().find((v) => v.agentKey === KEY)
+    if (!view) {
+      scaleWhenRemoved = presence.scale.x
+      break
+    }
+    officePoses.write(KEY, poseOf(view))
+    show(view)
+    for (let i = 0; i < 6; i++) frames.callbacks.at(-1)?.({ clock: { elapsedTime: 0 } }, FRAME_S)
+  }
+
+  expect(scaleWhenRemoved).toBeLessThanOrEqual(1e-9)
 })

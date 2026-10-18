@@ -7,7 +7,7 @@ const FRAME_S = 1 / 60
 function settle(fade: number | undefined, isReducedMotion: boolean, seconds: number, from = 1) {
   let presence = from
   for (let elapsed = 0; elapsed < seconds; elapsed += FRAME_S)
-    presence = presenceAfter(presence, { fade }, FRAME_S, isReducedMotion)
+    presence = presenceAfter(presence, fade === undefined ? 1 : 0, FRAME_S, isReducedMotion)
   return presence
 }
 

@@ -1,4 +1,5 @@
 import { bodyFits, type BodyFootprint } from '../../shared/office/body-footprints'
+import type { AgentView } from '../../shared/office/types'
 import { agentBody } from './agent-body'
 import { returnToDesk, tickAgent, type AgentRecord } from './behaviour'
 import { deskOf, type FloorLayout } from './layout'
@@ -24,3 +25,10 @@ export function seatAtDesk(
   if (!bodyFits(agentBody(view), obstacles)) return null
   return tickAgent({ ...recalled, view }, 0)
 }
+
+// A seat anywhere but the spot it faded on is a jump the renderer has to hide.
+export const isSeatedElsewhere = (faded: AgentView, seated: AgentView): boolean =>
+  faded.x !== seated.x ||
+  faded.z !== seated.z ||
+  (faded.elevation ?? 0) !== (seated.elevation ?? 0) ||
+  faded.physicalFloorId !== seated.physicalFloorId
