@@ -13,6 +13,7 @@ import { agentBody } from './agent-body'
 import {
   createAgent,
   leaveAgent,
+  passTime,
   returnToDesk,
   setFinished,
   tickAgent,
@@ -416,10 +417,14 @@ export class World {
       const offset = this.movementTick++ % Math.max(1, ordered.length)
       const bodies = [...this.agents.values()].filter((a) => !this.arrivals.has(a.view.agentKey))
       const crowd = new TickCrowd(bodies, this.bodyObstacles)
-      for (const [key, agent] of [...ordered.slice(offset), ...ordered.slice(0, offset)]) {
+      for (const [key, current] of [...ordered.slice(offset), ...ordered.slice(0, offset)]) {
         const fadedMs = this.fading.get(key)
-        if (fadedMs === undefined) this.agents.set(key, this.moveAgent(agent, crowd))
-        else if (fadedMs + TICK_MS < DEPARTURE_FADE_MS) this.fading.set(key, fadedMs + TICK_MS)
+        // A fader stands still, but its clocks run, however long its desk is taken.
+        const agent =
+          fadedMs === undefined ? this.moveAgent(current, crowd) : passTime(current, TICK_MS)
+        this.agents.set(key, agent)
+        if (fadedMs === undefined) continue
+        if (fadedMs + TICK_MS < DEPARTURE_FADE_MS) this.fading.set(key, fadedMs + TICK_MS)
         else if (agent.state === 'leaving') this.remove(key, crowd)
         else this.seatRecalled(key, agent, crowd)
       }

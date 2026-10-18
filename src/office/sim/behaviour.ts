@@ -128,18 +128,35 @@ export function leaveAgent(agent: AgentRecord): AgentRecord {
   return { ...withoutPlace(agent), state: 'leaving', path: [], finishedForMs: null }
 }
 
+const elapsed = (agent: AgentRecord, dtMs: number): AgentRecord => ({
+  ...agent,
+  view: { ...agent.view },
+  path: agent.path.map((p) => ({ ...p })),
+  dwellMs: agent.dwellMs + dtMs,
+  finishedForMs: agent.finishedForMs === null ? null : agent.finishedForMs + dtMs
+})
+
+// A queued activity shows once it has dwelt, and a done state lapses back to work.
+function settle(next: AgentRecord): AgentRecord {
+  if (next.dwellMs >= 1500 && next.queued !== null) {
+    next.view.activity = next.queued
+    next.queued = null
+    next.dwellMs = 0
+  }
+  if (next.state === 'done' && next.dwellMs >= 1500) next.state = 'working'
+  return next
+}
+
+// Its clocks alone, for one that cannot move: a fader keeps its activity and lounge wait.
+export const passTime = (agent: AgentRecord, dtMs: number): AgentRecord =>
+  settle(elapsed(agent, dtMs))
+
 export function tickAgent(
   agent: AgentRecord,
   dtMs: number,
   move?: (from: AgentView, to: Point) => Point
 ): AgentRecord {
-  const next = {
-    ...agent,
-    view: { ...agent.view },
-    path: agent.path.map((p) => ({ ...p })),
-    dwellMs: agent.dwellMs + dtMs,
-    finishedForMs: agent.finishedForMs === null ? null : agent.finishedForMs + dtMs
-  }
+  const next = elapsed(agent, dtMs)
   if (next.state === 'arriving') {
     let distance = (dtMs / 1000) * WALK_METRES_PER_SECOND
     // Planar: every agent route stays on the agent's own floor.
@@ -179,11 +196,5 @@ export function tickAgent(
       if (next.state === 'done') next.dwellMs = 0
     }
   }
-  if (next.dwellMs >= 1500 && next.queued !== null) {
-    next.view.activity = next.queued
-    next.queued = null
-    next.dwellMs = 0
-  }
-  if (next.state === 'done' && next.dwellMs >= 1500) next.state = 'working'
-  return next
+  return settle(next)
 }
