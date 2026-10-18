@@ -130,13 +130,13 @@ This reverses his 2026-10-16 answer that idle agents "can roam the city".
 
 ## Results
 
-| Measure (view-only server, real sessions)            | Before (`bffdf19e`, 3 min)         | After (`3986ef23` + chunk, 10 min)                                                                            |
-| ---------------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| Agents within 1.6 m of a building entrance for ≥ 3 s | 4 (12–16 s each)                   | 0                                                                                                             |
-| Agent samples outside their building                 | 475                                | 0                                                                                                             |
-| Agent samples in a game corner                       | 0 (lounges only in first projects) | 1,908                                                                                                         |
-| Office floors with a game corner                     | —                                  | 4 of 4                                                                                                        |
-| Working agents walking, not seated                   | 101 samples (stuck in doorways)    | 44 samples, all walks back from the corner when work arrived (desk distance falling ~10.7 → 0.7 m over ~11 s) |
+| Measure (view-only server, real sessions)            | Before (`bffdf19e`, 3 min)         | After (`3986ef23` + chunk, 10 min)                   | Final (`74146770`, 10 min)    |
+| ---------------------------------------------------- | ---------------------------------- | ---------------------------------------------------- | ----------------------------- |
+| Agents within 1.6 m of a building entrance for ≥ 3 s | 4 (12–16 s each)                   | 0                                                    | 0                             |
+| Agent samples outside their building                 | 475                                | 0                                                    | 0                             |
+| Agent samples in a game corner                       | 0 (lounges only in first projects) | 1,908                                                | 2,396                         |
+| Office floors with a game corner                     | —                                  | 4 of 4                                               | 4 of 4                        |
+| Working agents walking, not seated                   | 101 samples (stuck in doorways)    | 44, all walks back from the corner when work arrived | 6, walks back from the corner |
 
 - Gates on the integrated tree: both `tsc`, `eslint .`, `knip` and prettier are clean, and vitest passed 5,439 tests.
 - Draw and triangle checks:
@@ -153,3 +153,16 @@ This reverses his 2026-10-16 answer that idle agents "can roam the city".
 - **No deeper split of the bundle.** Themes import from scene, town, logic and citizens, so a themes chunk would be circular with the page chunk. Cost if wrong: about 4.7 KB of growth breaks the sync again.
 - **Generated buildings leave room for the corner (Ruling 8 of the sim builder).** After the cleanup pass the corner is shallower, so a generated city leaves 48 filler lots (smallest 4.45 m). Cost if wrong: smaller filler lots on a freshly generated city.
 - **Corner rows sit a walkway apart (cleanup pass).** Rows are 2.95 m apart, derived from body radius plus route clearance, so a walker fits between two seated rows. The front row is 1.2 m from the screen, and a spec fails if any gamer walks through the screen strip. Cost if wrong: in a full eight-seat corner, one late gamer can pause about 12 s behind a sitter before going round the row end.
+
+### Review and Codex
+
+- **Codex:** pass 1 found 1 high and 2 medium issues; the re-run found 1 medium. All four were reproduced as failing specs and fixed:
+  - the desk-swap deadlock;
+  - a cross-floor robot appearing at full size;
+  - invisible newcomers acting as bodies;
+  - a returning leaver walking on, visible and solid, from where it faded (`56805ad5`).
+
+  Following the mandate's rule to re-run once, the Codex loop stopped after the re-run.
+
+- **Maya, first pass:** request changes (1 Critical, 6 Important, 10 Minor). All were fixed in two slices (`b4a1a276`, `c90da571`), plus `23bb1460` and `74146770`.
+- **Gates at `56805ad5`:** both `tsc`, `eslint .`, `knip` and prettier are clean; vitest passed 5,503 tests; the build is OK (`office.js` 476,925 bytes).
