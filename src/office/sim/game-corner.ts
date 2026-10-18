@@ -17,19 +17,15 @@ const SCREEN_METRES = 1.2
 // ones: a body and its margin each side, and half a grid cell for its column to fall in.
 const ROW_STEP_METRES = 2 * (2 * WORKER_BODY_RADIUS + ROUTE_MARGIN_METRES + NAV_CELL_METRES / 2)
 
-interface Direction {
-  x: number
-  z: number
-}
-const NORTH: Direction = { x: 0, z: -1 }
-const SOUTH: Direction = { x: 0, z: 1 }
-const WEST: Direction = { x: -1, z: 0 }
-const EAST: Direction = { x: 1, z: 0 }
+const NORTH: Point = { x: 0, z: -1 }
+const SOUTH: Point = { x: 0, z: 1 }
+const WEST: Point = { x: -1, z: 0 }
+const EAST: Point = { x: 1, z: 0 }
 
 // The corner stands `outward` of the offices; its seats face `ahead`, at the screen on that edge.
 interface Side {
-  outward: Direction
-  ahead: Direction
+  outward: Point
+  ahead: Point
   heading: number
 }
 // The default camera looks from +x, +z, so seats face -z or -x and the screen faces it. A
@@ -124,7 +120,7 @@ function enclose(rooms: readonly WorldFootprint[]): WorldFootprint {
 
 // Its near edge a room gap from the offices, centred on them and slid inside the walls.
 function besideOffices(
-  outward: Direction,
+  outward: Point,
   envelope: WorldFootprint,
   footprint: WorldFootprint,
   { away, along }: { away: number; along: number }
@@ -153,7 +149,7 @@ function besideOffices(
 // step back from it, all centred across the corner.
 function layOut(area: WorldFootprint, side: Side, seats: number, floorId: string): LoungeLayout {
   const { outward, ahead, heading } = side
-  const halfOf = ({ x }: Direction) => (x !== 0 ? area.width : area.depth) / 2
+  const halfOf = ({ x }: Point) => (x !== 0 ? area.width : area.depth) / 2
   const door = { x: area.x - outward.x * halfOf(outward), z: area.z - outward.z * halfOf(outward) }
   const screen = { x: area.x + ahead.x * halfOf(ahead), z: area.z + ahead.z * halfOf(ahead) }
   const across = { x: -ahead.z, z: ahead.x }
