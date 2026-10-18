@@ -203,13 +203,19 @@ describe('game corner: idle agents play on their own floor', () => {
     city.run(200, () => {})
     city.patch([working('claude:idle', 'p_b', city.clock)])
     let movedWhileFaded = 0
+    let turnedWhileFaded = false
     let isSeated = false
     city.run(5_000, (frame) => {
       const view = frame.find((candidate) => candidate.agentKey === 'claude:idle')!
       if (view.fade === undefined) return (isSeated = city.isSeated(view))
       movedWhileFaded = Math.max(movedWhileFaded, Math.hypot(view.x - idle.x, view.z - idle.z))
+      turnedWhileFaded ||= view.heading !== idle.heading
     })
-    expect({ movedWhileFaded, isSeated }).toEqual({ movedWhileFaded: 0, isSeated: true })
+    expect({ movedWhileFaded, turnedWhileFaded, isSeated }).toEqual({
+      movedWhileFaded: 0,
+      turnedWhileFaded: false,
+      isSeated: true
+    })
   })
 
   // Before I1 a gamer stood 12 s against an office wall and the last one sat after 41.9 s.

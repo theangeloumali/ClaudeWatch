@@ -257,6 +257,7 @@ export class World {
       Object.assign(agent.view, {
         x: existing.view.x,
         z: existing.view.z,
+        heading: existing.view.heading,
         elevation: existing.view.elevation,
         physicalFloorId: existing.view.physicalFloorId
       })
