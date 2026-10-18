@@ -50,7 +50,7 @@
 - [x] Phase 5: HUD (hide panels, privacy toggle, mini-map footprint and pan, Follow, labels round the chrome)
 - [x] Phase 6: Company lens (re-tint per company, company cards)
 - [x] Phase 7: Integration, live re-measure, local install (no STOP, Angelo 2026-10-17)
-- [ ] Phase 8: Close: simplify, review pair, Codex, dead code, checklist, MP4 demo, vault, push and merge to `main`
+- [x] Phase 8: Close: simplify, review pair, Codex, dead code, checklist, MP4 demo, vault, push and merge to `main`
 
 ## Diagrams
 
@@ -710,7 +710,7 @@ Research: `cross-cutting.md` X1, `hud.md` §1.
   - Follow
   - the company lens
 - [x] Vault learning.
-- [ ] Push, open one PR against `main` once the office-health PR has merged, and merge it with `gh pr merge --merge` (stacked branches; a squash would orphan the base).
+- [x] Push, open one PR against `main` once the office-health PR has merged, and merge it with `gh pr merge --merge` (stacked branches; a squash would orphan the base).
 
 ## Estimates (hours: with Claude / without)
 

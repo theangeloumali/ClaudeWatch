@@ -70,7 +70,7 @@ Finding ids below (`seating-1`, `P3` …) refer to those reports.
 - [x] Phase 7 — Performance: static and dynamic batches, motion out of React, cached batch keys, memoised validation, shader prewarm, host-served world document
 - [x] Phase 8 — Release and repo hygiene: one version line (1.4.1), honest Windows updater status, main-checkout mode noise, worktree cleanup
 - [x] Phase 9 — Integration: full gate chain, live re-measure on real data, owner calls, local install (no STOP, Angelo 2026-10-17)
-- [ ] Phase 10 — Close: simplify, review pair, Codex, dead code, checklist, MP4 demo, vault, push and merge to `main`
+- [x] Phase 10 — Close: simplify, review pair, Codex, dead code, checklist, MP4 demo, vault, push and merge to `main` (merged as #13, `211958bf`, 2026-10-18)
 
 ## Diagrams
 
