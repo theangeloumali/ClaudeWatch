@@ -225,4 +225,22 @@ describe('live feed frames and poses (perf-2)', () => {
     const leaver = environment.frames.at(-1)?.agents.find((a) => a.agentKey === 'claude:b')
     expect(leaver?.fade).toBeDefined()
   })
+
+  // A newcomer's robot mounts unseen, so its fade-in waits for the blurred rate (Maya n3).
+  it('keeps the blurred rate while only newcomers fade in', () => {
+    const environment = createEnvironment({ isHidden: false, isFocused: false })
+    environment.hello([session('claude:a')])
+    vi.advanceTimersByTime(1_000)
+    const before = environment.frames.length
+    for (let index = 0; index < 10; index++) {
+      environment.patch([session(`claude:new-${index}`)])
+      vi.advanceTimersByTime(100)
+    }
+    const newcomers = environment.frames
+      .slice(before)
+      .flatMap((frame) => frame.agents)
+      .filter((agent) => agent.agentKey.startsWith('claude:new-'))
+    expect(newcomers.some((agent) => agent.fade !== undefined)).toBe(true)
+    expect(environment.frames.length - before).toBeLessThanOrEqual(5)
+  })
 })

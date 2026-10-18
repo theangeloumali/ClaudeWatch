@@ -167,6 +167,7 @@ export function createLiveFeed(
     let structureRevision = 0
     let lastFrameAtMs = Number.NEGATIVE_INFINITY
     let sentFading = new Set<string>()
+    let sentKeys = new Set<string>()
     let isDirty = true
     let offDocument: (() => void) | undefined
     let documentRevision = -1
@@ -264,10 +265,10 @@ export function createLiveFeed(
       const agentsKey = structuralKey(agents)
       const gamers = gamersOf(agents)
       if (!isDirty && agentsKey === lastAgents && gamers === lastGamers) return
-      // A fade goes out at once: its robot shrinks over it, and a leaver held back a tick
-      // would unmount before it had shrunk away.
+      // A fade on a robot already drawn goes out at once: it shrinks over it, and a leaver held
+      // back a tick would unmount before it had shrunk away. A newcomer mounts unseen anyway.
       const fading = new Set(agents.filter((a) => a.fade !== undefined).map((a) => a.agentKey))
-      const startsFade = [...fading].some((key) => !sentFading.has(key))
+      const startsFade = [...fading].some((key) => !sentFading.has(key) && sentKeys.has(key))
       if (
         !startsFade &&
         !visibility.read().isFocused &&
@@ -275,12 +276,13 @@ export function createLiveFeed(
       )
         return
       sentFading = fading
+      sentKeys = new Set(agents.map((agent) => agent.agentKey))
       isDirty = false
       if (agentsKey !== lastAgents) structureRevision += 1
       lastAgents = agentsKey
       lastGamers = gamers
       lastFrameAtMs = tick
-      poses.retain(new Set(agents.map((agent) => agent.agentKey)))
+      poses.retain(sentKeys)
       const frame: OfficeFrame = {
         floors,
         agents,
