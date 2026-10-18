@@ -47,6 +47,27 @@ describe('the reseat marker survives a step that spans a whole fade', () => {
     expect(seated?.reseats).toBe((gaming.reseats ?? 0) + 1)
   })
 
+  // An agent that leaves for good takes its count with it, so a key that returns starts fresh.
+  it('starts a returning session key with no count once its old agent has gone', () => {
+    const { city, gaming } = gamerInLounge()
+    city.patch([], [GAMER])
+    city.patch([{ ...observed(GAMER, 'p_a', city.clock), activity: 'thinking' }])
+    city.clock += STALLED_STEP_MS
+    const reseated = viewOf(city.world.step(STALLED_STEP_MS), GAMER)
+    expect(reseated?.reseats).toBe((gaming.reseats ?? 0) + 1)
+    city.patch([], [GAMER])
+    city.clock += STALLED_STEP_MS
+    expect(viewOf(city.world.step(STALLED_STEP_MS), GAMER)).toBeUndefined()
+    city.patch([observed(GAMER, 'p_a', city.clock)])
+    city.clock += STALLED_STEP_MS
+    const returned = viewOf(city.world.step(STALLED_STEP_MS), GAMER)
+
+    expect({ isSeated: city.isSeated(returned), reseats: returned?.reseats }).toEqual({
+      isSeated: true,
+      reseats: undefined
+    })
+  })
+
   it('leaves the count alone for a newcomer that fades in at its own desk', () => {
     const city = new CityWorld((nowMs) => [observed(GAMER, 'p_a', nowMs)])
     city.patch([observed(NEWCOMER, 'p_a', city.clock)])
