@@ -53,7 +53,7 @@ interface CornerSize {
 }
 
 // A seat for every desk on the floor, up to a full corner of eight.
-export const cornerSeats = (deskCount: number): number => clamp(deskCount, [1, MAX_SEATS])
+const cornerSeats = (deskCount: number): number => clamp(deskCount, [1, MAX_SEATS])
 
 // Seats a pitch apart with half a metre beyond each end's half pitch; four make LOUNGE_WIDTH.
 const rowWidth = (seats: number): number => loungeMetres(1 + 1.25 * seats)
