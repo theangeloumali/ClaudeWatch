@@ -49,7 +49,7 @@
 - [x] Phase 4: Growth, leaders and events (token spires, construction rig, crowns, leaders card, beacons, smoke and the `limited` producer, milestone fireworks, done flags, news line)
 - [x] Phase 5: HUD (hide panels, privacy toggle, mini-map footprint and pan, Follow, labels round the chrome)
 - [x] Phase 6: Company lens (re-tint per company, company cards)
-- [ ] Phase 7: Integration, live re-measure, local install (no STOP, Angelo 2026-10-17)
+- [x] Phase 7: Integration, live re-measure, local install (no STOP, Angelo 2026-10-17)
 - [ ] Phase 8: Close: simplify, review pair, Codex, dead code, checklist, MP4 demo, vault, push and merge to `main`
 
 ## Diagrams
@@ -681,10 +681,13 @@ Research: `cross-cutting.md` X1, `hud.md` §1.
   - 0 citizen or vehicle samples on a carriageway outside a crossing;
   - 0 working agents off their desks;
   - events fired only on evidence edges (the log against feed messages).
-- [ ] Install locally:
+- [x] Install locally:
   - a physical `node_modules` copy, Developer ID signing, no notarisation;
   - back up the old bundle to `~/Applications/`, `ditto` into `/Applications`;
   - `codesign --verify --deep --strict`.
+
+  Done 2026-10-18 from `0c1ba903`: 1.4.1, ZKidz Dev LLC (7QZW432V8B), verify passes. Busiest renderer unfocused: 6.1% CPU over 60 s. Page probe: draws full 38 → 44, balanced 37 → 39, light 34 → 35.
+
 - [ ] Report before/after to Angelo, with screenshots at city, building and desk zoom. No STOP (Angelo, 2026-10-17); Phase 8 follows.
 
 ## Phase 8 — Close and merge (lead + Wave 2)
