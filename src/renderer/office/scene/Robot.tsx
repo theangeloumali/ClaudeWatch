@@ -22,7 +22,7 @@ import { workerSeats, workerSeatPresence, type WorkerSeats } from './worker-seat
 const MOVE_RATE = 5
 const TURN_RATE = 6
 const MOVING_EPSILON = 0.05
-// A fade ending this far from where the robot was drawn is a reseat; nearer, it stood there.
+// A reseat this far from where the robot is drawn is a jump to hide; nearer, it stood there.
 const RESEAT_SNAP_METRES = WORKER_BODY_RADIUS
 // Merged shadows sort as one object, so they are drawn before every other see-through part.
 const SHADOW_BATCH = { [SHARED_BATCH]: 'agent-shadow' }
@@ -52,7 +52,9 @@ export interface RobotMotion {
   // The floor it was drawn on: a robot remounting on another floor was carried, not walked.
   physicalFloorId: string | null
   presence: number
-  isFading: boolean
+  // The last reseat it saw, and whether it is still shrinking away before jumping there.
+  reseats: number
+  isReseating: boolean
 }
 
 const isFadingAgent = (agent: Pick<AgentView, 'fade'>): boolean => agent.fade !== undefined
@@ -64,11 +66,10 @@ const presenceTarget = (agent: Pick<AgentView, 'fade'>): number => (isFadingAgen
 // the sim's fade; reduced motion skips the animation and the robot simply goes (seating-4).
 export function presenceAfter(
   presence: number,
-  agent: Pick<AgentView, 'fade'>,
+  target: number,
   delta: number,
   isReducedMotion: boolean
 ): number {
-  const target = presenceTarget(agent)
   if (isReducedMotion) return target
   // It shrinks away within the views the sim shows faded, so a reseat lands at scale 0.
   if (target < presence)
@@ -111,7 +112,9 @@ export function Robot({
   // Read once: an arrival still fading in starts at nothing, then the frame loop owns the scale.
   const mountedPresence = useRef<number>(null)
   mountedPresence.current ??= presenceTarget(agent)
-  const wasFadingRef = useRef(isFadingAgent(agent))
+  const reseatsRef = useRef<number>(null)
+  reseatsRef.current ??= livePose(officePoses, agent).reseats ?? 0
+  const isReseatingRef = useRef(false)
 
   useLayoutEffect(() => {
     const root = rootRef.current
@@ -125,7 +128,8 @@ export function Robot({
     // Same floor, same robot: it carries on its fade from the size it was drawn at.
     if (retained) {
       presenceRef.current?.scale.setScalar(retained.presence)
-      wasFadingRef.current = retained.isFading
+      reseatsRef.current = retained.reseats
+      isReseatingRef.current = retained.isReseating
     }
     root.position.set(
       retained?.x ?? initial.x,
@@ -150,22 +154,27 @@ export function Robot({
       root.position.y - goal.elevation,
       root.position.z - goal.z
     )
+    // The count, not the fade, marks a reseat: one sim step can start and end a whole fade.
+    const reseats = goal.reseats ?? 0
+    if (reseats !== reseatsRef.current) {
+      reseatsRef.current = reseats
+      if (goalDistance > RESEAT_SNAP_METRES) isReseatingRef.current = true
+    }
     const isFading = isFadingAgent(target)
-    const isMoving = !isFading && goalDistance > MOVING_EPSILON
+    const isHeld = isFading || isReseatingRef.current
+    const isMoving = !isHeld && goalDistance > MOVING_EPSILON
     const previousX = root.position.x
     const previousZ = root.position.z
     const presence = presenceRef.current
-    // The sim reseats a fader the tick its fade ends: a far seat means vanish and grow in there.
-    if (presence && wasFadingRef.current && !isFading && goalDistance > RESEAT_SNAP_METRES)
-      presence.scale.setScalar(0)
-    wasFadingRef.current = isFading
     // A robot shrunk to nothing goes straight to its pose, so nothing invisible streaks (FOUND 7).
     if (presence?.scale.x === 0) {
       root.position.set(goal.x, goal.elevation, goal.z)
       root.rotation.y = goal.heading
+      isReseatingRef.current = false
     }
-    // A fader stands where it is, as the sim's does, even if its reseat lands before the cleared fade.
-    else if (!isFading) {
+    // A fader stands where it is, as the sim's does; a reseat finishes its shrink there, however
+    // late its fade was seen, so it never pops away.
+    else if (!isHeld) {
       root.position.x = approach(previousX, goal.x, delta, MOVE_RATE)
       root.position.y = approach(root.position.y, goal.elevation, delta, MOVE_RATE)
       root.position.z = approach(previousZ, goal.z, delta, MOVE_RATE)
@@ -175,8 +184,12 @@ export function Robot({
       root.position.x - previousX,
       root.position.z - previousZ
     )
+    // Read after the jump above, so a robot grows in at its desk on the frame it lands there.
+    const isAway = isFading || isReseatingRef.current
     if (presence)
-      presence.scale.setScalar(presenceAfter(presence.scale.x, target, delta, isReducedMotion))
+      presence.scale.setScalar(
+        presenceAfter(presence.scale.x, isAway ? 0 : 1, delta, isReducedMotion)
+      )
     if (motions) {
       const motion = motions.get(target.agentKey) ?? {
         x: 0,
@@ -186,11 +199,13 @@ export function Robot({
         travelDistance: 0,
         physicalFloorId: null,
         presence: 1,
-        isFading: false
+        reseats: 0,
+        isReseating: false
       }
       motion.physicalFloorId = physicalFloorId(target)
       motion.presence = presence?.scale.x ?? 1
-      motion.isFading = isFading
+      motion.reseats = reseatsRef.current
+      motion.isReseating = isReseatingRef.current
       motion.x = root.position.x
       motion.y = root.position.y
       motion.z = root.position.z

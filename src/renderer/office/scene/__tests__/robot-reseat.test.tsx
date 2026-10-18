@@ -38,7 +38,8 @@ interface DrawnFrame extends Place {
 
 interface ReturnFeed {
   frameRate: number
-  // A blurred feed holds frames back, so the fade can reach the scene ticks after it began.
+  // A blurred feed holds frames back, so the fade can reach the scene ticks after it began;
+  // never, when one step ran the whole fade.
   fadeSeenTick?: number
   // Frames drawn after the desk pose lands in the store but before the cleared fade commits.
   clearLagFrames?: number
@@ -89,7 +90,9 @@ async function playReturn(feed: ReturnFeed): Promise<DrawnFrame[]> {
   const { frameRate, fadeSeenTick = 0, clearLagFrames = 0, reseatCrew = 'f1' } = feed
   const motions = new Map<string, RobotMotion>()
   const standing = makeAgent({ agentKey: 'a', ...SPOT, physicalFloorId: 'f1' })
-  const seated = { ...standing, ...(feed.desk ?? DESK) }
+  const desk = feed.desk ?? DESK
+  // The sim counts a seat away from where the agent faded, and only that.
+  const seated = { ...standing, ...desk, ...(desk === SPOT ? {} : { reseats: 1 }) }
   const fading = (tick: number): AgentView => ({ ...standing, fade: tick / RESEAT_TICK })
   officePoses.write('a', poseOf(standing))
   const { scene, rerender, unmount } = await mountInFiber(crews(standing, 'f1', motions, feed))
@@ -97,7 +100,7 @@ async function playReturn(feed: ReturnFeed): Promise<DrawnFrame[]> {
   const frames: DrawnFrame[] = []
   let tick = 0
   let reseatFrame = Infinity
-  for (let frame = 1; frame <= frameRate * 1.5; frame++) {
+  for (let frame = 1; frame <= frameRate * 2; frame++) {
     for (; tick * TICK_S <= frame * frameS + 1e-9; tick++) {
       officePoses.write('a', poseOf(tick < RESEAT_TICK ? standing : seated))
       if (tick === fadeSeenTick) await rerender(crews(fading(tick), 'f1', motions, feed))
@@ -118,6 +121,13 @@ async function playReturn(feed: ReturnFeed): Promise<DrawnFrame[]> {
   return frames
 }
 
+// The shrink is the faster ease, so no frame may change size by more than one of its steps.
+const shrinkStep = (frameRate: number): number =>
+  1000 / frameRate / (DEPARTURE_FADE_MS - SIM_TICK_MS)
+
+const largestScaleStep = (frames: readonly DrawnFrame[]): number =>
+  Math.max(...frames.slice(1).map((frame, index) => Math.abs(frame.scale - frames[index].scale)))
+
 const isAt = (frame: DrawnFrame, place: Place): boolean =>
   Math.hypot(frame.x - place.x, frame.z - place.z) <= AT_REST_M &&
   Math.abs(frame.heading - place.heading) <= AT_REST_M
@@ -133,14 +143,21 @@ it.each<[string, ReturnFeed]>([
   [
     'a remount into another crew as the fade clears',
     { frameRate: 60, fadeSeenTick: 2, reseatCrew: 'transit' }
+  ],
+  ['one step that ran the whole fade', { frameRate: 60, fadeSeenTick: Infinity }],
+  ['one step that ran the whole fade, at 15 Hz', { frameRate: 15, fadeSeenTick: Infinity }],
+  [
+    'one step that ran the whole fade, its desk pose frames before its view',
+    { frameRate: 60, fadeSeenTick: Infinity, clearLagFrames: 3 }
   ]
 ])(
-  'a robot recalled across the floor grows in at its desk, never sliding there (%s)',
+  'a robot recalled across the floor shrinks where it stood and grows in at its desk (%s)',
   async (_, feed) => {
     const frames = await playReturn(feed)
 
     const visible = frames.filter((frame) => frame.scale > 0)
     expect(visible.filter((frame) => !isAt(frame, SPOT) && !isAt(frame, DESK))).toEqual([])
+    expect(largestScaleStep(frames)).toBeLessThanOrEqual(shrinkStep(feed.frameRate) + 1e-9)
     const arrival = frames.find((frame) => isAt(frame, DESK))
     const growStep = 1000 / feed.frameRate / DEPARTURE_FADE_MS
     expect(arrival?.scale).toBeLessThanOrEqual(growStep + 1e-9)
@@ -173,10 +190,5 @@ it('a robot remounted mid-fade carries on shrinking from the size it was drawn a
     desk: SPOT
   })
 
-  const scales = frames.map((frame) => frame.scale)
-  // The shrink is the faster of the two, so no frame may change by more than its step.
-  const shrinkStep = 1000 / 60 / (DEPARTURE_FADE_MS - SIM_TICK_MS)
-  scales.slice(1).forEach((scale, index) => {
-    expect(Math.abs(scale - scales[index])).toBeLessThanOrEqual(shrinkStep + 1e-9)
-  })
+  expect(largestScaleStep(frames)).toBeLessThanOrEqual(shrinkStep(60) + 1e-9)
 })
