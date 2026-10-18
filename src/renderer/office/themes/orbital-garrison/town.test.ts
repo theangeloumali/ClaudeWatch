@@ -1,15 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { citizenGeometry } from '../../citizens/figure-parts'
 import { STATE_COLOR } from '../../office-palette'
-import { campusClaim, neededClaim } from '../../town/town-claim'
 import { dressLot, type ZonePlot } from '../../town/town-dress'
-import { campusGreen } from '../../town/town-green'
-import { LANDMARK_ZONES } from '../../town/town-lots'
-import { planTown } from '../../town/town-plan'
 import { TOWN_DISTRICTS } from '../../town/town-zones'
 import { LIVE_FLOORS } from '../floors.test-utils'
+import { LANDMARK_ZONES, cityLotsOf, everyZoneLots } from '../town-dress.test-utils'
 import type { PartSpec } from '../parts'
-import { lotBase } from '../surroundings'
 import { orbitalGarrison } from './index'
 import { GARRISON_TOWN } from './town'
 
@@ -66,7 +62,7 @@ describe('the designs', () => {
     for (const landmark of landmarks) expect(landmark.height.min).toBeLessThanOrEqual(12)
   })
 
-  it('draw a landmark only for the zones the plan marks one in', () => {
+  it('draw a landmark only for the zones a town marks one in', () => {
     for (const design of designs.filter((each) => each.isLandmark))
       for (const zone of design.zones) expect(LANDMARK_ZONES).toContain(zone)
   })
@@ -199,13 +195,14 @@ describe('the movers', () => {
 })
 
 describe.each(LIVE_FLOORS)('dressed over a real plan: %s', (_name, floor) => {
-  const plan = planTown(campusClaim(neededClaim(floor), null), 'full')
-  const lots = [...plan.lots, ...campusGreen(floor, plan)]
+  const cityLots = cityLotsOf(floor)
+  const lots = [...cityLots, ...everyZoneLots()]
 
-  it('stands something on every lot and every plot of the green, under its limit', () => {
-    expect(lots.length).toBeGreaterThan(150)
+  it('stands something on every lot, under its limit', () => {
+    expect(cityLots.length).toBeGreaterThan(0)
     for (const lot of lots) {
-      const base = lotBase(lot, floor)
+      // Every city lot stands on the ground at 0, as dressCityDistrict stands it.
+      const base = 0
       const placed = dressLot(lot, base, GARRISON_TOWN)
       expect(placed.parts.length).toBeGreaterThan(0)
       const top = Math.max(...placed.parts.map((part) => reachOf(part).top)) * placed.scale
@@ -215,24 +212,24 @@ describe.each(LIVE_FLOORS)('dressed over a real plan: %s', (_name, floor) => {
 
   it('has a lot that every design fits: none is drawn for nothing', () => {
     for (const design of designs) {
-      const fits = plan.lots.filter(
+      const fits = lots.filter(
         (lot) =>
           lot.kind === 'building' &&
           design.zones.includes(lot.zone) &&
           lot.isLandmark === (design.isLandmark === true) &&
-          lot.maxHeight - lotBase(lot, floor) >= design.height.min
+          lot.maxHeight >= design.height.min
       )
       expect(fits.length, design.name).toBeGreaterThan(0)
     }
   })
 
   it('uses most of its designs on any one floor', () => {
-    const used = new Set(plan.lots.map((lot) => dressLot(lot, -0.5, GARRISON_TOWN).design))
+    const used = new Set(lots.map((lot) => dressLot(lot, -0.5, GARRISON_TOWN).design))
     expect(used.size).toBeGreaterThanOrEqual(designs.length - 2)
   })
 
   it('stands each landmark on its zone’s landmark lot', () => {
-    for (const lot of plan.lots.filter((each) => each.isLandmark)) {
+    for (const lot of lots.filter((each) => each.isLandmark)) {
       const design = designs.find((each) => each.name === dressLot(lot, -0.5, GARRISON_TOWN).design)
       expect(design?.isLandmark).toBe(true)
       expect(design?.zones).toContain(lot.zone)

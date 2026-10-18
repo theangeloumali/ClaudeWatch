@@ -5,7 +5,9 @@ import {
   InstancedMesh,
   Matrix4,
   Mesh,
+  MeshStandardMaterial,
   Texture,
+  type BufferGeometry,
   type Material,
   type Object3D
 } from 'three'
@@ -15,6 +17,10 @@ interface SourceMesh {
   material: Material
   layerMask: number
   count: number
+  // What the batch last drew for this source; a frame that matches it writes nothing (perf-1).
+  drawnMatrix: Matrix4
+  drawnInstances: number
+  isDrawnShown: boolean
 }
 export interface MeshBatch {
   mesh: InstancedMesh
@@ -29,16 +35,70 @@ export const SHARED_BATCH = 'sharedBatch'
 
 const SHARED_KEY = 'shared:'
 
+const batchRoots = new WeakSet<Object3D>()
+
 // A batched root keeps its own world matrices: frozen when static, refreshed by updateMeshBatches
 // each frame otherwise. The renderer's pass over its thousands of parts would repeat that work.
 export function createBatchRoot(): Group {
   const root = new Group()
   root.updateMatrixWorld = () => undefined
+  batchRoots.add(root)
   return root
+}
+
+// A batch nested in another owns its subtree, so each rebuilds and freezes alone (perf-11).
+function traverseOwn(root: Object3D, visit: (object: Object3D) => void): void {
+  visit(root)
+  for (const child of root.children) if (!batchRoots.has(child)) traverseOwn(child, visit)
 }
 
 function colorOf(material: Material): Color | null {
   return 'color' in material && material.color instanceof Color ? material.color : null
+}
+
+// Keys outlive a rebuild (perf-3). A geometry never changes once built: new args make a new one.
+const shapeKeys = new WeakMap<BufferGeometry, string>()
+// A material is changed in place by React, which bumps no version; these are the props the
+// scene sets, and a cached key stands only while they match.
+const surfaceKeys = new WeakMap<Material, { props: string; key: string }>()
+
+function shapeKey(geometry: BufferGeometry): string {
+  let key = shapeKeys.get(geometry)
+  if (key === undefined) {
+    const { uuid, metadata, ...shape } = geometry.toJSON()
+    void uuid
+    void metadata
+    key = JSON.stringify(shape)
+    shapeKeys.set(geometry, key)
+  }
+  return key
+}
+
+function liveProps(material: Material): string {
+  const props: unknown[] = [material.version, material.side, material.toneMapped, material.opacity]
+  if (material instanceof MeshStandardMaterial)
+    props.push(
+      material.roughness,
+      material.metalness,
+      material.emissive.getHex(),
+      material.emissiveIntensity
+    )
+  return props.join('|')
+}
+
+function surfaceKey(material: Material): string {
+  const props = liveProps(material)
+  const cached = surfaceKeys.get(material)
+  if (cached?.props === props) return cached.key
+  // Colour is left out of the key: it is applied per instance, so parts alike in everything
+  // else share one draw whatever their colour or theme.
+  const { uuid, metadata, color, ...surface } = material.toJSON()
+  void uuid
+  void metadata
+  void color
+  const key = JSON.stringify(surface)
+  surfaceKeys.set(material, { props, key })
+  return key
 }
 
 function batchKey(mesh: Mesh, material: Material): string | null {
@@ -50,18 +110,7 @@ function batchKey(mesh: Mesh, material: Material): string | null {
   // before serialising: a material's JSON carries its texture's image.
   if ('map' in material && material.map instanceof Texture) return null
   if (!('parameters' in mesh.geometry)) return null
-  const geometry = mesh.geometry.toJSON()
-  const shading = material.toJSON()
-  const { uuid: geometryId, metadata: geometryMetadata, ...shape } = geometry
-  // Colour is left out of the key: it is applied per instance, so parts alike in everything
-  // else share one draw whatever their colour or theme.
-  const { uuid: materialId, metadata: materialMetadata, color, ...surface } = shading
-  void geometryId
-  void geometryMetadata
-  void materialId
-  void materialMetadata
-  void color
-  return JSON.stringify([shape, surface])
+  return `${shapeKey(mesh.geometry)}${surfaceKey(material)}`
 }
 
 const WHITE = new Color(1, 1, 1)
@@ -86,7 +135,7 @@ function tintInstances(batch: InstancedMesh, sources: readonly SourceMesh[]): vo
 
 export function createMeshBatches(root: Group): MeshBatch[] {
   const groups = new Map<string, SourceMesh[]>()
-  root.traverse((object) => {
+  traverseOwn(root, (object) => {
     if (!(object instanceof Mesh) || Array.isArray(object.material)) return
     const key = batchKey(object, object.material)
     if (!key) return
@@ -95,7 +144,10 @@ export function createMeshBatches(root: Group): MeshBatch[] {
       mesh: object,
       material: object.material,
       layerMask: object.layers.mask,
-      count: object instanceof InstancedMesh ? object.count : 1
+      count: object instanceof InstancedMesh ? object.count : 1,
+      drawnMatrix: new Matrix4(),
+      drawnInstances: -1,
+      isDrawnShown: false
     })
     groups.set(key, sources)
   })
@@ -121,39 +173,88 @@ export function createMeshBatches(root: Group): MeshBatch[] {
     root.add(mesh)
     batches.push({ mesh, sources, tinted })
   }
-  updateMeshBatches(root, batches)
+  prepareRoot(root)
+  for (const batch of batches) {
+    let index = 0
+    for (const source of batch.sources) index = drawSource(batch.mesh, source, index)
+    batch.mesh.instanceMatrix.needsUpdate = true
+  }
   return batches
 }
 
+const MATRIX_FLOATS = 16
 const inverseRoot = new Matrix4()
+const placed = new Matrix4()
 const matrix = new Matrix4()
 const instance = new Matrix4()
 const hidden = new Matrix4().makeScale(0, 0, 0)
 
+// The root of the pass in progress: set by prepareRoot with inverseRoot.
+let passRoot: Object3D | null = null
+
+// Above the root, a hidden ancestor hides the batch itself. A source React has unmounted since
+// the build never reaches the root, and is hidden too.
 function isVisible(object: Object3D): boolean {
   for (let current: Object3D | null = object; current; current = current.parent) {
+    if (current === passRoot) return true
     if (!current.visible) return false
   }
-  return true
+  return false
+}
+
+function prepareRoot(root: Group): void {
+  root.updateWorldMatrix(true, true)
+  inverseRoot.copy(root.matrixWorld).invert()
+  passRoot = root
+}
+
+function instanceVersionOf(mesh: Mesh): number {
+  return mesh instanceof InstancedMesh ? mesh.instanceMatrix.version : 0
+}
+
+// Writes the source's parts from `index` and records what was drawn; returns the next index.
+function drawSource(batch: InstancedMesh, source: SourceMesh, index: number): number {
+  const isShown = isVisible(source.mesh)
+  placed.multiplyMatrices(inverseRoot, source.mesh.matrixWorld)
+  for (let part = 0; part < source.count; part++) {
+    if (source.mesh instanceof InstancedMesh) {
+      source.mesh.getMatrixAt(part, instance)
+      matrix.multiplyMatrices(placed, instance)
+    } else matrix.copy(placed)
+    batch.setMatrixAt(index + part, isShown ? matrix : hidden)
+  }
+  source.drawnMatrix.copy(source.mesh.matrixWorld)
+  source.drawnInstances = instanceVersionOf(source.mesh)
+  source.isDrawnShown = isShown
+  return index + source.count
+}
+
+// A hidden source stays hidden however it moves; a shown one is redrawn when it or its own
+// instances moved. A root that moved moves every source with it.
+function isStale(source: SourceMesh): boolean {
+  const isShown = isVisible(source.mesh)
+  if (isShown !== source.isDrawnShown) return true
+  return (
+    isShown &&
+    (!source.drawnMatrix.equals(source.mesh.matrixWorld) ||
+      source.drawnInstances !== instanceVersionOf(source.mesh))
+  )
 }
 
 export function updateMeshBatches(root: Group, batches: readonly MeshBatch[]): void {
-  root.updateWorldMatrix(true, true)
-  inverseRoot.copy(root.matrixWorld).invert()
+  prepareRoot(root)
   for (const batch of batches) {
+    const { instanceMatrix } = batch.mesh
     let index = 0
     for (const source of batch.sources) {
-      const visible = isVisible(source.mesh)
-      for (let part = 0; part < source.count; part++) {
-        matrix.multiplyMatrices(inverseRoot, source.mesh.matrixWorld)
-        if (source.mesh instanceof InstancedMesh) {
-          source.mesh.getMatrixAt(part, instance)
-          matrix.multiply(instance)
-        }
-        batch.mesh.setMatrixAt(index++, visible ? matrix : hidden)
+      if (!isStale(source)) {
+        index += source.count
+        continue
       }
+      instanceMatrix.addUpdateRange(index * MATRIX_FLOATS, source.count * MATRIX_FLOATS)
+      instanceMatrix.needsUpdate = true
+      index = drawSource(batch.mesh, source, index)
     }
-    batch.mesh.instanceMatrix.needsUpdate = true
   }
 }
 
@@ -170,7 +271,7 @@ export function releaseMeshBatches(root: Group, batches: readonly MeshBatch[]): 
 // matrix on every frame, and a town is thousands of objects.
 export function freezeMatrices(root: Object3D): void {
   root.updateWorldMatrix(true, true)
-  root.traverse((object) => {
+  traverseOwn(root, (object) => {
     object.matrixAutoUpdate = false
     object.matrixWorldNeedsUpdate = false
   })
@@ -178,7 +279,7 @@ export function freezeMatrices(root: Object3D): void {
 
 // Before they are placed again: positions set since the freeze are taken up here.
 export function thawMatrices(root: Object3D): void {
-  root.traverse((object) => {
+  traverseOwn(root, (object) => {
     object.matrixAutoUpdate = true
   })
   root.updateWorldMatrix(true, true)

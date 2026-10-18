@@ -3,7 +3,6 @@ import { expect, it, vi } from 'vitest'
 import { MoverLayer } from '../../citizens/MoverLayer'
 import { SceneBodies } from '../../scene/BodySpace'
 import { getTheme } from '../../themes/registry'
-import { groupZonesByTheme } from '../../logic/office-themes'
 import { MOVER_FLOORS, townOn } from '../../town/movers.test-utils'
 
 const frame = vi.hoisted(() => ({ callback: (_state: object, _delta: number): void => {} }))
@@ -24,9 +23,7 @@ it('keeps citizen positions through a feed frame that changes no ground or trip'
   const props = {
     floor,
     plan: town.plan,
-    owners: town.owners,
     floorTheme: theme,
-    zoneGroups: groupZonesByTheme(floor, () => theme.id),
     player: null,
     isReducedMotion: false,
     hasVehicles: false,

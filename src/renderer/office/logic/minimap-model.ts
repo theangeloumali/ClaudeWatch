@@ -1,4 +1,5 @@
 import { parseAgentKey } from '../../../shared/office/agent-key'
+import { withLivePose } from '../../office-live/pose-store'
 import { floorEnvelope, physicalFloorId } from '../scene/all-floor-model'
 import type { FloorGeometry, OfficeFrame } from '../scene-model'
 import { boundsOfZone, type Bounds } from './zone-framing'
@@ -101,7 +102,8 @@ interface RepresentedSurface {
 
 function currentWorkers(input: MinimapInput, surface: RepresentedSurface): MinimapWorker[] {
   const seen = new Set<string>()
-  return input.frame.agents.flatMap((agent) => {
+  // Dots follow live poses, redrawn whenever the Office's clock re-renders the HUD (perf-2).
+  return input.frame.agents.map(withLivePose).flatMap((agent) => {
     const identity = parseAgentKey(agent.agentKey, input.frame.sessions)
     const position = { x: agent.x, z: agent.z, physicalFloorId: physicalFloorId(agent) }
     if (!identity || seen.has(agent.agentKey) || !representsSurface(position, surface)) return []

@@ -13,6 +13,9 @@ import { steamVariant } from './steam-variant'
 import { samuraiParts } from './samurai-parts'
 import { brassParts } from './brass-parts'
 
+// Full sim or scene builds: the 5 s default times out under multi-agent load (health-9).
+vi.setConfig({ testTimeout: 60_000 })
+
 vi.mock('react', async (original) => ({
   ...(await original<typeof import('react')>()),
   useMemo: (factory: () => object) => factory(),

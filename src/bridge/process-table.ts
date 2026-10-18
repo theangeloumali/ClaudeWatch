@@ -29,6 +29,7 @@ export function parseProcessTable(output: string): ProcessRow[] {
       pid: Number(match[1]),
       lstart: match[2],
       startedAtMs: Date.parse(`${match[2]} UTC`),
+      // `ps` gives no argv boundaries: a spaced path splits, so argv[0] may be a truncated path.
       argv: match[3].trim().split(/\s+/)
     })
   }
@@ -152,19 +153,26 @@ export const placeholderId = ({ pid, startedAtMs }: SessionOwner): string =>
   `pid-${pid}-${startedAtMs}`
 
 // Remembered by pid and start time, since asking costs an `lsof` run.
-export async function rememberedFolder(
-  io: BridgeIo,
+export async function rememberFolder(
   folders: Map<string, string>,
   running: RunningProcess,
-  platform: NodeJS.Platform = process.platform
+  read: (pid: number) => Promise<string | undefined>
 ): Promise<string | undefined> {
   const identity = identityOf(running)
   const known = folders.get(identity)
   if (known) return known
-  const cwd = await readWorkingFolder(io, running.pid, platform)
+  const cwd = await read(running.pid)
   if (cwd) folders.set(identity, cwd)
   return cwd
 }
+
+export const rememberedFolder = (
+  io: BridgeIo,
+  folders: Map<string, string>,
+  running: RunningProcess,
+  platform: NodeJS.Platform = process.platform
+): Promise<string | undefined> =>
+  rememberFolder(folders, running, (pid) => readWorkingFolder(io, pid, platform))
 
 // Processes sharing a folder claim conversations newest first: an older one would otherwise
 // take the newest conversation, written by the one that started after it.
@@ -198,3 +206,25 @@ export function forgetExited(running: RunningProcess[], ...memories: Map<string,
 
 // An agent bundled in an app (ChatGPT, Orca helpers) runs from inside the bundle; not a session.
 export const isInsideAppBundle = (folder: string): boolean => /\.app\/Contents(\/|$)/.test(folder)
+
+// The program file each process runs, which a `ps` row cannot carry whole: a bundle path with a
+// space before its `.app` leaves no bundle in argv[0] (health-2). macOS is asked once per process,
+// matched by start time; Windows argv is exact. Unanswered, a process is kept, as before.
+export async function withoutBundledPrograms<Process extends RunningProcess>(
+  io: BridgeIo,
+  programs: Map<string, string>,
+  processes: Process[],
+  platform: NodeJS.Platform
+): Promise<Process[]> {
+  if (platform !== 'darwin') return processes
+  forgetExited(processes, programs)
+  const unknown = processes.filter((process) => !programs.has(identityOf(process)))
+  if (unknown.length) {
+    const pids = unknown.map(({ pid }) => pid).join(',')
+    const output = await io
+      .exec('/bin/ps', ['-o', 'pid=,lstart=,comm=', '-p', pids])
+      .catch(() => '')
+    for (const row of parseProcessTable(output)) programs.set(identityOf(row), row.argv.join(' '))
+  }
+  return processes.filter((process) => !isInsideAppBundle(programs.get(identityOf(process)) ?? ''))
+}

@@ -40,9 +40,10 @@ import {
   type ProcessRow,
   readProcessTable,
   rememberedFolder,
-  type SessionOwner
+  type SessionOwner,
+  withoutBundledPrograms
 } from './process-table'
-import { discoverV2Roots, MAX_V2_LIVE_ROOTS, withoutV2Models } from './opencode-v2-db'
+import { discoverV2Roots, MAX_V2_BATCH, MAX_V2_LIVE_ROOTS, withoutV2Models } from './opencode-v2-db'
 import { placementOf, resolveProject } from './project-root'
 import { isStillWorking, OPEN_TOOL_HOLD_MS, quietFor, SUBAGENT_FRESH_MS } from './liveness'
 import { toolActivity } from './tool-category'
@@ -192,16 +193,32 @@ function claimOpencodeFolders(
   return sessions
 }
 
-function v2StateOf(
-  query: OpencodeQuery,
+type V2State = OpencodeState & { updatedAtMs: number }
+
+// What each session's newest message says, read for all of them in two queries (perf-4).
+function v2StatesOf(query: OpencodeQuery, rows: OpencodeRow[], now: number): V2State[] {
+  const messages = new Map<unknown, OpencodeRow>()
+  const parts = new Map<unknown, OpencodeRow[]>()
+  const ids = rows.flatMap((row) => (typeof row.id === 'string' ? [row.id] : []))
+  if (ids.length) {
+    const batch = JSON.stringify(ids)
+    for (const message of query('v2NewestMessages', batch))
+      messages.set(message.session_id, message)
+    for (const part of query('v2NewestParts', batch))
+      parts.set(part.session_id, [...(parts.get(part.session_id) ?? []), part])
+  }
+  return rows.map((row) => v2StateFrom(row, messages.get(row.id), parts.get(row.id) ?? [], now))
+}
+
+function v2StateFrom(
   row: OpencodeRow,
+  message: OpencodeRow | undefined,
+  parts: OpencodeRow[],
   now: number
-): OpencodeState & { updatedAtMs: number } {
+): V2State {
   const updatedAtMs = typeof row.time_updated === 'number' ? row.time_updated : 0
-  if (typeof row.id !== 'string') return { ...OPENCODE_IDLE, updatedAtMs }
-  const [message] = query('v2NewestMessage', row.id)
-  if (!message) return { ...OPENCODE_IDLE, updatedAtMs }
-  const state = opencodeState(message, query('v2MessageParts', row.id), now)
+  if (typeof row.id !== 'string' || !message) return { ...OPENCODE_IDLE, updatedAtMs }
+  const state = opencodeState(message, parts, now)
   const lastWrite =
     typeof message.time_updated === 'number' ? message.time_updated : message.time_created
   // V2 streams message updates without touching the session row on every chunk.
@@ -220,50 +237,70 @@ function v2StateOf(
   return { ...state, updatedAtMs: observedWrite }
 }
 
-const MAX_CHILDREN = 64
+const MAX_CHILDREN = MAX_V2_BATCH
 const MAX_CHILD_DEPTH = 4
 
+function v2SubagentOf(
+  row: OpencodeRow,
+  session: SessionRow,
+  state: V2State,
+  now: number
+): SubagentRef | null {
+  const quietMs = quietFor(now, state.updatedAtMs)
+  if (quietMs === null || state.attention === 'done' || state.attention === 'error') return null
+  const needsAnswer = state.attention === 'question' || state.attention === 'permission'
+  const isWorking = state.activity !== 'idle' || needsAnswer
+  if (
+    !isWorking ||
+    !isStillWorking(quietMs, SUBAGENT_FRESH_MS, state.currentTool !== null || needsAnswer)
+  )
+    return null
+  return {
+    id: session.id,
+    type: isLabel(row.agent) ? row.agent : 'subagent',
+    ...(isLabel(row.agent) && { name: row.agent }),
+    kind: 'subagent',
+    pid: null,
+    orcaPaneKey: null,
+    ...state,
+    tokens: session.counts,
+    ...(session.selectedModel && { selectedModel: session.selectedModel }),
+    observation: {
+      sourceId: 'opencode',
+      observedAtMs: now,
+      staleAfterMs: OBSERVATION_STALE_AFTER_MS,
+      coverage: 'own'
+    }
+  }
+}
+
+// A generation at a time, so each one's messages are read together.
 function v2Children(query: OpencodeQuery, rootId: string, now: number): SubagentRef[] {
   const subagents: SubagentRef[] = []
   const visited = new Set<string>([rootId])
-  const pending = [{ id: rootId, depth: 0 }]
   let inspected = 0
-  for (const parent of pending) {
-    if (parent.depth >= MAX_CHILD_DEPTH || inspected >= MAX_CHILDREN) continue
-    for (const row of query('v2ChildSessions', parent.id)) {
-      if (inspected++ >= MAX_CHILDREN) break
-      const session = sessionRow(row)
-      if (!session || visited.has(session.id)) continue
-      visited.add(session.id)
-      pending.push({ id: session.id, depth: parent.depth + 1 })
-      const state = v2StateOf(query, row, now)
-      const quietMs = quietFor(now, state.updatedAtMs)
-      if (quietMs === null || state.attention === 'done' || state.attention === 'error') continue
-      const needsAnswer = state.attention === 'question' || state.attention === 'permission'
-      const isWorking = state.activity !== 'idle' || needsAnswer
-      if (
-        !isWorking ||
-        !isStillWorking(quietMs, SUBAGENT_FRESH_MS, state.currentTool !== null || needsAnswer)
-      )
-        continue
-      subagents.push({
-        id: session.id,
-        type: isLabel(row.agent) ? row.agent : 'subagent',
-        ...(isLabel(row.agent) && { name: row.agent }),
-        kind: 'subagent',
-        pid: null,
-        orcaPaneKey: null,
-        ...state,
-        tokens: session.counts,
-        ...(session.selectedModel && { selectedModel: session.selectedModel }),
-        observation: {
-          sourceId: 'opencode',
-          observedAtMs: now,
-          staleAfterMs: OBSERVATION_STALE_AFTER_MS,
-          coverage: 'own'
-        }
-      })
+  for (let depth = 0, parents = [rootId]; depth < MAX_CHILD_DEPTH && parents.length; depth++) {
+    const children: { row: OpencodeRow; session: SessionRow }[] = []
+    for (const parentId of parents) {
+      if (inspected >= MAX_CHILDREN) break
+      for (const row of query('v2ChildSessions', parentId)) {
+        if (inspected++ >= MAX_CHILDREN) break
+        const session = sessionRow(row)
+        if (!session || visited.has(session.id)) continue
+        visited.add(session.id)
+        children.push({ row, session })
+      }
     }
+    const states = v2StatesOf(
+      query,
+      children.map(({ row }) => row),
+      now
+    )
+    children.forEach(({ row, session }, index) => {
+      const subagent = v2SubagentOf(row, session, states[index], now)
+      if (subagent) subagents.push(subagent)
+    })
+    parents = children.map(({ session }) => session.id)
   }
   return subagents
 }
@@ -283,7 +320,7 @@ function readV2Conversations(
       try {
         const session = sessionRow(row, platform)
         if (!session?.cwd || isAppFolder(session.cwd, platform)) return []
-        const state = v2StateOf(query, row, now)
+        const [state] = v2StatesOf(query, [row], now)
         const subagents = v2Children(query, session.id, now)
         const quietMs = quietFor(now, state.updatedAtMs)
         const needsAnswer = state.attention === 'question' || state.attention === 'permission'
@@ -332,6 +369,8 @@ interface Remembered {
   folders: Map<string, string>
   // The placeholder key a process without a session was first shown under, by pid and start time.
   placeholders: Map<string, string>
+  // The program file each candidate process runs, by pid and start time.
+  programs: Map<string, string>
   // Last tick's rows, for a tick that finds the database and its agents unchanged.
   answers: Answers | null
 }
@@ -377,15 +416,26 @@ export async function collectOpencode(
   const health: SourceHealth = { id: 'opencode', ok: true, detail: 'empty' }
   try {
     const rows = await readProcesses()
-    const processes = opencodeProcesses(rows)
     const isHosting = rows.some(isOpencodeService)
     let memory = remembered.get(io)
     if (!memory) {
       remembered.set(
         io,
-        (memory = { folders: new Map(), placeholders: new Map(), liveRootIds: [], answers: null })
+        (memory = {
+          folders: new Map(),
+          placeholders: new Map(),
+          programs: new Map(),
+          liveRootIds: [],
+          answers: null
+        })
       )
     }
+    const processes = await withoutBundledPrograms(
+      io,
+      memory.programs,
+      opencodeProcesses(rows, platform),
+      platform
+    )
     const { folders, placeholders, liveRootIds } = memory
     forgetExited(processes, folders, placeholders)
     const running = newestFirst(await locate(io, folders, processes, health, platform))

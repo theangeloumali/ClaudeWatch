@@ -128,10 +128,7 @@ const layerProps: ComponentProps<typeof MultiFloorLayer> = {
   onFlyToZone: vi.fn()
 }
 const protectedSites = [...floors, ...worldDocument.venues.map((venue) => venue.footprint)]
-const town = distributedTown(
-  townOf(groundEnvelope(floors, floors[0]), null, 'full'),
-  protectedSites
-)
+const town = distributedTown(townOf(groundEnvelope(floors, floors[0]), null), protectedSites)
 const AUTHORED_THEME_IDS = [
   'corporate-city',
   'neo-edo-steam',
@@ -333,7 +330,8 @@ describe('global roof cutaway', () => {
         .sort()
     ).toEqual(actors.map((actor) => actor.agentKey).sort())
     for (const mount of screen.getAllByTestId('delivery-floor')) {
-      const crew = mount.parentElement?.parentElement
+      // Crews batch apart from their floors (perf-11), in a group named for the storey.
+      const crew = view.container.querySelector(`[name="crew:${mount.dataset.floorId}"]`)
       if (!crew) throw new Error('Floor crew group is missing')
       expect(
         [...crew.querySelectorAll<HTMLElement>('[data-agent-key]')]
@@ -572,7 +570,7 @@ describe('authored recovered streetscape', () => {
     expect(projected).toEqual(shared)
     expect(projected).toEqual(effective.streetBlocks)
     expect(projected).toHaveLength(47)
-    expect(distributedTown(town, protectedSites).plan.lots).toEqual(town.plan.lots)
+    expect(distributedTown(town.plan, protectedSites).plan.lots).toEqual(town.plan.lots)
   })
   it.each(AUTHORED_THEME_IDS)(
     '%s fits actual rotated parts inside recovered parcels',

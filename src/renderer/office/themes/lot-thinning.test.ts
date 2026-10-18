@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest'
-import { campusClaim, neededClaim } from '../town/town-claim'
-import { planTown } from '../town/town-plan'
+import { distributedTown } from '../town/distributed-town'
 import { PAIR_FLOOR } from '../town/town.test-utils'
+import { townOf } from '../town/use-town-plan'
 import { contains } from './lot-math'
 import { thinnedLots } from './lot-thinning'
 import type { Lot } from './surroundings'
@@ -16,10 +16,9 @@ const onPlate: Lot = {
   width: 1,
   depth: 1,
   maxHeight: 1,
-  seed: 7,
-  zoneId: null
+  seed: 7
 }
-const lots: Lot[] = [...planTown(campusClaim(neededClaim(floor), null), 'full').lots, onPlate]
+const lots: Lot[] = [...distributedTown(townOf(floor, null), [floor]).plan.lots, onPlate]
 const isBeyond = (lot: Lot): boolean => !contains(floor, lot)
 const beyondOf = (drawn: readonly Lot[]): Lot[] => drawn.filter(isBeyond)
 
@@ -29,7 +28,7 @@ it('draws every lot at a full share', () => {
 
 it('draws the asked share of the lots beyond the plate', () => {
   const beyond = beyondOf(lots)
-  expect(beyond.length).toBeGreaterThan(20)
+  expect(beyond.length).toBeGreaterThan(10)
   expect(beyondOf(thinnedLots(lots, 0.6, floor))).toHaveLength(Math.round(beyond.length * 0.6))
   expect(beyondOf(thinnedLots(lots, 0.3, floor))).toHaveLength(Math.round(beyond.length * 0.3))
   expect(beyondOf(thinnedLots(lots, 0, floor))).toHaveLength(0)

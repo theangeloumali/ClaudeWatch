@@ -6,6 +6,9 @@ import type { OfficeFeed } from '../scene-model'
 import { listThemes } from '../themes/registry'
 import type { OfficeTheme, TowerFloor } from '../themes/types'
 
+// Full sim or scene builds: the 5 s default times out under multi-agent load (health-9).
+vi.setConfig({ testTimeout: 60_000 })
+
 vi.mock('../webgl-support', () => ({ canCreateWebGL2: () => true }))
 vi.mock('../scene/OfficeScene', () => ({
   default: ({

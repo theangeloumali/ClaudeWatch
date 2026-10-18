@@ -16,8 +16,6 @@ export interface Lot {
   maxHeight: number
   // A stable 32-bit number for the theme to pick a design from.
   seed: number
-  // The company the lot belongs to; null for a lot the floor theme dresses.
-  zoneId: string | null
 }
 
 // Where the ground plane lies and lots stand: under the slab.
@@ -28,8 +26,6 @@ export const WORLD_APRON = { west: 12, east: 12, north: 19, south: 8 }
 // A thing of height h hides 1.43 h of ground behind it at the camera's 35° elevation.
 export const HEIGHT_PER_METRE = 0.7
 export const MAX_LOT_HEIGHT_M = 24
-// The lowest limit a lot is still worth building under, by kind.
-export const MIN_LOT_HEIGHT_M = { building: 2, prop: 0.4 }
 
 function flatten(zones: readonly ZoneGeometry[]): ZoneGeometry[] {
   return zones.flatMap((zone) => [zone, ...flatten(zone.children)])
@@ -62,11 +58,6 @@ export function officesOf(floor: FloorGeometry): Rect[] {
 export function heightLimit(rect: Rect, offices: readonly Rect[]): number {
   const nearest = Math.min(...offices.map((office) => gapBetween(rect, office)))
   return Math.min(MAX_LOT_HEIGHT_M, nearest * HEIGHT_PER_METRE)
-}
-
-// A lot on the plate stands on the slab; every other lot stands on the ground.
-export function lotBase(lot: Rect, plate: Rect): number {
-  return contains(plate, lot) ? 0 : GROUND_Y
 }
 
 export function surveySite(floor: FloorGeometry): Site {

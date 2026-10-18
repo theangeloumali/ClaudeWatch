@@ -1,3 +1,4 @@
+import type { AgentView } from '../../../shared/office/types'
 import type { ZoneGeometry } from '../scene-model'
 
 export type ZoomBand = 'desk' | 'floor' | 'building'
@@ -177,7 +178,7 @@ export type FollowStep =
 interface FollowedAgent {
   agentKey: string
   roomId: string
-  place?: 'lounge'
+  place?: AgentView['place']
 }
 
 type Spot = Pick<ZoneGeometry, 'x' | 'z'>

@@ -11,7 +11,7 @@ function fit(parts: readonly PartSpec[], plot: ZonePlot): PartSpec[] {
   }))
 }
 
-export function terracedDataKeep(plot: ZonePlot): PartSpec[] {
+function terracedDataKeep(plot: ZonePlot): PartSpec[] {
   const parts: PartSpec[] = [box([0, 0.025, 0], [0.96, 0.05, 0.96], material.mineral)]
   for (let tier = 0; tier < 4; tier++) {
     const width = 0.82 - tier * 0.135

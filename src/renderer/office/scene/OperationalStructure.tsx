@@ -2,6 +2,7 @@ import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Vector3, type Group } from 'three'
 import { SIDE_NORMAL, type WallsMode, type WallSide } from '../logic/room-layout'
+import { createSideCutaway } from '../logic/facade-cutaway'
 import type { FloorGeometry, RoomGeometry } from '../scene-model'
 import { Parts } from '../themes/parts'
 import type { BuildingExteriorProfile } from '../themes/physical-building-parts'
@@ -42,13 +43,12 @@ export function OperationalStructure({
     [floor, theme, profile, isOverview]
   )
   const sides = useRef(new Map<WallSide, Group>())
-  const cameraPosition = useMemo(() => new Vector3(), [])
+  const forward = useMemo(() => new Vector3(), [])
+  const cutaway = useMemo(() => createSideCutaway<WallSide>(), [])
   useFrame(({ camera }) => {
-    camera.getWorldPosition(cameraPosition)
+    camera.getWorldDirection(forward)
     for (const [side, group] of sides.current) {
-      const normal = SIDE_NORMAL[side]
-      const isNear =
-        (cameraPosition.x - floor.x) * normal.x + (cameraPosition.z - floor.z) * normal.z >= 0
+      const isNear = cutaway.isOpen(side, forward, SIDE_NORMAL[side])
       group.visible = wallsMode === 'up' || (wallsMode === 'cutaway' && !isNear)
     }
   })

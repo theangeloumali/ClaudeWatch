@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import reactPlugin from '@vitejs/plugin-react'
 import { describe, it, expect } from 'vitest'
@@ -129,4 +130,39 @@ it('allows the exact React refresh preamble without allowing arbitrary inline sc
   const html = await readFile(resolve(process.cwd(), 'src/renderer/index.html'), 'utf-8')
   expect(html).toContain(`'sha256-${hash}'`)
   expect(html).not.toMatch(/script-src[^;]*'unsafe-inline'/)
+})
+
+describe('repository ignores', () => {
+  // A signing key once sat untracked in the repo root, one `git add -A` from a public push (health-1).
+  it('ignores signing certificates, keys and profiles', async () => {
+    const ignored = (await readFile(resolve(process.cwd(), '.gitignore'), 'utf-8')).split('\n')
+    for (const pattern of [
+      '*.p12',
+      '*.cer',
+      '*.certSigningRequest',
+      '*.pem',
+      '*.key',
+      '*.mobileprovision'
+    ]) {
+      expect(ignored).toContain(pattern)
+    }
+  })
+})
+
+describe('release version', () => {
+  const parts = (version: string): number[] => version.replace(/^v/, '').split('.').map(Number)
+  const isAtLeast = (version: string, floor: string): boolean => {
+    const [a, b] = [parts(version), parts(floor)]
+    const index = a.findIndex((part, i) => part !== b[i])
+    return index === -1 || a[index] > b[index]
+  }
+
+  // Shipping below a published tag makes the next bump collide with it (health-8).
+  it('is never below the newest published release tag', async () => {
+    const tags = execFileSync('git', ['tag', '-l', 'v*'], { encoding: 'utf-8' })
+      .split('\n')
+      .filter((tag) => /^v\d+\.\d+\.\d+$/.test(tag))
+    const manifest = JSON.parse(await readFile(resolve(process.cwd(), 'package.json'), 'utf-8'))
+    for (const tag of tags) expect(isAtLeast(manifest.version, tag), tag).toBe(true)
+  })
 })

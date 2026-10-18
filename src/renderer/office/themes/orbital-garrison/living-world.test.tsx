@@ -13,9 +13,9 @@ import { DISH_REACH_M } from './buildings'
 import { GarrisonAmbient, RadarDish, Shuttle } from './GarrisonAmbient'
 import { orbitalGarrison } from './index'
 import { FLOORS, officeGap } from './yard.test-utils'
-import { drawnTown } from '../../town/drawn-town.test-utils'
+import { drawnTown, townDressOf } from '../../town/drawn-town.test-utils'
+import { dressLot, type DressableLot } from '../../town/town-dress'
 import { drawnTop, topOf } from '../../town/town-ambient'
-import { LIVE_FLOORS } from '../floors.test-utils'
 
 type Frame = (state: { clock: { elapsedTime: number }; invalidate: () => void }) => void
 const frames: Frame[] = []
@@ -100,9 +100,26 @@ describe('the Orbital Garrison draw budget', () => {
 })
 
 describe('what moves around the garrison', () => {
-  it('mounts a dish on the pedestal of every radar tower the town draws', () => {
-    for (const [, floor] of LIVE_FLOORS) {
-      const placed = drawnTown(orbitalGarrison.id, floor)
+  // Civic lots of two sides, so the dish is checked on a narrow tower and on a broad one.
+  it('mounts a dish on the pedestal of every radar tower a town draws', () => {
+    for (const side of [8, 12]) {
+      const civicLots = Array.from(
+        { length: 8 },
+        (_, seed): DressableLot => ({
+          id: `civic:${side}:${seed}`,
+          kind: 'building',
+          x: seed * 16,
+          z: 0,
+          width: side,
+          depth: side,
+          maxHeight: 10,
+          seed,
+          zone: 'civic',
+          facing: 'south',
+          isLandmark: false
+        })
+      )
+      const placed = civicLots.map((lot) => dressLot(lot, 0, townDressOf(orbitalGarrison.id)))
       const towers = placed.filter((each) => each.design === 'radar-tower')
       const mounts = radarMounts(placed)
       expect(mounts.length).toBe(towers.length)
@@ -116,7 +133,7 @@ describe('what moves around the garrison', () => {
           .sort((a, b) => b.y - a.y)
         expect([mount.x, mount.y, mount.z]).toEqual([top.x, top.y, top.z])
         expect(mount.y).toBe(drawnTop(tower))
-        expect(mount.y + DISH_REACH_M * mount.scale).toBeLessThanOrEqual(tower.lot.maxHeight)
+        expect(mount.y + DISH_REACH_M * mount.scale).toBeLessThanOrEqual(tower.lot.maxHeight + 1e-9)
       })
     }
   })

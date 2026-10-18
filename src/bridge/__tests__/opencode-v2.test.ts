@@ -1,6 +1,6 @@
 import { rmSync } from 'node:fs'
-import { DatabaseSync } from 'node:sqlite'
-import { afterEach, expect, it } from 'vitest'
+import { DatabaseSync, StatementSync } from 'node:sqlite'
+import { afterEach, expect, it, vi } from 'vitest'
 import { fixtureIo } from '../__fixtures__/helpers'
 import { buildOpencodeDb, OPENCODE_SCHEMA } from '../__fixtures__/opencode-db'
 import { systemIo } from '../io'
@@ -33,6 +33,7 @@ const V2_SCHEMA = `
 `
 const roots: string[] = []
 afterEach(() => {
+  vi.restoreAllMocks()
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
 })
 
@@ -256,8 +257,8 @@ it('discovers V2 beside legacy tables using streaming message freshness', async 
 it('keeps prompt and tool arguments out of query rows and the feed', async () => {
   const { collect, path } = setup(workingFamily)
   const projected = readOpencodeDb(path, (query) => [
-    query('v2NewestMessage', 'root'),
-    query('v2MessageParts', 'root')
+    query('v2NewestMessages', JSON.stringify(['root'])),
+    query('v2NewestParts', JSON.stringify(['root']))
   ])
   const batch = await collect()
 
@@ -336,6 +337,34 @@ it('bounds discovery of a wide child family', async () => {
   expect(sessions).toHaveLength(1)
   expect(sessions[0].subagents).toHaveLength(32)
   expect(new Set(sessions[0].subagents.map((child) => child.id)).size).toBe(32)
+})
+
+// perf-4: two message reads per child made a wide family cost thousands of queries a tick.
+it('reads a family’s newest messages in queries that do not grow with its width', async () => {
+  async function messageReads(children: number): Promise<number> {
+    const { collect } = setup((db) => {
+      insertV2Session(db, { id: 'root' })
+      insertV2Message(db, { sessionId: 'root' })
+      for (let index = 0; index < children; index++) {
+        insertV2Session(db, { id: `child_${index}`, parentId: 'root' })
+        insertV2Message(db, { sessionId: `child_${index}` })
+      }
+    })
+    const prepare = vi.spyOn(DatabaseSync.prototype, 'prepare')
+    const all = vi.spyOn(StatementSync.prototype, 'all')
+    const { sessions } = await collect()
+    expect(sessions[0]?.subagents).toHaveLength(children)
+    const sqlOf = new Map(
+      prepare.mock.results.map(({ value }, index) => [value, prepare.mock.calls[index][0]])
+    )
+    const reads = all.mock.contexts.filter((statement) =>
+      /session_message/.test(sqlOf.get(statement) ?? '')
+    ).length
+    vi.restoreAllMocks()
+    return reads
+  }
+
+  expect(await messageReads(8)).toBe(await messageReads(2))
 })
 
 it('carries each identity’s selected model without changing the OpenCode transport provider', async () => {

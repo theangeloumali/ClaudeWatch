@@ -35,10 +35,6 @@ export interface VehicleDesign extends CitizenFigure {
   role: VehicleRole
 }
 
-// The pieces of the campus garden and the gate plaza: `feature`, `corner` and `innerTree`
-// name designs.
-export type GardenRole = 'tree' | 'lamp' | 'seat' | 'feature' | 'corner' | 'plazaPair' | 'innerTree'
-
 // A theme's whole town, as data: one shared view draws every theme from it.
 export interface TownDress {
   designs: readonly ZoneDesign[]
@@ -47,11 +43,11 @@ export interface TownDress {
   roads: { carriageway: string; sidewalk: string; promenade: string }
   citizens: readonly CitizenFigure[]
   vehicles: readonly VehicleDesign[]
-  // Absent: each role takes the first prop or design whose name fits it.
-  garden?: Record<GardenRole, string>
+  // The park design an open lot is laid out as; without one an open lot is bare ground.
+  garden?: string
 }
 
-// What a lot must say to be dressed: a town lot does, and so does a plot of the campus green.
+// What a lot must say to be dressed, as every town lot does.
 export type DressableLot = Lot & Pick<TownLot, 'zone' | 'facing' | 'isLandmark'>
 
 // The lot's own seed draws 0 to 4 are spent elsewhere; lots have always drawn their height fifth.

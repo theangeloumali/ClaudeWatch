@@ -1,4 +1,5 @@
 import { programName } from '../shared/platform-process'
+import { isAgentCli } from './agent-cli'
 import { type BridgeIo, isMissing } from './io'
 import { folderKey, isAppFolder, isFolderPath } from './process-folders'
 import { identityOf, rememberedFolder, type ProcessRow } from './process-table'
@@ -23,7 +24,7 @@ export function isNativeClaudeLead(
     Number.isFinite(startedAtMs) &&
     programName(argv[0] ?? '') === 'claude' &&
     !/\.(?:cmd|bat)$/i.test(argv[0] ?? '') &&
-    !isAppFolder(argv[0] ?? '', platform) &&
+    isAgentCli(argv[0] ?? '', platform) &&
     !argv.slice(1).some((argument) => HOST_ARGUMENT.test(argument)) &&
     !UTILITY_COMMAND.test(argv[1] ?? '')
   )
@@ -34,8 +35,9 @@ export function claudeSessionClaim(argv: string[]): string | null {
   for (let index = 1; index < argv.length && argv[index] !== '--'; index++) {
     const flag = SESSION_FLAG.exec(argv[index])
     if (!flag) continue
+    // A following flag means the picker: value-less, so it claims nothing (health-6).
     const sessionId = flag[1] ?? argv[index + 1]
-    return isClaudeSessionId(sessionId) ? sessionId : ''
+    return isClaudeSessionId(sessionId) && !sessionId.startsWith('-') ? sessionId : ''
   }
   return null
 }

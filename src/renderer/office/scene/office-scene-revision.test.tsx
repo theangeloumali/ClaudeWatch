@@ -26,6 +26,8 @@ afterEach(() => {
 })
 
 const floor = makeFloor({ floorId: 'f1', label: 'Main', rooms: [makeRoom({ id: 'r1' })] })
+// One list for every render, as the feed keeps its floors while their geometry stands.
+const floors = [floor]
 const theme = themeForTeam()
 
 function scene(agents: readonly AgentView[]) {
@@ -35,6 +37,8 @@ function scene(agents: readonly AgentView[]) {
       floors={[{ floorId: 'f1', label: 'Main', attentionCount: 0 }]}
       sessions={[]}
       floor={floor}
+      visibleFloors={floors}
+      allFloors={floors}
       agents={agents}
       cards={[]}
       stacks={[]}
@@ -67,15 +71,12 @@ it('keeps the revision and skips re-serialising the floor while agents only move
   expect(floorSerialisations(stringify)).toBe(0)
 })
 
-it('changes the revision when an agent joins, leaves or changes provider or role', () => {
+// perf-11: robots batch apart from the storeys, so the floor batch stands through roster churn.
+it('keeps the floor revision when an agent joins, leaves or roams', () => {
   const view = render(scene([walker(0)]))
   view.rerender(scene([walker(0), makeAgent({ agentKey: 'claude:b' })]))
+  view.rerender(scene([walker(0, { roomId: 'r2', physicalFloorId: null })]))
   view.rerender(scene([walker(0)]))
-  view.rerender(scene([walker(0, { provider: 'codex' })]))
-  view.rerender(scene([walker(0, { provider: 'codex', isSubagent: true })]))
-  const [alone, joined, left, switched, subagent] = revisions
-  expect(joined).not.toBe(alone)
-  expect(left).toBe(alone)
-  expect(switched).not.toBe(alone)
-  expect(subagent).not.toBe(switched)
+  expect(revisions).toHaveLength(4)
+  expect(new Set(revisions).size).toBe(1)
 })

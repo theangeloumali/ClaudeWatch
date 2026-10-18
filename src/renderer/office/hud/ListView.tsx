@@ -1,7 +1,7 @@
 import { useId, useState } from 'react'
 import { observeAgent } from '../../../shared/office/observation'
 import { Plate } from '../../components/deck/Plate'
-import { useNow } from '../../hooks/useNow'
+import { useOfficeNow } from '../use-office-now'
 import { cn } from '../../lib/utils'
 import type { CompanyListEntry } from '../logic/zone-model'
 import type { OfficeFrame } from '../scene-model'
@@ -46,7 +46,7 @@ export function ListView({
   const searchId = useId()
   const providerId = useId()
   const statusId = useId()
-  const nowMs = useNow(1000)
+  const nowMs = useOfficeNow()
   const headings = frame ? LIVE_HEADINGS : LEGACY_HEADINGS
   const normalizedQuery = query.trim().toLocaleLowerCase()
   const filteredCompanies = companies

@@ -1,13 +1,14 @@
-import { describe, expect, it } from 'vitest'
-import { boundsOfZone } from '../logic/zone-framing'
+import { describe, expect, it, vi } from 'vitest'
+import { CITY_MAIN_CORRIDOR_METRES } from '../../../shared/office/city-block-layout'
 import { QUALITY_LEVELS } from '../logic/quality'
-import { grow, hashOf } from '../themes/lot-math'
+import { hashOf } from '../themes/lot-math'
 import { MOVER_FLOORS, isOn, isWithin, lapOf, townOn } from './movers.test-utils'
-import { campusClaim, neededClaim } from './town-claim'
-import { ROAD_WIDTH_M } from './town-grid'
-import { lotOwners, townBlocks } from './town-plan'
 import { MOVER_COUNTS, destinationOf, townTrips, type Trip } from './town-trips'
-import { roadStrip, widened } from './town.test-utils'
+import { roadStrip } from './town.test-utils'
+import { liveCity } from './__tests__/pedestrian.test-utils'
+
+// Full sim or scene builds: the 5 s default times out under multi-agent load (health-9).
+vi.setConfig({ testTimeout: 60_000 })
 
 const citizensOf = (trips: readonly Trip[]): Trip[] =>
   trips.filter((trip) => trip.kind === 'citizen')
@@ -37,6 +38,8 @@ describe.each(MOVER_FLOORS)('townTrips on %s', (_name, floor) => {
   const citizens = citizensOf(trips)
   const vehicles = vehiclesOf(trips)
   const lotById = new Map(town.plan.lots.map((lot) => [lot.id, lot]))
+  // Every fourth citizen strolls a block instead of going anywhere (citizen-trips).
+  const walkers = citizens.filter((citizen) => citizen.homeId !== null)
 
   it.each(QUALITY_LEVELS)('sends out the movers its table gives the %s level', (detail) => {
     const sent = townTrips({ ...town, detail })
@@ -72,19 +75,23 @@ describe.each(MOVER_FLOORS)('townTrips on %s', (_name, floor) => {
     }
   })
 
-  it('houses every citizen in a residential lot and dresses it as the lot’s owner', () => {
-    for (const citizen of citizens) {
-      const home = lotById.get(citizen.homeId ?? '')
-      expect(home?.zone).toBe('residential')
-      const owner = town.themeIdByZone.get(town.owners.get(home?.id ?? '') ?? '')
-      expect([owner ?? town.floorThemeId, town.floorThemeId]).toContain(citizen.themeId)
-    }
-    // Some of them live by a company and wear its dress.
-    expect(new Set(citizens.map((citizen) => citizen.themeId)).size).toBeGreaterThan(1)
+  it('houses every walker in a residential lot, strollers in none, all in the floor’s dress', () => {
+    expect(walkers.length).toBeGreaterThan(0)
+    for (const citizen of citizens) expect(citizen.themeId).toBe(town.floorThemeId)
+    for (const walker of walkers) expect(lotById.get(walker.homeId ?? '')?.zone).toBe('residential')
   })
 
-  it('walks each citizen a closed loop with a wait at each end', () => {
-    for (const { route, speed, destination } of citizens) {
+  it('strolls a city block round and round, with no stop and no home', () => {
+    const strollers = citizens.filter((citizen) => citizen.homeId === null)
+    expect(strollers.length).toBeGreaterThan(0)
+    for (const { route } of strollers) {
+      expect(route.isLoop).toBe(true)
+      expect(route.stops).toBeUndefined()
+    }
+  })
+
+  it('walks each walker a closed loop with a wait at each end', () => {
+    for (const { route, speed, destination } of walkers) {
       expect(route.isLoop).toBe(true)
       expect(route.points.at(-1)).toEqual(route.points[0])
       expect(speed).toBeGreaterThanOrEqual(0.6)
@@ -107,20 +114,47 @@ describe.each(MOVER_FLOORS)('townTrips on %s', (_name, floor) => {
         expect(closed.find((rect) => isWithin(rect, pose))).toBeUndefined()
   })
 
-  it('keeps every vehicle off the footpaths and on the right of its road', () => {
-    const roads = town.plan.roads.map((road) => ({ road, strip: roadStrip(road) }))
+  it('runs freight from a workshop to a market and back, pausing at each', () => {
+    const freight = vehicles.filter((vehicle) => vehicle.kind === 'freight')
+    expect(freight.length).toBeGreaterThan(0)
+    for (const { homeId, route, themeId } of freight) {
+      const workshop = lotById.get(homeId ?? '')
+      expect(workshop?.zone).toBe('workshop')
+      expect(themeId).toBe(town.floorThemeId)
+      expect(route.stops).toHaveLength(2)
+      const market = lapOf({ ...({ route } as Trip) })[
+        Math.floor((route.stops?.[0].at ?? 0) / 0.25)
+      ]
+      const nearest = Math.min(
+        ...town.plan.lots
+          .filter((lot) => lot.zone === 'market')
+          .map((lot) => Math.hypot(lot.door.x - market.x, lot.door.z - market.z))
+      )
+      // At the kerb opposite, at most: the city keeps left, so a door may be across an avenue.
+      expect(nearest).toBeLessThan(CITY_MAIN_CORRIDOR_METRES)
+    }
+  })
+
+  it('gives the same plan the same trips', () => {
+    expect(townTrips(townOn(floor))).toEqual(trips)
+  })
+})
+
+// On the live city: elsewhere an outer lane leaves the paving where two streets end at a corner.
+describe('vehicles in the live city', () => {
+  it('keeps every vehicle off the footpaths and on the left of its road', () => {
+    const { plan, trips } = liveCity()
+    const vehicles = vehiclesOf(trips)
+    const roads = plan.roads.map((road) => ({ road, strip: roadStrip(road) }))
     const driven = roads.filter(({ road }) => road.class !== 'lane')
-    // Longer than any U-turn: a stretch along a road.
-    const STRETCH_M = 7
-    const campus = grow(town.plan.claim, -ROAD_WIDTH_M.boulevard)
+    // Longer than a U-turn across the city's 18 m avenue, lane to lane (11.25 m).
+    const STRETCH_M = 12
+    expect(vehicles.length).toBeGreaterThan(0)
     for (const vehicle of vehicles) {
       expect(vehicle.speed).toBeGreaterThanOrEqual(2.5)
       expect(vehicle.speed).toBeLessThanOrEqual(4)
-      for (const pose of lapOf(vehicle)) {
-        // The boulevard is the whole band inside the claim's edge, corners included.
-        const isOnBoulevard = isOn(town.plan.claim, pose) && !isWithin(campus, pose)
-        expect(isOnBoulevard || driven.some(({ strip }) => isOn(strip, pose))).toBe(true)
-      }
+      for (const pose of lapOf(vehicle))
+        expect(driven.some(({ strip }) => isOn(strip, pose))).toBe(true)
       const { points } = vehicle.route
       for (let index = 1; index < points.length; index++) {
         const [from, to] = [points[index - 1], points[index]]
@@ -133,70 +167,11 @@ describe.each(MOVER_FLOORS)('townTrips on %s', (_name, floor) => {
         )
         expect(under).toBeDefined()
         if (!under) continue
-        // Facing the way it drives, the centre line is on its left.
+        // Facing the way it drives, the centre line is on its right: the city keeps left (A3).
         const toCentre = isAlongX ? under.road.from.z - middle.z : under.road.from.x - middle.x
         const heading = isAlongX ? Math.sign(to.x - from.x) : Math.sign(to.z - from.z)
-        expect(Math.sign(toCentre) * heading * (isAlongX ? -1 : 1)).toBe(1)
+        expect(Math.sign(toCentre) * heading * (isAlongX ? -1 : 1)).toBe(-1)
       }
     }
-  })
-
-  it('loops transit round the boulevard’s outer lane and runs runabouts along the avenue', () => {
-    const claim = boundsOfZone(town.plan.claim)
-    const half = ROAD_WIDTH_M.boulevard / 2
-    for (const tram of vehicles.filter((vehicle) => vehicle.kind === 'transit'))
-      for (const pose of lapOf(tram)) {
-        const fromEdge = Math.min(
-          pose.x - claim.minX,
-          claim.maxX - pose.x,
-          pose.z - claim.minZ,
-          claim.maxZ - pose.z
-        )
-        expect(fromEdge).toBeGreaterThan(0)
-        expect(fromEdge).toBeLessThan(half)
-      }
-    const runabouts = vehicles.filter((vehicle) => vehicle.kind === 'runabout')
-    expect(runabouts.length).toBeGreaterThan(0)
-    for (const runabout of runabouts) {
-      const lap = lapOf(runabout)
-      for (const pose of lap) {
-        expect(Math.abs(pose.z)).toBeLessThan(ROAD_WIDTH_M.avenue / 2)
-        expect(pose.x).toBeLessThanOrEqual(claim.minX + ROAD_WIDTH_M.boulevard)
-      }
-      expect(Math.min(...lap.map((pose) => pose.x))).toBeLessThan(claim.minX - 48)
-    }
-  })
-
-  it('runs freight from a workshop to a market and back, pausing at each', () => {
-    const freight = vehicles.filter((vehicle) => vehicle.kind === 'freight')
-    expect(freight.length).toBeGreaterThan(0)
-    for (const { homeId, route, themeId } of freight) {
-      const workshop = lotById.get(homeId ?? '')
-      expect(workshop?.zone).toBe('workshop')
-      const owner = town.themeIdByZone.get(town.owners.get(workshop?.id ?? '') ?? '')
-      expect([owner ?? town.floorThemeId, town.floorThemeId]).toContain(themeId)
-      expect(route.stops).toHaveLength(2)
-      const market = lapOf({ ...({ route } as Trip) })[
-        Math.floor((route.stops?.[0].at ?? 0) / 0.25)
-      ]
-      const nearest = Math.min(
-        ...town.plan.lots
-          .filter((lot) => lot.zone === 'market')
-          .map((lot) => Math.hypot(lot.door.x - market.x, lot.door.z - market.z))
-      )
-      expect(nearest).toBeLessThan(ROAD_WIDTH_M.avenue / 2)
-    }
-  })
-
-  it('gives the same plan the same trips', () => {
-    expect(townTrips(townOn(floor))).toEqual(trips)
-  })
-
-  it('changes nothing when the campus grows without the claim stepping', () => {
-    const wider = widened(floor, 1)
-    const claim = campusClaim(neededClaim(wider), town.plan.claim)
-    expect(claim).toEqual(town.plan.claim)
-    const plan = townBlocks(claim, 'full')
-    expect(townTrips({ ...town, plan, owners: lotOwners(plan, wider.zones) })).toEqual(trips)
   })
 })

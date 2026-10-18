@@ -3,6 +3,7 @@ import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Vector3, type Group } from 'three'
 import type { AgentView } from '../../../shared/office/types'
+import { withLivePose } from '../../office-live/pose-store'
 import { placeBody, PLAYER_BODY_RADIUS } from '../../../shared/office/body-footprints'
 import type { SceneBodies } from '../scene/BodySpace'
 import { ISO_POLAR, ISO_START_AZIMUTH } from '../logic/camera-bands'
@@ -25,7 +26,7 @@ interface PlayerLayerProps {
   player: Player
   isWalking: boolean
   floor: FloorGeometry
-  allFloors?: readonly FloorGeometry[]
+  allFloors: readonly FloorGeometry[]
   // Everything that stands on the ground: the town's lots and the plots of the belt.
   solids: readonly Rect[]
   // How far the player may be sent: the town's extent, or the floor's own without a town.
@@ -72,7 +73,7 @@ export function PlayerLayer(props: PlayerLayerProps) {
   const grounds = useMemo(
     () =>
       new Map(
-        (props.allFloors ?? []).map((surface) => [
+        props.allFloors.map((surface) => [
           surface.floorId,
           walkGround(
             surface,
@@ -87,7 +88,7 @@ export function PlayerLayer(props: PlayerLayerProps) {
   const physicalGround = () => {
     const physical = grounds.get(player.physicalFloorId ?? '')
     if (physical) return physical
-    const groundFloor = props.allFloors?.find((surface) => (surface.elevation ?? 0) === 0)
+    const groundFloor = props.allFloors.find((surface) => (surface.elevation ?? 0) === 0)
     return (groundFloor && grounds.get(groundFloor.floorId)) || ground
   }
   const playerHeight = () =>
@@ -188,7 +189,12 @@ export function PlayerLayer(props: PlayerLayerProps) {
   // Agents walk too: one that comes up to a standing player is offered as well.
   useEffect(() => {
     setNearAgent(
-      isWalking ? agentInReach({ ...player.position, elevation: player.elevation }, agents) : null
+      isWalking
+        ? agentInReach(
+            { ...player.position, elevation: player.elevation },
+            agents.map(withLivePose)
+          )
+        : null
     )
   }, [isWalking, agents, player])
 
@@ -226,7 +232,7 @@ export function PlayerLayer(props: PlayerLayerProps) {
         )
       const beside = agentInReach(
         { ...player.position, elevation: player.elevation },
-        latestRef.current.agents
+        latestRef.current.agents.map(withLivePose)
       )
       if (beside?.agentKey !== latestRef.current.nearAgent?.agentKey) setNearAgent(beside)
     } else if (strideRef.current !== 0) {
@@ -279,7 +285,6 @@ export function PlayerLayer(props: PlayerLayerProps) {
     if (!isStillClick(event)) return
     event.stopPropagation()
     if (
-      props.allFloors &&
       player.physicalFloorId !== floor.floorId &&
       Math.abs(event.point.y - (floor.elevation ?? 0)) < 0.1
     ) {

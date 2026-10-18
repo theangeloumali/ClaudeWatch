@@ -23,8 +23,7 @@ it('keeps preview and selected-floor geometry out of the live town topology', ()
     theme: getTheme('corporate-city'),
     agents: [],
     sessions: [],
-    selectedAgentKey: null,
-    speakingAgentKey: null
+    selectedAgentKey: null
   })
   expect(data.townFloor.x).toBe(0)
   expect(data.surfaces[0].x).toBe(500)

@@ -12,6 +12,8 @@ export interface MoverClock {
   isWalking: boolean[]
   positions: CitizenMotionPose[]
   onFoot: RoutePoint[]
+  // Who is stuck behind whom, so the crowd can break its own jams.
+  waitsFor: Map<string, string>
 }
 
 export function moverRouteKey(trip: Trip): string {
@@ -69,6 +71,7 @@ export function moverClock({ trips, space, isOpen, previous }: MoverClockOptions
       const before = retained[index]
       return before === undefined ? false : (previous?.isWalking[before] ?? false)
     }),
-    onFoot: []
+    onFoot: [],
+    waitsFor: new Map()
   }
 }

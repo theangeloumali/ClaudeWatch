@@ -30,7 +30,8 @@ const headers = new WeakMap<
   BridgeIo,
   Map<string, { size: number; mtimeMs: number; header: HeaderResult }>
 >()
-const cursors = new WeakMap<BridgeIo, Map<string, number>>()
+// Per folder, each transcript's mtime when last stat'ed.
+const seenFolders = new WeakMap<BridgeIo, Map<string, Map<string, number>>>()
 
 export const isClaudeSessionId = (sessionId: unknown): sessionId is string =>
   typeof sessionId === 'string' &&
@@ -95,6 +96,14 @@ export async function explicitClaudeTranscript(options: {
   return null
 }
 
+// Unseen names and those written since `startedAtMs`; one last written before it cannot hold a
+// conversation begun since. So a large folder completes once each name is stat'ed (health-3).
+function namesDue(seen: Map<string, number>, names: string[], startedAtMs: number): string[] {
+  const listed = new Set(names)
+  for (const name of seen.keys()) if (!listed.has(name)) seen.delete(name)
+  return names.filter((name) => (seen.get(name) ?? Infinity) >= startedAtMs)
+}
+
 export async function recentClaudeTranscripts(options: {
   io: BridgeIo
   roots: readonly string[]
@@ -105,8 +114,8 @@ export async function recentClaudeTranscripts(options: {
   onFailure: (root?: string) => void
 }): Promise<{ candidates: ClaudeTranscript[]; isComplete: boolean }> {
   const { io, cwd, now, platform } = options
-  let offsets = cursors.get(io)
-  if (!offsets) cursors.set(io, (offsets = new Map()))
+  let folders = seenFolders.get(io)
+  if (!folders) seenFolders.set(io, (folders = new Map()))
   const candidates: ClaudeTranscript[] = []
   let isComplete = true
   for (const root of options.roots) {
@@ -115,15 +124,16 @@ export async function recentClaudeTranscripts(options: {
       const names = (await io.list(folder)).filter(
         (name) => name.endsWith('.jsonl') && isClaudeSessionId(name.slice(0, -6))
       )
-      const offset = (offsets.get(folder) ?? 0) % Math.max(1, names.length)
-      if (names.length > MAX_CANDIDATES) isComplete = false
-      const bounded = [...names.slice(offset), ...names.slice(0, offset)].slice(0, MAX_CANDIDATES)
-      if (offsets.size >= MAX_HEADERS && !offsets.has(folder)) offsets.clear()
-      offsets.set(folder, (offset + bounded.length) % Math.max(1, names.length))
-      for (const name of bounded) {
+      if (folders.size >= MAX_HEADERS && !folders.has(folder)) folders.clear()
+      let seen = folders.get(folder)
+      if (!seen) folders.set(folder, (seen = new Map()))
+      const due = namesDue(seen, names, options.startedAtMs)
+      if (due.length > MAX_CANDIDATES) isComplete = false
+      for (const name of due.slice(0, MAX_CANDIDATES)) {
         const path = join(folder, name)
         try {
           const info = await io.stat(path)
+          seen.set(name, info.mtimeMs)
           const quietMs = quietFor(now, info.mtimeMs)
           if (
             info.directory ||

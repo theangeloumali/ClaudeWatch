@@ -25,6 +25,8 @@ interface FileInfo {
   directory: boolean
   mtimeMs: number
   size: number
+  // Tells a file rewritten in place from one replaced under the same name.
+  ino?: number
 }
 // Whole lines only: `text` ends at the last newline read, and `nextOffset` is where to resume.
 interface ForwardRead {
@@ -209,7 +211,7 @@ export const systemIo: BridgeIo = {
   list: (path) => readdir(path),
   stat: async (path) => {
     const info = await stat(path)
-    return { directory: info.isDirectory(), mtimeMs: info.mtimeMs, size: info.size }
+    return { directory: info.isDirectory(), mtimeMs: info.mtimeMs, size: info.size, ino: info.ino }
   },
   exec: async (file, args, { timeoutMs = EXEC_TIMEOUT_MS } = {}) => {
     if (!PROGRAMS.has(file)) throw forbidden('program')

@@ -1,17 +1,18 @@
-import { cityScenerySites } from '../../../shared/office/city-scenery'
-import { gapBetween, hashOf, rectOf } from '../themes/lot-math'
+import { cityScenerySites, type CityScenerySite } from '../../../shared/office/city-scenery'
+import { gapBetween, hashOf, rectOf, type Rect } from '../themes/lot-math'
 import {
   CITY_MAIN_CORRIDOR_METRES,
   cityBlocksFor,
   cityGrid,
   cityStreetWidth
 } from '../../../shared/office/city-block-layout'
-import type { Town } from './use-town-plan'
+import type { TownPlan } from './town-plan'
+import type { CampusTown, Town } from './use-town-plan'
 import type { TownLot } from './town-lots'
 import { roadGraph } from './town-graph'
-import { districtStreets, type DistrictSite } from './district-streets'
-import type { TownDistrict } from './town-zones'
-import { SIDEWALK_M } from './town-grid'
+import { districtStreets, type DistrictSite } from '../../../shared/office/district-streets'
+import { LANDMARK_DISTRICTS, type TownDistrict } from './town-zones'
+import { SIDEWALK_M, type TownRoad } from '../../../shared/office/town-roads'
 
 const FRONTAGE_USES: readonly TownDistrict[] = [
   'residential',
@@ -24,14 +25,64 @@ const FRONTAGE_USES: readonly TownDistrict[] = [
   'market'
 ]
 
-// Office IDs share mixed-use street blocks, without campus belts or company districts.
-export function distributedTown(town: Town, protectedSites: readonly DistrictSite[]): Town {
-  if (!protectedSites.length) return town
+// The ground a street covers, end to end and kerb to kerb.
+export function streetFootprint(road: TownRoad): Rect {
+  return {
+    x: (road.from.x + road.to.x) / 2,
+    z: (road.from.z + road.to.z) / 2,
+    width: Math.abs(road.to.x - road.from.x) || road.width,
+    depth: Math.abs(road.to.z - road.from.z) || road.width
+  }
+}
+
+// The largest lot of each landmark district is its landmark; the first laid wins a tie.
+function landmarkIds(sites: readonly CityScenerySite[], zoneOf: (index: number) => TownDistrict) {
+  const largest = new Map<TownDistrict, CityScenerySite>()
+  sites.forEach((site, index) => {
+    const zone = zoneOf(index)
+    if (!LANDMARK_DISTRICTS.includes(zone)) return
+    const best = largest.get(zone)
+    if (!best || site.width * site.depth > best.width * best.depth) largest.set(zone, site)
+  })
+  return new Set([...largest.values()].map((site) => site.id))
+}
+
+type CityParts = Pick<
+  TownPlan,
+  'officeSites' | 'blocks' | 'lots' | 'roads' | 'promenades' | 'extent'
+>
+
+// The campus claim and size, under the city's own streets and lots.
+function cityOf(town: CampusTown, parts: CityParts): Town {
+  return {
+    plan: {
+      ...town,
+      ...parts,
+      envelope: parts.extent,
+      graph: roadGraph(parts.roads)
+    }
+  }
+}
+
+// Office IDs share mixed-use street blocks, without campus belts or company districts. Until an
+// office stands on the ground the city is empty; the plan is made again when one does.
+export function distributedTown(town: CampusTown, protectedSites: readonly DistrictSite[]): Town {
+  if (!protectedSites.length)
+    return cityOf(town, {
+      officeSites: [],
+      blocks: [],
+      lots: [],
+      roads: [],
+      promenades: [],
+      extent: town.claim
+    })
   const sites = cityScenerySites(protectedSites)
   const grid = cityGrid(protectedSites)
+  const zoneOf = (index: number): TownDistrict => FRONTAGE_USES[index % FRONTAGE_USES.length]
+  const landmarks = landmarkIds(sites, zoneOf)
   const lots: TownLot[] = sites.map((site, index) => {
     const seed = hashOf(site.id)
-    const zone = FRONTAGE_USES[index % FRONTAGE_USES.length]
+    const zone = zoneOf(index)
     const nearestOffice = Math.min(
       ...protectedSites.filter((site) => 'zones' in site).map((office) => gapBetween(site, office))
     )
@@ -63,21 +114,15 @@ export function distributedTown(town: Town, protectedSites: readonly DistrictSit
           : zone === 'residential'
             ? Math.min(heightLimit, 18 + (seed % 9))
             : Math.min(heightLimit, 8 + (seed % 5)),
-      zoneId: null,
       isFarRing: false,
-      isLandmark: zone === 'civic'
+      isLandmark: landmarks.has(site.id)
     }
   })
   const roads = districtStreets({
     sites: protectedSites,
     obstacles: [...protectedSites, ...sites]
   })
-  const roadSites = roads.map((road) => ({
-    x: (road.from.x + road.to.x) / 2,
-    z: (road.from.z + road.to.z) / 2,
-    width: Math.abs(road.to.x - road.from.x) || road.width,
-    depth: Math.abs(road.to.z - road.from.z) || road.width
-  }))
+  const roadSites = roads.map(streetFootprint)
   const blocks = cityBlocksFor(protectedSites).map((block) => ({
     ...block,
     zone: 'workshop' as const
@@ -89,20 +134,12 @@ export function distributedTown(town: Town, protectedSites: readonly DistrictSit
     Math.min(...footprint.map((site) => site.z - site.depth / 2)),
     Math.max(...footprint.map((site) => site.z + site.depth / 2))
   )
-  return {
-    ...town,
-    owners: new Map(),
-    green: [],
-    plan: {
-      ...town.plan,
-      extent,
-      envelope: extent,
-      officeSites: protectedSites,
-      blocks,
-      lots,
-      roads,
-      promenades: roadSites,
-      graph: roadGraph(roads, town.plan.claim)
-    }
-  }
+  return cityOf(town, {
+    officeSites: protectedSites,
+    blocks,
+    lots,
+    roads,
+    promenades: roadSites,
+    extent
+  })
 }

@@ -51,6 +51,7 @@ it('places a card where the camera will draw it, even before the renderer refres
   }
   render(
     <CardProjector
+      visibleFloors={[]}
       cards={[CARD]}
       stacks={[]}
       anchors={anchors}

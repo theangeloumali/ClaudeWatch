@@ -113,7 +113,6 @@ describe('Samurai Empire world contract', () => {
     expect(
       Object.values(samuraiEmpire.kit.floor).every((surface) => typeof surface === 'function')
     ).toBe(true)
-    expect(typeof samuraiEmpire.world.Tower).toBe('function')
   })
 
   it('keeps real-identity skin, adult face, and separate armored elbows and knees', () => {
@@ -152,7 +151,7 @@ describe('Samurai Empire world contract', () => {
     expect(SAMURAI_DESK_PARTS.length).toBeLessThan(70)
   })
 
-  it('covers all districts, garden roles, citizens, and vehicle roles', () => {
+  it('covers all districts, its garden, citizens, and vehicle roles', () => {
     for (const district of Object.keys(SAMURAI_TOWN.looks)) {
       expect(SAMURAI_DESIGNS.some((design) => design.zones.some((zone) => zone === district))).toBe(
         true
@@ -170,7 +169,7 @@ describe('Samurai Empire world contract', () => {
       'runabout'
     ])
     const names = [...SAMURAI_TOWN.designs, ...SAMURAI_TOWN.props].map((entry) => entry.name)
-    for (const role of Object.values(SAMURAI_TOWN.garden ?? {})) expect(names).toContain(role)
+    expect(names).toContain(SAMURAI_TOWN.garden)
   })
 
   it('bounds every district on narrow and broad lots without detail growing with height', () => {
@@ -217,15 +216,13 @@ describe('Samurai Empire world contract', () => {
     geometry.dispose()
   })
 
-  it('renders the floor, elevator, and landmark through shared merged unit parts', () => {
+  it('renders the floor and elevator through shared merged unit parts', () => {
     const { floor } = agentsOn(4, 20)
     const Slab = samuraiEmpire.kit.floor.Slab
     const Elevator = samuraiEmpire.kit.floor.Elevator
-    const Tower = samuraiEmpire.world.Tower
     const measured = mergedDraws([
       <Slab key="slab" floor={floor} />,
-      <Elevator key="elevator" floor={floor} />,
-      <Tower key="landmark" floors={[]} />
+      <Elevator key="elevator" floor={floor} />
     ])
     expect(measured.draws).toBeLessThanOrEqual(24)
     expect(measured.triangles).toBeLessThan(1500)

@@ -37,7 +37,7 @@ Validated (B8): with six teammates running, `node out/main/bridge.js --once` rep
 - [x] Phase 10 — zkidz-claude-team: vendored Office bundle and the `zkoffice` command (B7) (framework PR #96 merged as fff5c03, closes #95: `office/` bundle of 9 files and 1.5 MB, `bin/zkoffice`, `/zk:office`, 70-case harness in that repo's gate; installed on this Mac and started from `~/.claude/bin/zkoffice`: page 200, no token 401, port free after stop)
 - [x] Phase 11 — Release readiness: notarisation switch, changelog, README, clean-clone check (cdaccf5: the builder skips notarisation when its credentials are absent and does not fail; README now describes the local release; Node version declared)
 - [x] Phase 12 — Integration: gates, QA and security review, second review, cleanup pass, dead-code scan, demo, notes (two review rounds and an independent one, all findings fixed; cleanup pass applied; 1,924 tests in 187 files, typecheck, eslint, both builds and the dead-code scan pass at 3baf3d0; that build is installed in `/Applications`; demo re-recorded on it and frame-checked; learnings recorded; worktrees removed)
-- [ ] Phase 13 — Signed release 1.3.0 — BLOCKED (owner: Angelo): no Developer ID Application certificate on this Mac
+- [x] Phase 13 — Signed release 1.3.0: published to GitHub Releases as v1.3.0 on 2026-10-12T10:17:12Z (arm64 + x64 DMG/ZIP + latest-mac.yml), signed with the team's Developer ID Application certificate; notarisation still waits on Apple's agreement review (owner: Angelo), and 1.4.0 followed on 2026-10-13
 
 ## How the work is cut
 

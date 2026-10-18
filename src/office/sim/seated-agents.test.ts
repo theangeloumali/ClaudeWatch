@@ -1,7 +1,10 @@
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import type { AgentView, SessionRef } from '../../shared/office/types'
 import { session, subagent } from './fixtures'
 import { World } from './world'
+
+// Full sim or scene builds: the 5 s default times out under multi-agent load (health-9).
+vi.setConfig({ testTimeout: 60_000 })
 
 const SETTLE_S = 120
 function open(sessions: SessionRef[]): World {

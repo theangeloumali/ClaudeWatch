@@ -1,4 +1,4 @@
-import { act, renderHook } from '@testing-library/react'
+import { renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { officeSettings } from '../logic/office-settings'
 import { pinQuality } from '../quality-store'
@@ -11,6 +11,8 @@ const fresh = (floor: FloorGeometry) => edges(campusClaim(neededClaim(floor), nu
 const store = (value: unknown): void =>
   localStorage.setItem(CLAIM_STORAGE_KEY, JSON.stringify(value))
 const stored = (): unknown => JSON.parse(localStorage.getItem(CLAIM_STORAGE_KEY) ?? 'null')
+// The scene's town: the city round the floor's own site.
+const cityOn = (floor: FloorGeometry) => useTownPlan(floor, { protectedSites: [floor] })
 
 beforeEach(() => {
   localStorage.clear()
@@ -20,17 +22,17 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks())
 
 describe('townOf', () => {
-  it('is the town of the floor alone when nothing is held', () => {
-    const town = townOf(LARGE_FLOOR, null, 'full')
-    expect(edges(town.plan.claim)).toEqual(fresh(LARGE_FLOOR))
-    expect(town.green.length).toBeGreaterThan(0)
-    expect(town.owners.size).toBeGreaterThan(0)
+  it('is the claim of the floor alone and the town size when nothing is held, and nothing more', () => {
+    const town = townOf(LARGE_FLOOR, null)
+    expect(Object.keys(town).sort()).toEqual(['claim', 'size'])
+    expect(edges(town.claim)).toEqual(fresh(LARGE_FLOOR))
+    expect(town.size).toBe('city')
+    expect(townOf(LARGE_FLOOR, null, 'village').size).toBe('village')
   })
 
-  it('hands back the same plan for a floor that moves no claim edge', () => {
-    const first = townOf(LARGE_FLOOR, null, 'full')
-    const again = townOf(structuredClone(LARGE_FLOOR), first.plan.claim, 'full')
-    expect(again.plan).toBe(first.plan)
+  it('keeps the held claim for a floor that moves no claim edge', () => {
+    const first = townOf(LARGE_FLOOR, null)
+    expect(townOf(widened(LARGE_FLOOR, 1), first.claim)).toEqual(first)
   })
 })
 
@@ -65,7 +67,7 @@ describe('useTownPlan', () => {
     const floor = widened(LARGE_FLOOR, (((spare - 15) % 12) + 12) % 12)
     const held = { ...fresh(floor), east: fresh(floor).east - 12 }
     store({ version: 1, ...held })
-    const { result } = renderHook(() => useTownPlan(floor))
+    const { result } = renderHook(() => cityOn(floor))
     expect(edges(result.current.plan.claim)).toEqual(held)
   })
 
@@ -77,40 +79,37 @@ describe('useTownPlan', () => {
     ['another version', JSON.stringify({ version: 2, ...fresh(LARGE_FLOOR) })]
   ])('ignores %s in storage', (_name, raw) => {
     localStorage.setItem(CLAIM_STORAGE_KEY, raw)
-    const { result } = renderHook(() => useTownPlan(LARGE_FLOOR))
+    const { result } = renderHook(() => cityOn(LARGE_FLOOR))
     expect(edges(result.current.plan.claim)).toEqual(fresh(LARGE_FLOOR))
   })
 
   it('ignores a stored claim that no longer contains the campus', () => {
     store({ version: 1, ...fresh(PAIR_FLOOR), east: 12 })
-    const { result } = renderHook(() => useTownPlan(PAIR_FLOOR))
+    const { result } = renderHook(() => cityOn(PAIR_FLOOR))
     expect(edges(result.current.plan.claim)).toEqual(fresh(PAIR_FLOOR))
   })
 
   it('stores the claim of a first start', () => {
-    renderHook(() => useTownPlan(LARGE_FLOOR))
+    renderHook(() => cityOn(LARGE_FLOOR))
     expect(stored()).toEqual({ version: 1, ...fresh(LARGE_FLOOR) })
   })
 
   it('writes only when the claim changes', () => {
     store({ version: 1, ...fresh(LARGE_FLOOR) })
     const write = vi.spyOn(Storage.prototype, 'setItem')
-    const { result, rerender } = renderHook(({ floor }) => useTownPlan(floor), {
+    const { result, rerender } = renderHook(({ floor }) => cityOn(floor), {
       initialProps: { floor: LARGE_FLOOR }
     })
-    const first = result.current.plan
     rerender({ floor: structuredClone(LARGE_FLOOR) })
     rerender({ floor: widened(LARGE_FLOOR, 1) })
-    expect(result.current.plan).toBe(first)
     expect(write).not.toHaveBeenCalled()
     rerender({ floor: widened(LARGE_FLOOR, 30) })
-    expect(result.current.plan).not.toBe(first)
     expect(write).toHaveBeenCalledTimes(1)
     expect(stored()).toEqual({ version: 1, ...edges(result.current.plan.claim) })
   })
 
   it('holds an edge when the campus comes back in by less than the release distance', () => {
-    const { result, rerender } = renderHook(({ floor }) => useTownPlan(floor), {
+    const { result, rerender } = renderHook(({ floor }) => cityOn(floor), {
       initialProps: { floor: widened(LARGE_FLOOR, 30) }
     })
     const grown = edges(result.current.plan.claim)
@@ -122,37 +121,8 @@ describe('useTownPlan', () => {
     expect(edges(result.current.plan.claim)).toEqual(fresh(LARGE_FLOOR))
   })
 
-  it('plans the town for the detail level in use', () => {
-    officeSettings.setTownSize('city')
-    const { result } = renderHook(() => useTownPlan(LARGE_FLOOR))
-    const full = result.current.plan
-    act(() => pinQuality('light'))
-    expect(result.current.plan.lots.length).toBeLessThan(full.lots.length)
-    expect(edges(result.current.plan.claim)).toEqual(edges(full.claim))
-  })
-
   it('plans a city when nothing is stored', () => {
-    const { result } = renderHook(() => useTownPlan(LARGE_FLOOR))
+    const { result } = renderHook(() => cityOn(LARGE_FLOOR))
     expect(result.current.plan.size).toBe('city')
-  })
-
-  it('rebuilds the plan once for a size change, and not for an agent step', () => {
-    officeSettings.setTownSize('village')
-    const { result, rerender } = renderHook(({ floor }) => useTownPlan(floor), {
-      initialProps: { floor: LARGE_FLOOR }
-    })
-    const village = result.current.plan
-    act(() => officeSettings.setTownSize('city'))
-    const city = result.current.plan
-    rerender({ floor: structuredClone(LARGE_FLOOR) })
-    expect(result.current.plan).toBe(city)
-    expect(city).not.toBe(village)
-    expect(city.size).toBe('city')
-    expect(edges(city.claim)).toEqual(edges(village.claim))
-    // The camera's widest zoom is the plan's extent: it grows with the town.
-    expect(edges(city.extent).east).toBeGreaterThan(edges(village.extent).east)
-    expect(edges(city.extent).west).toBeLessThan(edges(village.extent).west)
-    act(() => officeSettings.setTownSize('city'))
-    expect(result.current.plan).toBe(city)
   })
 })

@@ -1,8 +1,10 @@
 import { World } from '../../office/sim/world'
 import { buildLayout, type LayoutMap } from '../../office/sim/layout'
-import { resolveEffectiveWorld } from '../../office/sim/effective-world'
-import { createWorldDocument } from '../../shared/office/world-document'
+import { effectiveWorldKey, resolveEffectiveWorld } from '../../office/sim/effective-world'
+import { createWorldDocument, parseWorldDocument } from '../../shared/office/world-document'
 import { createWorldDocumentStore, type WorldDocumentStore } from './world-document-store'
+import { hostWorldStorage, type HostWorldStorage } from './host-world-storage'
+import type { WorldSaveReply } from '../../shared/office/world-sync'
 import { listThemes } from '../office/themes/registry'
 import { isJsonObject } from '../../shared/json-object'
 import { applyFeed } from '../../shared/office/apply-feed'
@@ -20,6 +22,7 @@ import { officeSettings, type OfficeSettingsStore } from '../office/logic/office
 import { browserVisibilityEnv, type VisibilityEnv } from '../office/logic/frame-governor'
 import type { FloorGeometry, OfficeFeed, OfficeFrame } from '../office/scene-model'
 import { toFloorGeometry } from './layout-geometry'
+import { officePoses, poseOf, structuralKey, type PoseStore } from './pose-store'
 
 export interface FeedSource {
   ready(): Promise<void>
@@ -33,6 +36,8 @@ export interface FeedSource {
   ): Promise<InteractionResult>
   peek(sessionKey: string): Promise<PeekResult>
   start(projectKey: string, provider: ProviderId): Promise<InteractionResult>
+  // Saves the city on the host every page shares; a source without it keeps the page's own.
+  saveWorld?(document: unknown): Promise<WorldSaveReply>
 }
 
 interface LayoutStorage {
@@ -42,6 +47,13 @@ interface LayoutStorage {
 
 const LAYOUT_KEY = 'claudewatch.office.layout'
 const TICK_MS = 100
+// The governor's blurred idle rate (5 fps): a background window needs React frames no faster.
+const BLURRED_FRAME_GAP_MS = 200
+
+export interface LiveFeed extends OfficeFeed {
+  // Every agent's pose at the latest sim step; frames are sent only when structure changes.
+  poses: PoseStore
+}
 
 const isObjectArray = (value: unknown): value is Record<string, unknown>[] =>
   Array.isArray(value) && value.every(isJsonObject)
@@ -61,8 +73,16 @@ function isLayoutMap(value: unknown): value is LayoutMap {
   )
 }
 
-// Storage is null, or throws, where site data is blocked, and anything else in it is not a
-// layout: the office then starts from a fresh one.
+// A host that keeps the city sends it in its hello, null while it holds none. It is checked here
+// like any document read from storage.
+function receiveHostWorld(storage: HostWorldStorage | null, snapshot: OfficeSnapshot): void {
+  if (!storage || !('world' in snapshot)) return
+  const parsed = snapshot.world === null ? null : parseWorldDocument(snapshot.world)
+  if (parsed === null || parsed.success) storage.receive(parsed?.document ?? null)
+}
+
+// A layout saved before the world document, so an upgraded office keeps its desks. Storage is
+// null, or throws, where site data is blocked; anything else in it is not a layout.
 function loadLayout(storage: LayoutStorage | null): LayoutMap | undefined {
   try {
     const saved: unknown = JSON.parse(storage?.getItem(LAYOUT_KEY) ?? 'null')
@@ -72,41 +92,36 @@ function loadLayout(storage: LayoutStorage | null): LayoutMap | undefined {
   }
 }
 
-function saveLayout(storage: LayoutStorage | null, serialised: string): void {
-  try {
-    storage?.setItem(LAYOUT_KEY, serialised)
-  } catch {
-    // Not remembered; the feed listener that called this must keep running.
-  }
-}
-
 // Runs the office sim in the renderer on top of the bridge feed and emits a frame when it changes.
 export function createLiveFeed(
   source: FeedSource,
   options: {
     storage: LayoutStorage | null
-    worldEditing?: boolean
     now?: () => number
     // The owner's switches; the sim reads only the lounge trips.
     settings?: Pick<OfficeSettingsStore, 'get' | 'subscribe'>
     visibility?: VisibilityEnv
+    poses?: PoseStore
   }
-): OfficeFeed {
+): LiveFeed {
   const now = options.now ?? Date.now
   const settings = options.settings ?? officeSettings
   const visibility = options.visibility ?? browserVisibilityEnv()
   const listeners = new Set<(frame: OfficeFrame) => void>()
+  const poses = options.poses ?? officePoses
   let stop: (() => void) | null = null
   let currentWorld: World | null = null
   let documentStore: WorldDocumentStore | null = null
 
   const start = (): (() => void) => {
     const saved = loadLayout(options.storage)
+    const saveWorld = source.saveWorld?.bind(source)
+    const hostStorage = saveWorld ? hostWorldStorage(options.storage, saveWorld) : null
     let resolvedKey = ''
     let resolvedLayout: LayoutMap | undefined
     const resolveLayout = (base: LayoutMap, sessions: readonly SessionRef[]): LayoutMap => {
       const document = documentStore?.get().document ?? createWorldDocument(base, sessions)
-      const nextKey = JSON.stringify([base, document.revision])
+      const nextKey = effectiveWorldKey(base, document, sessions)
       if (nextKey !== resolvedKey || !resolvedLayout) {
         resolvedLayout = resolveEffectiveWorld(base, document, sessions)
         resolvedKey = nextKey
@@ -117,26 +132,22 @@ export function createLiveFeed(
       now,
       saved,
       loungeTrips: settings.get().loungeTrips,
-      ...(options.worldEditing
-        ? {
-            resolveLayout,
-            getVenueTargets: () =>
-              (resolvedLayout?.effectiveVenues ?? []).map((venue) => ({
-                id: venue.id,
-                kind: venue.kind,
-                capacity: venue.capacity,
-                entrance: {
-                  x: venue.footprint.x + venue.entrance.x,
-                  z: venue.footprint.z + venue.entrance.z
-                },
-                slots: venue.slots.map((slot) => ({
-                  ...slot,
-                  x: slot.x + venue.footprint.x,
-                  z: slot.z + venue.footprint.z
-                }))
-              }))
-          }
-        : {})
+      resolveLayout,
+      getVenueTargets: () =>
+        (resolvedLayout?.effectiveVenues ?? []).map((venue) => ({
+          id: venue.id,
+          kind: venue.kind,
+          capacity: venue.capacity,
+          entrance: {
+            x: venue.footprint.x + venue.entrance.x,
+            z: venue.footprint.z + venue.entrance.z
+          },
+          slots: venue.slots.map((slot) => ({
+            ...slot,
+            x: slot.x + venue.footprint.x,
+            z: slot.z + venue.footprint.z
+          }))
+        }))
     })
     currentWorld = world
     // A running office follows the switch: the next step walks agents back, or lets them go.
@@ -151,8 +162,8 @@ export function createLiveFeed(
     const offVisibility = visibility.onChange(() => {
       lastTick = now()
     })
-    let savedLayout = ''
     let lastAgents = ''
+    let lastFrameAtMs = Number.NEGATIVE_INFINITY
     let isDirty = true
     let offDocument: (() => void) | undefined
     let documentRevision = -1
@@ -161,7 +172,7 @@ export function createLiveFeed(
       const nextFloors = toFloorGeometry(
         world.layout(),
         snapshot?.sessions ?? lastKnownSnapshot?.sessions ?? [],
-        { keepEmptyHeadquarters: !options.worldEditing }
+        { keepEmptyHeadquarters: false }
       )
       const nextKey = JSON.stringify(nextFloors)
       if (nextKey !== floorsKey) {
@@ -184,10 +195,11 @@ export function createLiveFeed(
       lastKnownSnapshot = snapshot
       feedReceivedAtMs = now()
       feedRevision = snapshot.rev
-      if (options.worldEditing && !documentStore) {
+      if (message.type === 'hello') receiveHostWorld(hostStorage, snapshot)
+      if (!documentStore) {
         const initialLayout = buildLayout(snapshot.sessions, saved)
         documentStore = createWorldDocumentStore({
-          storage: options.storage,
+          storage: hostStorage ?? options.storage,
           getLayout: () => (world.baseLayout().floors.length ? world.baseLayout() : initialLayout),
           getSessions: () => snapshot?.sessions ?? lastKnownSnapshot?.sessions ?? [],
           knownThemeIds: listThemes().map((theme) => theme.id)
@@ -209,7 +221,7 @@ export function createLiveFeed(
       const layout = world.layout()
       // Most messages change no geometry: the scene keeps its world while the floors are the same.
       const nextFloors = toFloorGeometry(layout, snapshot?.sessions ?? [], {
-        keepEmptyHeadquarters: !options.worldEditing
+        keepEmptyHeadquarters: false
       })
       const nextFloorsKey = JSON.stringify(nextFloors)
       if (nextFloorsKey !== floorsKey) {
@@ -217,11 +229,6 @@ export function createLiveFeed(
         floorsKey = nextFloorsKey
       }
       isDirty = true
-      const serialised = JSON.stringify(layout)
-      if (serialised !== savedLayout) {
-        if (!options.worldEditing) saveLayout(options.storage, serialised)
-        savedLayout = serialised
-      }
     })
     let isStopped = false
     void source.ready().catch(() => {
@@ -239,11 +246,15 @@ export function createLiveFeed(
       }
       const agents = world.step(tick - lastTick)
       lastTick = tick
-      // Idle offices produce identical frames; skip them so the scene is not re-rendered for nothing.
-      const agentsKey = JSON.stringify(agents)
+      for (const agent of agents) poses.write(agent.agentKey, poseOf(agent))
+      // A walk moves poses only: the scene reads those each drawn frame, without React (perf-2).
+      const agentsKey = structuralKey(agents)
       if (!isDirty && agentsKey === lastAgents) return
+      if (!visibility.read().isFocused && tick - lastFrameAtMs < BLURRED_FRAME_GAP_MS) return
       isDirty = false
       lastAgents = agentsKey
+      lastFrameAtMs = tick
+      poses.retain(new Set(agents.map((agent) => agent.agentKey)))
       const frame: OfficeFrame = {
         floors,
         agents,
@@ -253,7 +264,7 @@ export function createLiveFeed(
         accounts: lastKnownSnapshot?.accounts,
         feedReceivedAtMs,
         feedRevision,
-        worldRevision: options.worldEditing ? documentRevision : undefined,
+        worldRevision: documentRevision,
         venues: resolvedLayout?.effectiveVenues
       }
       for (const listener of listeners) listener(frame)
@@ -273,6 +284,7 @@ export function createLiveFeed(
   }
 
   return {
+    poses,
     getWorldDocumentStore: () => documentStore,
     setBodyObstacles: (bodies) => currentWorld?.setBodyObstacles(bodies),
     subscribe(listener) {

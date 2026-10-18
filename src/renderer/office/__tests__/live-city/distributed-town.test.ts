@@ -4,7 +4,6 @@ import { makeFloor } from '../fixtures'
 import { distributedTown } from '../../town/distributed-town'
 import { overlaps } from '../../themes/lot-math'
 import { groundQuads } from '../../town/town-ground'
-import { plazaSquare } from '../../town/town-plaza'
 import { fallbackDress } from '../../town/fallback-dress'
 import { EDO } from '../../themes/palettes'
 import { cityScenerySites } from '../../../../shared/office/city-scenery'
@@ -16,7 +15,7 @@ it('places scenery and traversable streets inside the city without covering live
     { x: 0, z: -48, width: 30, depth: 25 },
     { x: 48, z: 0, width: 30, depth: 25 }
   ]
-  const town = distributedTown(townOf(envelope, null, 'full'), buildings)
+  const town = distributedTown(townOf(envelope, null), buildings)
   const lots = town.plan.lots.filter((lot) => lot.id.startsWith('city-lot:'))
   const sites = cityScenerySites(buildings)
   expect(lots.length).toBeGreaterThan(0)
@@ -55,28 +54,27 @@ it('places scenery and traversable streets inside the city without covering live
   ).toBe(true)
 })
 
-it('does not paint the old headquarters avenue and gate plaza across distributed offices', () => {
+it('paints only the city’s own ground across distributed offices, no campus street or plaza', () => {
   const envelope = makeFloor({ floorId: 'district', x: 0, z: 0, width: 150, depth: 150 })
   const sites = [{ x: 48, z: 0, width: 30, depth: 25 }]
-  const district = distributedTown(townOf(envelope, null, 'full'), sites)
+  const district = distributedTown(townOf(envelope, null), sites)
   const quads = groundQuads(district.plan, fallbackDress(EDO))
-  const plaza = plazaSquare(district.plan.claim)
-  expect(quads.filter((quad) => quad.layer === 'street')).toEqual([])
-  expect(
-    quads.some(
-      (quad) =>
-        quad.layer === 'promenade' &&
-        quad.x === plaza.x &&
-        quad.z === plaza.z &&
-        quad.width === plaza.width &&
-        quad.depth === plaza.depth
-    )
-  ).toBe(false)
+  expect(new Set(quads.map((quad) => quad.layer))).toEqual(
+    new Set(['pad', 'sidewalk', 'carriageway', 'marking'])
+  )
 })
 
-it('retains the entrance plaza for an actual legacy single-campus town', () => {
-  const legacy = townOf(makeFloor({ floorId: 'hq' }), null, 'full')
-  const quads = groundQuads(legacy.plan, fallbackDress(EDO))
-  expect(quads.filter((quad) => quad.layer === 'street')).toHaveLength(1)
-  expect(quads.some((quad) => quad.layer === 'promenade')).toBe(true)
+it('lays an empty city in the held claim until an office stands on the ground', () => {
+  const campus = townOf(makeFloor({ floorId: 'hq' }), null)
+  const { plan } = distributedTown(campus, [])
+  expect(plan.officeSites).toEqual([])
+  expect([plan.lots, plan.roads, plan.blocks, plan.promenades, plan.graph.edges]).toEqual([
+    [],
+    [],
+    [],
+    [],
+    []
+  ])
+  expect(plan.claim).toBe(campus.claim)
+  expect(plan.extent).toEqual(campus.claim)
 })

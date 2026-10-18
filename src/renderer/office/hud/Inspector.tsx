@@ -14,7 +14,7 @@ import {
 import { Plate } from '../../components/deck/Plate'
 import { StateMark } from '../../components/deck/StateMark'
 import { stateOfAttention } from '../../deck/roster'
-import { useNow } from '../../hooks/useNow'
+import { useOfficeNow } from '../use-office-now'
 import { formatElapsedTime } from '../../lib/utils'
 import { isTeammate, reachTarget } from '../logic/interactions'
 import { PROVIDER_LABEL } from '../office-palette'
@@ -62,7 +62,7 @@ function crewLine(session: SessionRef, member: SubagentRef | undefined): string 
 
 // Ticks here, so a passing second re-renders this row and not the Office around it.
 function ElapsedFact({ startedAtMs }: { startedAtMs: number | undefined }) {
-  const nowMs = useNow(1000)
+  const nowMs = useOfficeNow()
   const elapsedSeconds =
     startedAtMs === undefined ? 0 : Math.max(0, Math.floor((nowMs - startedAtMs) / 1000))
   return <Fact term="Elapsed" value={formatElapsedTime(elapsedSeconds)} />

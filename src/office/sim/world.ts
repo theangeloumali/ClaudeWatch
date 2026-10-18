@@ -1,14 +1,19 @@
-import type { AgentView, FeedMessage, SessionRef, SourceHealth } from '../../shared/office/types'
+import {
+  DEPARTURE_FADE_MS,
+  type AgentView,
+  type FeedMessage,
+  type SessionRef,
+  type SourceHealth
+} from '../../shared/office/types'
 import { clamp } from '../../shared/range'
 import { BodyPassages } from '../../shared/office/body-passages'
 import {
   bodyStep,
   bodyFits,
   placeBody,
-  SUBAGENT_BODY_RADIUS,
-  WORKER_BODY_RADIUS,
   type BodyFootprint
 } from '../../shared/office/body-footprints'
+import { agentBody } from './agent-body'
 import {
   createAgent,
   leaveAgent,
@@ -18,38 +23,33 @@ import {
   updateAgent,
   type AgentRecord
 } from './behaviour'
-import { buildLayout, type LayoutMap, type LoungeLayout } from './layout'
+import { buildLayout, type FloorLayout, type LayoutMap, type LoungeLayout } from './layout'
 import { loungesByRoom } from './lounge'
 import type { PathCache } from './navigation'
-import { MovementRecovery } from './movement-recovery'
-import { placements } from './placements'
+import { MovementRecovery, remainingRouteMetres } from './movement-recovery'
+import { placements, type Placement } from './placements'
 import { FloorRoutes, floorElevation, floorEntrance } from './world-floor-routes'
 import { VenueBookings, type WorldVenue } from './world-venues'
-import { reconcileLeisure } from './world-leisure'
+import { homeRoute, reconcileLeisure } from './world-leisure'
+import { isAwayForLeisure, seatAtDesk, walksHome } from './world-recall'
+import { RoamOutings } from './roaming'
+import type { Point } from './path'
 import {
   recoverWorkerRoute,
   resumeUnseatedWorker,
   relayoutWorker,
+  waitCycleLeaders,
   waitsForMovingBody,
   workerNavigation
 } from './worker-navigation'
 export type { WorldVenue } from './world-venues'
 
-function agentBody(view: AgentView): BodyFootprint {
-  return {
-    id: view.agentKey,
-    x: view.x,
-    z: view.z,
-    elevation: view.elevation ?? 0,
-    connectorId:
-      'connectorId' in view && typeof view.connectorId === 'string' ? view.connectorId : undefined,
-    radius: view.isSubagent ? SUBAGENT_BODY_RADIUS : WORKER_BODY_RADIUS
-  }
-}
+const TICK_MS = 100
 
 export class World {
   private readonly routes = new FloorRoutes()
   private readonly venueBookings = new VenueBookings()
+  private readonly roaming = new RoamOutings()
   private readonly connectorOccupants = new Map<string, string>()
   private baseline: LayoutMap = { version: 1, floors: [], reservations: {} }
   private sources: readonly SourceHealth[] = []
@@ -60,7 +60,15 @@ export class World {
   private bodyObstacles: readonly BodyFootprint[] = []
   private departurePaths = new Map<string, PathCache>()
   private readonly recovery = new MovementRecovery()
+  private readonly members = new Map<string, Placement['member']>()
+  // Agents fading out in place, with how long each has faded. A leaver goes; any other was
+  // called back to work and reappears at its desk (FOUND 7).
+  private readonly fading = new Map<string, number>()
   private readonly passages = new BodyPassages()
+  // Who waited on whom last tick, and who could have stepped; one of each cycle steps now.
+  private waitEdges = new Map<string, string>()
+  private steppable = new Set<string>()
+  private cycleLeaders = new Set<string>()
   private movementTick = 0
   private map: LayoutMap = { version: 1, floors: [], reservations: {} }
   // From storage: read for order and bays by the first build, never walked on.
@@ -171,9 +179,22 @@ export class World {
       this.floorJson = floorJson
     }
     const active = new Set(desired.map((p) => p.session.key))
-    for (const key of this.arrivals.keys()) if (!active.has(key)) this.arrivals.delete(key)
+    for (const key of this.arrivals.keys())
+      if (!active.has(key)) {
+        this.arrivals.delete(key)
+        this.members.delete(key)
+      }
     for (const [key, agent] of this.agents) {
       if (active.has(key) || agent.state === 'leaving') continue
+      this.venueBookings.release(key)
+      this.passages.clear(key)
+      // A subagent runs inside its parent: it finishes at its desk while the parent works, and
+      // leaves with the parent when the session ends (seating-4).
+      const member = this.members.get(key)
+      if (member?.kind === 'subagent' && active.has(member.leadKey)) {
+        this.fadeOut(key, leaveAgent(agent, []))
+        continue
+      }
       const floor =
         this.routes.floor(agent.view.physicalFloorId) ??
         oldMap.floors.find((f) => f.id === agent.view.floorId)
@@ -192,9 +213,7 @@ export class World {
         ? this.routes.toGround(agent.view, floor, agent.view.place === 'lounge' ? undefined : door)
         : exit
       this.agents.set(key, leaveAgent(agent, departure))
-      this.venueBookings.release(key)
       this.departurePaths.set(key, oldPaths)
-      this.passages.clear(key)
     }
     const oldRooms = new Map(
       oldMap.floors.flatMap((floor) =>
@@ -203,6 +222,7 @@ export class World {
     )
     for (const placement of desired) {
       const { session, room, slot, floorId, isSubagent } = placement
+      this.members.set(session.key, placement.member)
       const isFinished =
         placement.isFinished ||
         (session.observation?.coverage === 'own' &&
@@ -221,7 +241,7 @@ export class World {
           : previousAgent
       const waiting = this.arrivals.get(session.key)
       this.departurePaths.delete(session.key)
-      if (existing?.view.place === 'lounge') {
+      if (existing && isAwayForLeisure(existing, isFinished, this.fading.has(session.key))) {
         const updated = setFinished(
           updateAgent(existing, session.activity, session.attention),
           isFinished
@@ -234,12 +254,7 @@ export class World {
           label: session.name
         })
         if (!isFinished) this.passages.clear(session.key)
-        this.agents.set(
-          session.key,
-          isFinished
-            ? updated
-            : returnToDesk(updated, slot.heading, this.routes.toFloor(updated.view, floor, slot))
-        )
+        this.agents.set(session.key, isFinished ? updated : this.callHome(updated, floor, slot))
         continue
       }
       const oldSlot = oldRooms
@@ -301,7 +316,9 @@ export class World {
           : paths.via(elevator, door, slot)
       const agent = createAgent(session, destination, route.length ? route : entrance)
       this.passages.clear(session.key)
-      this.recovery.clear(session.key)
+      // A body re-routed where it stands stays as blocked as it was (seating-3).
+      if (!existing) this.recovery.clear(session.key)
+      this.fading.delete(session.key)
       agent.view.isSubagent = isSubagent
       if (existing)
         Object.assign(agent.view, {
@@ -354,10 +371,15 @@ export class World {
       if (!floor || !paths) continue
       const portal = this.options.resolveLayout ? floorEntrance(floor) : floor.elevator
       // Admit the next body after its predecessor clears the door, not a whole converging roster.
+      // A predecessor stuck there no longer holds the door for the crew behind it (seating-3).
+      // A walker still on the sidewalks, out or on its way home, is not at the door yet.
       const hasEntryTraffic = [...this.agents.values()].some(
         (walker) =>
           walker.state === 'arriving' &&
+          !walker.path[0]?.sidewalk &&
+          !this.fading.has(walker.view.agentKey) &&
           walker.view.floorId === floor.id &&
+          !this.recovery.isBodyBlocked(walker.view.agentKey) &&
           (walker.view.physicalFloorId === null ||
             Math.hypot(walker.view.x - portal.x, walker.view.z - portal.z) < 2)
       )
@@ -430,13 +452,18 @@ export class World {
       connected: this.ready,
       nowMs: this.nowMs,
       hasTrips: this.hasLoungeTrips,
-      venues: this.options.getVenueTargets?.() ?? [],
+      venues: this.venueTargets(),
       bookings: this.venueBookings,
       map: this.map,
       routes: this.routes,
       lounges: this.lounges,
+      roaming: this.roaming,
       clearPassage: (key) => this.passages.clear(key)
     })
+  }
+
+  private venueTargets(): readonly WorldVenue[] {
+    return this.options.getVenueTargets?.() ?? []
   }
 
   // Takes effect at the next step: agents in the lounge walk back, or waiting ones set out.
@@ -488,9 +515,19 @@ export class World {
         return to
       }
       const navigation = workerNavigation({ routes: this.routes, from, to, departure })
+      // A sidewalk leg never steps onto a carriageway, even to pass someone (P5).
+      const isOpen = to.sidewalk
+        ? (point: Point) => navigation.isOpen(point) && this.routes.isSidewalkOpen(point)
+        : navigation.isOpen
       const body = agentBody(from)
-      const hasClosedStart = !navigation.isOpen(from)
-      if (waitsForMovingBody({ body, to, obstacles, walkers, isOpen: navigation.isOpen })) {
+      const hasClosedStart = !isOpen(from)
+      const leader = waitsForMovingBody({ body, to, obstacles, walkers, isOpen })
+      if (leader && !this.waitEdges.has(from.agentKey)) {
+        this.waitEdges.set(from.agentKey, leader)
+        const step = bodyStep({ body, to, obstacles, isOpen })
+        if (Math.hypot(step.x - from.x, step.z - from.z) > 1e-6) this.steppable.add(from.agentKey)
+      }
+      if (leader && !this.cycleLeaders.has(from.agentKey)) {
         hasYielded = true
         return {
           ...to,
@@ -509,13 +546,13 @@ export class World {
           obstacles,
           walkers,
           tick: this.movementTick,
-          isOpen: navigation.isOpen,
+          isOpen,
           routeTo: (target) => navigation.around(body, target, obstacles)
         }),
         obstacles,
         // A layout may build a wall under a walker or shrink away; let that walker escape it.
         isOpen: (point) =>
-          navigation.isOpen(point) ||
+          isOpen(point) ||
           (hasClosedStart && Math.hypot(point.x - from.x, point.z - from.z) <= 0.140001)
       })
       hasYielded ||= Math.hypot(moved.x - to.x, moved.z - to.z) > 1e-8
@@ -534,22 +571,27 @@ export class World {
       next.view.physicalFloorId === null && (next.view.elevation ?? 0) !== 0
         ? activeConnector
         : undefined
-    for (const [connector, occupant] of this.connectorOccupants)
-      if (
-        occupant === agent.view.agentKey &&
-        !next.path.some((point) => point.connectorId === connector)
-      )
-        this.connectorOccupants.delete(connector)
     const key = agent.view.agentKey
     const recovery = this.recovery.record({
       id: key,
       position: next.view,
       waypoint: next.path[0],
-      hasYielded
+      hasYielded,
+      remaining: remainingRouteMetres(next.view, next.path)
     })
+    // A leaver that cannot get through fades where it stands; an arriver keeps waiting, never
+    // moved by fiat (seating-2, verifier E7).
+    if (recovery.isBodyBlocked && next.state === 'leaving') {
+      next.path = []
+      this.startFade(key)
+    }
+    for (const [connector, occupant] of this.connectorOccupants)
+      if (occupant === key && !next.path.some((point) => point.connectorId === connector))
+        this.connectorOccupants.delete(connector)
     const target = next.path.at(-1)
     // Brief direct steps can still circle a wall corner; recover from lack of waypoint progress.
-    if (target && recovery.canRepath) {
+    // A sidewalk leg keeps its route: the street detour would cross a carriageway.
+    if (target && recovery.canRepath && !next.path[0]?.sidewalk) {
       const route = recoverWorkerRoute({
         agent: next,
         routes: this.routes,
@@ -566,22 +608,66 @@ export class World {
     return next
   }
 
+  // Work calls it home: it walks when that fits the call, else fades to reappear at its desk.
+  private callHome(agent: AgentRecord, floor: FloorLayout, desk: Placement['slot']): AgentRecord {
+    if (this.fading.has(agent.view.agentKey)) return agent
+    const route = homeRoute(agent, floor, desk, this.routes, this.venueTargets())
+    if (walksHome(agent, route)) return returnToDesk(agent, desk.heading, route)
+    this.startFade(agent.view.agentKey)
+    return returnToDesk(agent, desk.heading, [])
+  }
+
+  private startFade(key: string): void {
+    this.fading.set(key, 0)
+    this.passages.clear(key)
+    this.recovery.clear(key)
+  }
+
+  private fadeOut(key: string, agent: AgentRecord): void {
+    this.agents.set(key, agent)
+    this.startFade(key)
+  }
+
+  // A desk another body stands on keeps it faded until the next tick.
+  private seatRecalled(key: string, agent: AgentRecord): void {
+    const seated = seatAtDesk(agent, this.map.floors, this.bodies())
+    if (!seated) return
+    this.agents.set(key, seated)
+    this.fading.delete(key)
+  }
+
+  private remove(key: string): void {
+    this.agents.delete(key)
+    this.departurePaths.delete(key)
+    this.recovery.clear(key)
+    this.passages.clear(key)
+    this.fading.delete(key)
+    this.members.delete(key)
+  }
+
   step(dtMs: number): AgentView[] {
     this.syncClock()
     this.activateArrivals()
     this.accumulatedMs += Number.isFinite(dtMs) ? clamp(dtMs, [0, 1000]) : 0
     while (this.accumulatedMs >= 100) {
       if (!this.options.now) this.nowMs += 100
+      const steppable = this.steppable
+      this.cycleLeaders = waitCycleLeaders(this.waitEdges, (id) => steppable.has(id))
+      this.waitEdges = new Map()
+      this.steppable = new Set()
       const ordered = [...this.agents].sort(([first], [second]) => first.localeCompare(second))
       const offset = this.movementTick++ % Math.max(1, ordered.length)
       for (const [key, agent] of [...ordered.slice(offset), ...ordered.slice(0, offset)]) {
+        const fadedMs = this.fading.get(key)
+        if (fadedMs !== undefined) {
+          if (fadedMs + TICK_MS < DEPARTURE_FADE_MS) this.fading.set(key, fadedMs + TICK_MS)
+          else if (agent.state === 'leaving') this.remove(key)
+          else this.seatRecalled(key, agent)
+          continue
+        }
         const next = this.moveAgent(agent)
-        if (next.removed) {
-          this.agents.delete(key)
-          this.departurePaths.delete(key)
-          this.recovery.clear(key)
-          this.passages.clear(key)
-        } else this.agents.set(key, next)
+        if (next.removed) this.remove(key)
+        else this.agents.set(key, next)
       }
       for (const [key, agent] of this.arrivals)
         this.arrivals.set(
@@ -594,7 +680,13 @@ export class World {
     }
     return [...this.agents.values()]
       .sort((a, b) => a.view.agentKey.localeCompare(b.view.agentKey))
-      .map((a) => ({ ...a.view }))
+      .map((a) => {
+        const view: AgentView =
+          a.state === 'leaving' ? { ...a.view, place: 'leaving' } : { ...a.view }
+        const fadedMs = this.fading.get(a.view.agentKey)
+        if (fadedMs !== undefined) view.fade = fadedMs / DEPARTURE_FADE_MS
+        return view
+      })
   }
 
   revision(): number {

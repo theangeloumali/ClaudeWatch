@@ -67,12 +67,18 @@ beforeEach(() => {
   office.start()
 })
 
+const offsets = ['--usage-offsets', '/unused-user-data/usage-offsets.json']
+
 it('has the bridge derive Codex accounts only while accounts are watched, restarting it when that changes', () => {
-  expect(fork).toHaveBeenLastCalledWith(expect.any(String), [], expect.anything())
+  expect(fork).toHaveBeenLastCalledWith(expect.any(String), offsets, expect.anything())
   accounts.isWatchingAccounts = true
   accounts.onWatchingChange.mock.calls[0][0]()
   expect(bridge.kill).toHaveBeenCalledOnce()
-  expect(fork).toHaveBeenLastCalledWith(expect.any(String), ['--accounts'], expect.anything())
+  expect(fork).toHaveBeenLastCalledWith(
+    expect.any(String),
+    ['--accounts', ...offsets],
+    expect.anything()
+  )
 })
 
 it('passes everything the bridge posts to the ledger, which keeps only token counts', () => {

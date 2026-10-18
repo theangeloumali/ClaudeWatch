@@ -6,7 +6,6 @@ import { CourtPilot } from './CourtPilot'
 import { CourtDesk, CourtDoorway, CourtRoomDressing, CourtRoomFloors } from './CourtRoom'
 import { CourtAmbient } from './CourtSurroundings'
 import { CourtWalls } from './CourtWalls'
-import { CourtTower } from './CourtWorld'
 import { COURT, COURT_PALETTE } from './palette'
 import { VIOLET_COURT_ID, violetCourtRoster } from './roster'
 import { COURT_TOWN } from './town'
@@ -41,6 +40,5 @@ export const violetCourt: OfficeTheme = {
       Ambient: CourtAmbient
     }
   },
-  world: { Tower: CourtTower },
   town: COURT_TOWN
 }

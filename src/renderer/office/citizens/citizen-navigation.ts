@@ -1,9 +1,9 @@
-import type { BodyPlacementOptions, BodyPoint } from '../../../shared/office/body-footprints'
-import {
-  bodiesShareElevation,
-  bodySegmentDistance,
-  canSweepBody
-} from '../../../shared/office/body-sweep'
+import type {
+  BodyFootprint,
+  BodyPlacementOptions,
+  BodyPoint
+} from '../../../shared/office/body-footprints'
+import { canSweepBody } from '../../../shared/office/body-sweep'
 import { walkPath, type WalkGround } from '../player/walk-ground'
 
 // dry-new: bodyStep's stateless tangents cannot retain a citizen's speed-limited passing route.
@@ -12,6 +12,13 @@ export interface CitizenNavigation {
   target: BodyPoint
   points: readonly BodyPoint[]
   blockedSec: number
+  // Seconds without a step, kept across replans: the jam breaker's clock (citizens-2).
+  stuckSec: number
+  // The body in the way of the last step not taken.
+  blockerId?: string
+  // A body this walker gives way through until they are apart, and one it already backed from.
+  passingId?: string
+  backedFromId?: string
 }
 
 const PASS_CLEARANCE_M = 0.15
@@ -23,7 +30,12 @@ interface NavigationStep extends BodyPlacementOptions {
   budget: number
   deltaSec: number
   ground?: WalkGround
+  giveWay?: GiveWay
 }
+
+// How a stuck walker clears the way (citizens-2): back off along its own route to `to`, or
+// walk through the body in its way.
+export type GiveWay = { kind: 'back-off'; to: BodyPoint } | { kind: 'pass' }
 
 function boundedPoint(from: BodyPoint, to: BodyPoint, budget: number): BodyPoint {
   const distance = Math.hypot(to.x - from.x, to.z - from.z)
@@ -31,21 +43,26 @@ function boundedPoint(from: BodyPoint, to: BodyPoint, budget: number): BodyPoint
   return { x: from.x + (to.x - from.x) * share, z: from.z + (to.z - from.z) * share }
 }
 
-function passingPoints(options: NavigationStep, waypoint: BodyPoint): BodyPoint[] {
-  const { body, obstacles, isOpen, budget } = options
-  const step = boundedPoint(body, waypoint, budget)
-  const blocker = obstacles
+// The nearest body that stops a step to `to`, by the sweep's own rule: a body the step moves
+// away from never counts, however close.
+function blockerOf(options: BodyPlacementOptions, to: BodyPoint): BodyFootprint | undefined {
+  const { body, obstacles } = options
+  return obstacles
     .filter(
       (obstacle) =>
         obstacle.id !== body.id &&
-        bodiesShareElevation(body, obstacle) &&
-        bodySegmentDistance({ from: body, to: step, obstacle }) < body.radius + obstacle.radius
+        !canSweepBody({ body, to, obstacles: [obstacle], isOpen: () => true })
     )
     .sort(
       (first, second) =>
         Math.hypot(body.x - first.x, body.z - first.z) -
           Math.hypot(body.x - second.x, body.z - second.z) || first.id.localeCompare(second.id)
     )[0]
+}
+
+function passingPoints(options: NavigationStep, waypoint: BodyPoint): BodyPoint[] {
+  const { body, obstacles, isOpen, budget } = options
+  const blocker = blockerOf(options, boundedPoint(body, waypoint, budget))
   if (!blocker) return []
   const clearance = body.radius + blocker.radius + PASS_CLEARANCE_M
   if (Math.hypot(waypoint.x - blocker.x, waypoint.z - blocker.z) <= clearance) return []
@@ -80,9 +97,41 @@ function plannedPoints(options: NavigationStep, waypoint: BodyPoint): BodyPoint[
   return passingPoints(options, waypoint)
 }
 
-export function advanceNavigation(options: NavigationStep) {
+// A body walked through stays ignored until the two are clear of each other.
+function withPassingSettled(options: NavigationStep): CitizenNavigation {
+  const { body, obstacles, navigation } = options
+  const passed = obstacles.find((obstacle) => obstacle.id === navigation.passingId)
+  const isApart =
+    !passed ||
+    Math.hypot(passed.x - body.x, passed.z - body.z) >=
+      body.radius + passed.radius + PASS_CLEARANCE_M
+  return isApart ? { ...navigation, passingId: undefined } : navigation
+}
+
+// Backs off once per blocker; with no room behind, or a second time, walks through it.
+function givenWay(options: NavigationStep, blockerId: string, giveWay: GiveWay) {
+  const { body, budget, navigation } = options
+  const settled = { ...navigation, blockedSec: 0, stuckSec: 0, blockerId: undefined }
+  const canBack =
+    giveWay.kind === 'back-off' &&
+    navigation.backedFromId !== blockerId &&
+    Math.hypot(giveWay.to.x - body.x, giveWay.to.z - body.z) > CITIZEN_POSITION_EPSILON &&
+    canSweepBody({ ...options, to: boundedPoint(body, giveWay.to, budget) })
+  return canBack
+    ? { ...settled, points: [giveWay.to], backedFromId: blockerId }
+    : { ...settled, passingId: blockerId }
+}
+
+export function advanceNavigation(step: NavigationStep) {
+  let navigation = withPassingSettled(step)
+  if (step.giveWay && navigation.blockerId)
+    navigation = givenWay({ ...step, navigation }, navigation.blockerId, step.giveWay)
+  const { passingId } = navigation
+  const obstacles = passingId
+    ? step.obstacles.filter((obstacle) => obstacle.id !== passingId)
+    : step.obstacles
+  const options = { ...step, navigation, obstacles }
   const { body, budget, deltaSec } = options
-  let navigation = options.navigation
   let points = [...navigation.points]
   while (
     points.length > 0 &&
@@ -105,7 +154,13 @@ export function advanceNavigation(options: NavigationStep) {
     if (!canSweepBody({ ...options, to: point }))
       return {
         point: { x: body.x, z: body.z },
-        navigation: { ...navigation, points, blockedSec: navigation.blockedSec || deltaSec },
+        navigation: {
+          ...navigation,
+          points,
+          blockedSec: navigation.blockedSec || deltaSec,
+          stuckSec: navigation.stuckSec + deltaSec,
+          blockerId: blockerOf(options, point)?.id
+        },
         distance: 0
       }
   }
@@ -113,7 +168,7 @@ export function advanceNavigation(options: NavigationStep) {
     points.shift()
   return {
     point,
-    navigation: { ...navigation, points, blockedSec: 0 },
+    navigation: { ...navigation, points, blockedSec: 0, stuckSec: 0, blockerId: undefined },
     distance: Math.hypot(point.x - body.x, point.z - body.z)
   }
 }

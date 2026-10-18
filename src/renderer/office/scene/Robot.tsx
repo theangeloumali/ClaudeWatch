@@ -2,7 +2,8 @@ import { useFrame, type ThreeEvent } from '@react-three/fiber'
 import { useLayoutEffect, useMemo, useRef, type ReactElement } from 'react'
 import type { Group } from 'three'
 import { AGENT_SCALE, SUBAGENT_SCALE } from '../../../shared/office/figure-scale'
-import type { AgentView } from '../../../shared/office/types'
+import { DEPARTURE_FADE_MS, type AgentView } from '../../../shared/office/types'
+import { livePose, officePoses } from '../../office-live/pose-store'
 import type { WorldVenue } from '../../../shared/office/world-document'
 import type { FloorGeometry } from '../scene-model'
 import { approach, approachAngle, moodFor, robotPose } from '../logic/character-pose'
@@ -12,7 +13,7 @@ import { applyModelPose, useRobotRig } from '../themes/rig'
 import type { OfficeTheme } from '../themes/types'
 import { SHARED_BATCH } from './mesh-batches'
 import { blobShadowTexture } from './textures'
-import { agentElevation, physicalFloorId } from './all-floor-model'
+import { physicalFloorId } from './all-floor-model'
 import { OverviewWorker } from './OverviewWorker'
 import { applyHumanPose } from '../themes/corporate-city/human-pose'
 import { workerSeats, workerSeatPresence, type WorkerSeats } from './worker-seat-presence'
@@ -47,6 +48,20 @@ export interface RobotMotion {
   travelDistance: number
 }
 
+// Batched robot parts share opaque materials, so a departing robot fades by shrinking away over
+// the sim's fade; reduced motion skips the animation and the robot simply goes (seating-4).
+export function presenceAfter(
+  presence: number,
+  agent: Pick<AgentView, 'fade'>,
+  delta: number,
+  isReducedMotion: boolean
+): number {
+  const target = agent.fade === undefined ? 1 : 0
+  if (isReducedMotion) return target
+  const step = (delta * 1000) / DEPARTURE_FADE_MS
+  return target > presence ? Math.min(target, presence + step) : Math.max(target, presence - step)
+}
+
 function phaseFor(key: string): number {
   let hash = 0
   for (const char of key) hash = (hash * 31 + char.charCodeAt(0)) >>> 0
@@ -68,6 +83,7 @@ export function Robot({
 }: RobotProps) {
   const rig = useRobotRig()
   const rootRef = useRef<Group>(null)
+  const presenceRef = useRef<Group>(null)
   const isOverviewModel = isOverview && !isSelected
   const Model = isOverviewModel ? OverviewWorker : theme.robot.Model
   const agentRef = useRef(agent)
@@ -78,11 +94,11 @@ export function Robot({
   useLayoutEffect(() => {
     const root = rootRef.current
     if (!root) return
-    const initial = agentRef.current
-    const retained = motions?.get(initial.agentKey)
+    const initial = livePose(officePoses, agentRef.current)
+    const retained = motions?.get(agentRef.current.agentKey)
     root.position.set(
       retained?.x ?? initial.x,
-      retained?.y ?? agentElevation(initial),
+      retained?.y ?? initial.elevation,
       retained?.z ?? initial.z
     )
     root.rotation.y = retained?.heading ?? initial.heading
@@ -90,28 +106,37 @@ export function Robot({
     // Seeds the first position only; later frames ease toward the target.
   }, [rootRef, motions])
 
-  // Per-frame motion mutates refs only; React re-renders only when the feed sends a new frame.
+  // Per-frame motion mutates refs only. A walk reaches it through the pose store, so React
+  // re-renders only when an agent's structure changes (perf-2).
   useFrame(({ clock }, delta) => {
     const root = rootRef.current
     const body = rig.body.current
     if (!root || !body) return
     const target = agentRef.current
+    const goal = livePose(officePoses, target)
     const isMoving =
       Math.hypot(
-        root.position.x - target.x,
-        root.position.y - agentElevation(target),
-        root.position.z - target.z
+        root.position.x - goal.x,
+        root.position.y - goal.elevation,
+        root.position.z - goal.z
       ) > MOVING_EPSILON
     const previousX = root.position.x
     const previousZ = root.position.z
-    root.position.x = approach(previousX, target.x, delta, MOVE_RATE)
-    root.position.y = approach(root.position.y, agentElevation(target), delta, MOVE_RATE)
-    root.position.z = approach(previousZ, target.z, delta, MOVE_RATE)
+    const presence = presenceRef.current
+    // A robot faded to nothing goes straight to its pose: a recall seats it across town (FOUND 7).
+    if (presence?.scale.x === 0) root.position.set(goal.x, goal.elevation, goal.z)
+    else {
+      root.position.x = approach(previousX, goal.x, delta, MOVE_RATE)
+      root.position.y = approach(root.position.y, goal.elevation, delta, MOVE_RATE)
+      root.position.z = approach(previousZ, goal.z, delta, MOVE_RATE)
+    }
     travelDistanceRef.current += Math.hypot(
       root.position.x - previousX,
       root.position.z - previousZ
     )
-    root.rotation.y = approachAngle(root.rotation.y, target.heading, delta, TURN_RATE)
+    root.rotation.y = approachAngle(root.rotation.y, goal.heading, delta, TURN_RATE)
+    if (presence)
+      presence.scale.setScalar(presenceAfter(presence.scale.x, target, delta, isReducedMotion))
     if (motions) {
       const motion = motions.get(target.agentKey) ?? {
         x: 0,
@@ -165,52 +190,54 @@ export function Robot({
 
   return (
     <group ref={rootRef} scale={agent.isSubagent ? SUBAGENT_SCALE : AGENT_SCALE}>
-      <mesh
-        position={[0, 0.012, 0]}
-        rotation={[-Math.PI / 2, 0, 0]}
-        userData={SHADOW_BATCH}
-        renderOrder={SHADOW_RENDER_ORDER}
-      >
-        <planeGeometry args={[0.9, 0.9]} />
-        <meshBasicMaterial map={blobShadowTexture()} transparent depthWrite={false} />
-      </mesh>
-      {isSelected && (
-        <mesh position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-          <ringGeometry args={[0.42, 0.52, 40]} />
-          <meshBasicMaterial color={theme.palette.glow} toneMapped={false} />
+      <group ref={presenceRef}>
+        <mesh
+          position={[0, 0.012, 0]}
+          rotation={[-Math.PI / 2, 0, 0]}
+          userData={SHADOW_BATCH}
+          renderOrder={SHADOW_RENDER_ORDER}
+        >
+          <planeGeometry args={[0.9, 0.9]} />
+          <meshBasicMaterial map={blobShadowTexture()} transparent depthWrite={false} />
         </mesh>
-      )}
-      <Model
-        agent={agent}
-        skin={theme.robot.skins[agent.provider]}
-        rosterIndex={rosterIndex}
-        rig={rig}
-        isReducedMotion={isReducedMotion}
-      />
-      {isSpeaking && (
-        // Speech puff after a message is sent; OfficeApp clears it after about 1.5 s.
-        <group position={[0.32, 1.32, 0]}>
-          <mesh scale={[0.24, 0.16, 0.08]}>
-            <sphereGeometry args={[1, 16, 10]} />
-            <meshBasicMaterial color={theme.palette.steam} />
+        {isSelected && (
+          <mesh position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+            <ringGeometry args={[0.42, 0.52, 40]} />
+            <meshBasicMaterial color={theme.palette.glow} toneMapped={false} />
           </mesh>
-          <mesh position={[-0.13, -0.13, 0]} scale={0.045}>
-            <sphereGeometry args={[1, 8, 6]} />
-            <meshBasicMaterial color={theme.palette.steam} />
-          </mesh>
-        </group>
-      )}
-      {/* Invisible, simple hit target: raycasting one capsule beats raycasting every part. */}
-      <mesh
-        position={[0, 0.6, 0]}
-        onClick={select}
-        onDoubleClick={fly}
-        onPointerOver={() => (document.body.style.cursor = 'pointer')}
-        onPointerOut={() => (document.body.style.cursor = '')}
-      >
-        <capsuleGeometry args={[0.32, 0.6, 2, 8]} />
-        <meshBasicMaterial visible={false} />
-      </mesh>
+        )}
+        <Model
+          agent={agent}
+          skin={theme.robot.skins[agent.provider]}
+          rosterIndex={rosterIndex}
+          rig={rig}
+          isReducedMotion={isReducedMotion}
+        />
+        {isSpeaking && (
+          // Speech puff after a message is sent; OfficeApp clears it after about 1.5 s.
+          <group position={[0.32, 1.32, 0]}>
+            <mesh scale={[0.24, 0.16, 0.08]}>
+              <sphereGeometry args={[1, 16, 10]} />
+              <meshBasicMaterial color={theme.palette.steam} />
+            </mesh>
+            <mesh position={[-0.13, -0.13, 0]} scale={0.045}>
+              <sphereGeometry args={[1, 8, 6]} />
+              <meshBasicMaterial color={theme.palette.steam} />
+            </mesh>
+          </group>
+        )}
+        {/* Invisible, simple hit target: raycasting one capsule beats raycasting every part. */}
+        <mesh
+          position={[0, 0.6, 0]}
+          onClick={select}
+          onDoubleClick={fly}
+          onPointerOver={() => (document.body.style.cursor = 'pointer')}
+          onPointerOut={() => (document.body.style.cursor = '')}
+        >
+          <capsuleGeometry args={[0.32, 0.6, 2, 8]} />
+          <meshBasicMaterial visible={false} />
+        </mesh>
+      </group>
     </group>
   )
 }

@@ -1,5 +1,6 @@
 import type { AgentActivity, AgentAttention, CurrentTool } from '../shared/office/types'
 import { programName } from '../shared/platform-process'
+import { isAgentCli } from './agent-cli'
 import { isLabel } from './io'
 import type { OpencodeRow } from './opencode-db'
 import type { ProcessRow } from './process-table'
@@ -33,9 +34,17 @@ const NOT_A_SESSION = new Set([
 ])
 
 // The compiled binary is the agent. A package runner's `node …/bin/opencode` only starts it.
-export function opencodeProcesses(rows: ProcessRow[]): { pid: number; startedAtMs: number }[] {
+export function opencodeProcesses(
+  rows: ProcessRow[],
+  platform: NodeJS.Platform = process.platform
+): { pid: number; startedAtMs: number }[] {
   return rows
-    .filter(({ argv }) => programName(argv[0]) === 'opencode' && !NOT_A_SESSION.has(argv[1] ?? ''))
+    .filter(
+      ({ argv }) =>
+        programName(argv[0]) === 'opencode' &&
+        isAgentCli(argv[0], platform) &&
+        !NOT_A_SESSION.has(argv[1] ?? '')
+    )
     .map(({ pid, startedAtMs }) => ({ pid, startedAtMs }))
 }
 

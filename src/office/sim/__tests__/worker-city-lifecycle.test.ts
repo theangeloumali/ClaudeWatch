@@ -1,10 +1,13 @@
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { World } from '../world'
 import { buildLayout } from '../layout'
 import { session, subagent } from '../fixtures'
 import { resolveEffectiveWorld } from '../effective-world'
 import { createWorldDocument } from '../../../shared/office/world-document'
 import type { WorldVenue } from '../world-venues'
+
+// Full sim or scene builds: the 5 s default times out under multi-agent load (health-9).
+vi.setConfig({ testTimeout: 60_000 })
 
 it('lets an eligible idle worker leave its actual office door, reach the arcade, and return to work', () => {
   const actor = {
@@ -49,9 +52,11 @@ it('lets an eligible idle worker leave its actual office door, reach the arcade,
     }
   })
   const home = world.step(0)[0]
+  // One-way sidewalks (A3) make the arcade a 147 s walk from this office.
+  const walkTicks = 3000
   let hasReachedStreet = false
   let hasReachedArcade = false
-  for (let tick = 0; tick < 1500; tick++) {
+  for (let tick = 0; tick < walkTicks; tick++) {
     const current = world.step(100)[0]
     hasReachedStreet ||= current.physicalFloorId === null
     hasReachedArcade ||=
@@ -73,7 +78,7 @@ it('lets an eligible idle worker leave its actual office door, reach the arcade,
     removed: [],
     upserts: [{ ...actor, activity: 'thinking' }]
   })
-  for (let tick = 0; tick < 1500; tick++) world.step(100)
+  for (let tick = 0; tick < walkTicks; tick++) world.step(100)
   expect(world.step(0)[0]).toMatchObject({
     physicalFloorId: home.floorId,
     activity: 'thinking',

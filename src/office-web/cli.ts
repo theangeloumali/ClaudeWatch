@@ -8,6 +8,7 @@ import { BridgeHost } from '../main/bridge-host'
 import { execFilePromise } from '../main/platform/exec'
 import { TerminalResolver } from '../main/terminal-resolver'
 import { createOfficeService } from '../office-host/office-service'
+import { createHostWorld, SHARED_WORLD_PATH } from '../office-host/host-world'
 import { runInteractivePowerShell } from '../shared/powershell-host'
 import { PollerProcess } from '../office-host/poller-process'
 import { parseArgs } from './args'
@@ -29,7 +30,10 @@ async function main(): Promise<void> {
   }
   // The page files sit beside this file, listed in MANIFEST.json.
   const files = await loadStaticFiles(dirname(fileURLToPath(import.meta.url)))
-  const host = new BridgeHost({ spawn: () => new PollerProcess(new BridgePoller()) })
+  const usageOffsetsPath = join(LAUNCH_FOLDER, 'usage-offsets.json')
+  const host = new BridgeHost({
+    spawn: () => new PollerProcess(new BridgePoller({ usageOffsetsPath }))
+  })
   const service = createOfficeService({
     // This page has no ledger: no session carries an account, whatever the bridge reports.
     host: withoutAccounts(host),
@@ -39,7 +43,9 @@ async function main(): Promise<void> {
       (await new TerminalResolver(process.platform, runInteractivePowerShell).resolve(pid))
         .terminalType,
     isInteractive: args.interactive,
-    runScript: runInteractivePowerShell
+    runScript: runInteractivePowerShell,
+    // The app and every standalone port show one saved city (health-13).
+    world: createHostWorld(SHARED_WORLD_PATH)
   })
 
   const launchCode = createLaunchToken()

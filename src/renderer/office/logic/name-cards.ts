@@ -9,6 +9,8 @@ import {
   activitySummaryText,
   agentActivityDetail,
   isActivityAvailable,
+  isAgentActivityAvailable,
+  LEAVING_LABEL,
   summariseActivity
 } from './activity-summary'
 
@@ -88,7 +90,15 @@ export function buildNameCards(
         identity && agent.isSubagent === (identity.member !== undefined)
           ? identity.session
           : undefined
-      const isAvailable = session !== undefined && isActivityAvailable(frame, [agent.provider])
+      const isLeaving = agent.place === 'leaving'
+      const isAvailable =
+        !isLeaving && session !== undefined && isAgentActivityAvailable(frame, agent)
+      const detail = (toolName?: string): string =>
+        isLeaving
+          ? LEAVING_LABEL
+          : isAvailable
+            ? agentActivityDetail(agent, toolName)
+            : ACTIVITY_UNAVAILABLE_LABEL
       const meta = {
         projectKey: session?.projectKey ?? null,
         updatedAtMs: session?.updatedAtMs ?? 0,
@@ -102,7 +112,7 @@ export function buildNameCards(
           x: agent.x,
           z: agent.z,
           title: agent.label,
-          detail: isAvailable ? agentActivityDetail(agent) : ACTIVITY_UNAVAILABLE_LABEL,
+          detail: detail(),
           status: isAvailable ? statusFor(agent) : 'idle',
           ...meta
         }
@@ -116,9 +126,7 @@ export function buildNameCards(
         x: agent.x + Math.sin(agent.heading) * reach,
         z: agent.z + Math.cos(agent.heading) * reach,
         title: session?.name ?? agent.label,
-        detail: isAvailable
-          ? agentActivityDetail(agent, session?.currentTool?.name)
-          : ACTIVITY_UNAVAILABLE_LABEL,
+        detail: detail(session?.currentTool?.name),
         status: isAvailable ? statusFor(agent) : 'idle',
         ...meta
       }

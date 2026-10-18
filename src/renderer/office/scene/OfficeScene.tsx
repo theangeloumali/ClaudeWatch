@@ -1,4 +1,4 @@
-import { Canvas } from '@react-three/fiber'
+import { Canvas, type RootState } from '@react-three/fiber'
 import { memo, useCallback, useMemo, useRef, useState } from 'react'
 import type { AgentView, SessionRef, SourceHealth } from '../../../shared/office/types'
 import { cityVenueSite } from '../../../shared/office/city-access'
@@ -13,15 +13,12 @@ import type { WallsMode } from '../logic/room-layout'
 import { SCENE_BACKGROUND } from '../office-palette'
 import type { FloorGeometry } from '../scene-model'
 import { CameraRig } from './CameraRig'
-import { FloorView } from './FloorView'
 import { Horizon } from './Horizon'
 import { CardProjector, type CardAnchors } from './CardProjector'
 import { NameCardLayer } from './NameCards'
 import { FrameGovernor, MetricsProbe } from './RenderLoop'
-import { RobotCrew } from './Robot'
 import { BatchedScene } from './BatchedScene'
-import { TowerView } from './WorldView'
-import { ZonePickers, type SceneEditTarget } from './ZonePickers'
+import type { SceneEditTarget } from './ZonePickers'
 import { MultiFloorLayer } from './MultiFloorLayer'
 import { VenueLayer } from './VenueLayer'
 import { visibleWorkstationDisplays } from './scene-density'
@@ -33,8 +30,7 @@ import { PlayerLayer } from '../player/PlayerLayer'
 import { PlayerLabels, PlayerLabelProjector } from '../player/PlayerLabels'
 import { sendPlayer, type Player } from '../player/walking'
 import { useQualitySettings } from '../quality-store'
-import { TOWER_STOREY_M } from '../themes/layout'
-import { GROUND_Y, MAX_LOT_HEIGHT_M, sceneExtent } from '../themes/surroundings'
+import { MAX_LOT_HEIGHT_M, sceneExtent } from '../themes/surroundings'
 import type { OfficeTheme, TowerFloor, WorkstationSpec } from '../themes/types'
 import { TownGround } from '../town/TownGround'
 import { dressOf, TownAmbient, TownView } from '../town/TownView'
@@ -43,6 +39,7 @@ import { WorkstationScreens } from './WorkstationScreens'
 import { OfficeNameLayer, OfficeNameProjector, type OfficeNameAnchors } from './OfficeNames'
 import { SceneBodies } from './BodySpace'
 import { BodyObstacleSync } from './BodyObstacleSync'
+import { ShaderPrewarm } from './ShaderPrewarm'
 import type { BodyFootprint } from '../../../shared/office/body-footprints'
 
 interface OfficeSceneProps {
@@ -54,8 +51,8 @@ interface OfficeSceneProps {
   connected?: boolean
   onFlyToZone: (zoneId: string) => void
   floor: FloorGeometry
-  visibleFloors?: readonly FloorGeometry[]
-  allFloors?: readonly FloorGeometry[]
+  visibleFloors: readonly FloorGeometry[]
+  allFloors: readonly FloorGeometry[]
   isLayoutPreview?: boolean
   venues?: readonly WorldVenue[]
   previewVenues?: readonly WorldVenue[]
@@ -99,7 +96,7 @@ const INITIAL_CAMERA_POSITION: [number, number, number] = [
   CAMERA_DISTANCE * Math.sin(ISO_POLAR) * Math.cos(ISO_START_AZIMUTH)
 ]
 
-// One canvas consumes physical positions from the feed; the legacy scene remains a single plate.
+// One canvas draws every physical floor the feed places agents on.
 function OfficeScene(props: OfficeSceneProps) {
   const isReducedMotion = usePrefersReducedMotion()
   const [band, setBand] = useState<ZoomBand>('floor')
@@ -133,8 +130,8 @@ function OfficeScene(props: OfficeSceneProps) {
   const [bodies] = useState(() => new SceneBodies())
   bodies.setWorkers(agents)
   const [officeAnchors] = useState<OfficeNameAnchors>(() => new Map())
-  const { surfaces, groups, zoneGroups, townFloor, officeLabels, displays, revision } =
-    useSceneFloorData(props)
+  const [canvasRoot, setCanvasRoot] = useState<RootState | null>(null)
+  const { surfaces, groups, townFloor, officeLabels, displays, revision } = useSceneFloorData(props)
   const visibleCards = useMemo(() => {
     const isCityView = props.viewMode === 'city'
     const roomWorkers = props.focusedRoomId
@@ -162,17 +159,13 @@ function OfficeScene(props: OfficeSceneProps) {
       ),
     [officeLabels, props.viewMode]
   )
-  // The detail level in use: how sharply and how often the scene is drawn. The plan thins the
-  // town by that level itself.
+  // The detail level in use: how sharply and how often the scene is drawn.
   const quality = useQualitySettings()
   const protectedSites = useMemo(
-    () =>
-      props.allFloors
-        ? [
-            ...props.allFloors.filter((floor) => (floor.elevation ?? 0) === 0),
-            ...(props.venues?.map(cityVenueSite) ?? [])
-          ]
-        : undefined,
+    () => [
+      ...props.allFloors.filter((floor) => (floor.elevation ?? 0) === 0),
+      ...(props.venues?.map(cityVenueSite) ?? [])
+    ],
     [props.allFloors, props.venues]
   )
   const previewSites = useMemo(
@@ -195,11 +188,8 @@ function OfficeScene(props: OfficeSceneProps) {
     () => ({ idleFps: isWalking ? quality.walkFps : quality.idleFps, walkFps: quality.walkFps }),
     [isWalking, quality.idleFps, quality.walkFps]
   )
-  // What the player and the citizens go round: the town's lots and the plots of the belt.
-  const solids = useMemo(
-    () => (settings.town ? [...town.plan.lots, ...town.green] : []),
-    [town, settings.town]
-  )
+  // What the player and the citizens go round: the town's lots.
+  const solids = useMemo(() => (settings.town ? town.plan.lots : []), [town, settings.town])
   // How far the scene reaches: the town to its last road, or the floor alone without one.
   const reach = useMemo(
     () => (settings.town ? town.plan.extent : sceneExtent(townFloor, [])),
@@ -212,20 +202,17 @@ function OfficeScene(props: OfficeSceneProps) {
         : undefined,
     [isWalking, player]
   )
-  const storeyCount = props.floors.length
   const sceneBox = useMemo(
     () => ({
       ...reach,
-      minY: props.visibleFloors ? 0 : GROUND_Y,
-      maxY: props.visibleFloors
-        ? Math.max(
-            MAX_LOT_HEIGHT_M,
-            floorEnvelope(surfaces)?.maxY ?? 0,
-            ...town.plan.lots.map((lot) => lot.maxHeight)
-          )
-        : MAX_LOT_HEIGHT_M + storeyCount * TOWER_STOREY_M
+      minY: 0,
+      maxY: Math.max(
+        MAX_LOT_HEIGHT_M,
+        floorEnvelope(surfaces)?.maxY ?? 0,
+        ...town.plan.lots.map((lot) => lot.maxHeight)
+      )
     }),
-    [reach, storeyCount, surfaces, props.visibleFloors, town.plan.lots]
+    [reach, surfaces, town.plan.lots]
   )
   const liveSessionKeys = useMemo(
     () => new Set(props.sessions.map((session) => session.key)),
@@ -236,11 +223,7 @@ function OfficeScene(props: OfficeSceneProps) {
       {/* The image role sits on the canvas alone: around the card layer it would hide its buttons. */}
       <Canvas
         role="img"
-        aria-label={
-          props.visibleFloors
-            ? `Isometric view of ${surfaces.length} physical office floors`
-            : `Isometric view of the ${props.floor.label} floor`
-        }
+        aria-label={`Isometric view of ${surfaces.length} physical office floor${surfaces.length === 1 ? '' : 's'}`}
         orthographic
         frameloop="demand"
         flat
@@ -248,6 +231,7 @@ function OfficeScene(props: OfficeSceneProps) {
         gl={{ powerPreference: 'low-power', alpha: false, antialias: true }}
         camera={{ zoom: BAND_ZOOM.floor, near: 1, far: 200, position: INITIAL_CAMERA_POSITION }}
         onPointerMissed={() => props.onSelectAgent(null)}
+        onCreated={setCanvasRoot}
       >
         <color
           attach="background"
@@ -276,64 +260,37 @@ function OfficeScene(props: OfficeSceneProps) {
           />
         )}
         <BatchedScene revision={revision}>
-          {props.visibleFloors ? (
-            <MultiFloorLayer
-              floors={surfaces}
-              agents={props.isLayoutPreview ? [] : agents}
-              floorTheme={theme}
-              groups={groups}
-              wallsMode={props.wallsMode}
-              areRoofsVisible={props.areRoofsVisible}
-              viewMode={props.viewMode}
-              focusedFloorId={props.focusedFloorId}
-              focusedRoomId={props.focusedRoomId}
-              venues={displayedVenues}
-              isReducedMotion={isReducedMotion}
-              selectedAgentKey={selectedAgentKey}
-              speakingAgentKey={speakingAgentKey}
-              onSelect={props.onSelectAgent}
-              onFly={props.onFlyToAgent}
-              onFlyToZone={props.onFlyToZone}
-              onWalk={walkTo}
-              onEditTarget={props.onEditTarget}
-              onFocusFloor={props.onFocusFloor}
-            />
-          ) : (
-            <>
-              <FloorView
-                floorTheme={theme}
-                zoneGroups={zoneGroups}
-                floor={floor}
-                wallsMode={props.wallsMode}
-                isReducedMotion={isReducedMotion}
-                focusedRoomId={props.focusedRoomId}
-              />
-              <RobotCrew
-                agents={agents}
-                zoneGroups={zoneGroups}
-                floorTheme={theme}
-                selectedAgentKey={selectedAgentKey}
-                speakingAgentKey={speakingAgentKey}
-                isReducedMotion={isReducedMotion}
-                onSelect={props.onSelectAgent}
-                onFly={props.onFlyToAgent}
-              />
-            </>
-          )}
+          <MultiFloorLayer
+            floors={surfaces}
+            agents={props.isLayoutPreview ? [] : agents}
+            floorTheme={theme}
+            groups={groups}
+            wallsMode={props.wallsMode}
+            areRoofsVisible={props.areRoofsVisible}
+            viewMode={props.viewMode}
+            focusedFloorId={props.focusedFloorId}
+            focusedRoomId={props.focusedRoomId}
+            venues={displayedVenues}
+            isReducedMotion={isReducedMotion}
+            selectedAgentKey={selectedAgentKey}
+            speakingAgentKey={speakingAgentKey}
+            onSelect={props.onSelectAgent}
+            onFly={props.onFlyToAgent}
+            onFlyToZone={props.onFlyToZone}
+            onWalk={walkTo}
+            onEditTarget={props.onEditTarget}
+            onFocusFloor={props.onFocusFloor}
+          />
         </BatchedScene>
         {!props.isLayoutPreview && band !== 'building' && (
           <WorkstationScreens displays={visibleWorkstationDisplays(displays, selectedAgentKey)} />
         )}
         {settings.town && (
           <>
-            {!props.visibleFloors && (
-              <TowerView plan={town.plan} theme={theme} floors={props.floors} band={band} />
-            )}
             <TownView
               town={town}
               floor={townFloor}
               floorTheme={theme}
-              zoneGroups={zoneGroups}
               viewMode={props.viewMode}
               focusedFloor={props.floor}
             />
@@ -342,30 +299,17 @@ function OfficeScene(props: OfficeSceneProps) {
                 town={town}
                 floor={townFloor}
                 floorTheme={theme}
-                zoneGroups={zoneGroups}
                 share={quality.ambientShare}
                 isReducedMotion={isReducedMotion}
               />
             )}
           </>
         )}
-        {!props.visibleFloors && (
-          <ZonePickers
-            floor={props.floor}
-            onFly={props.onFlyToZone}
-            onMiss={() => props.onSelectAgent(null)}
-            onWalk={walkTo}
-            onEditTarget={props.onEditTarget}
-            onFocusFloor={props.onFocusFloor}
-          />
-        )}
         {!props.isLayoutPreview && settings.citizens && settings.town && (
           <MoverLayer
             floor={townFloor}
             plan={town.plan}
-            owners={town.owners}
             floorTheme={theme}
-            zoneGroups={zoneGroups}
             player={player}
             isReducedMotion={isReducedMotion}
             hasVehicles={settings.vehicles}
@@ -377,7 +321,7 @@ function OfficeScene(props: OfficeSceneProps) {
             player={player}
             isWalking={isWalking}
             floor={floor}
-            allFloors={props.allFloors ?? props.visibleFloors}
+            allFloors={props.allFloors}
             solids={solids}
             extent={reach}
             agents={agents}
@@ -410,7 +354,6 @@ function OfficeScene(props: OfficeSceneProps) {
           hasInspector={selectedAgentKey !== null}
           inspectorLayout={props.inspectorLayout}
           cards={visibleCards}
-          showsPhysicalFloors={props.visibleFloors !== undefined}
         />
         <CameraRig
           floorCount={props.floors.length}
@@ -444,6 +387,7 @@ function OfficeScene(props: OfficeSceneProps) {
         {!props.isLayoutPreview && (
           <BodyObstacleSync bodies={bodies} onChange={props.onBodyObstacles} />
         )}
+        <ShaderPrewarm root={canvasRoot} viewMode={props.viewMode} />
       </Canvas>
       {!props.isLayoutPreview && (
         <NameCardLayer

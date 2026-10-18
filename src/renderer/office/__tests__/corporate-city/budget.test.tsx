@@ -10,6 +10,9 @@ import {
 } from '../../themes/live-budget.test-utils'
 import { getTheme } from '../../themes/registry'
 
+// Full sim or scene builds: the 5 s default times out under multi-agent load (health-9).
+vi.setConfig({ testTimeout: 60_000 })
+
 vi.mock('react', async (original) => ({
   ...(await original<typeof import('react')>()),
   useMemo: (factory: () => object) => factory(),

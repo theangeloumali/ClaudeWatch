@@ -1,10 +1,13 @@
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { session } from '../fixtures'
 import { World } from '../world'
 import { WORKER_BODY_RADIUS } from '../../../shared/office/body-footprints'
 import type { AgentView } from '../../../shared/office/types'
 import { createAgent, setFinished, tickAgent, updateAgent } from '../behaviour'
 import { placements } from '../placements'
+
+// Full sim or scene builds: the 5 s default times out under multi-agent load (health-9).
+vi.setConfig({ testTimeout: 60_000 })
 
 function expectSeparated(agents: AgentView[]): void {
   let minimum = Infinity

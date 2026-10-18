@@ -41,6 +41,15 @@ it('prints exactly one JSON snapshot and does not start polling in once mode', a
     claudeRoots: [join(homedir(), '.claude'), resolve('./extra')]
   })
 })
+// health-4: the parent names where usage offsets are kept, so a restarted bridge resumes.
+it('keeps usage offsets where --usage-offsets says', async () => {
+  mocks.tick.mockResolvedValue(emptySnapshot())
+  vi.spyOn(process.stdout, 'write').mockReturnValue(true)
+  await main(['--once', '--usage-offsets', './state/offsets.json'])
+  expect(mocks.options).toHaveBeenCalledWith(
+    expect.objectContaining({ usageOffsetsPath: resolve('./state/offsets.json') })
+  )
+})
 it('derives Codex account keys only when started with --accounts', async () => {
   mocks.tick.mockResolvedValue(emptySnapshot())
   vi.spyOn(process.stdout, 'write').mockReturnValue(true)

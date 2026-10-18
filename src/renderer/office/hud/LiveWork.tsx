@@ -2,7 +2,7 @@ import type { CSSProperties } from 'react'
 import { parseAgentKey } from '../../../shared/office/agent-key'
 import { observeAgent } from '../../../shared/office/observation'
 import { PLATE_TITLE_CLASS } from '../../components/deck/deck-styles'
-import { useNow } from '../../hooks/useNow'
+import { useOfficeNow } from '../use-office-now'
 import { formatElapsedTime } from '../../lib/utils'
 import { reachBlocker, reachTarget } from '../logic/interactions'
 import { PROVIDER_LABEL } from '../office-palette'
@@ -19,7 +19,7 @@ export interface LiveWorkProps {
 
 // dry-new: Inspector's legacy facts do not distinguish own observations from world motion.
 export function LiveWork({ frame, agentKey, feed, style, presentation = 'panel' }: LiveWorkProps) {
-  const nowMs = useNow(1000)
+  const nowMs = useOfficeNow()
   const resolved = parseAgentKey(agentKey, frame.sessions)
   const session = resolved?.session
   const member = resolved?.member

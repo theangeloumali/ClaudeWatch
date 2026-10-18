@@ -39,7 +39,6 @@ const clockTower = dressLot(
     depth: 7,
     maxHeight: 20,
     seed: 77,
-    zoneId: null,
     zone: 'civic',
     facing: 'east',
     isLandmark: true
@@ -103,16 +102,20 @@ describe('rising steam', () => {
 })
 
 describe('tower gears', () => {
-  it('sit on the faces of a clock tower drawn, and on nothing else', () => {
-    const gears = brassGears([clockTower, ...drawnTown('brass-workshop', floor)])
-    expect(gears).toHaveLength(2)
-    const { lot } = clockTower
+  it('sit on the faces of the clock towers drawn, two to a tower, and on nothing else', () => {
+    const placed = [clockTower, ...drawnTown('brass-workshop', floor)]
+    const towers = placed.filter((each) => each.design === clockTower.design)
+    const gears = brassGears(placed)
+    expect(gears).toHaveLength(towers.length * 2)
     for (const gear of gears) {
       const [x, y, z] = gear.at
-      expect(Math.abs(x - lot.x)).toBeLessThan(lot.width / 2)
-      expect(Math.abs(z - lot.z)).toBeLessThan(lot.depth / 2)
+      const tower = towers.find(
+        ({ lot }) => Math.abs(x - lot.x) < lot.width / 2 && Math.abs(z - lot.z) < lot.depth / 2
+      )
+      expect(tower, `gear at ${x}, ${z}`).toBeDefined()
+      if (!tower) continue
       expect(y).toBeGreaterThan(GROUND_Y)
-      expect(y + gear.radius).toBeLessThan(drawnTop(clockTower))
+      expect(y + gear.radius).toBeLessThan(drawnTop(tower))
     }
   })
 

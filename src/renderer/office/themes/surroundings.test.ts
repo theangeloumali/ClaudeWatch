@@ -3,9 +3,7 @@ import { makeFloor, makeRoom, makeZone } from '../__tests__/fixtures'
 import type { FloorGeometry, ZoneGeometry } from '../scene-model'
 import {
   capped,
-  GROUND_Y,
   heightLimit,
-  lotBase,
   officesOf,
   sceneExtent,
   surveySite,
@@ -99,8 +97,7 @@ const lotAt = (id: string, x: number, z: number, seed: number): Lot => ({
   width: 4,
   depth: 4,
   maxHeight: 10,
-  seed,
-  zoneId: null
+  seed
 })
 
 describe('nothing may hide a desk', () => {
@@ -128,11 +125,6 @@ it('surveys the companies in id order and the offices nothing may hide', () => {
   expect(site.companies.map((zone) => zone.id)).toEqual(['c1', 'c3'])
   expect(site.offices).toEqual(officesOf(busy))
   expect(site.plate).toBe(busy)
-})
-
-it('stands a lot on the slab inside the plate and on the ground outside it', () => {
-  expect(lotBase(lotAt('in', 0, 0, 1), plateOf(lone))).toBe(0)
-  expect(lotBase(lotAt('out', lone.width, 0, 1), plateOf(lone))).toBe(GROUND_Y)
 })
 
 it('keeps the plate’s lots over the cap and thins the rest by seed', () => {

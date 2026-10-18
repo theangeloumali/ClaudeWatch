@@ -1,11 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { citizenGeometry } from '../citizens/figure-parts'
-import { campusClaim, neededClaim } from '../town/town-claim'
+import type { FloorGeometry } from '../scene-model'
+import { distributedTown } from '../town/distributed-town'
 import { dressLot, type DressableLot, type TownDress } from '../town/town-dress'
-import { placeGardenPiece } from '../town/garden-pieces'
-import { campusGreen } from '../town/town-green'
-import { townBlocks } from '../town/town-plan'
-import { TOWN_DISTRICTS, type TownDistrict } from '../town/town-zones'
+import { LANDMARK_DISTRICTS, TOWN_DISTRICTS, type TownDistrict } from '../town/town-zones'
+import { townOf } from '../town/use-town-plan'
 import { LIVE_FLOORS } from './floors.test-utils'
 import { expectInsideLot } from './lot-box.test-utils'
 import type { OfficeTheme } from './types'
@@ -23,16 +22,63 @@ import {
 
 export { heightOf } from './town-bounds.test-utils'
 
-const LANDMARK_ZONES: readonly TownDistrict[] = ['civic', 'workshop', 'entertainment']
+export const LANDMARK_ZONES = LANDMARK_DISTRICTS
+const BUILDING_HEIGHTS_M = [4, 8, 12, 24]
+const LANDMARK_HEIGHTS_M = [12, 24]
+const SEEDS_PER_HEIGHT = 4
 // A town lot, and an avenue lot seen from its front and from its side.
 const FOOTPRINTS = [
   { width: 8, depth: 8 },
   { width: 8, depth: 5 },
   { width: 5, depth: 8 }
 ]
-// A plot of the campus green, which only park designs are stood on.
+// A small park plot, which only park designs are stood on.
 const GREEN_FOOTPRINT = { width: 4, depth: 4 }
 const WIDE_PLOT = { width: 8, depth: 8, seed: 7, accent: TEST_ACCENT }
+
+function zoneLot(
+  zone: TownDistrict,
+  kind: DressableLot['kind'],
+  maxHeight: number,
+  seed: number,
+  isLandmark: boolean
+): DressableLot {
+  const id = `${zone}:${kind}:${isLandmark ? 'landmark' : 'plain'}:${maxHeight}:${seed}`
+  return {
+    id,
+    kind,
+    x: 0,
+    z: 0,
+    width: 8,
+    depth: 8,
+    maxHeight,
+    seed,
+    zone,
+    facing: 'south',
+    isLandmark
+  }
+}
+
+// Lots of every zone and landmark at every height: the city makes only some of them, and every
+// design must keep a lot to stand on.
+export function everyZoneLots(): DressableLot[] {
+  const seeds = Array.from({ length: SEEDS_PER_HEIGHT }, (_, seed) => seed)
+  return TOWN_DISTRICTS.flatMap((zone) => [
+    ...seeds.map((seed) => zoneLot(zone, 'prop', 1.5, seed, false)),
+    ...BUILDING_HEIGHTS_M.flatMap((height) =>
+      seeds.map((seed) => zoneLot(zone, 'building', height, seed, false))
+    ),
+    ...(LANDMARK_ZONES.includes(zone)
+      ? LANDMARK_HEIGHTS_M.flatMap((height) =>
+          seeds.map((seed) => zoneLot(zone, 'building', height, seed, true))
+        )
+      : [])
+  ])
+}
+
+// The city round a floor's own site, as the scene lays it on a first start.
+export const cityLotsOf = (floor: FloorGeometry): DressableLot[] =>
+  distributedTown(townOf(floor, null), [floor]).plan.lots
 
 // What every theme's town dress must hold to, whatever it looks like.
 export function describeTownDress(theme: OfficeTheme, dress: TownDress): void {
@@ -152,18 +198,16 @@ export function describeTownDress(theme: OfficeTheme, dress: TownDress): void {
     )
 
     describe.each(LIVE_FLOORS)('on the town of %s', (_name, floor) => {
-      const plan = townBlocks(campusClaim(neededClaim(floor), null), 'full')
-      const lots: readonly DressableLot[] = plan.lots
-      const garden = campusGreen(floor, plan)
+      const cityLots = cityLotsOf(floor)
+      const lots = [...cityLots, ...everyZoneLots()]
 
-      it('dresses every lot and garden piece, inside its footprint and under its height limit', () => {
-        expect(lots.length).toBeGreaterThan(100)
+      it('dresses every lot, inside its footprint and under its height limit', () => {
+        expect(cityLots.length).toBeGreaterThan(0)
         for (const lot of lots) expectInsideLot(dressLot(lot, 0, dress))
-        for (const piece of garden) expectInsideLot(placeGardenPiece(piece, 0, dress))
       })
 
       it('never squashes a building under the height it looks right at', () => {
-        for (const lot of plan.lots.filter((each) => each.kind === 'building')) {
+        for (const lot of lots.filter((each) => each.kind === 'building')) {
           const placed = dressLot(lot, 0, dress)
           const design = dress.designs.find((each) => each.name === placed.design)
           const where = `${placed.design} on ${lot.id}`
@@ -174,7 +218,7 @@ export function describeTownDress(theme: OfficeTheme, dress: TownDress): void {
 
       it('stands its landmarks on the landmark lots', () => {
         for (const zone of LANDMARK_ZONES) {
-          const lot = plan.lots.find((each) => each.isLandmark && each.zone === zone)
+          const lot = lots.find((each) => each.isLandmark && each.zone === zone)
           const placed = lot && dressLot(lot, 0, dress)
           const design = dress.designs.find((each) => each.name === placed?.design)
           expect(design?.isLandmark, zone).toBe(true)

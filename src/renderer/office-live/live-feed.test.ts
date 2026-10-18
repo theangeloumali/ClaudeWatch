@@ -70,19 +70,9 @@ describe('createLiveFeed', () => {
 
     expect(source.ready).toHaveBeenCalledOnce()
     const last = frames.at(-1)!
-    expect(last.floors.map((f) => f.label)).toEqual(['app'])
+    expect(last.floors.map((f) => f.label)).toEqual(['app · Floor 1'])
     expect(last.sessions.map((s) => s.key)).toEqual(['claude:a'])
     expect(last.agents.map((a) => a.agentKey)).toEqual(['claude:a'])
-  })
-
-  it('persists the layout so desks stay put across restarts', () => {
-    createLiveFeed(source, { storage: store }).subscribe(() => {})
-    listener?.({
-      type: 'hello',
-      v: 1,
-      snapshot: { rev: 1, generatedAtMs: 1, sessions: [session('claude:a')], sources: [] }
-    })
-    expect(JSON.parse(storage.get('claudewatch.office.layout')!).floors).toHaveLength(1)
   })
 
   it.each([
@@ -203,9 +193,10 @@ describe('createLiveFeed', () => {
       'claude:a': { floorId: 'hq', plate: 0, bay: 1, companyKey: 'c_test', projectKey: 'p_app' },
       'claude:b': { floorId: 'hq', plate: 0, bay: 0, companyKey: 'c_test', projectKey: 'p_app' }
     }
+    const frames: OfficeFrame[] = []
     const openWith = (saved: unknown): (() => void) => {
       storage.set(LAYOUT_KEY, JSON.stringify(saved))
-      const frames: OfficeFrame[] = []
+      frames.length = 0
       createLiveFeed(source, { storage: store }).subscribe((frame) => frames.push(frame))
       return () => {
         listener?.({
@@ -225,19 +216,18 @@ describe('createLiveFeed', () => {
         ])
       }
     }
-    const bayOfA = (): number => JSON.parse(storage.get(LAYOUT_KEY)!).reservations['claude:a'].bay
+    // The bay ends the room id an agent sits in.
+    const bayOfA = (): number =>
+      Number(
+        frames
+          .at(-1)
+          ?.agents.find((agent) => agent.agentKey === 'claude:a')
+          ?.roomId?.split(':')
+          .at(-1)
+      )
 
     it('is still used when it is well formed', () => {
       const hello = openWith({ version: 1, floors: [], reservations })
-      expect(hello).not.toThrow()
-      expect(bayOfA()).toBe(1)
-    })
-
-    it('is still used when it is one the office itself saved', () => {
-      openWith({ version: 1, floors: [], reservations })()
-      const written = JSON.parse(storage.get(LAYOUT_KEY)!)
-      expect(written.floors[0].zones).not.toHaveLength(0)
-      const hello = openWith(written)
       expect(hello).not.toThrow()
       expect(bayOfA()).toBe(1)
     })
@@ -262,19 +252,6 @@ describe('createLiveFeed', () => {
       expect(hello).not.toThrow()
       expect(bayOfA()).toBe(0)
     })
-  })
-
-  it('does not rewrite the stored layout when it did not change', () => {
-    const setItem = vi.spyOn(store, 'setItem')
-    createLiveFeed(source, { storage: store }).subscribe(() => {})
-    const hello: FeedMessage = {
-      type: 'hello',
-      v: 1,
-      snapshot: { rev: 1, generatedAtMs: 1, sessions: [session('claude:a')], sources: [] }
-    }
-    listener?.(hello)
-    listener?.({ ...hello, snapshot: { ...hello.snapshot, rev: 2 } })
-    expect(setItem).toHaveBeenCalledTimes(1)
   })
 
   describe('lounge trips', () => {

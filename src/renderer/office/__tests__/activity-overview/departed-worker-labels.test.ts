@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { agentKey } from '../../../../shared/office/agent-key'
-import { isActivityAvailable } from '../../logic/activity-summary'
+import { isActivityAvailable, LEAVING_LABEL } from '../../logic/activity-summary'
 import { buildNameCards } from '../../logic/name-cards'
 import { makeAgent, makeFloor, makeFrame, makeRoom, makeSession } from '../fixtures'
 import { makeActivityFrame } from './activity-fixtures'
@@ -14,7 +14,7 @@ describe('departed worker name-card truth', () => {
       const departedFrame = makeFrame({
         ...frame,
         sessions: [],
-        agents: [{ ...frame.agents[0], agentKey: departedRootKey }]
+        agents: [{ ...frame.agents[0], agentKey: departedRootKey, place: 'leaving' }]
       })
 
       expect(isActivityAvailable(departedFrame, ['claude'])).toBe(true)
@@ -24,7 +24,7 @@ describe('departed worker name-card truth', () => {
       expect(cards[0]).toMatchObject({
         agentKey: departedRootKey,
         isAvailable: false,
-        detail: 'Activity unavailable',
+        detail: LEAVING_LABEL,
         sessionKey: null
       })
       expect(cards[0].status).not.toBe('working')
@@ -46,7 +46,8 @@ describe('departed worker name-card truth', () => {
             roomId,
             isSubagent: true,
             label: 'Explore',
-            activity: 'reading'
+            activity: 'reading',
+            place: 'leaving'
           })
         ]
       })
@@ -59,7 +60,7 @@ describe('departed worker name-card truth', () => {
       expect(removedChild).toMatchObject({
         kind: 'pill',
         isAvailable: false,
-        detail: 'Activity unavailable',
+        detail: LEAVING_LABEL,
         sessionKey: null
       })
       expect(removedChild?.status).not.toBe('working')

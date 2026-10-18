@@ -1,4 +1,7 @@
+import { forgetExited, rememberFolder } from '../../bridge/process-table'
 import { execFilePromise } from './exec'
+
+const NATIVE_HOST_ARGUMENT = /^--chrome-native-host(?:=|$)/
 
 export interface RawProcessInfo {
   pid: number
@@ -21,31 +24,42 @@ function isClaudeCLI(command: string): boolean {
   if (command.includes('Electron.app')) return false
   if (command.includes('Electron Helper')) return false
   if (command.startsWith('grep ')) return false
+  // A browser native-messaging host is not an instance; teammates still are (health-12).
+  if (command.split(/\s+/).some((argument) => NATIVE_HOST_ARGUMENT.test(argument))) return false
   // Match: bare "claude" command, or full path ending in /claude
   return /(?:^|\/)claude(\s|$)/.test(command)
 }
 
-function parsePsLine(line: string): RawProcessInfo | null {
+interface PsRow {
+  info: RawProcessInfo
+  startedAtMs: number
+}
+
+function parsePsLine(line: string): PsRow | null {
   const trimmed = line.trim()
   if (!trimmed || trimmed.startsWith('PID')) return null
 
-  // Parse: PID STAT %CPU %MEM ELAPSED TT COMMAND...
-  // Fields are whitespace-separated, but COMMAND may contain spaces
-  const match = trimmed.match(/^(\d+)\s+(\S+)\s+(\d+\.?\d*)\s+(\d+\.?\d*)\s+(\S+)\s+(\S+)\s+(.+)$/)
+  // PID STAT %CPU %MEM ELAPSED TT STARTED COMMAND; STARTED is lstart, COMMAND may contain spaces.
+  const match = trimmed.match(
+    /^(\d+)\s+(\S+)\s+(\d+\.?\d*)\s+(\d+\.?\d*)\s+(\S+)\s+(\S+)\s+(\w{3}\s+\w{3}\s+\d+\s+\d\d:\d\d:\d\d\s+\d{4})\s+(.+)$/
+  )
   if (!match) return null
 
-  const [, pid, stat, cpu, mem, elapsed, tty, command] = match
+  const [, pid, stat, cpu, mem, elapsed, tty, started, command] = match
 
   if (!isClaudeCLI(command)) return null
 
   return {
-    pid: parseInt(pid, 10),
-    stat,
-    cpuPercent: parseFloat(cpu),
-    memPercent: parseFloat(mem),
-    elapsedTime: elapsed,
-    tty,
-    command
+    info: {
+      pid: parseInt(pid, 10),
+      stat,
+      cpuPercent: parseFloat(cpu),
+      memPercent: parseFloat(mem),
+      elapsedTime: elapsed,
+      tty,
+      command
+    },
+    startedAtMs: Date.parse(started)
   }
 }
 
@@ -60,43 +74,42 @@ function parseLsofOutput(stdout: string): string {
   return ''
 }
 
+async function readWorkingFolder(pid: number): Promise<string> {
+  try {
+    const { stdout } = await execFilePromise('lsof', ['-p', String(pid), '-a', '-d', 'cwd', '-Fn'])
+    return parseLsofOutput(stdout)
+  } catch {
+    return ''
+  }
+}
+
 export class DarwinDetector implements PlatformDetector {
+  // Each listed process's start, so its folder is asked once per process, not once per poll.
+  private readonly starts = new Map<number, number>()
+  private readonly folders = new Map<string, string>()
+
   async getClaudeProcesses(): Promise<RawProcessInfo[]> {
     try {
       const { stdout } = await execFilePromise('ps', [
-        '-eo',
-        'pid,stat,%cpu,%mem,etime,tty,command'
+        '-xo',
+        'pid,stat,%cpu,%mem,etime,tty,lstart,command'
       ])
-
-      const lines = stdout.split('\n')
-      const processes: RawProcessInfo[] = []
-
-      for (const line of lines) {
-        const info = parsePsLine(line)
-        if (info) {
-          processes.push(info)
-        }
-      }
-
-      return processes
+      const rows = stdout.split('\n').flatMap((line) => parsePsLine(line) ?? [])
+      const running = rows
+        .filter(({ startedAtMs }) => Number.isFinite(startedAtMs))
+        .map(({ info, startedAtMs }) => ({ pid: info.pid, startedAtMs }))
+      this.starts.clear()
+      for (const { pid, startedAtMs } of running) this.starts.set(pid, startedAtMs)
+      forgetExited(running, this.folders)
+      return rows.map(({ info }) => info)
     } catch {
       return []
     }
   }
 
   async getWorkingDirectory(pid: number): Promise<string> {
-    try {
-      const { stdout } = await execFilePromise('lsof', [
-        '-p',
-        String(pid),
-        '-a',
-        '-d',
-        'cwd',
-        '-Fn'
-      ])
-      return parseLsofOutput(stdout)
-    } catch {
-      return ''
-    }
+    const startedAtMs = this.starts.get(pid)
+    if (startedAtMs === undefined) return readWorkingFolder(pid)
+    return (await rememberFolder(this.folders, { pid, startedAtMs }, readWorkingFolder)) ?? ''
   }
 }

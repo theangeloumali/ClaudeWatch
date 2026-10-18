@@ -1,4 +1,4 @@
-import { expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { type SessionFiles, UsageTracker } from './usage-tracker'
 import { listAgentFiles } from './subagents'
 import { fixtureIo, hostPath } from './__fixtures__/helpers'
@@ -186,4 +186,79 @@ it('keeps counting a teammate that finished, for as long as its lead session liv
   expect(tracker.tokens(mate)).toBeNull()
   await tracker.scan(await sessionFiles(io))
   expect(tracker.usage('claude:s')).toMatchObject({ subagents: counts(0, 0), spawned: 0 })
+})
+
+// health-4: every bridge start re-read every live transcript from its first byte.
+describe('resuming from saved offsets', () => {
+  const withInode = <Io extends ReturnType<typeof fixtureIo>>(io: Io, ino = 7): Io => {
+    const stat = io.stat
+    io.stat = async (path) => ({ ...(await stat(path)), ino })
+    return io
+  }
+
+  it('a second tracker given persisted offsets reads 0 bytes for unchanged transcripts', async () => {
+    const io = withInode(
+      fixtureIo({
+        [main]: message('m1', 1, 10) + message('m2', 2, 5),
+        [plain]: message('a1', 3, 2)
+      })
+    )
+    const first = new UsageTracker(io)
+    await first.scan(await sessionFiles(io))
+    const second = new UsageTracker(io)
+    second.resume(first.offsets())
+    const read = vi.spyOn(io, 'readFrom')
+    await second.scan(await sessionFiles(io))
+
+    expect(read).not.toHaveBeenCalled()
+    expect(second.usage('claude:s')).toEqual(first.usage('claude:s'))
+  })
+
+  it('reads only what was appended since the offsets were saved, and reports it once', async () => {
+    const files = { [main]: message('m1', 1, 10) }
+    const io = withInode(fixtureIo(files))
+    const first = new UsageTracker(io)
+    await first.scan(await sessionFiles(io))
+    const savedAt = Buffer.byteLength(files[main])
+    // Only a line with a time is reported; the fold counts it either way.
+    files[main] += message('m2', 2, 5).replace('{', '{"timestamp":"2026-10-16T10:00:00Z",')
+    const second = new UsageTracker(io)
+    second.resume(first.offsets())
+    const added: number[] = []
+    await second.scan(await sessionFiles(io), (delta) => added.push(delta.position))
+
+    expect(added).toEqual([savedAt])
+    expect(second.usage('claude:s')?.own).toEqual(counts(3, 15))
+  })
+
+  it('keeps a saved offset a while for a session not listed yet, then lets it go', async () => {
+    const io = withInode(fixtureIo({ [main]: message('m1', 1, 10) }))
+    const first = new UsageTracker(io)
+    await first.scan(await sessionFiles(io))
+    const second = new UsageTracker(io)
+    second.resume(first.offsets())
+    await second.scan(new Map())
+    expect([...second.offsets().keys()]).toEqual([main])
+
+    for (let scan = 0; scan < 30; scan++) await second.scan(new Map())
+    expect(second.offsets().size).toBe(0)
+  })
+
+  it.each([
+    ['its inode changed', { ino: 8, text: message('m1', 1, 10) + message('m2', 2, 5) }],
+    ['it is shorter than the saved offset', { ino: 7, text: message('m9', 4, 1) }]
+  ])('reads a transcript from its start when %s', async (_, replaced) => {
+    const files = { [main]: message('m1', 1, 10) + message('m2', 2, 5) }
+    const io = withInode(fixtureIo(files))
+    const first = new UsageTracker(io)
+    await first.scan(await sessionFiles(io))
+    files[main] = replaced.text
+    const second = new UsageTracker(withInode(io, replaced.ino))
+    second.resume(first.offsets())
+    await second.scan(await sessionFiles(io))
+
+    const expected = new UsageTracker(io)
+    await expected.scan(await sessionFiles(io))
+    expect(second.usage('claude:s')?.own).toEqual(expected.usage('claude:s')?.own)
+  })
 })

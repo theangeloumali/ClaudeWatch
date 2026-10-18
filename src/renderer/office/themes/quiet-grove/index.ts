@@ -6,7 +6,6 @@ import { GroveLounge } from './GroveLounge'
 import { GroveSpirit } from './GroveSpirit'
 import { GroveAmbient } from './GroveSurroundings'
 import { GroveWalls } from './GroveWalls'
-import { GroveTower } from './GroveWorld'
 import { GROVE, GROVE_PALETTE } from './palette'
 import { QUIET_GROVE_ID, quietGroveRoster } from './roster'
 import { GROVE_TOWN } from './town'
@@ -41,6 +40,5 @@ export const quietGrove: OfficeTheme = {
       Ambient: GroveAmbient
     }
   },
-  world: { Tower: GroveTower },
   town: GROVE_TOWN
 }
