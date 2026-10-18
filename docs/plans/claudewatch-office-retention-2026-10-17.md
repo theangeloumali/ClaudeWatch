@@ -154,6 +154,13 @@ This reverses his 2026-10-16 answer that idle agents "can roam the city".
 - **Generated buildings leave room for the corner (Ruling 8 of the sim builder).** After the cleanup pass the corner is shallower, so a generated city leaves 48 filler lots (smallest 4.45 m). Cost if wrong: smaller filler lots on a freshly generated city.
 - **Corner rows sit a walkway apart (cleanup pass).** Rows are 2.95 m apart, derived from body radius plus route clearance, so a walker fits between two seated rows. The front row is 1.2 m from the screen, and a spec fails if any gamer walks through the screen strip. Cost if wrong: in a full eight-seat corner, one late gamer can pause about 12 s behind a sitter before going round the row end.
 
+- **Any fade a stalled step swallows may end unshrunk (Maya's sign-off).** A stall of the main thread of 500 ms or more can swallow a fade, because live-feed skips hidden time. When it does:
+  - a leaver vanishes;
+  - a robot reseated onto another floor drops from its size to gone;
+  - during a held reseat, its card, crown, camera framing and minimap read the desk pose for up to 400 ms.
+
+  Cost if wrong: a blink, or a card ahead of its robot, but only right after the app has visibly frozen.
+
 ### Review and Codex
 
 - **Codex:** pass 1 found 1 high and 2 medium issues; the re-run found 1 medium. All four were reproduced as failing specs and fixed:
@@ -162,7 +169,10 @@ This reverses his 2026-10-16 answer that idle agents "can roam the city".
   - invisible newcomers acting as bodies;
   - a returning leaver walking on, visible and solid, from where it faded (`56805ad5`).
 
-  Following the mandate's rule to re-run once, the Codex loop stopped after the re-run.
+  Passes 3 and 4 found 2 and 2 more (an unbounded stall recovery; three renderer fade timing edges), all fixed test-first. The loop then stopped after four passes on this diff (3, 1, 2, 2 findings, each narrower).
 
-- **Maya, first pass:** request changes (1 Critical, 6 Important, 10 Minor). All were fixed in two slices (`b4a1a276`, `c90da571`), plus `23bb1460` and `74146770`.
+- **Maya:**
+  - first pass: request changes (1 Critical, 6 Important, 10 Minor), all fixed;
+  - re-review: N1 (the screen faced away from the camera) and N2 (a flapped leaver glided), fixed;
+  - final: **APPROVE** at `0d44c54e`, with 3 minors and 2 test gaps fixed in session.
 - **Gates at `56805ad5`:** both `tsc`, `eslint .`, `knip` and prettier are clean; vitest passed 5,503 tests; the build is OK (`office.js` 476,925 bytes).
