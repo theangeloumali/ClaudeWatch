@@ -80,3 +80,19 @@ it('routes a walker pressed between a wall and a body along its own side of that
   expect(route.length).toBeGreaterThan(1)
   expect(route.filter((point) => point.z >= southWall)).toEqual([])
 })
+
+// Mid-walk starts are endless on a floor that never changes, so the memo must stay bounded.
+it('bounds its route memo, keeping routes it still uses', () => {
+  const floor = buildLayout([session('a')], undefined).floors[0]
+  const cache = new PathCache(floor)
+  const desk = floor.rooms[0].slots.find((slot) => slot.id === 'desk_main')!
+  const kept = cache.get(floor.elevator, desk)
+  for (let step = 0; step < 600; step++) {
+    cache.get({ x: floor.elevator.x + step / 1000, z: floor.elevator.z }, desk)
+    if (step % 100 === 0) cache.get(floor.elevator, desk)
+  }
+  expect(cache['paths'].size).toBeLessThanOrEqual(512)
+  expect(cache['paths'].get(`${floor.elevator.x},${floor.elevator.z}:${desk.x},${desk.z}`)).toEqual(
+    kept
+  )
+})

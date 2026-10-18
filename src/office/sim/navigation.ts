@@ -6,6 +6,8 @@ import { bodiesShareElevation } from '../../shared/office/body-sweep'
 // The walk grid's cell, and the margin `around` keeps between two bodies.
 export const NAV_CELL_METRES = 0.25
 export const ROUTE_MARGIN_METRES = 0.05
+// Room for a busy floor's routes; one pushed out is only searched again.
+const MAX_CACHED_ROUTES = 512
 
 export function officeGrid(floor: FloorLayout): NavGrid {
   const cellSize = NAV_CELL_METRES
@@ -157,12 +159,16 @@ export class PathCache {
   get(from: Point, to: Point): Point[] {
     const key = `${from.x},${from.z}:${to.x},${to.z}`
     let path = this.paths.get(key)
+    // Least recently used first: mid-walk starts are endless while the floor stays the same.
+    this.paths.delete(key)
     if (!path) {
       // Built on first use: most feed messages only change activity and need no path.
       this.grid ??= officeGrid(this.floor)
       path = findPath(this.grid, from, to)
-      this.paths.set(key, path)
+      const oldest = this.paths.keys().next()
+      if (this.paths.size >= MAX_CACHED_ROUTES && !oldest.done) this.paths.delete(oldest.value)
     }
+    this.paths.set(key, path)
     return path.map((p) => ({ ...p }))
   }
 }
