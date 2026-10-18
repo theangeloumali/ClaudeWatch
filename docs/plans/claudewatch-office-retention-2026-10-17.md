@@ -94,7 +94,7 @@ This reverses his 2026-10-16 answer that idle agents "can roam the city".
 - [x] Phase 3: Sim — a game corner on every office floor; idle agents play there
 - [x] Phase 4: Renderer — GameCorner furniture, gaming pose, grow-in, "Playing games", setting copy
 - [x] Phase 5: Integrate, gates, live re-measure, page probe
-- [ ] Phase 6: Close (simplify, review, Codex, dead code, checklist, install, MP4, vault)
+- [x] Phase 6: Close (simplify, review, Codex, dead code, checklist, install, MP4, vault)
 - [ ] Phase 7: Push and merge to main (#12, office-health PR, city-port PR)
 
 | Phase | Owner                                           | Verify                                                                                                                                                                                                                                                                                                                         |

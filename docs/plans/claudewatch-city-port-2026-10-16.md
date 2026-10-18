@@ -688,7 +688,7 @@ Research: `cross-cutting.md` X1, `hud.md` §1.
 
   Done 2026-10-18 from `0c1ba903`: 1.4.1, ZKidz Dev LLC (7QZW432V8B), verify passes. Busiest renderer unfocused: 6.1% CPU over 60 s. Page probe: draws full 38 → 44, balanced 37 → 39, light 34 → 35.
 
-- [ ] Report before/after to Angelo, with screenshots at city, building and desk zoom. No STOP (Angelo, 2026-10-17); Phase 8 follows.
+- [x] Report before/after to Angelo, with screenshots at city, building and desk zoom. No STOP (Angelo, 2026-10-17); Phase 8 follows.
 
 ## Phase 8 — Close and merge (lead + Wave 2)
 
@@ -698,8 +698,8 @@ Research: `cross-cutting.md` X1, `hud.md` §1.
 - [x] Review: Maya + Kai at risk 2, because names and the saved document are touched. Kai approved after fixes (no veto); Maya requested changes (1 Critical, 3 Important), and every Critical, Important and verified Minor finding is fixed (run ledger, Wave 2).
 - [x] `bash ~/.claude/hooks/codex-review.sh`. Four passes: 7, 4, 3 and 3 findings, each reproduced RED and fixed test-first; the loop stops after pass 4 (three-strike ruling in the run ledger).
 - [x] `bash ~/.claude/hooks/dead-code-check.sh`.
-- [ ] The feature checklist.
-- [ ] An MP4 demo covering:
+- [x] The feature checklist (`/Users/angeloumali/Desktop/eor-feature-checklists/CW-CITY-PORT-review-checklist.md`).
+- [x] An MP4 demo covering (`recordings/office-retention-city-port-demo.mp4`, frame-verified, plus the game corner and a gamer called back to work):
   - signs at four rotations
   - a work trip
   - the railway
@@ -709,7 +709,7 @@ Research: `cross-cutting.md` X1, `hud.md` §1.
   - Hide names
   - Follow
   - the company lens
-- [ ] Vault learning.
+- [x] Vault learning.
 - [ ] Push, open one PR against `main` once the office-health PR has merged, and merge it with `gh pr merge --merge` (stacked branches; a squash would orphan the base).
 
 ## Estimates (hours: with Claude / without)

@@ -868,7 +868,7 @@ Done in the main checkout. Nothing here is committed on this branch.
   - Accepted unchanged: citizens in plain sight 50–70%, and the recall fade for far roamers.
 - [x] One local install for office-health and the city port together (city-port plan Phase 7), from the final city-port commit (`0c1ba903`, 2026-10-18; 6.1% renderer CPU unfocused).
 - [x] Measure the installed renderer CPU, unfocused, over 60 s: `bash /tmp/office-audit-tools/perf/sample-procs.sh` (was 56.9%). Interim 1.4.1: 25.2% (whole app 73.3% → 39.8%); re-measured on the final install.
-- [ ] Report the before/after to Angelo. No STOP (Angelo, 2026-10-17); Phase 10 follows.
+- [x] Report the before/after to Angelo. No STOP (Angelo, 2026-10-17); Phase 10 follows.
 
 ## Phase 10 — Close and merge (lead + Wave 2)
 
