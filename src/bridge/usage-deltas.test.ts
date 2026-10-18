@@ -74,7 +74,14 @@ it('reports added tokens with the project of their session, on the tick they arr
   })
   io.exec = async (file, args) => (isTableQuery(file, args) ? '' : entry.procStart)
   const onUsage = vi.fn()
-  const poller = new BridgePoller({ io, claudeRoots: [root], codexRoot: '/codex', onUsage })
+  // The clock sits beside the transcript, so its line stays inside the week the poller keeps.
+  const poller = new BridgePoller({
+    io,
+    claudeRoots: [root],
+    codexRoot: '/codex',
+    onUsage,
+    now: () => minuteMs(20)
+  })
   // The first tick publishes before counting, so it has nothing to report.
   await poller.tick()
   expect(onUsage).not.toHaveBeenCalled()
