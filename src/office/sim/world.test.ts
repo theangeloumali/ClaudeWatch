@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { World } from './world'
 import { session } from './fixtures'
 
@@ -355,4 +355,24 @@ it('keeps a fading leaver at its desk when its session returns', () => {
     place: undefined,
     fade: undefined
   })
+})
+
+// Each floor is serialised once per reconcile: the routes' change check is the lounges' too.
+it('serialises each floor once when a patch is applied', () => {
+  const sim = world()
+  const stringify = vi.spyOn(JSON, 'stringify')
+  sim.apply({
+    type: 'patch',
+    v: 1,
+    seq: 2,
+    upserts: [{ ...session('a'), activity: 'thinking' }],
+    removed: []
+  })
+  const isFloor = (value: unknown) =>
+    typeof value === 'object' && value !== null && 'zones' in value
+  const floorCalls = stringify.mock.calls.filter(
+    ([value]) => isFloor(value) || (Array.isArray(value) && value.some(isFloor))
+  )
+  stringify.mockRestore()
+  expect(floorCalls).toHaveLength(sim.layout().floors.length)
 })

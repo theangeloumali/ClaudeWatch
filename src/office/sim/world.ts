@@ -61,8 +61,6 @@ export class World {
   private map: LayoutMap = { version: 1, floors: [], reservations: {} }
   // From storage: read for order and bays by the first build, never walked on.
   private savedMap: LayoutMap | undefined
-  // The floor `lounges` were made for.
-  private floorJson = ''
   private lounges = new Map<string, LoungeLayout>()
   private accumulatedMs = 0
   private sequence = -1
@@ -148,12 +146,8 @@ export class World {
     this.map = map
     this.baseline = baseline
     this.savedMap = undefined
-    this.routes.update(this.map)
-    const floorJson = JSON.stringify(this.map.floors)
-    if (floorJson !== this.floorJson) {
+    if (this.routes.update(this.map))
       this.lounges = new Map(this.map.floors.flatMap((floor) => [...loungesByRoom(floor)]))
-      this.floorJson = floorJson
-    }
     const active = new Set(desired.map((p) => p.session.key))
     // Every leaver fades where it stands: walking out is what jammed the street door.
     for (const [key, agent] of this.agents)

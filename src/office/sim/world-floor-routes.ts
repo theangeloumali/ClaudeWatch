@@ -14,14 +14,18 @@ export function floorElevation(floor: FloorLayout): number {
 export class FloorRoutes {
   private readonly caches = new Map<string, { json: string; paths: PathCache }>()
 
-  update(map: LayoutMap): void {
+  // Whether any floor came, went or changed.
+  update(map: LayoutMap): boolean {
     const live = new Set(map.floors.map((floor) => floor.id))
-    for (const id of this.caches.keys()) if (!live.has(id)) this.caches.delete(id)
+    let hasChanged = false
+    for (const id of this.caches.keys()) if (!live.has(id)) hasChanged = this.caches.delete(id)
     for (const floor of map.floors) {
       const json = JSON.stringify(floor)
-      if (this.caches.get(floor.id)?.json !== json)
-        this.caches.set(floor.id, { json, paths: new PathCache(floor) })
+      if (this.caches.get(floor.id)?.json === json) continue
+      this.caches.set(floor.id, { json, paths: new PathCache(floor) })
+      hasChanged = true
     }
+    return hasChanged
   }
 
   paths(id: string | null | undefined): PathCache | undefined {
