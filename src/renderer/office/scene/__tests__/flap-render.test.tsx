@@ -3,9 +3,9 @@ import { createElement } from 'react'
 import { Euler, Vector3 } from 'three'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { officePoses, poseOf, structuralKey } from '../../../office-live/pose-store'
-import { DEPARTURE_FADE_MS, SIM_TICK_MS, type AgentView } from '../../../../shared/office/types'
+import { SIM_TICK_MS, type AgentView } from '../../../../shared/office/types'
 import { themeForTeam } from '../../themes/registry'
-import { Robot } from '../Robot'
+import { LEAVER_SHRINK_MS, Robot } from '../Robot'
 import { CityWorld, observed } from '../../../../office/sim/__tests__/city-harness'
 import { LOUNGE_DELAY_MS } from '../../../../office/sim/behaviour'
 
@@ -70,7 +70,8 @@ interface Delivery {
 }
 const FRAME_S = 1 / 60
 // The shrink is the faster ease, so no frame may change size by more than one of its steps.
-const SHRINK_STEP = (FRAME_S * 1000) / (DEPARTURE_FADE_MS - SIM_TICK_MS)
+// The largest scale change one frame may make: a leaver's shrink, the faster of the two.
+const SHRINK_STEP = (FRAME_S * 1000) / LEAVER_SHRINK_MS
 
 function playFlap({ frameGapMs, flapAfterTicks, firstStepMs }: Delivery) {
   const city = new CityWorld((now) => [observed(KEY, 'p_a', now)])
@@ -138,27 +139,42 @@ it.each<[string, Delivery]>([
 
 // A leaver has no reseat to wait for: its robot unmounts with the frame that drops it. live-feed
 // sends a fade's first view at once, so the shrink always has the whole fade.
-it('a leaver has shrunk away by the frame that removes it', () => {
-  const city = new CityWorld((now) => [observed(KEY, 'p_a', now)])
-  let gaming: AgentView | undefined
-  city.run(
-    LOUNGE_DELAY_MS + 30_000,
-    (views) => void (gaming = views.find((v) => v.agentKey === KEY))
-  )
-  officePoses.write(KEY, poseOf(gaming!))
-  const { presence, show } = mount(gaming!)
-  let scaleWhenRemoved: number | undefined
-  city.patch([], [KEY])
-  for (let tick = 0; tick < 10; tick++) {
-    const view = city.step().find((v) => v.agentKey === KEY)
-    if (!view) {
-      scaleWhenRemoved = presence.scale.x
-      break
+// Its first faded view may land a frame or so late while the removal is on time (Maya n2).
+it.each([0, 10, 20, 33, 50])(
+  'a leaver has shrunk away by the frame that removes it, its fade seen %i ms late',
+  (lateMs) => {
+    const city = new CityWorld((now) => [observed(KEY, 'p_a', now)])
+    let gaming: AgentView | undefined
+    city.run(
+      LOUNGE_DELAY_MS + 30_000,
+      (views) => void (gaming = views.find((v) => v.agentKey === KEY))
+    )
+    officePoses.write(KEY, poseOf(gaming!))
+    const { presence, show } = mount(gaming!)
+    const steps: { atMs: number; view: AgentView | undefined }[] = []
+    city.patch([], [KEY])
+    for (let tick = 1; tick <= 10; tick++) {
+      const view = city.step().find((v) => v.agentKey === KEY)
+      steps.push({ atMs: tick * SIM_TICK_MS + (tick === 1 ? lateMs : 0), view })
+      if (!view) break
     }
-    officePoses.write(KEY, poseOf(view))
-    show(view)
-    for (let i = 0; i < 6; i++) frames.callbacks.at(-1)?.({ clock: { elapsedTime: 0 } }, FRAME_S)
-  }
+    let scaleWhenRemoved: number | undefined
+    let next = 0
+    for (let atMs = SIM_TICK_MS; atMs < 2000 && scaleWhenRemoved === undefined; ) {
+      while (next < steps.length && steps[next].atMs <= atMs + 1e-9) {
+        const { view } = steps[next++]
+        if (!view) {
+          scaleWhenRemoved = presence.scale.x
+          break
+        }
+        officePoses.write(KEY, poseOf(view))
+        show(view)
+      }
+      if (scaleWhenRemoved !== undefined) break
+      frames.callbacks.at(-1)?.({ clock: { elapsedTime: 0 } }, FRAME_S)
+      atMs += FRAME_S * 1000
+    }
 
-  expect(scaleWhenRemoved).toBeLessThanOrEqual(1e-9)
-})
+    expect(scaleWhenRemoved).toBeLessThanOrEqual(1e-9)
+  }
+)

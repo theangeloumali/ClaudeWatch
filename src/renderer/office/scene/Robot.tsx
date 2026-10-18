@@ -64,16 +64,20 @@ const presenceTarget = (agent: Pick<AgentView, 'fade'>): number => (isFadingAgen
 
 // Batched robot parts share opaque materials, so a departing robot fades by shrinking away over
 // the sim's fade; reduced motion skips the animation and the robot simply goes (seating-4).
+// A reseat holds the robot until it reaches 0, so it shrinks over the views the sim shows faded.
+const SHRINK_MS = DEPARTURE_FADE_MS - SIM_TICK_MS
+// A leaver unmounts on the tick that removes it: a tick of slack covers a late first fade view.
+export const LEAVER_SHRINK_MS = SHRINK_MS - SIM_TICK_MS
+
 export function presenceAfter(
   presence: number,
   target: number,
   delta: number,
-  isReducedMotion: boolean
+  isReducedMotion: boolean,
+  shrinkMs = SHRINK_MS
 ): number {
   if (isReducedMotion) return target
-  // It shrinks away within the views the sim shows faded, so a reseat lands at scale 0.
-  if (target < presence)
-    return Math.max(target, presence - (delta * 1000) / (DEPARTURE_FADE_MS - SIM_TICK_MS))
+  if (target < presence) return Math.max(target, presence - (delta * 1000) / shrinkMs)
   return Math.min(target, presence + (delta * 1000) / DEPARTURE_FADE_MS)
 }
 
@@ -188,7 +192,13 @@ export function Robot({
     const isAway = isFading || isReseatingRef.current
     if (presence)
       presence.scale.setScalar(
-        presenceAfter(presence.scale.x, isAway ? 0 : 1, delta, isReducedMotion)
+        presenceAfter(
+          presence.scale.x,
+          isAway ? 0 : 1,
+          delta,
+          isReducedMotion,
+          target.place === 'leaving' ? LEAVER_SHRINK_MS : undefined
+        )
       )
     if (motions) {
       const motion = motions.get(target.agentKey) ?? {
