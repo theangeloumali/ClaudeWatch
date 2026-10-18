@@ -95,7 +95,7 @@ This reverses his 2026-10-16 answer that idle agents "can roam the city".
 - [x] Phase 4: Renderer — GameCorner furniture, gaming pose, grow-in, "Playing games", setting copy
 - [x] Phase 5: Integrate, gates, live re-measure, page probe
 - [x] Phase 6: Close (simplify, review, Codex, dead code, checklist, install, MP4, vault)
-- [ ] Phase 7: Push and merge to main (#12, office-health PR, city-port PR)
+- [x] Phase 7: Push and merge to main (#12, office-health PR, city-port PR) — merged 2026-10-18: #12 `ccf972c3`, #13 `211958bf`, #14 `3b8de102`; main's tree equals the verified branch tree (`f0a10374`)
 
 | Phase | Owner                                           | Verify                                                                                                                                                                                                                                                                                                                         |
 | ----- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
