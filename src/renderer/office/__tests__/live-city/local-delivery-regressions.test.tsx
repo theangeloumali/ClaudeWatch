@@ -569,7 +569,7 @@ describe('authored recovered streetscape', () => {
     }))
     expect(projected).toEqual(shared)
     expect(projected).toEqual(effective.streetBlocks)
-    // Generated buildings keep room for a shallower game corner, so the offices leave 48 lots.
+    // Generated buildings keep a row's width for a sideways game corner; the offices leave 48 lots.
     expect(projected).toHaveLength(48)
     expect(distributedTown(town.plan, protectedSites).plan.lots).toEqual(town.plan.lots)
   })

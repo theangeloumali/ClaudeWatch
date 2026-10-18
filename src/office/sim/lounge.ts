@@ -1,12 +1,14 @@
 import { wantsLounge, type AgentRecord } from './behaviour'
 import type { FloorLayout, LoungeLayout, Slot } from './layout'
 
-// Each room's company lounge, by room id. Seats come from the map and nowhere else.
+// Each room's lounge, by room id: its company's, or on a building's floor that floor's one
+// corner, whoever's room it is. Seats come from the map and nowhere else.
 export function loungesByRoom(floor: FloorLayout): Map<string, LoungeLayout> {
   const byCompany = new Map(floor.zones.map((zone) => [zone.companyKey, zone.lounge]))
+  const corner = floor.buildingId ? floor.zones[0]?.lounge : undefined
   const lounges = new Map<string, LoungeLayout>()
   for (const room of floor.rooms) {
-    const lounge = byCompany.get(room.companyKey)
+    const lounge = corner ?? byCompany.get(room.companyKey)
     if (lounge) lounges.set(room.id, lounge)
   }
   return lounges

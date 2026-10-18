@@ -205,17 +205,6 @@ function validateRoom({ room, building, field, context, report }: RoomValidation
     requiredIds.some((id) => !room.desks.some((desk) => desk.id === id))
   )
     report(`${field}.desks`, room.target, 'occupied-capacity')
-  const previous = context.layout.floors
-    .flatMap((floor) => floor.rooms)
-    .find((prior) => prior.sessionKey && room.target === `session:${prior.sessionKey}`)
-  if (
-    previous?.buildingId &&
-    (previous.buildingId !== building.id || previous.floorNumber !== room.floorNumber)
-  ) {
-    const oldFloor = context.layout.floors.find((floor) => floor.id === previous.floorId)
-    if (!building.connector || !oldFloor?.connector)
-      report(`${field}.floorNumber`, room.target, 'transfer-connector')
-  }
   for (const desk of room.desks) {
     if (!deskHasClearance(room, desk))
       report(`${field}.desks.${desk.id}`, room.target, 'desk-clearance')

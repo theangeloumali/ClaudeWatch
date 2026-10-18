@@ -13,6 +13,7 @@ import { agentBody } from './agent-body'
 import {
   createAgent,
   leaveAgent,
+  passTime,
   returnToDesk,
   setFinished,
   tickAgent,
@@ -61,8 +62,6 @@ export class World {
   private map: LayoutMap = { version: 1, floors: [], reservations: {} }
   // From storage: read for order and bays by the first build, never walked on.
   private savedMap: LayoutMap | undefined
-  // The floor `lounges` were made for.
-  private floorJson = ''
   private lounges = new Map<string, LoungeLayout>()
   private accumulatedMs = 0
   private sequence = -1
@@ -148,12 +147,8 @@ export class World {
     this.map = map
     this.baseline = baseline
     this.savedMap = undefined
-    this.routes.update(this.map)
-    const floorJson = JSON.stringify(this.map.floors)
-    if (floorJson !== this.floorJson) {
+    if (this.routes.update(this.map))
       this.lounges = new Map(this.map.floors.flatMap((floor) => [...loungesByRoom(floor)]))
-      this.floorJson = floorJson
-    }
     const active = new Set(desired.map((p) => p.session.key))
     // Every leaver fades where it stands: walking out is what jammed the street door.
     for (const [key, agent] of this.agents)
@@ -256,28 +251,25 @@ export class World {
       },
       isSubagent
     )
-    // One fading or not yet seated has no cleared body: it comes back as a newcomer does.
-    const wasUnseen = this.fading.has(key) || this.arrivals.has(key)
+    const isUnseen = this.fading.has(key) || this.arrivals.has(key)
     this.passages.clear(key)
-    this.fading.delete(key)
-    this.arrivals.delete(key)
-    if (!existing || wasUnseen) {
+    if (existing)
+      Object.assign(agent.view, {
+        x: existing.view.x,
+        z: existing.view.z,
+        elevation: existing.view.elevation,
+        physicalFloorId: existing.view.physicalFloorId
+      })
+    // Unseen till its fade ends, where it stands; seatRecalled then seats it, so it never glides.
+    if (existing ? isUnseen : !isInitial) {
       this.recovery.clear(key)
-      if (existing || !isInitial) {
-        this.startFade(key)
-        this.arrivals.add(key)
-      }
-      return agent
+      this.fading.set(key, this.fading.get(key) ?? 0)
+      this.arrivals.add(key)
     }
+    if (!existing || isUnseen) return agent
     // A desk that moved does not restart its wait for the lounge.
     agent.finishedForMs = existing.finishedForMs
     agent.path = this.routes.toFloor(existing.view, floor, slot)
-    Object.assign(agent.view, {
-      x: existing.view.x,
-      z: existing.view.z,
-      elevation: existing.view.elevation,
-      physicalFloorId: existing.view.physicalFloorId
-    })
     if (!agent.path.length) this.startFade(key)
     return agent
   }
@@ -425,10 +417,14 @@ export class World {
       const offset = this.movementTick++ % Math.max(1, ordered.length)
       const bodies = [...this.agents.values()].filter((a) => !this.arrivals.has(a.view.agentKey))
       const crowd = new TickCrowd(bodies, this.bodyObstacles)
-      for (const [key, agent] of [...ordered.slice(offset), ...ordered.slice(0, offset)]) {
+      for (const [key, current] of [...ordered.slice(offset), ...ordered.slice(0, offset)]) {
         const fadedMs = this.fading.get(key)
-        if (fadedMs === undefined) this.agents.set(key, this.moveAgent(agent, crowd))
-        else if (fadedMs + TICK_MS < DEPARTURE_FADE_MS) this.fading.set(key, fadedMs + TICK_MS)
+        // A fader stands still, but its clocks run, however long its desk is taken.
+        const agent =
+          fadedMs === undefined ? this.moveAgent(current, crowd) : passTime(current, TICK_MS)
+        this.agents.set(key, agent)
+        if (fadedMs === undefined) continue
+        if (fadedMs + TICK_MS < DEPARTURE_FADE_MS) this.fading.set(key, fadedMs + TICK_MS)
         else if (agent.state === 'leaving') this.remove(key, crowd)
         else this.seatRecalled(key, agent, crowd)
       }

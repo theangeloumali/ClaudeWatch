@@ -1,8 +1,9 @@
 import type { AgentView, SessionRef, SourceHealth } from '../../../shared/office/types'
 import { createWorldDocument } from '../../../shared/office/world-document'
+import type { WorldDocument } from '../../../shared/office/world-document-types'
 import { resolveEffectiveWorld } from '../effective-world'
 import { session } from '../fixtures'
-import type { LayoutMap, Slot } from '../layout'
+import { deskOf, type LayoutMap } from '../layout'
 import { World } from '../world'
 import { TICK_MS } from './door-invariants'
 
@@ -24,8 +25,14 @@ export function observed(key: string, project: string, nowMs: number): SessionRe
   }
 }
 
-const resolveLayout = (base: LayoutMap, current: readonly SessionRef[]): LayoutMap =>
-  resolveEffectiveWorld(base, createWorldDocument(base, current), current)
+// The effective world from the generated document, after `reshape` edits it.
+const resolveWith =
+  (reshape: (document: WorldDocument) => void) =>
+  (base: LayoutMap, current: readonly SessionRef[]): LayoutMap => {
+    const document = createWorldDocument(base, current)
+    reshape(document)
+    return resolveEffectiveWorld(base, document, current)
+  }
 
 // The city as the live Office runs it: the effective world and its own clock.
 export class CityWorld {
@@ -33,8 +40,11 @@ export class CityWorld {
   readonly world: World
   private sequence = 1
 
-  constructor(sessions: (nowMs: number) => SessionRef[]) {
-    this.world = new World({ resolveLayout, now: () => this.clock })
+  constructor(
+    sessions: (nowMs: number) => SessionRef[],
+    reshape: (document: WorldDocument) => void = () => {}
+  ) {
+    this.world = new World({ resolveLayout: resolveWith(reshape), now: () => this.clock })
     this.world.apply({
       type: 'hello',
       v: 1,
@@ -61,16 +71,8 @@ export class CityWorld {
       if (onFrame(this.step(), elapsed) === true) return
   }
 
-  deskOf(view: AgentView): Slot | undefined {
-    return this.world
-      .layout()
-      .floors.find((floor) => floor.id === view.floorId)
-      ?.rooms.find((room) => room.id === view.roomId)
-      ?.slots.find((slot) => slot.id === view.slotId)
-  }
-
   isSeated(view: AgentView | undefined): boolean {
-    const desk = view && this.deskOf(view)
+    const desk = view && deskOf(this.world.layout().floors, view)?.desk
     return (
       !!view &&
       !!desk &&

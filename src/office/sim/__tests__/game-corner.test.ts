@@ -4,15 +4,28 @@ import { createWorldDocument } from '../../../shared/office/world-document'
 import { contains, overlaps } from '../../../shared/office/world-document-geometry'
 import { resolveEffectiveWorld } from '../effective-world'
 import { session, subagent } from '../fixtures'
-import { gameCorner } from '../game-corner'
+import { cornerSizes, gameCorner } from '../game-corner'
 import { buildLayout, type FloorLayout, type LoungeLayout } from '../layout'
 import { createAgent } from '../behaviour'
 import { FloorRoutes } from '../world-floor-routes'
+import { PathCache } from '../navigation'
+import { generatedMap, rosters } from './generated-floors'
 import { WORKER_BODY_RADIUS } from '../../../shared/office/body-footprints'
 import { LOUNGE_WIDTH } from '../rooms'
 
 const SCREEN_METRES = 1.2
 const EPSILON = 1e-6
+
+// Where a corner's screen stands: the box edge its seats face, and that edge's outward normal.
+function screenEdge(corner: LoungeLayout) {
+  const facing = { x: Math.sin(corner.slots[0].heading), z: Math.cos(corner.slots[0].heading) }
+  const half = (Math.abs(facing.x) > 0.5 ? corner.width : corner.depth) / 2
+  return { facing, edge: { x: corner.x + facing.x * half, z: corner.z + facing.z * half } }
+}
+const toScreen = (corner: LoungeLayout, point: { x: number; z: number }): number => {
+  const { facing, edge } = screenEdge(corner)
+  return (edge.x - point.x) * facing.x + (edge.z - point.z) * facing.z
+}
 
 // One company of three projects, the last on two storeys; office counts 1, 2 and 6.
 function city() {
@@ -87,59 +100,109 @@ describe('game corner: one beside the offices on every floor', () => {
     }
   })
 
-  it('faces every seat at a screen on the far edge, with room before it', () => {
+  it('faces every seat at a screen on an edge away from the door, with room before it', () => {
     for (const floor of withOffices) {
       const corner = cornerOf(floor)!
-      for (const seat of corner.slots) {
-        const facing = { x: Math.sin(seat.heading), z: Math.cos(seat.heading) }
-        const reach = Math.abs(facing.x) > 0.5 ? corner.width : corner.depth
-        const farEdge = { x: corner.door.x + facing.x * reach, z: corner.door.z + facing.z * reach }
-        const toScreen = (farEdge.x - seat.x) * facing.x + (farEdge.z - seat.z) * facing.z
-        const fromDoor = (seat.x - corner.door.x) * facing.x + (seat.z - corner.door.z) * facing.z
-        expect({ toScreen: toScreen >= SCREEN_METRES - EPSILON, fromDoor: fromDoor > 0 }).toEqual({
-          toScreen: true,
-          fromDoor: true
-        })
-      }
-      // The screen side is away from the offices: the door edge faces them.
-      const toOffices = floor.rooms.map((room) =>
-        Math.hypot(room.x - corner.door.x, room.z - corner.door.z)
-      )
-      const farSide = {
-        x: 2 * corner.x - corner.door.x,
-        z: 2 * corner.z - corner.door.z
-      }
-      expect(
-        Math.min(...floor.rooms.map((room) => Math.hypot(room.x - farSide.x, room.z - farSide.z)))
-      ).toBeGreaterThan(Math.min(...toOffices))
+      for (const seat of corner.slots)
+        expect({
+          toScreen: toScreen(corner, seat) >= SCREEN_METRES - EPSILON,
+          isDoorOffScreenEdge: toScreen(corner, corner.door) > EPSILON
+        }).toEqual({ toScreen: true, isDoorOffScreenEdge: true })
+      // The door edge faces the offices: the door is nearer them than the box centre is.
+      const nearest = (point: { x: number; z: number }) =>
+        Math.min(...floor.rooms.map((room) => Math.hypot(room.x - point.x, room.z - point.z)))
+      expect(nearest(corner.door)).toBeLessThan(nearest(corner))
     }
   })
 
   it('reaches every seat from every desk on its floor', () => {
-    const routes = new FloorRoutes()
-    routes.update(map)
-    const unreachable: string[] = []
-    for (const floor of withOffices)
-      for (const room of floor.rooms)
-        for (const desk of room.slots.filter((slot) => slot.id !== 'door')) {
-          const agent = createAgent(
-            session('claude:walker'),
-            {
-              floorId: floor.id,
-              roomId: room.id,
-              slotId: desk.id,
-              x: desk.x,
-              z: desk.z,
-              heading: desk.heading,
-              elevation: floor.elevation,
-              physicalFloorId: floor.id
-            },
-            false
-          )
-          for (const seat of cornerOf(floor)!.slots)
-            if (!routes.toFloor(agent.view, floor, seat).length)
-              unreachable.push(`${room.id}/${desk.id} -> ${seat.id}`)
-        }
+    expect(unreachableSeats(map, withOffices)).toEqual([])
+  })
+
+  // The renderer stands the screen and cabinets there: no walker crosses it, or brushes it.
+  it('closes the strip before the screen, and a body around it, leaving every seat open', () => {
+    for (const floor of withOffices) {
+      const corner = cornerOf(floor)!
+      const grid = new PathCache(floor)
+      const { facing, edge } = screenEdge(corner)
+      const across = { x: -facing.z, z: facing.x }
+      const span = (Math.abs(facing.x) > 0.5 ? corner.depth : corner.width) / 2
+      const strip = [-0.5, 0.1, 0.5, 0.9].flatMap((back) =>
+        [-1.03, -1, -0.5, 0, 0.5, 1, 1.03].map((share) => ({
+          x: edge.x - facing.x * back + across.x * share * span,
+          z: edge.z - facing.z * back + across.z * share * span
+        }))
+      )
+      expect({
+        openInStrip: strip.filter((point) => grid.isOpen(point)).length,
+        closedSeats: corner.slots.filter((seat) => !grid.isOpen(seat)).length
+      }).toEqual({ openInStrip: 0, closedSeats: 0 })
+    }
+  })
+})
+
+const unreachableSeats = (map: ReturnType<typeof city>, floors: readonly FloorLayout[]) => {
+  const routes = new FloorRoutes()
+  routes.update(map)
+  const unreachable: string[] = []
+  for (const floor of floors)
+    for (const room of floor.rooms)
+      for (const desk of room.slots.filter((slot) => slot.id !== 'door')) {
+        const view = createAgent(
+          session('claude:walker'),
+          {
+            floorId: floor.id,
+            roomId: room.id,
+            slotId: desk.id,
+            x: desk.x,
+            z: desk.z,
+            heading: desk.heading,
+            elevation: floor.elevation,
+            physicalFloorId: floor.id
+          },
+          false
+        ).view
+        for (const seat of cornerOf(floor)!.slots)
+          if (!routes.toFloor(view, floor, seat).length)
+            unreachable.push(`${floor.id} ${room.id}/${desk.id} -> ${seat.id}`)
+      }
+  return unreachable
+}
+
+describe('game corner: every generated floor of 1 to 24 sessions', () => {
+  const maps = rosters().map(generatedMap)
+  const floors = maps.flatMap((map) => map.floors.filter((floor) => floor.rooms.length))
+
+  it('gives every generated floor its full corner, inside its walls and clear of its offices', () => {
+    const wrong: string[] = []
+    for (const floor of floors) {
+      const corner = cornerOf(floor)
+      if (!corner) continue
+      const local = { ...corner, x: corner.x - floor.x, z: corner.z - floor.z }
+      const entrance = { ...floor.entrance!, width: 0, depth: 0 }
+      const issues = {
+        seats: corner.slots.length === Math.min(8, desksOf(floor).length),
+        isFullWidth: Math.max(corner.width, corner.depth) >= LOUNGE_WIDTH - EPSILON,
+        isInside: contains(floor, local, 1),
+        isClear: floor.rooms.every((room) => !overlaps(corner, room, 1 - EPSILON)),
+        isOffLift: !floor.connector || !overlaps(corner, floor.connector),
+        isOffEntrance: !overlaps(corner, entrance, 2 - EPSILON)
+      }
+      for (const [check, isMet] of Object.entries(issues))
+        if (!isMet) wrong.push(`${floor.id}: ${check}`)
+    }
+    expect(wrong).toEqual([])
+  })
+
+  it('reaches every seat from every desk on its floor', () => {
+    const unreachable = maps
+      .filter((_, index) => index % 4 === 0)
+      .flatMap((map) =>
+        unreachableSeats(
+          map,
+          map.floors.filter((floor) => floor.rooms.length)
+        )
+      )
     expect(unreachable).toEqual([])
   })
 })
@@ -154,12 +217,11 @@ it('keeps only the ground floor corner clear of the street door', () => {
     room.floorNumber = index < 2 ? 1 : 2
     room.position = { x: index % 2 ? -0.05 : -7.05, z: 3 }
   })
-  const headings = resolveEffectiveWorld(base, document, sessions).floors.map(
-    (floor) => cornerOf(floor)?.slots[0].heading
+  // Within 2 m of where the street door is: only the upper floor may be, having no door.
+  const isAtDoor = resolveEffectiveWorld(base, document, sessions).floors.map((floor) =>
+    overlaps(cornerOf(floor)!, { ...floor.entrance!, width: 0, depth: 0 }, 2 - EPSILON)
   )
-  // Laid where the far side would be, the ground floor corner must have passed it over.
-  expect(headings[0]).not.toBe(Math.PI)
-  expect(headings[1]).toBe(Math.PI)
+  expect(isAtDoor).toEqual([false, true])
 })
 
 describe('game corner: placement', () => {
@@ -179,13 +241,14 @@ describe('game corner: placement', () => {
   })
 
   // The -z corner fits its wall margin here, but its far edge is 1.35 m from the door.
-  it('passes over a side whose corner would stand in the entrance', () => {
+  it('passes over a side whose corner would stand in the entrance, for the -x side', () => {
     const corner = gameCorner(floor(30, 17))
     expect(corner?.slots.map((seat) => seat.heading)).toEqual([
-      Math.PI / 2,
-      Math.PI / 2,
-      Math.PI / 2
+      -Math.PI / 2,
+      -Math.PI / 2,
+      -Math.PI / 2
     ])
+    expect(corner!.x).toBeLessThan(0)
   })
 
   it('passes over a side whose corner would cover the lift', () => {
@@ -193,21 +256,65 @@ describe('game corner: placement', () => {
       ...floor(30, 30, { x: 0, z: 15 }),
       connector: { x: 0, z: -8, width: 2, depth: 2 }
     })
-    expect(corner?.slots[0].heading).toBe(Math.PI / 2)
+    expect(corner?.slots[0].heading).toBe(-Math.PI / 2)
+  })
+
+  // Against the west wall, too shallow north for a row: only the +x side has room.
+  it('turns a corner east of the offices sideways: screen on its -z edge, door on its -x', () => {
+    const corner = gameCorner({ ...floor(30, 14), rooms: [office(-11, 0)] })!
+    expect(corner.slots.map((seat) => seat.heading)).toEqual([Math.PI, Math.PI, Math.PI])
+    expect(corner.x).toBeGreaterThan(-9)
+    expect(corner.door).toEqual({ x: corner.x - corner.width / 2, z: corner.z })
+    // Rows run along x, so the box is a row wide away from the offices and a row deep along them.
+    expect(corner.width).toBeCloseTo(LOUNGE_WIDTH, 6)
+    expect(corner.depth).toBeCloseTo(SCREEN_METRES + 2.95, 6)
+    for (const seat of corner.slots) expect(toScreen(corner, seat)).toBeCloseTo(SCREEN_METRES, 6)
+  })
+
+  // Against the north wall, too narrow west and east for a row: only the +z side has room.
+  it('turns a corner south of the offices sideways: screen on its -x edge, door on its -z', () => {
+    const corner = gameCorner({ ...floor(12, 30, { x: 0, z: 15 }), rooms: [office(0, -11)] })!
+    expect(corner.slots.map((seat) => seat.heading)).toEqual([
+      -Math.PI / 2,
+      -Math.PI / 2,
+      -Math.PI / 2
+    ])
+    expect(corner.z).toBeGreaterThan(-9)
+    expect(corner.door).toEqual({ x: corner.x, z: corner.z - corner.depth / 2 })
+    expect(corner.width).toBeCloseTo(SCREEN_METRES + 2.95, 6)
+    expect(corner.depth).toBeCloseTo(LOUNGE_WIDTH, 6)
+  })
+
+  // Ruling: a 5 m deep strip has no camera-facing room, so a floor keeps a corner facing away.
+  it('falls back to a corner facing away from the offices when no camera-facing one fits', () => {
+    const corner = gameCorner({
+      floorId: 'b:2',
+      footprint: { x: 0, z: 0, width: 20, depth: 5 },
+      rooms: [office(-7, 0)],
+      deskCount: 1
+    })
+    expect(corner?.slots.map((seat) => seat.heading)).toEqual([Math.PI / 2])
+  })
+
+  // 8 m east of the office holds a row of two sideways, or a full row of four facing away.
+  it('prefers a narrower camera-facing corner to a full one facing away', () => {
+    const corner = gameCorner({
+      floorId: 'b:2',
+      footprint: { x: -2, z: 0, width: 12, depth: 10 },
+      rooms: [office(-6, 0)],
+      deskCount: 4
+    })
+    expect(corner?.slots.map((seat) => seat.heading)).toEqual([Math.PI, Math.PI])
   })
 
   // Six seats: a full front row of four and a centred back row of two.
   it('sits the front row 1.2 m from the screen and the next a walkway nearer the door', () => {
     const corner = gameCorner({ ...floor(30, 30, { x: 0, z: 15 }), deskCount: 6 })!
-    const facing = { x: Math.sin(corner.slots[0].heading), z: Math.cos(corner.slots[0].heading) }
+    const { facing } = screenEdge(corner)
     const across = { x: -facing.z, z: facing.x }
-    const reach = Math.abs(facing.x) > 0.5 ? corner.width : corner.depth
-    const farEdge = { x: corner.door.x + facing.x * reach, z: corner.door.z + facing.z * reach }
     const rows = [corner.slots.slice(0, 4), corner.slots.slice(4)].map((row) => ({
       seats: row.length,
-      toScreen: Math.max(
-        ...row.map((seat) => (farEdge.x - seat.x) * facing.x + (farEdge.z - seat.z) * facing.z)
-      ),
+      toScreen: Math.max(...row.map((seat) => toScreen(corner, seat))),
       offCentre:
         row.reduce(
           (sum, seat) => sum + (seat.x - corner.x) * across.x + (seat.z - corner.z) * across.z,
@@ -253,5 +360,24 @@ describe('game corner: placement', () => {
 
   it('leaves a floor with no offices without a corner', () => {
     expect(gameCorner({ ...floor(30, 30), rooms: [] })).toBeUndefined()
+  })
+
+  // Seat counts sharing a row count share an area, so one is tried per row count (M6).
+  it('tries one full-width size per row count, then narrower single rows', () => {
+    const full = LOUNGE_WIDTH
+    const row = (seats: number) => (1 + 1.25 * seats) * (LOUNGE_WIDTH / 6)
+    expect([...cornerSizes(8)]).toEqual([
+      { seats: 8, across: full },
+      { seats: 4, across: full },
+      { seats: 3, across: row(3) },
+      { seats: 2, across: row(2) },
+      { seats: 1, across: row(1) }
+    ])
+    expect([...cornerSizes(3)]).toEqual([
+      { seats: 3, across: full },
+      { seats: 3, across: row(3) },
+      { seats: 2, across: row(2) },
+      { seats: 1, across: row(1) }
+    ])
   })
 })

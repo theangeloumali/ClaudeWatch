@@ -125,41 +125,39 @@ export function createWorldDocument(
     }
   const includedProjects = projects.slice(0, LIMITS.buildings)
   const buildings = includedProjects.map(defaultBuilding)
+  const document = singleFloorWorldDocument({
+    version: 2,
+    revision: 0,
+    buildings,
+    rooms: includedProjects.flatMap((source, index) =>
+      source.rooms.map((room) => defaultRoom({ source, building: buildings[index], room }))
+    ),
+    venues: [],
+    allocation: allocationFromLayout(layout)
+  })
   const pitch = Math.max(
     24,
-    ...buildings.map(
+    ...document.buildings.map(
       (building) =>
         Math.max(building.footprint.width, building.footprint.depth) + WORLD_STREET_METRES
     )
   )
   return arrangeWorldDocument(
-    singleFloorWorldDocument({
-      version: 2,
-      revision: 0,
-      buildings,
-      rooms: includedProjects.flatMap((source, index) =>
-        source.rooms.map((room) => defaultRoom({ source, building: buildings[index], room }))
-      ),
-      venues: defaultWorldVenues(buildings, pitch),
-      allocation: allocationFromLayout(layout)
-    }),
+    { ...document, venues: defaultWorldVenues(document.buildings, pitch) },
     'streets'
   )
 }
 
-function defaultBuilding(source: ProjectSource): WorldBuilding {
-  const { company, project } = source
-  const width = Math.min(LIMITS.buildingMetres, Math.max(36, project.width + 12))
-  const depth = Math.min(LIMITS.buildingMetres, Math.max(28, project.depth + 8))
+// Unsized: singleFloorWorldDocument sizes it round its offices and places its doors.
+function defaultBuilding({ company, project }: ProjectSource): WorldBuilding {
   return {
     id: worldBuildingId(company.companyKey, project.projectKey ?? ''),
     companyKey: company.companyKey,
     projectKey: project.projectKey ?? '',
     displayName: Array.from(project.label).slice(0, LIMITS.labels).join('') || 'Project',
-    footprint: { x: 0, z: 0, width, depth },
+    footprint: { x: 0, z: 0, width: 0, depth: 0 },
     floors: 1,
-    entrance: { x: 0, z: -depth / 2 },
-    connector: { x: -width / 2 + 2, z: -depth / 2 + 2, width: 2, depth: 2 }
+    entrance: { x: 0, z: 0 }
   }
 }
 function defaultRoom(options: {

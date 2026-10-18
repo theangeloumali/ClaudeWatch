@@ -154,6 +154,23 @@ describe('departures and arrivals: each fades where it stands', () => {
   })
 })
 
+// Held faded on a taken desk, its clocks still run: a queued activity shows, its wait grows (M4).
+it('runs the clocks of an arrival held faded on a taken desk', () => {
+  const { world, crew } = seatedWorld([])
+  crew([member('mate', 'teammate')])
+  const arriving = world.step(0).find((view) => view.agentKey === `${LEAD}#mate`)!
+  world.setBodyObstacles([
+    { id: 'player', x: arriving.x, z: arriving.z, elevation: 0, radius: 0.55 }
+  ])
+  crew([{ ...member('mate', 'teammate'), activity: 'idle' }])
+  const held = follow(world, `${LEAD}#mate`, 30)
+  expect({
+    fade: held.last?.fade,
+    activity: held.last?.activity,
+    finishedForMs: world['agents'].get(`${LEAD}#mate`)?.finishedForMs
+  }).toEqual({ fade: expect.any(Number), activity: 'idle', finishedForMs: 3_000 })
+})
+
 describe('an arrival fading in is not yet a body', () => {
   it('lets a walker close in on its desk until it is seated', () => {
     const { world, crew } = seatedWorld([])
