@@ -144,6 +144,11 @@ it.each<[string, ReturnFeed]>([
     'a remount into another crew as the fade clears',
     { frameRate: 60, fadeSeenTick: 2, reseatCrew: 'transit' }
   ],
+  // The remount lands mid-reseat, so the robot must carry its pending reseat across (Maya w1).
+  [
+    'a remount into another crew while its reseat is still pending',
+    { frameRate: 60, fadeSeenTick: 2, clearLagFrames: 3, reseatCrew: 'transit' }
+  ],
   ['one step that ran the whole fade', { frameRate: 60, fadeSeenTick: Infinity }],
   ['one step that ran the whole fade, at 15 Hz', { frameRate: 15, fadeSeenTick: Infinity }],
   [
