@@ -6,7 +6,7 @@ import { createOfficeSettingsStore } from '../../office/logic/office-settings'
 import type { PageVisibility } from '../../office/logic/frame-governor'
 import type { OfficeFrame } from '../../office/scene-model'
 import { createLiveFeed, type FeedSource } from '../live-feed'
-import { createPoseStore, officePoses, structuralKey, withLivePose } from '../pose-store'
+import { createPoseStore, officePoses, poseOf, structuralKey, withLivePose } from '../pose-store'
 
 const agent = (overrides: Partial<AgentView> = {}): AgentView => ({
   agentKey: 'claude:a',
@@ -41,6 +41,18 @@ describe('createPoseStore', () => {
     expect(poses.version()).toBe(moved)
     poses.write('claude:a', { x: 1.1, z: 2, heading: 0, elevation: 0 })
     expect(poses.version()).toBe(moved + 1)
+  })
+
+  // The frame loop reads the reseat with the desk pose it explains, before React hears of it.
+  it('keeps a reseat even where the pose it lands with has not moved', () => {
+    const poses = createPoseStore()
+    poses.write('claude:a', poseOf(agent()))
+    const before = poses.version()
+    poses.write('claude:a', poseOf(agent({ reseats: 1 })))
+    expect({ reseats: poses.read('claude:a')?.reseats, version: poses.version() }).toEqual({
+      reseats: 1,
+      version: before + 1
+    })
   })
 
   it('forgets agents that left the roster', () => {
@@ -83,7 +95,8 @@ describe('structuralKey', () => {
     ['attention', { attention: 'permission' }],
     ['label', { label: 'renamed' }],
     ['physical floor', { physicalFloorId: null }],
-    ['fade start', { fade: 0 }]
+    ['fade start', { fade: 0 }],
+    ['reseat count', { reseats: 1 }]
   ])('changes with the %s', (_name, change) => {
     expect(structuralKey([agent(change)])).not.toBe(reference)
   })
