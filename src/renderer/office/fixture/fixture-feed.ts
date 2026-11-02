@@ -1,7 +1,7 @@
 import type { OfficeFeed, OfficeFrame } from '../scene-model'
 import { PROJECTS } from './fixture-projects'
 import { companyKeyFor, sessionFor } from './fixture-sessions'
-import type { SessionRef } from '../../../shared/office/types'
+import type { MemoryNotes, SessionRef } from '../../../shared/office/types'
 import { createLiveFeed, type FeedSource } from '../../office-live/live-feed'
 import { officeThemes } from '../logic/office-themes'
 import { VIOLET_COURT_ID } from '../themes/violet-court/roster'
@@ -9,6 +9,9 @@ import { fixtureLayout } from './fixture-layout'
 import { browserStorage } from '../../office-live/browser-storage'
 
 export const FIXTURE_TICK_MS = 2000
+const FIRST_MEMORY_NOTES = 612
+// A new note every ~20 s, so the Brain's pulse shows within a preview glance.
+const MEMORY_NOTE_EVERY_MS = 20_000
 
 function fixtureSessions(tick: number, nowMs: number): SessionRef[] {
   return PROJECTS.flatMap((project) =>
@@ -38,6 +41,8 @@ function scriptedSource(tickMs: number): FeedSource {
     ready: async () => {},
     onFeedMessage(listener) {
       let tick = 0
+      let memory: MemoryNotes = { notes: FIRST_MEMORY_NOTES, changedAt: Date.now() }
+      let noteDueAtMs = Date.now() + MEMORY_NOTE_EVERY_MS
       const sessions = (): SessionRef[] => {
         const nowMs = Date.now()
         return fixtureSessions(tick, nowMs).map((session) => ({
@@ -67,6 +72,7 @@ function scriptedSource(tickMs: number): FeedSource {
           rev: 0,
           generatedAtMs: Date.now(),
           sessions: sessions(),
+          memory,
           sources: [
             {
               id: 'preview-fixture',
@@ -80,12 +86,19 @@ function scriptedSource(tickMs: number): FeedSource {
       })
       const timer = setInterval(() => {
         tick += 1
+        const nowMs = Date.now()
+        const hasNewNote = nowMs >= noteDueAtMs
+        if (hasNewNote) {
+          memory = { notes: memory.notes + 1, changedAt: nowMs }
+          noteDueAtMs = nowMs + MEMORY_NOTE_EVERY_MS
+        }
         listener({
           type: 'patch',
           v: 1,
           seq: tick,
           upserts: sessions(),
           removed: [],
+          ...(hasNewNote && { memory }),
           sources: [
             {
               id: 'preview-fixture',

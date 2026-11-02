@@ -17,10 +17,12 @@ const GLOW = '#38e1ff'
 const CORE = '#e6fbff'
 const PLATFORM_HEIGHT_M = 0.5
 const PEDESTAL_HEIGHT_M = 1.2
-const SPHERE_RADIUS_M = 1.5
+const SPHERE_RADIUS_M = 2.1
 const BEAM_HEIGHT_M = 42
-const RING_SHARES = [0.52, 0.72, 0.92] as const
-const RING_BASE_OPACITY = 0.55
+// The last ring traces the platform rim, so the plaza edge glows too.
+const RING_SHARES = [0.5, 0.7, 0.88, 1] as const
+const RING_WIDTH_M = 0.22
+const RING_BASE_OPACITY = 0.85
 const PULSE_MS = 1_200
 // Tilts in radians for the orbit ellipses, so they cross rather than stack.
 const ORBIT_TILTS = [0.35, -0.55, 1.1] as const
@@ -57,14 +59,16 @@ interface CampusHubProps {
   isReducedMotion: boolean
 }
 
-// THE BRAIN: a raised disc, glowing rings, a pale core on a pedestal, a beam and orbit lines.
+// THE BRAIN: a raised disc, glowing rings, a haloed core on a pedestal, a beam and orbit lines.
 export function CampusHub({ hub, memory, isReducedMotion }: CampusHubProps) {
   const ringMaterials = useMemo(
     () => RING_SHARES.map(() => glowMaterial(GLOW, RING_BASE_OPACITY)),
     []
   )
-  const beamMaterial = useMemo(() => glowMaterial(GLOW, 0.28), [])
-  const haloMaterial = useMemo(() => glowMaterial(GLOW, 0.18), [])
+  const beamMaterial = useMemo(() => glowMaterial(GLOW, 0.6), [])
+  const beamHazeMaterial = useMemo(() => glowMaterial(GLOW, 0.14), [])
+  const haloMaterial = useMemo(() => glowMaterial(GLOW, 0.32), [])
+  const outerHaloMaterial = useMemo(() => glowMaterial(GLOW, 0.1), [])
   const orbitMaterial = useMemo(
     () =>
       new LineBasicMaterial({
@@ -77,14 +81,32 @@ export function CampusHub({ hub, memory, isReducedMotion }: CampusHubProps) {
       }),
     []
   )
-  const orbits = useMemo(() => ORBIT_TILTS.map((_, index) => orbitGeometry(2.6 + index * 0.5)), [])
+  const orbits = useMemo(
+    () => ORBIT_TILTS.map((_, index) => orbitGeometry(SPHERE_RADIUS_M + 1.1 + index * 0.6)),
+    []
+  )
   useEffect(
     () => () => {
-      for (const material of [...ringMaterials, beamMaterial, haloMaterial, orbitMaterial])
+      for (const material of [
+        ...ringMaterials,
+        beamMaterial,
+        beamHazeMaterial,
+        haloMaterial,
+        outerHaloMaterial,
+        orbitMaterial
+      ])
         material.dispose()
       for (const orbit of orbits) orbit.dispose()
     },
-    [ringMaterials, beamMaterial, haloMaterial, orbitMaterial, orbits]
+    [
+      ringMaterials,
+      beamMaterial,
+      beamHazeMaterial,
+      haloMaterial,
+      outerHaloMaterial,
+      orbitMaterial,
+      orbits
+    ]
   )
 
   const pulse = usePulse(memory?.changedAt, isReducedMotion)
@@ -107,7 +129,7 @@ export function CampusHub({ hub, memory, isReducedMotion }: CampusHubProps) {
     <group position={[hub.x, 0, hub.z]} name="campus-hub">
       <mesh position={[0, top / 2, 0]}>
         <cylinderGeometry args={[hub.radius, hub.radius * 1.04, top, 64]} />
-        <meshStandardMaterial color="#141a2e" roughness={0.7} metalness={0.3} />
+        <meshStandardMaterial color="#18213a" roughness={0.7} metalness={0.3} />
       </mesh>
       {RING_SHARES.map((share, index) => (
         <mesh
@@ -119,7 +141,7 @@ export function CampusHub({ hub, memory, isReducedMotion }: CampusHubProps) {
           rotation={[-Math.PI / 2, 0, 0]}
           material={ringMaterials[index]}
         >
-          <ringGeometry args={[hub.radius * share - 0.12, hub.radius * share, 96]} />
+          <ringGeometry args={[hub.radius * share - RING_WIDTH_M, hub.radius * share, 96]} />
         </mesh>
       ))}
       <mesh position={[0, top + PEDESTAL_HEIGHT_M / 2, 0]}>
@@ -131,10 +153,16 @@ export function CampusHub({ hub, memory, isReducedMotion }: CampusHubProps) {
         <meshBasicMaterial color={CORE} toneMapped={false} />
       </mesh>
       <mesh position={[0, sphereY, 0]} material={haloMaterial}>
-        <sphereGeometry args={[SPHERE_RADIUS_M * 1.35, 24, 16]} />
+        <sphereGeometry args={[SPHERE_RADIUS_M * 1.3, 24, 16]} />
+      </mesh>
+      <mesh position={[0, sphereY, 0]} material={outerHaloMaterial}>
+        <sphereGeometry args={[SPHERE_RADIUS_M * 1.85, 24, 16]} />
       </mesh>
       <mesh position={[0, sphereY + BEAM_HEIGHT_M / 2, 0]} material={beamMaterial}>
-        <cylinderGeometry args={[0.12, 0.2, BEAM_HEIGHT_M, 12, 1, true]} />
+        <cylinderGeometry args={[0.3, 0.45, BEAM_HEIGHT_M, 12, 1, true]} />
+      </mesh>
+      <mesh position={[0, sphereY + BEAM_HEIGHT_M / 2, 0]} material={beamHazeMaterial}>
+        <cylinderGeometry args={[0.9, 1.3, BEAM_HEIGHT_M, 16, 1, true]} />
       </mesh>
       {orbits.map((orbit, index) => (
         <lineLoop

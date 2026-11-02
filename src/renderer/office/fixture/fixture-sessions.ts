@@ -1,5 +1,6 @@
 import { projectKey } from '../../../shared/office/project-key'
 import type {
+  SelectedModelRef,
   SessionRef,
   SessionUsage,
   SubagentRef,
@@ -43,6 +44,18 @@ function splitTokens(total: number): TokenCounts {
   const output = Math.round(total * 0.011)
   const cacheWrite = Math.round(total * 0.045)
   return { input, output, cacheWrite, cacheRead: total - input - output - cacheWrite }
+}
+
+// Real Claude ids, so the Brain card and Runs-on chips show the names a live run would.
+const CLAUDE_MODEL_IDS = [
+  'claude-opus-4-1-20250805',
+  'claude-sonnet-4-5-20250929',
+  'claude-haiku-4-5-20251001'
+] as const
+
+function claudeModelFor(session: FixtureSession, index: number): SelectedModelRef | undefined {
+  if (session.provider !== 'claude') return undefined
+  return { providerId: 'anthropic', modelId: CLAUDE_MODEL_IDS[index % CLAUDE_MODEL_IDS.length] }
 }
 
 export function companyKeyFor(project: FixtureProject): string {
@@ -120,6 +133,7 @@ export function sessionFor(
   return {
     key,
     provider: session.provider,
+    selectedModel: claudeModelFor(session, index),
     sessionId: key.split(':')[1],
     pid: 40_000 + index,
     name: session.name,

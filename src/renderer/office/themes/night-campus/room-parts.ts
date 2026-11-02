@@ -5,14 +5,29 @@ import { DESK_REACH } from '../../logic/room-layout'
 import type { DeskSlot, FloorGeometry } from '../../scene-model'
 import { overlaps, type Rect } from '../lot-math'
 import { box, type PartSpec } from '../parts'
-import { BOOKSHELF, CHART_SCREEN, FLOOR_LAMP, PLANT, SOFA, type Prop } from './room-props'
+import {
+  BOOKSHELF,
+  CHART_SCREEN,
+  FLOOR_LAMP,
+  PLANT,
+  PLANT_SPREAD_M,
+  SOFA,
+  type Prop
+} from './room-props'
 
 export type WallSide = 'west' | 'east' | 'north' | 'south'
 
-export const BACK_WALL_HEIGHT_M = 2.2
+// Tall enough to read as solid panels from the overview, and above every prop.
+export const BACK_WALL_HEIGHT_M = 2.6
 const WALL_THICKNESS_M = 0.18
-const SLAB_THICKNESS_M = 0.36
-const RUG_INSET_M = 0.5
+export const SLAB_THICKNESS_M = 0.56
+// The coloured top over a wall-toned block, so the slab colour stays on the floor.
+const SLAB_TOP_M = 0.04
+// The Campus ground plane lies at y = 0; a top flush with it z-fights into black bands.
+const SLAB_LIFT_M = 0.006
+const RUG_Y_M = SLAB_LIFT_M + 0.006
+const RUG_MARGIN_M = 0.5
+const RUG_INSET_M = 0.3
 // A desk with its chair, at the largest furniture scale, measured round its centre.
 const DESK_CLEAR_M = 1.8 * FURNITURE_SCALE
 const SOFA_MIN_DEPTH_M = 8
@@ -93,10 +108,26 @@ const deskFootprint = (seat: DeskSlot): Rect => ({
   width: DESK_CLEAR_M,
   depth: DESK_CLEAR_M
 })
-const CORNER_PROP_M = 0.55
+const CORNER_PROP_M = PLANT_SPREAD_M
 
 const at = (parts: readonly PartSpec[], x: number, z: number): PartSpec[] =>
   parts.map((part) => ({ ...part, at: [part.at[0] + x, part.at[1], part.at[2] + z] }))
+
+// One rug under every desk, kept inside the plate; none when the room has no desks.
+function rugParts(plate: Plate, desks: readonly Rect[], color: string): PartSpec[] {
+  if (desks.length === 0) return []
+  const clampX = (x: number) =>
+    Math.min(Math.max(x, plate.minX + RUG_INSET_M), plate.maxX - RUG_INSET_M)
+  const clampZ = (z: number) =>
+    Math.min(Math.max(z, plate.minZ + RUG_INSET_M), plate.maxZ - RUG_INSET_M)
+  const minX = clampX(Math.min(...desks.map((desk) => desk.x - desk.width / 2)) - RUG_MARGIN_M)
+  const maxX = clampX(Math.max(...desks.map((desk) => desk.x + desk.width / 2)) + RUG_MARGIN_M)
+  const minZ = clampZ(Math.min(...desks.map((desk) => desk.z - desk.depth / 2)) - RUG_MARGIN_M)
+  const maxZ = clampZ(Math.max(...desks.map((desk) => desk.z + desk.depth / 2)) + RUG_MARGIN_M)
+  return [
+    box([(minX + maxX) / 2, RUG_Y_M, (minZ + maxZ) / 2], [maxX - minX, 0.012, maxZ - minZ], color)
+  ]
+}
 
 function shellParts(plate: Plate, colors: CampusRoomColors): PartSpec[] {
   const [xSide, zSide] = BACK_WALL_SIDES
@@ -107,23 +138,24 @@ function shellParts(plate: Plate, colors: CampusRoomColors): PartSpec[] {
   const maxZ = Math.max(plate.maxZ, plate.maxZ + grow.z)
   const edgeX = wallOrigin(xSide, plate).x + grow.x / 2
   const edgeZ = wallOrigin(zSide, plate).z + grow.z / 2
-  const rugWidth = plate.maxX - plate.minX - RUG_INSET_M * 2
-  const rugDepth = plate.maxZ - plate.minZ - RUG_INSET_M * 2
+  const footprint = {
+    x: (minX + maxX) / 2,
+    z: (minZ + maxZ) / 2,
+    width: maxX - minX,
+    depth: maxZ - minZ
+  }
+  const bodyHeight = SLAB_THICKNESS_M - SLAB_TOP_M
   return [
     box(
-      [(minX + maxX) / 2, -SLAB_THICKNESS_M / 2, (minZ + maxZ) / 2],
-      [maxX - minX, SLAB_THICKNESS_M, maxZ - minZ],
+      [footprint.x, -SLAB_TOP_M - bodyHeight / 2, footprint.z],
+      [footprint.width, bodyHeight, footprint.depth],
+      colors.wall
+    ),
+    box(
+      [footprint.x, SLAB_LIFT_M - SLAB_TOP_M / 2, footprint.z],
+      [footprint.width, SLAB_TOP_M, footprint.depth],
       colors.slab
     ),
-    ...(rugWidth > 0 && rugDepth > 0
-      ? [
-          box(
-            [(plate.minX + plate.maxX) / 2, 0.006, (plate.minZ + plate.maxZ) / 2],
-            [rugWidth, 0.012, rugDepth],
-            colors.rug
-          )
-        ]
-      : []),
     // The x-side wall runs on over the shared corner; the z-side one stops at the plate.
     box(
       [edgeX, BACK_WALL_HEIGHT_M / 2, (minZ + maxZ) / 2],
@@ -177,7 +209,7 @@ function cornerParts(plate: Plate, desks: readonly Rect[]): PartSpec[] {
   )
 }
 
-// One project's open room: slab, rug, two back walls and its dressing, in floor coordinates.
+// One project's open room: slab, desk rug, two back walls and its dressing, in floor coordinates.
 export function campusRoomParts(floor: FloorGeometry, colors: CampusRoomColors): PartSpec[] {
   const plate = plateOf(floor)
   const desks = floor.rooms.flatMap((room) => room.seats.map(deskFootprint))
@@ -188,6 +220,7 @@ export function campusRoomParts(floor: FloorGeometry, colors: CampusRoomColors):
   }
   return [
     ...shellParts(plate, colors),
+    ...rugParts(plate, desks, colors.rug),
     ...placed(CHART_SCREEN, chartWall, plate, 0),
     ...wallProp(shelfWall, BOOKSHELF),
     ...(floor.depth >= SOFA_MIN_DEPTH_M ? wallProp(chartWall, SOFA) : []),

@@ -18,6 +18,7 @@ import { canRespond } from './logic/interactions'
 import { INITIAL_OFFICE_STATE, officeReducer } from './logic/office-reducer'
 import { buildThemeRows, countThemeChoices, useThemeAssignments } from './logic/office-themes'
 import { findZone } from './logic/zone-model'
+import { campusPanelStep } from './logic/campus-panel-default'
 import { canHidePanels, HUD_GRID_STYLE } from './logic/hud-layout'
 import { buildOperationsModel } from './logic/operations-model'
 import { createFrameMetrics } from './frame-metrics'
@@ -46,7 +47,7 @@ import { OfficeContext } from './hud/OfficeContext'
 import { CurrentEvidenceStrip } from './hud/CurrentEvidenceStrip'
 import { ThemesList } from './hud/ThemesList'
 import { useWalking } from './player/use-walking'
-import { placePlayerAtOrigin } from './player/player-floor-routes'
+import { placePlayerAtStart } from './player/player-floor-routes'
 import { SceneErrorBoundary } from './SceneErrorBoundary'
 import type { OfficeFeed } from './scene-model'
 import {
@@ -150,6 +151,19 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
 
   const isPanelHideAllowed = canHidePanels(inspectorController.layout.viewportWidth)
   const arePanelsHidden = state.arePanelsHidden && isPanelHideAllowed
+  const isCampusView = isCampus && state.viewMode === 'city'
+  const campusPanels = useRef<{ wasCampus: boolean; wereHiddenBefore?: boolean }>({
+    wasCampus: false
+  })
+  useEffect(() => {
+    const step = campusPanelStep({
+      ...campusPanels.current,
+      isCampus: isCampusView,
+      arePanelsHidden: state.arePanelsHidden
+    })
+    campusPanels.current = { wasCampus: isCampusView, wereHiddenBefore: step.wereHiddenBefore }
+    if (step.shouldToggle) dispatch({ type: 'panels-toggled' })
+  }, [isCampusView, state.arePanelsHidden])
   const is3DAvailable = hasWebGL && !hasSceneFailed
   const isShowingList = state.isListView || !is3DAvailable
   useFeedSubscription(feed, dispatch)
@@ -229,7 +243,7 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
   useEffect(() => {
     if (!player || playerLayout.current === worldLayout) return
     playerLayout.current = worldLayout
-    placePlayerAtOrigin(player)
+    placePlayerAtStart(player, worldLayout)
   }, [player, worldLayout])
   const {
     agent: selectedAgent,

@@ -1,7 +1,8 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import { BottomBar } from '../../hud/BottomBar'
-import { placePlayerAtOrigin } from '../../player/player-floor-routes'
+import { placePlayerAtStart } from '../../player/player-floor-routes'
+import { CAMPUS_HUB_RADIUS_M } from '../../../../shared/office/world-document-ring'
 import { createPlayer } from '../../player/walking'
 
 const barProps = {
@@ -49,15 +50,22 @@ it('offers City · Campus · Office, and Campus is the city view in the Campus l
   expect(onWorldLayout).toHaveBeenCalledOnce()
 })
 
-it('restarts the player on the plaza with no route left to walk', () => {
+it('restarts the player at the plaza edge, facing the Brain, with no route left to walk', () => {
   const player = createPlayer({ x: 40, z: -12 })
   player.path = [{ x: 41, z: -12, elevation: 0, physicalFloorId: 'f' }]
   player.physicalFloorId = 'f'
-  placePlayerAtOrigin(player)
-  expect(player).toMatchObject({
-    position: { x: 0, z: 0 },
-    path: [],
-    goal: null,
-    physicalFloorId: null
-  })
+  placePlayerAtStart(player, 'campus')
+  expect(player).toMatchObject({ path: [], goal: null, physicalFloorId: null })
+  const distance = Math.hypot(player.position.x, player.position.z)
+  expect(distance).toBeGreaterThan(CAMPUS_HUB_RADIUS_M)
+  expect(distance).toBeLessThan(CAMPUS_HUB_RADIUS_M + 2)
+  // Facing (sin heading, cos heading) points back at the hub centre.
+  const facing = { x: Math.sin(player.heading), z: Math.cos(player.heading) }
+  expect(facing.x * -player.position.x + facing.z * -player.position.z).toBeCloseTo(distance)
+})
+
+it('restarts the City player at the open gate on the origin', () => {
+  const player = createPlayer({ x: 40, z: -12 })
+  placePlayerAtStart(player, 'city')
+  expect(player.position).toEqual({ x: 0, z: 0 })
 })

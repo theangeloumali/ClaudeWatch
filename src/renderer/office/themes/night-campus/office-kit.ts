@@ -3,8 +3,9 @@ import {
   CorporateProjectOffice,
   CorporateSlab
 } from '../corporate-city/CorporateGrounds'
-import { CorporateDesk, CorporateRoomFloors } from '../corporate-city/CorporateRoom'
+import { CorporateRoomFloors } from '../corporate-city/CorporateRoom'
 import type { OfficeTheme } from '../types'
+import { CampusDesk } from './CampusDesk'
 
 // Open plan: the room shell is drawn per floor by NightCampusRoom, so these stay empty.
 const Nothing = () => null
@@ -18,7 +19,7 @@ export const NIGHT_CAMPUS_KIT: OfficeTheme['kit'] = {
     RoomFloors: CorporateRoomFloors,
     Walls: Nothing,
     Doorway: Nothing,
-    Desk: CorporateDesk,
+    Desk: CampusDesk,
     RoomDressing: Nothing,
     RoomSign: Nothing
   }

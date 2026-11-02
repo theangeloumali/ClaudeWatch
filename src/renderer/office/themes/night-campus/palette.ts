@@ -2,9 +2,10 @@ import type { CampusRoomColors } from '../../logic/campus-colors'
 import { CORPORATE_MATERIALS, CORPORATE_PALETTE } from '../corporate-city/palette'
 import type { OfficeTheme, ThemePalette } from '../types'
 
-// Corporate furniture on a dark campus: only the trim and glow warm up.
+// Corporate furniture on a dark campus: white desk tops, warm trim and glow.
 export const NIGHT_CAMPUS_PALETTE: ThemePalette = {
   ...CORPORATE_PALETTE,
+  wood: '#F4F1EA',
   brass: '#F2E6CF',
   glow: '#FFD27A'
 }
@@ -14,6 +15,9 @@ export const BOOK_COLORS = ['#E85D5D', '#F2B544', '#4F8FE0', '#5CC28A', '#B57BE0
 export const CHART_SCREEN_COLOR = '#151A22'
 export const SOFA_COLOR = '#5B6B8C'
 export const CUSHION_COLOR = '#8EA0C4'
+// Brighter than the corporate foliage, so plants still read green on a saturated slab.
+export const PLANT_GREEN = '#3FBF5F'
+export const LAMP_SHADE_COLOR = '#FFF1CF'
 
 // Brighter provider colours than the corporate cast: badges and rings read on the dark ground.
 export const NIGHT_CAMPUS_SKINS: OfficeTheme['robot']['skins'] = {
