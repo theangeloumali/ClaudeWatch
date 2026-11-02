@@ -3,8 +3,9 @@ import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { BridgePoller } from '../bridge/poller'
-import { withoutAccounts } from '../main/accounts'
+import { withMemoryNotes, withoutAccounts } from '../main/accounts'
 import { BridgeHost } from '../main/bridge-host'
+import { MemoryNotesWatcher, scanMemoryNotes } from '../main/memory-notes'
 import { execFilePromise } from '../main/platform/exec'
 import { TerminalResolver } from '../main/terminal-resolver'
 import { createOfficeService } from '../office-host/office-service'
@@ -34,9 +35,12 @@ async function main(): Promise<void> {
   const host = new BridgeHost({
     spawn: () => new PollerProcess(new BridgePoller({ usageOffsetsPath }))
   })
+  // No main process here, so this server counts the notes itself, at the live pace while it runs.
+  const memoryNotes = new MemoryNotesWatcher(scanMemoryNotes)
+  memoryNotes.setLive(true)
   const service = createOfficeService({
     // This page has no ledger: no session carries an account, whatever the bridge reports.
-    host: withoutAccounts(host),
+    host: withMemoryNotes(withoutAccounts(host), memoryNotes),
     run: execFilePromise,
     // A fresh resolver each time: its cache is keyed by pid, and nothing here evicts a dead one.
     terminalOf: async (pid) =>
@@ -57,6 +61,7 @@ async function main(): Promise<void> {
   const shutdown = async (): Promise<void> => {
     await removeLaunchFile()
     host.stop()
+    memoryNotes.stop()
     await server.close()
   }
   const server = createOfficeServer({
@@ -72,6 +77,7 @@ async function main(): Promise<void> {
   process.once('SIGINT', () => void shutdown())
   process.once('SIGTERM', () => void shutdown())
 
+  memoryNotes.start()
   const { port } = await server.listen(args.port)
   launchFile = await writeLaunchFile(LAUNCH_FOLDER, port, launchCode, args.interactive)
   // The launch code is in the launch file only: it is never printed and never an argument.

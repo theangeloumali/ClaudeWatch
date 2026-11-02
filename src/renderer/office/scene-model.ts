@@ -3,6 +3,7 @@ import type {
   AgentView,
   FocusResult,
   InteractionResult,
+  MemoryNotes,
   PeekResult,
   PermissionDecision,
   ProjectTokens,
@@ -108,6 +109,8 @@ export interface OfficeFrame {
   accounts?: AccountRef[]
   // Today's tokens per project from the accounts ledger; absent on a host without one.
   projectsToday?: readonly ProjectTokens[]
+  // Memory notes on disk, a bare count; absent until the first scan.
+  memory?: MemoryNotes
   feedReceivedAtMs?: number
   feedRevision?: number
   // Moves when the agents change in anything but their poses; absent from feeds that keep none.

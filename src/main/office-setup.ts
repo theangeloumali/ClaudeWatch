@@ -15,7 +15,15 @@ import type { SettingsStore } from './store'
 import { rememberBounds, restoreBounds } from './window-bounds'
 import { officeChrome } from './window-chrome'
 import { runInteractivePowerShell } from '../shared/powershell-host'
-import { type AccountLedger, type OfficeAccounts, withAccounts, withoutAccounts } from './accounts'
+import {
+  type AccountLedger,
+  type OfficeAccounts,
+  withAccounts,
+  withMemoryNotes,
+  withoutAccounts
+} from './accounts'
+import { MemoryNotesWatcher, scanMemoryNotes } from './memory-notes'
+import { LIVE_POLL_MS } from '../shared/office/pace'
 import { createBrowserOffice } from './office-browser'
 import { handoverOf } from '../shared/accounts'
 import { loadStaticFiles } from '../office-web/static-files'
@@ -75,7 +83,8 @@ export function setupOffice(
       | 'onWatchingChange'
       | 'onUsageDurable'
     >,
-  worldPath = SHARED_WORLD_PATH
+  worldPath = SHARED_WORLD_PATH,
+  memoryNotes = new MemoryNotesWatcher(scanMemoryNotes)
 ): Office {
   const bridge = new BridgeHost({
     spawn: () => {
@@ -107,7 +116,7 @@ export function setupOffice(
   })
   bridge.onMessage(() => accounts.observeSessions(bridge.snapshot()?.sessions ?? []))
   accounts.onWatchingChange(() => bridge.restart())
-  const host = withAccounts(bridge, accounts)
+  const host = withMemoryNotes(withAccounts(bridge, accounts), memoryNotes)
   // One saved city for the window, the Browser Office and the standalone ports (health-13).
   const world = createHostWorld(worldPath)
   const controller = new OfficeWindowController({
@@ -129,7 +138,7 @@ export function setupOffice(
     loadFiles: () => loadStaticFiles(join(__dirname, '../office-web')),
     launchFolder: join(app.getPath('userData'), 'office-browser'),
     service: createOfficeService({
-      host: withoutAccounts(bridge),
+      host: withMemoryNotes(withoutAccounts(bridge), memoryNotes),
       run: execFilePromise,
       terminalOf: async (pid) => (await terminalResolver.resolve(pid)).terminalType,
       isInteractive: false,
@@ -164,13 +173,20 @@ export function setupOffice(
     open: (options) => controller.open(options),
     openBrowser: () => browser.open(),
     hasBrowserWatchers: () => browser.hasWatchers(),
-    start: () => bridge.start(),
+    start: () => {
+      bridge.start()
+      memoryNotes.start()
+    },
     stop: () => {
+      memoryNotes.stop()
       void browser.close().catch(() => console.error('Browser Office could not close.'))
       bridge.stop()
     },
     snapshot: () => host.snapshot(),
-    setPollInterval: (intervalMs) => bridge.setPollInterval(intervalMs),
+    setPollInterval: (intervalMs) => {
+      bridge.setPollInterval(intervalMs)
+      memoryNotes.setLive(intervalMs <= LIVE_POLL_MS)
+    },
     focusSession: (pid) => paneFocus.focus(pid)
   }
 }

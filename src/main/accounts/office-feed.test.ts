@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { session } from '../../bridge/__fixtures__/helpers'
 import type { FeedMessage, OfficeSnapshot, SessionRef } from '../../shared/office/types'
-import { withAccounts, withoutAccounts } from './office-feed'
+import type { MemoryNotes } from '../../shared/office/types'
+import { withAccounts, withMemoryNotes, withoutAccounts } from './office-feed'
 
 it('strips every account from a feed that has no ledger behind it', () => {
   const codex: SessionRef = {
@@ -197,5 +198,96 @@ describe('today’s tokens per project', () => {
     say({ type: 'patch', v: 1, seq: 4, upserts: [], removed: [] })
     expect(later).toHaveLength(1)
     expect(later[0]).not.toHaveProperty('projectsToday')
+  })
+})
+
+describe('withMemoryNotes', () => {
+  function memorySetup(snapshot: OfficeSnapshot | null, notes: MemoryNotes | undefined) {
+    const host = {
+      listeners: new Set<(message: FeedMessage) => void>(),
+      snapshot: () => snapshot,
+      onMessage: (listener: (message: FeedMessage) => void) => {
+        host.listeners.add(listener)
+        return () => host.listeners.delete(listener)
+      }
+    }
+    const source = {
+      value: notes,
+      changeListeners: new Set<() => void>(),
+      current: () => source.value,
+      onChange: (listener: () => void) => {
+        source.changeListeners.add(listener)
+        return () => source.changeListeners.delete(listener)
+      }
+    }
+    const feed = withMemoryNotes(withoutAccounts(host), source)
+    const received: FeedMessage[] = []
+    const unsubscribe = feed.onMessage((message) => received.push(message))
+    const say = (message: FeedMessage): void =>
+      host.listeners.forEach((listener) => listener(message))
+    const change = (value: MemoryNotes): void => {
+      source.value = value
+      source.changeListeners.forEach((listener) => listener())
+    }
+    return { feed, received, say, change, unsubscribe, source, host }
+  }
+  const base: OfficeSnapshot = { rev: 3, generatedAtMs: 1, sources: [], sessions: [session('a')] }
+  const patch = (seq: number): FeedMessage => ({
+    type: 'patch',
+    v: 1,
+    seq,
+    upserts: [],
+    removed: []
+  })
+
+  it('serves the count in the snapshot and in the first hello, and nothing before it is known', () => {
+    const known = memorySetup(base, { notes: 2, changedAt: 50 })
+    expect(known.feed.snapshot()?.memory).toEqual({ notes: 2, changedAt: 50 })
+    known.say({ type: 'hello', v: 1, snapshot: base })
+    expect(known.received).toMatchObject([{ type: 'hello', snapshot: { memory: { notes: 2 } } }])
+    expect(memorySetup(base, undefined).feed.snapshot()).not.toHaveProperty('memory')
+  })
+
+  it('sends the count on a patch only when it changed since this listener last saw it', () => {
+    const { received, say, source } = memorySetup(base, { notes: 2, changedAt: 50 })
+    say({ type: 'hello', v: 1, snapshot: base })
+    say(patch(4))
+    source.value = { notes: 3, changedAt: 80 }
+    say(patch(5))
+    say(patch(6))
+    const patches = received.flatMap((message) => (message.type === 'patch' ? [message] : []))
+    expect(patches.map((message) => message.memory)).toEqual([
+      undefined,
+      { notes: 3, changedAt: 80 },
+      undefined
+    ])
+  })
+
+  it('sends the whole snapshot again when the count changes, since the bridge may be quiet', () => {
+    const { received, change } = memorySetup(base, { notes: 2, changedAt: 50 })
+    change({ notes: 1, changedAt: 20 })
+    expect(received).toMatchObject([
+      { type: 'hello', snapshot: { rev: 3, memory: { notes: 1, changedAt: 20 } } }
+    ])
+  })
+
+  it('does not repeat a count the listener already has, and has nothing to send before a snapshot', () => {
+    const { received, change } = memorySetup(base, { notes: 2, changedAt: 50 })
+    change({ notes: 2, changedAt: 50 })
+    expect(received).toEqual([])
+    const early = memorySetup(null, undefined)
+    early.change({ notes: 1, changedAt: 5 })
+    expect(early.received).toEqual([])
+  })
+
+  it('lets the count go to zero and stops listening when the listener leaves', () => {
+    const { received, change, unsubscribe, source, host } = memorySetup(base, {
+      notes: 2,
+      changedAt: 50
+    })
+    change({ notes: 0, changedAt: 0 })
+    expect(received).toMatchObject([{ snapshot: { memory: { notes: 0, changedAt: 0 } } }])
+    unsubscribe()
+    expect([host.listeners.size, source.changeListeners.size]).toEqual([0, 0])
   })
 })
