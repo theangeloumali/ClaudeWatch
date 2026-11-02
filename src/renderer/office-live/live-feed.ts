@@ -302,6 +302,7 @@ export function createLiveFeed(
         sources: lastKnownSnapshot?.sources ?? [],
         accounts: lastKnownSnapshot?.accounts,
         projectsToday: lastKnownSnapshot?.projectsToday,
+        memory: lastKnownSnapshot?.memory,
         feedReceivedAtMs,
         feedRevision,
         structureRevision,

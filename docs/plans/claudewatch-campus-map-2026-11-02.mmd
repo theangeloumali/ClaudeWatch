@@ -1,0 +1,10 @@
+flowchart LR
+  bridge["Bridge: sessions + Claude model"] --> feed["Office feed (2 s / 30 s)"]
+  memory["Main: memory-notes reader (counts only)"] --> feed
+  feed --> frame["OfficeFrame"]
+  frame --> ring["Ring layout: project rooms"]
+  frame --> hub["The Brain hub: notes count, pulse"]
+  frame --> couriers["Couriers: one per tool call"]
+  frame --> hud["HUD: room cards, toasts, minimap, Runs on chips"]
+  ring --> spokes["Spoke roads to the hub"]
+  couriers --> spokes

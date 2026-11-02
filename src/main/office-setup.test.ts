@@ -20,6 +20,11 @@ vi.mock('electron', () => ({
   BrowserWindow: vi.fn()
 }))
 vi.mock('@electron-toolkit/utils', () => ({ is: { dev: false } }))
+// Keeps the setup tests off the real home folder's memory notes.
+vi.mock('./memory-notes', async (original) => ({
+  ...(await original<typeof import('./memory-notes')>()),
+  scanMemoryNotes: async () => ({ notes: 0, changedAt: 0 })
+}))
 vi.mock('./platform/exec', () => ({ execFilePromise }))
 vi.mock('./terminal-opener', () => ({
   openTerminal,
