@@ -21,6 +21,14 @@ export interface MinimapInput {
   selectedAgentKey: string | null
   isPreview: boolean
   player?: MinimapPlayer
+  // Set in Campus: rooms take their chip colour and the hub and spokes are drawn.
+  campus?: MinimapCampus
+}
+
+export interface MinimapCampus {
+  hub: { x: number; z: number; radius: number }
+  spokes: readonly { from: MapPoint; to: MapPoint }[]
+  colorByBuilding: ReadonlyMap<string, string>
 }
 
 interface MinimapFootprint {
@@ -32,6 +40,7 @@ interface MinimapFootprint {
 
 interface MinimapFloor extends Omit<MinimapFootprint, 'id'> {
   floorId: string
+  color: string | null
 }
 
 interface MinimapWorker extends MinimapPlayer {
@@ -49,6 +58,7 @@ interface MinimapRailway {
 export interface MinimapModel {
   bounds: Bounds | null
   railway: MinimapRailway | null
+  campus: MinimapCampus | null
   floors: MinimapFloor[]
   rooms: MinimapFootprint[]
   workers: MinimapWorker[]
@@ -69,10 +79,26 @@ export function buildMinimapModel(input: MinimapInput): MinimapModel {
   const envelope = floorEnvelope(represented)
   const floorBounds = envelope && validBounds(envelope)
   if (!floorBounds)
-    return { bounds: null, railway: null, floors: [], rooms: [], workers: [], player: null }
+    return {
+      bounds: null,
+      railway: null,
+      campus: null,
+      floors: [],
+      rooms: [],
+      workers: [],
+      player: null
+    }
   const railway = input.viewMode === 'city' ? mapRailway() : null
+  const campus = input.campus ?? null
+  // The hub's bounding corners, so the frame holds it whole.
+  const rim = campus
+    ? [-1, 1].map((side) => ({
+        x: campus.hub.x + side * campus.hub.radius,
+        z: campus.hub.z + side * campus.hub.radius
+      }))
+    : []
   // Framed whole, never clamped to the map's edge (ClearSpent 6fe66a7b).
-  const bounds = railway ? withPoints(floorBounds, railway.ring) : floorBounds
+  const bounds = withPoints(floorBounds, [...(railway?.ring ?? []), ...rim])
   const floors = represented.flatMap((floor) => {
     const footprint = validBounds(floor)
     if (!footprint) return []
@@ -81,7 +107,8 @@ export function buildMinimapModel(input: MinimapInput): MinimapModel {
         floorId: floor.floorId,
         label: floor.label.trim() || floor.floorId,
         bounds: footprint,
-        isSelected: floor.floorId === input.focusedFloorId
+        isSelected: floor.floorId === input.focusedFloorId,
+        color: campus?.colorByBuilding.get(floor.buildingId ?? floor.floorId) ?? null
       }
     ]
   })
@@ -106,6 +133,7 @@ export function buildMinimapModel(input: MinimapInput): MinimapModel {
   return {
     bounds,
     railway,
+    campus,
     floors,
     rooms,
     workers: input.isPreview ? [] : currentWorkers(input, surface),

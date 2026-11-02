@@ -1,4 +1,4 @@
-import { useId, useMemo, useState, useSyncExternalStore } from 'react'
+import { lazy, Suspense, useId, useMemo, useState, useSyncExternalStore } from 'react'
 import { officePoses } from '../../office-live/pose-store'
 import { BUTTON_QUIET_COMPACT_CLASS } from '../../components/deck/deck-styles'
 import { Plate } from '../../components/deck/Plate'
@@ -6,8 +6,13 @@ import { cn } from '../../lib/utils'
 import { buildMinimapModel, type MinimapInput, type MinimapModel } from '../logic/minimap-model'
 import type { MapPoint } from '../logic/office-view'
 import { shownRailway } from '../town/railway-plan'
+import type { ZoomDirection } from '../logic/camera-bands'
 import { FIELD_CLASS } from './hud-styles'
 import { MinimapSurface } from './MinimapSurface'
+
+const CampusZoom = lazy(() =>
+  import('./CampusMap').then((module) => ({ default: module.CampusZoom }))
+)
 
 export interface MinimapProps extends MinimapInput {
   isNarrow: boolean
@@ -16,6 +21,9 @@ export interface MinimapProps extends MinimapInput {
   onChooseWorker: (agentKey: string) => void
   // Set where a camera can move: a tap or arrow key pans the view to that ground.
   onPan?: (point: MapPoint) => void
+  // Campus only: the minimap carries the camera's zoom and Fit.
+  onZoom?: (direction: ZoomDirection) => void
+  onFit?: () => void
 }
 
 // dry-new: physical navigation has no existing spatial, collapsible map surface.
@@ -51,6 +59,11 @@ export function Minimap(props: MinimapProps) {
               <span aria-hidden="true" className="text-xs text-text-secondary">
                 N ↑
               </span>
+              {props.campus && props.onZoom && props.onFit && (
+                <Suspense>
+                  <CampusZoom onZoom={props.onZoom} onFit={props.onFit} />
+                </Suspense>
+              )}
               <button
                 type="button"
                 className={cn(
@@ -139,7 +152,8 @@ export function Minimap(props: MinimapProps) {
 // Rebuilt only when something the map draws changed. Dots read live poses, so the pose store's
 // version and the shown railway are keys too.
 function useMinimapModel(input: MinimapInput, isExpanded: boolean): MinimapModel | null {
-  const { frame, viewMode, focusedFloorId, focusedRoomId, selectedAgentKey, isPreview } = input
+  const { frame, viewMode, focusedFloorId, focusedRoomId, selectedAgentKey, isPreview, campus } =
+    input
   const [x, z, physicalFloorId] = [input.player?.x, input.player?.z, input.player?.physicalFloorId]
   const poseVersion = officePoses.version()
   const railway = useSyncExternalStore(shownRailway.subscribe, shownRailway.current)
@@ -156,9 +170,11 @@ function useMinimapModel(input: MinimapInput, isExpanded: boolean): MinimapModel
       focusedRoomId,
       selectedAgentKey,
       isPreview,
-      player
+      player,
+      campus
     })
   }, [
+    campus,
     isExpanded,
     frame,
     viewMode,
