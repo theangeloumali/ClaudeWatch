@@ -2,6 +2,8 @@ import { defineConfig } from 'vitest/config'
 import { resolve } from 'path'
 
 export default defineConfig({
+  // Campus models are imported `?inline` (night-campus/glb-props.ts).
+  assetsInclude: ['**/*.glb'],
   test: {
     globals: true,
     environment: 'jsdom',
