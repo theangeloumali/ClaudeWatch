@@ -1,6 +1,7 @@
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Vector3 } from 'three'
+import { breath, campusClock } from '../logic/campus-motion'
 import type { MemoryNotes } from '../../../shared/office/types'
 import { crestFor } from '../../deck/roster'
 import { clearOfObstacles, pinInside, type Rect } from '../logic/card-culling'
@@ -112,10 +113,9 @@ export function RoomCardLayer({ rooms, colors, skins, memory, anchors }: RoomCar
               </span>
               <span className={`${GLASS_META_CLASS} block whitespace-nowrap`}>
                 <span
-                  className={
-                    room.runningCount > 0
-                      ? 'inline-block text-emerald-400 motion-safe:animate-pulse'
-                      : 'text-white/40'
+                  className={room.runningCount > 0 ? 'text-emerald-400' : 'text-white/40'}
+                  style={
+                    room.runningCount > 0 ? { opacity: `var(${LIVE_PULSE_VAR}, 1)` } : undefined
                   }
                 >
                   ●
@@ -163,6 +163,20 @@ interface RoomCardProjectorProps {
   inspectorLayout?: InspectorLayout
 }
 
+const LIVE_PULSE_VAR = '--campus-live'
+// Steps, so the cards restyle a few times a breath rather than on every frame.
+const LIVE_PULSE_STEPS = 8
+let lastLivePulse = -1
+
+// The live dots breathe on the scene's own frames: an infinite CSS animation recomposited the
+// page at the display rate and tripled the GPU process's CPU.
+function writeLivePulse(layer: HTMLElement | null | undefined): void {
+  const step = Math.round(breath(campusClock.uTime.value, 1.6) * LIVE_PULSE_STEPS)
+  if (!layer || step === lastLivePulse) return
+  lastLivePulse = step
+  layer.style.setProperty(LIVE_PULSE_VAR, String(0.4 + (0.6 * step) / LIVE_PULSE_STEPS))
+}
+
 // Places the Brain card first, then each room card, each kept clear of the HUD and of every
 // card already placed; a card with no clear spot hides rather than overlap.
 export function RoomCardProjector({
@@ -182,6 +196,7 @@ export function RoomCardProjector({
     const zoom = 'zoom' in camera && typeof camera.zoom === 'number' ? camera.zoom : 1
     setCameraZoom(zoom)
     const layer = anchors.get(BRAIN_KEY)?.parentElement
+    writeLivePulse(layer)
     const obstacles = readCanvasObstacles(layer ?? undefined)
     const slots = view.current
     const hasMoved =

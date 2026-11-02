@@ -25,15 +25,6 @@ export function CampusMapLayer({
           strokeWidth={1.5}
         />
       ))}
-      {/* A sonar ring off the hub dot; reduced motion hides it. */}
-      <circle
-        cx={campus.hub.x}
-        cy={campus.hub.z}
-        r={Math.max(dotRadius, campus.hub.radius * 0.35)}
-        className="origin-center fill-none stroke-text-primary/60 [transform-box:fill-box] motion-safe:animate-ping motion-reduce:hidden"
-        vectorEffect="non-scaling-stroke"
-        strokeWidth={1.5}
-      />
       <circle
         data-campus-hub=""
         cx={campus.hub.x}

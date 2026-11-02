@@ -1,5 +1,5 @@
 import type { CampusRoomColors } from '../../logic/campus-colors'
-import { CORPORATE_MATERIALS, CORPORATE_PALETTE } from '../corporate-city/palette'
+import { CORPORATE_PALETTE } from '../corporate-city/palette'
 import type { OfficeTheme, ThemePalette } from '../types'
 
 // Corporate furniture on a dark campus: white desk tops, warm trim and glow.
