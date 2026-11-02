@@ -12,7 +12,8 @@ export function applyFeed(
   if (message.seq <= current.rev) return current
   const sources = message.sources ?? current.sources
   const projectsToday = message.projectsToday ?? current.projectsToday
-  const folded = { ...current, rev: message.seq, sources, projectsToday }
+  const memory = message.memory ?? current.memory
+  const folded = { ...current, rev: message.seq, sources, projectsToday, memory }
   if (message.upserts.length === 0 && message.removed.length === 0) return folded
 
   // A Map keeps existing keys in place and appends new ones, so floor order is stable.

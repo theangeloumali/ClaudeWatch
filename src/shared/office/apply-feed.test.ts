@@ -121,4 +121,20 @@ describe('applyFeed', () => {
     })
     expect(onlyTotals).toMatchObject({ rev: 4, projectsToday: [] })
   })
+
+  it('keeps the last memory-note count when a patch carries none', () => {
+    const memory = { notes: 4, changedAt: 99 }
+    const held = { ...snapshot([session('claude:a')]), memory }
+    const quiet = applyFeed(held, { type: 'patch', v: 1, seq: 2, upserts: [], removed: [] })
+    expect(quiet?.memory).toEqual(memory)
+    const changed = applyFeed(held, {
+      type: 'patch',
+      v: 1,
+      seq: 3,
+      upserts: [],
+      removed: [],
+      memory: { notes: 5, changedAt: 120 }
+    })
+    expect(changed?.memory).toEqual({ notes: 5, changedAt: 120 })
+  })
 })

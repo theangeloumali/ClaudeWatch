@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import type { CurrentTool } from '../shared/office/types'
+import type { CurrentTool, SelectedModelRef } from '../shared/office/types'
 import { type BridgeIo, isLabel, isMissing, jsonObject, object } from './io'
 import { toolCategory } from './tool-category'
 
@@ -12,7 +12,14 @@ export interface TranscriptState {
   error: boolean
   // Set while the latest reply is a usage or rate limit.
   limit: UsageLimit | null
+  // The newest assistant reply's model id; absent before the first reply.
+  model?: string
 }
+
+export const claudeModel = (modelId: string): SelectedModelRef => ({
+  providerId: 'claude',
+  modelId
+})
 
 // The CLI writes a limit as a synthetic API-error reply; any real reply after it proceeded.
 function limitAfter(reply: Record<string, unknown>, held: UsageLimit | null): UsageLimit | null {
@@ -34,9 +41,15 @@ export function parseTranscript(text: string): TranscriptState {
   const tools: { id: string; name: string }[] = []
   const results = new Map<string, boolean>()
   let limit: UsageLimit | null = null
+  let model: string | undefined
   for (const line of text.split('\n')) {
     const record = jsonObject(line)
-    if (record?.type === 'assistant') limit = limitAfter(record, limit)
+    if (record?.type === 'assistant') {
+      limit = limitAfter(record, limit)
+      // "<synthetic>" (the CLI's own error replies) is not a label, so it never replaces a real model.
+      const reported = object(record.message)?.model
+      if (isLabel(reported)) model = reported
+    }
     const content = object(record?.message)?.content
     if (!Array.isArray(content)) continue
     for (const value of content) {
@@ -69,7 +82,8 @@ export function parseTranscript(text: string): TranscriptState {
         }
       : null,
     error: !!latest && results.get(latest.id) === true,
-    limit
+    limit,
+    ...(model && { model })
   }
 }
 

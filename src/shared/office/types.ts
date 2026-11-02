@@ -137,6 +137,13 @@ export interface ProjectTokens {
   tokens: number
 }
 
+// Memory notes on disk, counted by folder listing only: numbers, never a name or a word.
+export interface MemoryNotes {
+  notes: number
+  // The newest note's file time in ms; 0 when there are none.
+  changedAt: number
+}
+
 export interface OfficeSnapshot {
   rev: number
   generatedAtMs: number
@@ -144,6 +151,7 @@ export interface OfficeSnapshot {
   sources: SourceHealth[]
   accounts?: AccountRef[]
   projectsToday?: ProjectTokens[]
+  memory?: MemoryNotes
 }
 
 export type FeedMessage =
@@ -158,6 +166,8 @@ export type FeedMessage =
       sources?: SourceHealth[]
       // Present only when a project's total for today changed.
       projectsToday?: ProjectTokens[]
+      // Present only when the memory-note count or its newest time changed.
+      memory?: MemoryNotes
     }
   | { type: 'resync' }
 
