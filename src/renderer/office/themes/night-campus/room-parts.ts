@@ -187,7 +187,29 @@ function firstClearAlong(
   )
 }
 
-function cornerParts(plate: Plate, desks: readonly Rect[]): PartSpec[] {
+export type PropKind = 'bookshelf' | 'sofa' | 'lamp' | 'plant'
+
+// A prop's spot in floor coordinates: its local origin, its yaw, and its built-in parts there.
+export interface PropPlacement {
+  kind: PropKind
+  x: number
+  z: number
+  yaw: number
+  parts: PartSpec[]
+}
+
+function wallPlacement(
+  kind: PropKind,
+  prop: Prop,
+  side: WallSide,
+  plate: Plate,
+  along: number
+): PropPlacement {
+  const origin = onWall(side, plate, along, 0)
+  return { kind, ...origin, yaw: INWARD_YAW[side], parts: placed(prop.parts, side, plate, along) }
+}
+
+function cornerPlacements(plate: Plate, desks: readonly Rect[]): PropPlacement[] {
   const [xSide, zSide] = BACK_WALL_SIDES
   const inset = CORNER_PROP_M / 2 + PROP_GAP_M
   const cornerX = (sign: number) => (sign < 0 ? plate.minX + inset : plate.maxX - inset)
@@ -204,26 +226,51 @@ function cornerParts(plate: Plate, desks: readonly Rect[]): PartSpec[] {
       if (desks.some((desk) => overlaps(spot, desk))) return []
       // The lamp lights the corner where the two walls meet; plants take the others.
       const isBack = xSign === backCorner.x && zSign === backCorner.z
-      return at(isBack ? FLOOR_LAMP : PLANT, spot.x, spot.z)
+      const parts = at(isBack ? FLOOR_LAMP : PLANT, spot.x, spot.z)
+      return [{ kind: isBack ? 'lamp' : 'plant', x: spot.x, z: spot.z, yaw: 0, parts }]
     })
   )
 }
 
-// One project's open room: slab, desk rug, two back walls and its dressing, in floor coordinates.
-export function campusRoomParts(floor: FloorGeometry, colors: CampusRoomColors): PartSpec[] {
+const roomDesks = (floor: FloorGeometry) =>
+  floor.rooms.flatMap((room) => room.seats.map(deskFootprint))
+
+// Where the wall chart hangs: its local origin and yaw, as for a prop.
+export function chartPlacement(floor: FloorGeometry) {
+  const [chartWall] = BACK_WALL_SIDES
+  return { ...onWall(chartWall, plateOf(floor), 0, 0), yaw: INWARD_YAW[chartWall] }
+}
+
+// The room without its free-standing props: slab, desk rug, two back walls and the chart.
+export function campusRoomShell(floor: FloorGeometry, colors: CampusRoomColors): PartSpec[] {
   const plate = plateOf(floor)
-  const desks = floor.rooms.flatMap((room) => room.seats.map(deskFootprint))
-  const [chartWall, shelfWall] = BACK_WALL_SIDES
-  const wallProp = (side: WallSide, prop: Prop): PartSpec[] => {
-    const along = firstClearAlong(side, plate, prop, desks)
-    return along === null ? [] : placed(prop.parts, side, plate, along)
-  }
   return [
     ...shellParts(plate, colors),
-    ...rugParts(plate, desks, colors.rug),
-    ...placed(CHART_SCREEN, chartWall, plate, 0),
-    ...wallProp(shelfWall, BOOKSHELF),
-    ...(floor.depth >= SOFA_MIN_DEPTH_M ? wallProp(chartWall, SOFA) : []),
-    ...cornerParts(plate, desks)
+    ...rugParts(plate, roomDesks(floor), colors.rug),
+    ...placed(CHART_SCREEN, BACK_WALL_SIDES[0], plate, 0)
+  ]
+}
+
+// The bookshelf, sofa, lamp and plants, each on the first spot clear of the desks.
+export function campusPropPlacements(floor: FloorGeometry): PropPlacement[] {
+  const plate = plateOf(floor)
+  const desks = roomDesks(floor)
+  const [chartWall, shelfWall] = BACK_WALL_SIDES
+  const wallProp = (kind: PropKind, side: WallSide, prop: Prop): PropPlacement[] => {
+    const along = firstClearAlong(side, plate, prop, desks)
+    return along === null ? [] : [wallPlacement(kind, prop, side, plate, along)]
+  }
+  return [
+    ...wallProp('bookshelf', shelfWall, BOOKSHELF),
+    ...(floor.depth >= SOFA_MIN_DEPTH_M ? wallProp('sofa', chartWall, SOFA) : []),
+    ...cornerPlacements(plate, desks)
+  ]
+}
+
+// One project's open room, all in built-in parts, in floor coordinates.
+export function campusRoomParts(floor: FloorGeometry, colors: CampusRoomColors): PartSpec[] {
+  return [
+    ...campusRoomShell(floor, colors),
+    ...campusPropPlacements(floor).flatMap((placement) => placement.parts)
   ]
 }

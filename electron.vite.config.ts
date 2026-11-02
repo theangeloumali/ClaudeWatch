@@ -37,6 +37,8 @@ export default defineConfig({
       }
     },
     plugins: [react()],
+    // Campus models are imported `?inline` (night-campus/glb-props.ts).
+    assetsInclude: ['**/*.glb'],
     build: {
       rollupOptions: {
         input: {

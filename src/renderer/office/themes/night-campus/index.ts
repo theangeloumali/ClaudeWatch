@@ -1,5 +1,5 @@
-import { applyHumanPose } from '../corporate-city/human-pose'
-import { HumanFrame } from '../corporate-city/HumanFrame'
+import { applyCampusPose } from './mini-pose'
+import { MiniPerson } from './MiniPerson'
 import { corporatePlayerGeometry } from '../corporate-city/player-geometry'
 import type { OfficeTheme } from '../types'
 import { WORKSTATIONS } from '../workstations'
@@ -15,7 +15,7 @@ export const nightCampus: OfficeTheme = {
   description: 'Open project rooms round a glowing hub.',
   palette: NIGHT_CAMPUS_PALETTE,
   workstation: WORKSTATIONS.corporate,
-  robot: { Model: HumanFrame, skins: NIGHT_CAMPUS_SKINS, applyPose: applyHumanPose },
+  robot: { Model: MiniPerson, skins: NIGHT_CAMPUS_SKINS, applyPose: applyCampusPose },
   playerGeometry: corporatePlayerGeometry,
   kit: NIGHT_CAMPUS_KIT
 }
