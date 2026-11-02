@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useState } from 'react'
 
-import { readStored, writeStored } from '../office-live/browser-storage'
+import { browserStorage, readStored, writeStored } from '../office-live/browser-storage'
 import {
   countThemeChoices,
   everyOfficeNotice,
   officeThemes,
   resolveTheme,
+  sceneThemeFor,
   themeChangeNotice,
   useThemeAssignments,
   type ThemeTarget
 } from './logic/office-themes'
+import { readWorldLayoutPreference } from './logic/world-layout-preference'
 import type { ZoneGeometry } from './scene-model'
 import { getTheme, listThemes, themeForTeam } from './themes/registry'
 import type { OfficeTheme } from './themes/types'
@@ -102,8 +104,10 @@ export function useOfficeTheme(focusedZone?: ZoneGeometry) {
   }, [focusedZone, zoneThemeId, chooseTheme, chooseMapTheme, theme.id])
   const dismissNotice = useCallback(() => setNotice(''), [])
 
+  // OfficeApp saves the layout before it re-renders, so reading it here follows each switch.
+  const layout = readWorldLayoutPreference(browserStorage())
   return {
-    theme,
+    theme: sceneThemeFor(theme, layout),
     chooseTheme,
     chooseMapTheme,
     cycleTheme,
