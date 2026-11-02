@@ -56,6 +56,7 @@ import { DoneFlags } from './DoneFlags'
 import { CampusLayers } from './campus/CampusLayers'
 import { campusSkyBox } from '../logic/campus-geometry'
 import type { WorldLayout } from '../logic/world-layout-preference'
+import { RoomCardLayer, RoomCardProjector, useRoomCardAnchors, type CampusCards } from './RoomCards'
 
 // Campus is a night scene: the sky, and a ground a shade darker so the plates read on it.
 const CAMPUS_BACKGROUND = '#0b1020'
@@ -107,6 +108,8 @@ interface OfficeSceneProps {
   onBodyObstacles?: (bodies: readonly BodyFootprint[]) => void
   onEditTarget?: (target: SceneEditTarget) => void
   onFocusFloor?: (floorId: string) => void
+  // Campus only: the room cards and the Brain card replace the office stacks and labels.
+  campusCards?: CampusCards
 }
 
 // Orthographic distance only sets clipping, not size; zoom sets size.
@@ -174,15 +177,20 @@ function OfficeScene(props: OfficeSceneProps) {
           : !roomWorkers || roomWorkers.has(card.agentKey))
     )
   }, [props.cards, props.viewMode, props.focusedRoomId, agents, selectedAgentKey])
-  const visibleStacks = props.viewMode === 'city' || props.focusedRoomId ? [] : props.stacks
+  const campusCards = isCampus ? props.campusCards : undefined
+  const roomCardAnchors = useRoomCardAnchors()
+  const visibleStacks =
+    campusCards || props.viewMode === 'city' || props.focusedRoomId ? [] : props.stacks
   const visibleOfficeLabels = useMemo(
     () =>
-      officeLabels.filter((label) =>
-        props.viewMode === 'city'
-          ? label.kind !== 'room'
-          : label.isSelected || label.kind !== 'room'
-      ),
-    [officeLabels, props.viewMode]
+      campusCards
+        ? []
+        : officeLabels.filter((label) =>
+            props.viewMode === 'city'
+              ? label.kind !== 'room'
+              : label.isSelected || label.kind !== 'room'
+          ),
+    [officeLabels, props.viewMode, campusCards]
   )
   // The detail level in use: how sharply and how often the scene is drawn.
   const quality = useQualitySettings()
@@ -407,6 +415,15 @@ function OfficeScene(props: OfficeSceneProps) {
           agents={agents}
           visibleFloors={props.visibleFloors}
         />
+        {campusCards && (
+          <RoomCardProjector
+            rooms={campusCards.rooms}
+            hub={campusCards.hub}
+            anchors={roomCardAnchors}
+            hasInspector={selectedAgentKey !== null}
+            inspectorLayout={props.inspectorLayout}
+          />
+        )}
         <OfficeNameProjector
           labels={visibleOfficeLabels}
           anchors={officeAnchors}
@@ -461,6 +478,15 @@ function OfficeScene(props: OfficeSceneProps) {
           band={band}
           selectedAgentKey={props.selectedAgentKey}
           anchors={anchors}
+        />
+      )}
+      {!props.isLayoutPreview && campusCards && (
+        <RoomCardLayer
+          rooms={campusCards.rooms}
+          colors={campusCards.colors}
+          skins={theme.robot.skins}
+          memory={campusCards.memory}
+          anchors={roomCardAnchors}
         />
       )}
       <OfficeNameLayer labels={visibleOfficeLabels} anchors={officeAnchors} />
