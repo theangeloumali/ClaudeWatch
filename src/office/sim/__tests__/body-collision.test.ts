@@ -182,7 +182,7 @@ it('seats past an obstacle with its own id, and holds still beside a player on i
 })
 
 it('keeps crowded lounge trips and returners separated without losing seat ownership', () => {
-  const world = new World()
+  const world = new World({ roomStrolls: false })
   world.apply({
     type: 'hello',
     v: 1,

@@ -27,6 +27,7 @@ import { MovementRecovery } from './movement-recovery'
 import { placements, type Placement } from './placements'
 import { FloorRoutes, floorElevation } from './world-floor-routes'
 import { reconcileLeisure } from './world-leisure'
+import { reconcileStrolls, type StrollClock } from './room-strolls'
 import { isSeatedElsewhere, seatAtDesk } from './world-recall'
 import { TickCrowd } from './tick-crowd'
 import {
@@ -50,6 +51,7 @@ export class World {
   // Agents fading where they stand, with how long each has faded. A leaver goes; any other
   // reappears at its desk: a newcomer, a desk moved off its floor, or a recall (FOUND 7).
   private readonly fading = new Map<string, number>()
+  private readonly strolls = new Map<string, StrollClock>()
   // Unseen, so no body until their desk takes them: newcomers fading in, recalls fully faded.
   private readonly arrivals = new Set<string>()
   // Each agent's count of seats away from where it faded, which its views carry.
@@ -70,11 +72,13 @@ export class World {
   private ready = false
   private hasLoungeTrips: boolean
 
-  // `loungeTrips: false` keeps finished agents at their desks.
+  // `loungeTrips: false` keeps finished agents at their desks; `roomStrolls: false` keeps the
+  // rest seated between corner trips, for suites that measure seating alone.
   constructor(
     private readonly options: {
       saved?: LayoutMap
       loungeTrips?: boolean
+      roomStrolls?: boolean
       resolveLayout?: (baseLayout: LayoutMap, sessions: readonly SessionRef[]) => LayoutMap
       now?: () => number
     } = {}
@@ -177,6 +181,7 @@ export class World {
             })
           : previousAgent
       // In the lounge, or fading in or out: it goes to the desk the map gives it now.
+      // A stroller stays out at a desk that stays put, and walks to one that moved.
       if (
         existing &&
         existing.state !== 'leaving' &&
@@ -291,6 +296,17 @@ export class World {
       lounges: this.lounges,
       clearPassage: (key) => this.passages.clear(key),
       isFading: (key) => this.fading.has(key),
+      callHome: (agent) => this.callHome(agent)
+    })
+    reconcileStrolls({
+      agents: this.agents,
+      clocks: this.strolls,
+      nowMs: this.nowMs,
+      hasTrips: this.hasLoungeTrips && (this.options.roomStrolls ?? true),
+      floors: this.map.floors,
+      routes: this.routes,
+      isFading: (key) => this.fading.has(key),
+      clearPassage: (key) => this.passages.clear(key),
       callHome: (agent) => this.callHome(agent)
     })
   }
@@ -413,6 +429,7 @@ export class World {
     this.passages.clear(key)
     this.fading.delete(key)
     this.reseats.delete(key)
+    this.strolls.delete(key)
   }
 
   step(dtMs: number): AgentView[] {

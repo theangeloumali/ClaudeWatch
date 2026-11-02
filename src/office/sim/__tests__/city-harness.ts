@@ -44,7 +44,11 @@ export class CityWorld {
     sessions: (nowMs: number) => SessionRef[],
     reshape: (document: WorldDocument) => void = () => {}
   ) {
-    this.world = new World({ resolveLayout: resolveWith(reshape), now: () => this.clock })
+    this.world = new World({
+      resolveLayout: resolveWith(reshape),
+      roomStrolls: false,
+      now: () => this.clock
+    })
     this.world.apply({
       type: 'hello',
       v: 1,
