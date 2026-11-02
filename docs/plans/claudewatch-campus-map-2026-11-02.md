@@ -4,18 +4,18 @@ Repo copy on approval: `docs/plans/claudewatch-campus-map-2026-11-02.md` · bran
 
 ## Context
 
-On 2026-11-02 Angelo asked for "the same UI for our offices", pointing at a screenshot and the video *I Built an AI Office With 31 Agents* (Bekhruz AI, youtube.com/watch?v=t0hGE-aaAds). The video shows about 8 solid-colour isometric rooms (one per team) on a ring around a glowing "THE BRAIN · 1,842 notes · shared memory" hub. Spoke roads with light trails run from the rooms to the hub, and small figures walk them. Each room has a card with an icon chip, the name, "3 agents · 2 running" and a stack of faces. The screen also has a toast stack top right, a minimap with − / + / fit, a "Runs on Opus · Sonnet · Haiku" strip and a dark starry background.
+On 2026-11-02 Angelo asked for "the same UI for our offices", pointing at a screenshot and the video _I Built an AI Office With 31 Agents_ (Bekhruz AI, youtube.com/watch?v=t0hGE-aaAds). The video shows about 8 solid-colour isometric rooms (one per team) on a ring around a glowing "THE BRAIN · 1,842 notes · shared memory" hub. Spoke roads with light trails run from the rooms to the hub, and small figures walk them. Each room has a card with an icon chip, the name, "3 agents · 2 running" and a stack of faces. The screen also has a toast stack top right, a minimap with − / + / fit, a "Runs on Opus · Sonnet · Haiku" strip and a dark starry background.
 
 `main` was already current at `4d295b2a` (1.4.1); there was nothing to pull.
 
 His answers (one question round, 2026-11-02):
 
-| Question | Answer |
-|---|---|
-| How it lands | **New Campus map next to City and Office**, which stay as they are |
-| What the Brain shows | **Claude memory notes**: a read-only count that pulses on change |
+| Question             | Answer                                                                       |
+| -------------------- | ---------------------------------------------------------------------------- |
+| How it lands         | **New Campus map next to City and Office**, which stay as they are           |
+| What the Brain shows | **Claude memory notes**: a read-only count that pulses on change             |
 | What walks the roads | **Couriers for real tool calls**; agents stay seated (2026-10-17 rule holds) |
-| Verify mode | **Prototype** |
+| Verify mode          | **Prototype**                                                                |
 
 We build our own geometry in our own engine and take no assets from the video. It is a UI reference, not a game recreation.
 
@@ -85,8 +85,67 @@ The video's Tasks and Calendar tabs (our Needs-you queue already covers approval
   - Verify: typecheck and build; preview screenshots at 1440 and 1100 px wide; 0 console errors in Chrome DevTools on the Browser Office.
 - [x] Phase 5: Install for Angelo's look, then stop. Local dev-signed build per the release memory recipe, installed to `/Applications`.
   - Verify: frame budget check in Campus: draws and triangles at 20 agents, recorded against 300 and 600k. **Stop for his approval** (feedback memory 2026-10-12).
-- [ ] Phase 6: Merge settle (after his approval). Tests for the ring arrangement, worldLayout persistence, memory reader (temp dirs, counts only, MEMORY.md excluded), feed field, courier trigger, model parsing, cards and toasts, plus the live-budget case. Then `npm test`, lint, the review pair Maya + Kai (risk 2: a new filesystem reader), Codex review, /simplify, dead-code check, a demo MP4 into `recordings/`, the vault entry, and the PR when he says to open it.
-  - Verify: `npm test && npm run lint` green; review pair verdicts recorded
+- [ ] Phase 6: Constant motion
+  - Clock: new `renderer/office/logic/campus-motion.ts` holds the `campusClock` uniform and pure curve functions (`breath`, `rippleAt`, `packetSpeedFor`, `arcPoints`). `CampusLayers.tsx` writes the uniform once a frame.
+  - Brain (`CampusHub.tsx`):
+    - the core breathes;
+    - two ripple rings wave from the core to the rim;
+    - the orbits spin, each carrying an electron (one instanced draw);
+    - motes rise up the beam and sparks drift around the plaza (one `Points` shader each);
+    - the beam shimmers;
+    - a memory change fires a shockwave plus a flash along every arc.
+  - Arcs: new `CampusArcs.tsx`.
+  - Roads (`CampusSpokes.tsx`): a packet shader with per-vertex `along` and `speed` attributes.
+  - Stars (`CampusStars.tsx`): per-star twinkle.
+  - HUD (`RoomCards.tsx`, `ToastStack.tsx`, `CampusMap.tsx`, `hud/glass.ts`), CSS only and respecting `prefers-reduced-motion`:
+    - the live dot pulses;
+    - counts animate when they change;
+    - toasts slide in and out;
+    - the Brain count ticks;
+    - the minimap hub pulses.
+  - Verify: `npm run typecheck && npm run build`; two preview frames 1 s apart differ at the hub, roads and stars, and are identical under emulated reduced motion; Campus at 20 agents ≤ 300 draws / 600k triangles; renderer CPU idle-focused within 2 points of the round-1 baseline (`ps`, before and after)
+- [ ] Phase 7: Agents stroll their own room
+  - New `office/sim/room-strolls.ts`:
+    - eligibility, seeded timers and the per-room away cap;
+    - target sampling inside the room footprint, off desk slots, at least 2 m from the door, reachable.
+  - `behaviour.ts`: `goStroll` and the dwell, with return through `returnToDesk`.
+  - `world.ts`: calls `reconcileStrolls` after `reconcileLeisure` (`world.ts:288`), at most one new route per tick, gated by `hasLoungeTrips`.
+  - `shared/office/types.ts`: adds `place: 'stroll'`.
+  - `renderer/office/logic/character-pose.ts`: a standing look-around pose for a stroll.
+  - Card status unchanged.
+  - Tests (TDD, RED first):
+    - a stroll target never leaves the room or comes within 2 m of the door;
+    - an urgent agent is called home;
+    - the cap holds;
+    - the lounge switch disables strolls;
+    - the existing `lounge-trips` and `seated-agents` suites stay green.
+  - Verify: `npx vitest run src/office/sim` green; `npm run typecheck && npm run build`; a 60 s preview capture in Campus shows agents leaving and returning to their desks inside their room, none passing a door, with at least two-thirds of each room seated at any sampled frame
+- [ ] Phase 8: Free CC0 low-poly models
+  - Spike first, in an empty temp folder: download the Kenney Furniture Kit and a character pack, read the licence, and inspect the node and bone trees with `npx @gltf-transform/cli inspect`.
+  - Optimise the models and commit the GLBs plus `assets/campus/LICENSE.txt`.
+  - New files:
+    - `themes/night-campus/glb-props.ts`: bakes glTF into instanced geometry;
+    - `themes/night-campus/MiniPerson.tsx`: maps glTF onto `RobotRig`.
+  - `room-props.ts`, `CampusDesk.tsx` and `NightCampusRoom.tsx` swap to the baked props, with scrolling monitors, lamp glow and a scrolling wall chart.
+  - `night-campus/index.ts` points `robot.Model` at `MiniPerson`.
+  - Verify: typecheck and build; a close-zoom screenshot passes his bar (people face the viewer, sit and type at their own desks, stroll inside the room; the map rotates); ≤ 300 draws / 600k triangles at 20 agents; largest emitted file < 480 KB; Browser Office 0 console errors
+- [ ] Phase 9: Install for his look, then stop
+  - Dev-signed build per the release memory recipe.
+  - The previous app is kept as `~/Applications/ClaudeWatch-1.4.1-campus-r1.app`; the new one is installed to `/Applications`.
+  - Stop for his approval (feedback memory 2026-10-12).
+  - Verify: `codesign --verify --deep --strict /Applications/ClaudeWatch.app` passes and the app opens to Campus
+- [ ] Phase 10: Merge settle (after his approval)
+  - The old Phase 6 scope, plus tests for `campus-motion.ts`, packet speed, the glTF rig mapping and prop baking.
+  - Then:
+    - `npm test` and lint;
+    - the review pair Maya and Kai;
+    - Codex;
+    - /simplify;
+    - the dead-code check;
+    - a demo MP4 into `recordings/`;
+    - the vault entry;
+    - a PR when he says so.
+  - Verify: `npm test && npm run lint` green, and every completion-mandate step recorded
 
 ## Parallel vs sequential
 
@@ -94,15 +153,15 @@ Phase 1 runs first: everything sits on the ring. Phases 2, 3 and 4 then run in p
 
 ## Estimate
 
-| Phase | Without Claude | With Claude |
-|---|---|---|
-| 1 Layout and stage | 10 h | 1.5 h |
-| 2 Room kit | 12 h | 2 h |
-| 3 Brain, couriers, memory feed | 14 h | 2.5 h |
-| 4 HUD | 12 h | 2 h |
-| 5 Install and budget check | 3 h | 0.5 h |
-| 6 Merge settle | 14 h | 3 h |
-| **Total** | **65 h** | **11.5 h** |
+| Phase                          | Without Claude | With Claude |
+| ------------------------------ | -------------- | ----------- |
+| 1 Layout and stage             | 10 h           | 1.5 h       |
+| 2 Room kit                     | 12 h           | 2 h         |
+| 3 Brain, couriers, memory feed | 14 h           | 2.5 h       |
+| 4 HUD                          | 12 h           | 2 h         |
+| 5 Install and budget check     | 3 h            | 0.5 h       |
+| 6 Merge settle                 | 14 h           | 3 h         |
+| **Total**                      | **65 h**       | **11.5 h**  |
 
 ## Verification (end to end)
 
@@ -115,6 +174,154 @@ Phase 1 runs first: everything sits on the ring. Phases 2, 3 and 4 then run in p
 
 ## Ticket table
 
-| Ticket | Status | Source link | Conversation |
-|---|---|---|---|
+| Ticket              | Status             | Source link                                 | Conversation                                                                                                                      |
+| ------------------- | ------------------ | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | none (needs filing) | Planned; no PR yet | https://www.youtube.com/watch?v=t0hGE-aaAds | "Follow up on the latest changes from the main branch and check on how we can implement the same fucking same UI for our offices" |
+
+## Round 2 (2026-11-02): constant motion, room strolls, free models
+
+The Phases ledger above carries phases 6–10.
+
+### Round 2 context
+
+Phases 1–5 shipped the Campus map, and Angelo has used the build installed in `/Applications`. On 2026-11-02 he gave three asks:
+
+1. "this can still be improved, like having a lot of animations and motion graphics here that can make this fucking alive… the brain that you generated, it's not fucking alive"
+2. "Can we somehow replicate their models or is it a paid model?"
+3. "I want the AI agents not to just be sitting… they can roam around the room or whatever… If we can already use the same concept that we have on default view mode"
+
+**What causes the stillness (evidence):**
+
+- The Brain's only `useFrame` returns early unless a memory pulse is running (`scene/campus/CampusHub.tsx:114-124`). Its rings, core, halo, beam and orbits sit frozen.
+- Roads and kerb trails are static (`CampusSpokes.tsx:93`). The stars are a static `Points` draw (`CampusStars.tsx`).
+- Night Campus registers no `Ambient` component (`themes/night-campus/index.ts`). Orbital Garrison's `GarrisonAmbient.tsx` is the pattern to copy.
+- **Agents move between only two places.** A finished agent waits `LOUNGE_DELAY_MS = 20_000` (`office/sim/behaviour.ts:30`), then walks to the game corner (`world-leisure.ts:71`). That trip only happens when the agent is observed fresh and at rest (`world-leisure.ts:35-57`). In his app the header reads "Activity unavailable", so nobody qualifies and everyone stays seated. Working agents never leave the desk at all.
+
+**Frame cost.**
+
+- Ambient motion: the governor already draws continuously at the idle rate (`logic/frame-governor.ts:43-47`: 30 fps focused, 10 blurred, 5 blurred idle, 0 hidden). Motion driven from the clock or a shader `uTime` therefore adds **no frames**.
+- Walking: it holds the walking rate. Focused, that is the same 30 fps. Blurred, it is 10 instead of 5 while someone strolls, about 1% of a core more by the governor's own note.
+
+**His models question.**
+
+- The video doesn't name its models.
+- Its chunky rounded people, star-base office chairs, shaded floor lamps and round potted plants look like free **CC0 low-poly packs** in the Kenney style, not paid assets.
+- Kenney assets are CC0: free for commercial use, no credit required. They ship as OBJ, FBX and glTF.
+- We can't take the video's own files, but we can use free CC0 packs of the same kind.
+
+**His answers (one question round, 2026-11-02):**
+
+| Question  | Answer                                                                                                                            |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Models    | **Motion now, free models next**: CC0 low-poly glTF furniture and people in a later phase                                         |
+| Road life | **Light pulses always, people on real calls**: packets run every road constantly; a walking courier still means a real tool call  |
+| Agents    | (his follow-up message) **Agents move around their own room** instead of only sitting, reusing the default view's in-office trips |
+
+### Design
+
+```ascii
+ ┌──────────────────────────── one project room (agents never leave it) ──────────────────────────┐
+ │                                                                                                │
+ │  desk ●──stroll──► chart wall ··· look 5–12 s ···──► back to desk     (working: every 45–120 s)│
+ │  desk ●──stroll──► bookshelf / plant / a colleague's desk ──► back    (idle: every 15–40 s)    │
+ │  desk ●──20 s done──► game corner (existing lounge trip) ◄──► strolls between games            │
+ │  needs-you ●  stays seated, and a stroller is called straight home the moment it needs you     │
+ │  door zone ✕  never a stroll target (the 2026-10-17 "stuck at the door" fix stays true)        │
+ └────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+         shared uTime (frozen under reduced motion) drives every ambient layer:
+   STARS twinkle · BRAIN breathes, ripples, spins orbits, beam motes, neural arcs, memory shockwave
+   ROADS packets flow to the hub, faster for busy rooms · ROOMS screens scroll, lamps glow
+   HUD live-dot pulse, toast slide, Brain count tick, minimap hub pulse
+   no new frames requested · ≈ +9 draws (62 → ~71 of 300)
+```
+
+### Decisions (ASSUMPTION lines, my calls)
+
+**Motion**
+
+- ASSUMPTION: All motion runs on the shared clock in `useFrame` or on a shader `uTime`, never through `invalidate`.
+- ASSUMPTION: Reduced motion (`usePrefersReducedMotion`) freezes `uTime`, which leaves a lit, still frame.
+- ASSUMPTION: No bloom post-processing. Glow stays additive and unlit, inside the 300-draw / 600k-triangle budget.
+- ASSUMPTION: Road packets flow from each room to the Brain. Their speed and density come from the room's count of running agents. That count is written into a vertex attribute only when it changes, and an idle room keeps a slow trickle.
+- ASSUMPTION: A neural arc runs from each room's door to the core, in the room's colour, with a dash travelling inward. All the arcs are one `LineSegments` draw.
+- ASSUMPTION: A working agent's monitor scrolls a shared code-line `CanvasTexture`; an idle desk's monitor is dim and still.
+- ASSUMPTION: No idle camera drift. He rotates the map himself.
+
+**Strolls (phase 7)**
+
+- ASSUMPTION: **A stroll is a short walk inside the agent's own room.** It goes to a free spot (a wall, the chart, the shelf, a plant, a colleague's desk), pauses 5–12 s facing that spot, then walks back to the desk. Targets are sampled on the room's nav grid and must:
+  - be inside the room's footprint;
+  - be off every desk slot;
+  - be at least 2 m from the doorway;
+  - be reachable by `navigation.around`.
+- ASSUMPTION: **Who strolls and how often.**
+  - Working agents: every 45–120 s.
+  - Done or idle agents: every 15–40 s, alternating with the existing game-corner trip.
+  - Agents that need you never stroll. One that turns urgent mid-stroll is called home at once through the existing `callHome`.
+  - The jitter is seeded from the agent key, so tests are deterministic.
+- ASSUMPTION: **Strolls don't need observation.** Unknown activity ("Activity unavailable") no longer pins an agent to its desk for strolls, because he asked for them "as much as possible". This reverses my unconfirmed 2026-10-16 reading that unknown activity stays seated. Game-corner trips keep their existing evidence rule, because sitting in the game corner claims the agent is idle; a stroll claims nothing.
+- ASSUMPTION: **Caps.** At most a third of a room's agents (rounded up) are away at once, so every room still shows people working. The sim plans at most one new stroll route per tick. That bounds pathfinding CPU, the lesson of 2026-10-12 ("Office CPU was crew churn").
+- ASSUMPTION: **The existing "lounge trips" switch governs strolls too.** When it's off, agents stay seated, so he keeps a calm mode.
+- ASSUMPTION: **Strolls run in every layout** (City, Campus, Office), because the sim runs one layout for every view (vault learning 2026-11-02). It is the same in-office concept as the default view, now with more places to go.
+- ASSUMPTION: The new view state is `place: 'stroll'`, beside `'lounge'` (`shared/office/types.ts:191`). `character-pose.ts` gives it a standing look-around pose and keeps the agent's card status unchanged.
+
+**Models (phase 8)**
+
+- ASSUMPTION: Kenney CC0 packs: the Furniture Kit for desk, chair, lamp, plant, shelf and sofa, plus a mini or blocky character pack.
+  - Optimised to GLB with `gltf-transform` and committed under `src/renderer/office/assets/campus/` with the CC0 licence text.
+  - Each file stays under the 480 KB per-file guard.
+  - Loaded with `GLTFLoader` from `three/examples`; no new package.
+- ASSUMPTION: A new `MiniPerson` model maps the glTF nodes or bones onto the existing `RobotRig`, so `applyHumanPose` keeps agents sitting, typing and strolling. If a pack can't be mapped onto the rig, Night Campus keeps `HumanFrame` for people and ships the furniture only, and I report that to him.
+- ASSUMPTION: Each glTF prop is baked once into a vertex-coloured geometry, then drawn as one `InstancedMesh` per prop kind. Draws then grow with the number of prop kinds, not the number of rooms.
+
+### Non-goals
+
+- Decorative road walkers.
+- Agents leaving their room, or walking through its door, outside today's arrive and leave.
+- Idle camera movement.
+- Bloom.
+- Visual changes to City or Office beyond agents strolling there too.
+
+### Round 2 parallel vs sequential
+
+`logic/campus-motion.ts` (the clock) is created first, inline. After that, three slices own disjoint files and run **in parallel** worktrees:
+
+| Slice   | Owner          | Files                                                                                   |
+| ------- | -------------- | --------------------------------------------------------------------------------------- |
+| Motion  | @lena          | `scene/campus/*`, `logic/campus-motion.ts`, the Phase 6 HUD files                       |
+| Strolls | @ravi          | `src/office/sim/*`, `shared/office/types.ts`, `renderer/office/logic/character-pose.ts` |
+| Models  | @lena (second) | `themes/night-campus/*`, `assets/campus/*`                                              |
+
+- Phase 9 waits for all three slices.
+- Phase 10 waits for his approval.
+- One risk-based review pair closes it, in Phase 10.
+
+### Estimate
+
+| Phase              | Without Claude | With Claude |
+| ------------------ | -------------- | ----------- |
+| 6 Constant motion  | 12 h           | 2 h         |
+| 7 Room strolls     | 10 h           | 2 h         |
+| 8 CC0 models       | 16 h           | 3 h         |
+| 9 Install and stop | 1 h            | 0.3 h       |
+| 10 Merge settle    | 18 h           | 4 h         |
+| **Round 2 total**  | **57 h**       | **11.3 h**  |
+
+### Verification (end to end)
+
+1. `npm run typecheck && npm run build` green at each phase close.
+2. Preview in Campus, quality pinned to balanced: frames 1 s apart differ at the Brain, roads and stars; they're identical under reduced motion.
+3. Strolls: over 60 s, agents walk to spots inside their own room and return, never through a door. At least two-thirds of each room stay seated. A needs-you agent goes straight home.
+4. Live sessions: a busy room's packets run faster than an idle room's, and a tool call still sends a courier.
+5. Budget: ≤ 300 draws and ≤ 600k triangles at 20 agents; idle-focused CPU within 2 points of the baseline.
+6. After the model swap, at close zoom: people face the viewer, sit and type at their own desks, and stroll; the map rotates.
+7. Browser Office: 0 console errors.
+
+### Round 2 tickets
+
+| Ticket              | Status                                              | Source link                                 | Conversation                                                                                                                                                                                |
+| ------------------- | --------------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| none (needs filing) | Round 2 Phase 6 (motion) planned; no PR yet         | https://www.youtube.com/watch?v=t0hGE-aaAds | "Okay I think this is a good start but this can still be improved, like having a lot of animations and motion graphics here that can make this fucking alive."                              |
+| none (needs filing) | Answered: free CC0 packs, not paid; swap in Phase 8 | https://www.youtube.com/watch?v=t0hGE-aaAds | "Can we somehow replicate their models or is it a paid model?"                                                                                                                              |
+| none (needs filing) | Round 2 Phase 7 (room strolls) planned              | https://www.youtube.com/watch?v=t0hGE-aaAds | "Also I want the AI agents not to just be sitting. If possible as much as possible, they can roam around the room or whatever instead of just them fucking sitting without doing anything." |

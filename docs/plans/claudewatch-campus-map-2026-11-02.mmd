@@ -8,3 +8,13 @@ flowchart LR
   frame --> hud["HUD: room cards, toasts, minimap, Runs on chips"]
   ring --> spokes["Spoke roads to the hub"]
   couriers --> spokes
+%% ---
+flowchart LR
+  T[shared uTime<br/>frozen under reduced motion] --> S[Stars twinkle]
+  T --> B[Brain: breath, ripples,<br/>orbits, motes, arcs]
+  T --> R[Roads: packets to hub,<br/>speed from live agents]
+  T --> M[Rooms: screens scroll,<br/>lamps glow]
+  D[Desk] -->|stroll 45-120 s working<br/>15-40 s idle| P[Spot inside room<br/>2 m from door]
+  P -->|look 5-12 s| D
+  D -->|20 s done| G[Game corner]
+  U[Needs you] -->|called home| D
