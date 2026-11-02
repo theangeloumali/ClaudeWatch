@@ -129,7 +129,7 @@ The video's Tasks and Calendar tabs (our Needs-you queue already covers approval
   - `room-props.ts`, `CampusDesk.tsx` and `NightCampusRoom.tsx` swap to the baked props, with scrolling monitors, lamp glow and a scrolling wall chart.
   - `night-campus/index.ts` points `robot.Model` at `MiniPerson`.
   - Verify: typecheck and build; a close-zoom screenshot passes his bar (people face the viewer, sit and type at their own desks, stroll inside the room; the map rotates); ≤ 300 draws / 600k triangles at 20 agents; largest emitted file < 480 KB; Browser Office 0 console errors
-- [ ] Phase 9: Install for his look, then stop
+- [x] Phase 9: Install for his look, then stop
   - Dev-signed build per the release memory recipe.
   - The previous app is kept as `~/Applications/ClaudeWatch-1.4.1-campus-r1.app`; the new one is installed to `/Applications`.
   - Stop for his approval (feedback memory 2026-10-12).
