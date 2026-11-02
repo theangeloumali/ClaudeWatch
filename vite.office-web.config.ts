@@ -7,6 +7,8 @@ import react from '@vitejs/plugin-react'
 function officeChunk(id: string): string | undefined {
   // The simulation and the shared office model import each other, so they ship as one chunk.
   if (id.includes('/src/office/sim/') || id.includes('/src/shared/office/')) return 'simulation'
+  // The HUD panels are leaves of the page, so they split off cleanly when office.js nears the guard.
+  if (id.includes('/src/renderer/office/hud/')) return 'office-hud'
   if (!id.includes('/node_modules/')) return undefined
   if (id.includes('/three/build/three.core')) return 'three-core'
   if (id.includes('/node_modules/three/')) return 'three-webgl'
