@@ -67,3 +67,31 @@ export function arcPoints(from: Vec3, to: Vec3, rise: number, segments: number):
     }
   })
 }
+
+const BREATH_DEPTH = 0.04
+const SHOCKWAVE_MS = 900
+
+// The core's scale: rest minus 4% at the start of a breath, plus 4% at its middle.
+export function breathScale(timeS: number, periodS: number): number {
+  return 1 + BREATH_DEPTH * (2 * breath(timeS, periodS) - 1)
+}
+
+// The memory shockwave `elapsedMs` in: fast off the core, fading out at the rim; null when over.
+export function shockwaveAt(elapsedMs: number): { share: number; opacity: number } | null {
+  if (elapsedMs < 0 || elapsedMs >= SHOCKWAVE_MS) return null
+  const progress = elapsedMs / SHOCKWAVE_MS
+  return { share: 1 - (1 - progress) ** 3, opacity: 1 - progress }
+}
+
+export interface RunningRoom {
+  projectKey: string
+  runningCount: number
+}
+
+// A stable name for the running counts, so road speeds are rewritten only when one changes.
+export function runningCountsKey(rooms: readonly RunningRoom[] | undefined): string {
+  return (rooms ?? [])
+    .map((room) => `${room.projectKey}=${room.runningCount}`)
+    .sort()
+    .join(',')
+}

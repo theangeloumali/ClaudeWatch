@@ -2,9 +2,12 @@ import { describe, expect, it } from 'vitest'
 import {
   arcPoints,
   breath,
+  breathScale,
   createCampusClock,
   packetSpeedFor,
-  rippleAt
+  rippleAt,
+  runningCountsKey,
+  shockwaveAt
 } from '../../logic/campus-motion'
 
 describe('campus clock', () => {
@@ -60,5 +63,52 @@ describe('arcPoints', () => {
     expect(points[0]).toEqual({ x: 10, y: 0, z: 0 })
     expect(points[8]).toEqual({ x: 0, y: 4, z: 0 })
     expect(points[4].y).toBeGreaterThan(4)
+  })
+})
+
+describe('breathScale', () => {
+  it('swells and shrinks the core by four per cent around rest', () => {
+    expect(breathScale(0, 4)).toBeCloseTo(0.96)
+    expect(breathScale(2, 4)).toBeCloseTo(1.04)
+    expect(breathScale(1, 4)).toBeCloseTo(1)
+  })
+})
+
+describe('shockwaveAt', () => {
+  it('starts at the core, fully lit', () => {
+    expect(shockwaveAt(0)).toEqual({ share: 0, opacity: 1 })
+  })
+
+  it('races out early and fades as it reaches the rim', () => {
+    const halfway = shockwaveAt(450)
+    expect(halfway?.share).toBeGreaterThan(0.75)
+    expect(halfway?.opacity).toBeCloseTo(0.5)
+  })
+
+  it('is over once it has reached the rim, and before it starts', () => {
+    expect(shockwaveAt(900)).toBeNull()
+    expect(shockwaveAt(-1)).toBeNull()
+  })
+})
+
+describe('runningCountsKey', () => {
+  it('names each room and its running count', () => {
+    const rooms = [
+      { projectKey: 'b', runningCount: 0 },
+      { projectKey: 'a', runningCount: 2 }
+    ]
+    expect(runningCountsKey(rooms)).toBe('a=2,b=0')
+  })
+
+  it('does not change when only the order does', () => {
+    const first = [
+      { projectKey: 'a', runningCount: 1 },
+      { projectKey: 'b', runningCount: 3 }
+    ]
+    expect(runningCountsKey([...first].reverse())).toBe(runningCountsKey(first))
+  })
+
+  it('is empty with no rooms', () => {
+    expect(runningCountsKey(undefined)).toBe('')
   })
 })

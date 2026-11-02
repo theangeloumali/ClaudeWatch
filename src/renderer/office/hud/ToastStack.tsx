@@ -1,11 +1,17 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Bell } from 'lucide-react'
 import type { SessionRef } from '../../../shared/office/types'
 import type { NewsItem } from '../logic/attention-queue'
-import { GLASS_CLASS, GLASS_META_CLASS, inkOn } from './glass'
+import { GLASS_CLASS, GLASS_META_CLASS, inkOn, playGlassMotion } from './glass'
 
 export const MAX_TOASTS = 3
 export const TOAST_LIFETIME_MS = 6_000
+// The fade-out runs in the last stretch of a toast's lifetime.
+const TOAST_EXIT_MS = 200
+const ENTER_FRAMES: Keyframe[] = [
+  { transform: 'translateX(24px)', opacity: 0 },
+  { transform: 'none', opacity: 1 }
+]
 
 interface Toast {
   id: string
@@ -13,6 +19,7 @@ interface Toast {
   line: string
   chip: string | null
   atMs: number
+  isLeaving: boolean
 }
 
 export const toastAge = (ageMs: number): string =>
@@ -38,7 +45,8 @@ function toastOf(
     title: isSplit && session ? session.projectLabel : null,
     line: isSplit && prefix ? news.text.slice(prefix.length) : news.text,
     chip: (session && chips.get(session.projectKey)) ?? null,
-    atMs: Date.now()
+    atMs: Date.now(),
+    isLeaving: false
   }
 }
 
@@ -52,10 +60,10 @@ interface ToastStackProps {
 // The Campus news: the same items the news line shows, as cards that leave on their own.
 export function ToastStack({ news, sessions, chips }: ToastStackProps) {
   const [toasts, setToasts] = useState<Toast[]>([])
-  const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
+  const timers = useRef(new Map<string, ReturnType<typeof setTimeout>[]>())
   useEffect(() => {
     const pending = timers.current
-    return () => pending.forEach(clearTimeout)
+    return () => pending.forEach((ids) => ids.forEach(clearTimeout))
   }, [])
   // Keyed on the id alone: a frame that rewords nothing must not toast twice.
   const latest = useRef({ news, sessions, chips })
@@ -66,11 +74,18 @@ export function ToastStack({ news, sessions, chips }: ToastStackProps) {
     if (!item || timers.current.has(item.id)) return
     const toast = toastOf(item, named, colours)
     setToasts((current) => [toast, ...current].slice(0, MAX_TOASTS))
-    const timer = setTimeout(() => {
+    const leave = setTimeout(() => {
+      setToasts((current) =>
+        current.map((candidate) =>
+          candidate.id === toast.id ? { ...candidate, isLeaving: true } : candidate
+        )
+      )
+    }, TOAST_LIFETIME_MS - TOAST_EXIT_MS)
+    const remove = setTimeout(() => {
       timers.current.delete(toast.id)
       setToasts((current) => current.filter((candidate) => candidate.id !== toast.id))
     }, TOAST_LIFETIME_MS)
-    timers.current.set(toast.id, timer)
+    timers.current.set(toast.id, [leave, remove])
   }, [newsId])
   return (
     <div
@@ -82,7 +97,7 @@ export function ToastStack({ news, sessions, chips }: ToastStackProps) {
     >
       <ul className="flex flex-col gap-2">
         {toasts.map((toast) => (
-          <li key={toast.id} className={`${GLASS_CLASS} flex items-start gap-2.5 p-2.5`}>
+          <ToastCard key={toast.id} isLeaving={toast.isLeaving}>
             <span
               aria-hidden
               className="grid size-7 shrink-0 place-items-center rounded-md bg-white/10"
@@ -103,9 +118,25 @@ export function ToastStack({ news, sessions, chips }: ToastStackProps) {
             <span className={`${GLASS_META_CLASS} shrink-0`}>
               {toastAge(Date.now() - toast.atMs)}
             </span>
-          </li>
+          </ToastCard>
         ))}
       </ul>
     </div>
+  )
+}
+
+// Slides in from the right on arrival; fades and drifts right as it leaves.
+function ToastCard({ isLeaving, children }: { isLeaving: boolean; children: ReactNode }) {
+  const ref = useRef<HTMLLIElement>(null)
+  useEffect(() => playGlassMotion(ref.current, ENTER_FRAMES, 260), [])
+  return (
+    <li
+      ref={ref}
+      className={`${GLASS_CLASS} flex items-start gap-2.5 p-2.5 transition-[opacity,transform] duration-200 ease-out ${
+        isLeaving ? 'translate-x-3 opacity-0' : ''
+      }`}
+    >
+      {children}
+    </li>
   )
 }

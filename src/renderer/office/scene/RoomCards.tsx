@@ -1,5 +1,5 @@
 import { useFrame } from '@react-three/fiber'
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Vector3 } from 'three'
 import type { MemoryNotes } from '../../../shared/office/types'
 import { crestFor } from '../../deck/roster'
@@ -9,7 +9,7 @@ import { hudSafeInsets, type InspectorLayout } from '../logic/hud-layout'
 import type { RoomCard } from '../logic/room-cards'
 import { cardSafeArea } from '../logic/zone-framing'
 import type { OfficeTheme } from '../themes/types'
-import { GLASS_CLASS, GLASS_META_CLASS, inkOn } from '../hud/glass'
+import { GLASS_CLASS, GLASS_META_CLASS, inkOn, playGlassMotion } from '../hud/glass'
 import { setCameraZoom } from '../hud/camera-zoom'
 import { readCanvasObstacles } from './canvas-obstacles'
 import { OFFSCREEN } from './CardProjector'
@@ -34,8 +34,34 @@ export function useRoomCardAnchors(): RoomCardAnchors {
   return anchors
 }
 
-export function brainLine(memory: MemoryNotes | undefined): string {
-  return memory ? `${NOTE_COUNT.format(memory.notes)} notes · shared memory` : 'memory unavailable'
+const TICK_FRAMES: Keyframe[] = [
+  { transform: 'translateY(-40%)', opacity: 0.3 },
+  { transform: 'none', opacity: 1 }
+]
+
+// A count that drops into place when it changes; the first value shown is still.
+function Tick({ value, children }: { value: number; children: ReactNode }) {
+  const ref = useRef<HTMLSpanElement>(null)
+  const seenRef = useRef(value)
+  useEffect(() => {
+    if (seenRef.current === value) return
+    seenRef.current = value
+    playGlassMotion(ref.current, TICK_FRAMES, 220)
+  }, [value])
+  return (
+    <span ref={ref} className="inline-block tabular-nums">
+      {children}
+    </span>
+  )
+}
+
+function BrainLine({ memory }: { memory: MemoryNotes | undefined }) {
+  if (!memory) return <>memory unavailable</>
+  return (
+    <>
+      <Tick value={memory.notes}>{NOTE_COUNT.format(memory.notes)}</Tick> notes · shared memory
+    </>
+  )
 }
 
 interface RoomCardLayerProps {
@@ -61,7 +87,9 @@ export function RoomCardLayer({ rooms, colors, skins, memory, anchors }: RoomCar
         className={`${GLASS_CLASS} absolute left-0 top-0 px-3 py-2 text-center`}
       >
         <p className="text-[11px] font-bold tracking-[0.18em]">THE BRAIN</p>
-        <p className={GLASS_META_CLASS}>{brainLine(memory)}</p>
+        <p className={GLASS_META_CLASS}>
+          <BrainLine memory={memory} />
+        </p>
       </div>
       {rooms.map((room) => {
         const chip = colors.get(room.projectKey)?.chip ?? '#64748b'
@@ -83,11 +111,18 @@ export function RoomCardLayer({ rooms, colors, skins, memory, anchors }: RoomCar
                 {room.label}
               </span>
               <span className={`${GLASS_META_CLASS} block whitespace-nowrap`}>
-                <span className={room.runningCount > 0 ? 'text-emerald-400' : 'text-white/40'}>
+                <span
+                  className={
+                    room.runningCount > 0
+                      ? 'inline-block text-emerald-400 motion-safe:animate-pulse'
+                      : 'text-white/40'
+                  }
+                >
                   ●
                 </span>{' '}
-                {room.agentCount} {room.agentCount === 1 ? 'agent' : 'agents'} · {room.runningCount}{' '}
-                running
+                <Tick value={room.agentCount}>{room.agentCount}</Tick>{' '}
+                {room.agentCount === 1 ? 'agent' : 'agents'} ·{' '}
+                <Tick value={room.runningCount}>{room.runningCount}</Tick> running
               </span>
             </span>
             {room.faces.length > 0 && (

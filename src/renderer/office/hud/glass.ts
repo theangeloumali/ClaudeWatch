@@ -11,3 +11,18 @@ export const GLASS_CLASS =
 
 // Secondary text on the glass; white at 70% keeps above 4.5:1 on the navy.
 export const GLASS_META_CLASS = 'font-mono text-[11px] text-white/70'
+
+const EASE_OUT = 'cubic-bezier(0.23, 1, 0.32, 1)'
+const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)'
+
+// A short glass nudge (a toast arriving, a count ticking); skipped under reduced motion and
+// where WAAPI is missing (jsdom).
+export function playGlassMotion(
+  element: HTMLElement | null,
+  keyframes: Keyframe[],
+  durationMs: number
+): void {
+  if (!element || typeof element.animate !== 'function') return
+  if (window.matchMedia?.(REDUCED_MOTION_QUERY).matches) return
+  element.animate(keyframes, { duration: durationMs, easing: EASE_OUT })
+}
