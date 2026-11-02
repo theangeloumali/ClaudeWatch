@@ -11,6 +11,7 @@ import type { OfficeTheme } from '../../themes/types'
 import { CampusArcs } from './CampusArcs'
 import { CampusCouriers } from './CampusCouriers'
 import { BRAIN_CORE_Y_M, CampusHub } from './CampusHub'
+import { CampusPackets } from './CampusPackets'
 import { CampusSpokes } from './CampusSpokes'
 import { CampusStars } from './CampusStars'
 
@@ -43,11 +44,18 @@ export function CampusLayers({ floors, skyBox, memory, rooms }: CampusLayersProp
       (spoke.projectKey !== null && colors.get(spoke.projectKey)?.chip) || UNCLAIMED_CHIP,
     [colors]
   )
+  const chipOfProject = useCallback(
+    (projectKey: string | null) =>
+      (projectKey !== null && colors.get(projectKey)?.chip) || UNCLAIMED_CHIP,
+    [colors]
+  )
+  const core = useMemo(() => ({ x: hub.x, y: BRAIN_CORE_Y_M, z: hub.z }), [hub.x, hub.z])
   return (
     <>
       <CampusStars box={skyBox} />
       <CampusSpokes spokes={spokes} chipOf={chipOf} rooms={rooms} />
       <CampusArcs spokes={spokes} chipOf={chipOf} hub={hub} coreY={BRAIN_CORE_Y_M} flash={flash} />
+      <CampusPackets spokes={spokes} core={core} chipOf={chipOfProject} rooms={rooms} />
       <CampusHub hub={hub} memory={memory} isReducedMotion={isReducedMotion} flash={flash} />
       <CampusCouriers spokes={spokes} chipOf={chipOf} isReducedMotion={isReducedMotion} />
     </>

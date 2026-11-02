@@ -48,13 +48,13 @@ export function packetSpeedFor(runningAgents: number): number {
   return IDLE_PACKET_SPEED + PACKET_SPEED_PER_AGENT * Math.min(runningAgents, BUSIEST_ROOM_AGENTS)
 }
 
-// A quadratic arc from `from` to `to`, lifted `rise` metres above the higher end at its middle.
+// The control point that lifts a quadratic arc `rise` metres above its higher end at its middle.
+export function arcControl(from: Vec3, to: Vec3, rise: number): Vec3 {
+  return { x: (from.x + to.x) / 2, y: Math.max(from.y, to.y) + rise * 2, z: (from.z + to.z) / 2 }
+}
+
 export function arcPoints(from: Vec3, to: Vec3, rise: number, segments: number): Vec3[] {
-  const control = {
-    x: (from.x + to.x) / 2,
-    y: Math.max(from.y, to.y) + rise * 2,
-    z: (from.z + to.z) / 2
-  }
+  const control = arcControl(from, to, rise)
   return Array.from({ length: segments + 1 }, (_, index) => {
     const t = index / segments
     const a = (1 - t) ** 2

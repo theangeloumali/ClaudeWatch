@@ -2,12 +2,10 @@ import { useEffect, useMemo } from 'react'
 import { BufferAttribute, BufferGeometry, Color } from 'three'
 import type { CampusGeometry, CampusSpoke } from '../../logic/campus-geometry'
 import { arcPoints } from '../../logic/campus-motion'
+import { ARC_RISE_M, ARC_ROOM_END_Y_M } from '../../logic/campus-packets'
 import { campusGlowMaterial } from './campus-shaders'
 
 const ARC_SEGMENTS = 32
-const ARC_RISE_M = 3
-// The room end sits just above the plate edge, so the arc reads as leaving the room.
-const ROOM_END_Y_M = 0.4
 
 // `along` runs 0 at the room to 1 at the core; dashes travel inward, each arc on its own phase.
 const ARC_VERTEX = /* glsl */ `
@@ -33,7 +31,7 @@ varying float vAlong;
 varying float vPhase;
 void main() {
   float dash = smoothstep(0.75, 1.0, fract(vAlong * 2.0 - uTime * 0.35 + vPhase));
-  float lit = 0.18 + 0.9 * dash + 0.8 * uFlash;
+  float lit = 0.35 + 0.9 * dash + 0.8 * uFlash;
   gl_FragColor = vec4(vColor * lit, 1.0);
   #include <colorspace_fragment>
 }
@@ -55,7 +53,7 @@ function arcGeometry(
   spokes.forEach((spoke, index) => {
     tint.set(chipOf(spoke))
     const points = arcPoints(
-      { x: spoke.from.x, y: ROOM_END_Y_M, z: spoke.from.z },
+      { x: spoke.from.x, y: ARC_ROOM_END_Y_M, z: spoke.from.z },
       core,
       ARC_RISE_M,
       ARC_SEGMENTS
