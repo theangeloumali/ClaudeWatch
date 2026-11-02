@@ -298,6 +298,7 @@ function OfficeScene(props: OfficeSceneProps) {
             theme={theme}
             skyBox={skyBox}
             memory={props.campusCards?.memory}
+            rooms={props.campusCards?.rooms}
           />
         )}
         {hasTown && <TownGround plan={town.plan} dress={dressOf(theme)} />}
