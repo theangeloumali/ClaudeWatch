@@ -23,7 +23,7 @@ type Destination = Pick<
   AgentView,
   'floorId' | 'roomId' | 'slotId' | 'x' | 'z' | 'heading' | 'elevation' | 'physicalFloorId'
 >
-const urgent = (attention: AgentAttention) =>
+export const isUrgent = (attention: AgentAttention) =>
   ['permission', 'question', 'error', 'limited'].includes(attention)
 
 // How long a finished agent stays at its desk before it walks to its company's lounge.
@@ -83,6 +83,12 @@ export function goToLounge(
   return { ...walking, view: { ...agent.view, place: 'lounge' }, loungeSeatId: seat.id }
 }
 
+// A stroll faces `heading` when it gets there; the world's callHome brings it back.
+export function goStroll(agent: AgentRecord, heading: number, path: Point[]): AgentRecord {
+  const walking = walk(agent, heading, path)
+  return { ...walking, view: { ...agent.view, place: 'stroll' } }
+}
+
 function withoutPlace(agent: AgentRecord): AgentRecord {
   const { place: _place, ...view } = agent.view
   return { ...agent, view, loungeSeatId: null }
@@ -98,7 +104,7 @@ export function updateAgent(
   attention: AgentAttention
 ): AgentRecord {
   const next = { ...agent, view: { ...agent.view, attention } }
-  if (urgent(attention)) {
+  if (isUrgent(attention)) {
     next.state = next.path.length ? 'arriving' : 'needs_you'
     next.view.heading = next.slotHeading
     next.view.activity = activity
@@ -187,7 +193,7 @@ export function tickAgent(
       next.path.shift()
     }
     if (!next.path.length) {
-      next.state = urgent(next.view.attention)
+      next.state = isUrgent(next.view.attention)
         ? 'needs_you'
         : next.view.attention === 'done'
           ? 'done'

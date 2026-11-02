@@ -16,6 +16,8 @@ export interface RobotPose {
   // Body pitch in radians; negative leans back.
   lean: number
   headPitch: number
+  // Head turn in radians; positive looks to the robot's left.
+  headYaw: number
   // Shoulder pitch in radians; negative swings the arm forward and up.
   leftArm: number
   rightArm: number
@@ -50,6 +52,7 @@ const REST: RobotPose = {
   sway: 0,
   lean: 0,
   headPitch: 0,
+  headYaw: 0,
   leftArm: 0,
   rightArm: 0,
   rightArmRoll: 0,
@@ -103,8 +106,10 @@ const POSTURE: Record<RobotMood, Partial<RobotPose>> = {
 function motion(mood: RobotMood, t: number): Partial<RobotPose> {
   switch (mood) {
     case 'idle':
+      // Standing or sat with nothing to do, it looks slowly about the room.
       return {
         bob: 0.025 * Math.sin(t * TAU * 0.3),
+        headYaw: 0.5 * Math.sin(t * TAU * 0.15),
         eyeOpen: t % BLINK_PERIOD_SEC < BLINK_SEC ? 0.1 : 1
       }
     case 'working':

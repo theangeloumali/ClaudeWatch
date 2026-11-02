@@ -187,8 +187,9 @@ export interface AgentView {
   provider: ProviderId
   isSubagent: boolean
   label: string
-  // Absent means the agent is at its own desk; 'leaving' while it walks out or fades (seating-5).
-  place?: 'lounge' | 'leaving'
+  // Absent means the agent is at its own desk; 'stroll' while it wanders its own room;
+  // 'leaving' while it walks out or fades (seating-5).
+  place?: 'lounge' | 'stroll' | 'leaving'
   // How far a departing agent has faded out where it stands, 0–1; absent while fully here.
   fade?: number
   // Times the sim seated it away from where it faded, absent until the first. One step can

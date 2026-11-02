@@ -100,6 +100,17 @@ describe('gaming pose', () => {
     expect(Math.max(...bobs) - Math.min(...bobs)).toBeLessThan(0.05)
   })
 
+  it('looks slowly about while it stands idle, and holds the head square under reduced motion', () => {
+    const yaws = Array.from(
+      { length: 200 },
+      (_, index) => robotPose('idle', index * 0.1, 0).headYaw
+    )
+    expect(Math.max(...yaws)).toBeGreaterThan(0.3)
+    expect(Math.min(...yaws)).toBeLessThan(-0.3)
+    expect(Math.max(...yaws.map(Math.abs))).toBeLessThanOrEqual(0.6)
+    expect(robotPose('idle', 3.1, 0, { isReducedMotion: true }).headYaw).toBe(0)
+  })
+
   it('holds still under reduced motion', () => {
     expect(robotPose('gaming', 0.4, 0, { isReducedMotion: true })).toEqual(
       robotPose('gaming', 7.3, 0.5, { isReducedMotion: true })
@@ -112,6 +123,7 @@ describe('gaming pose', () => {
       sway: 0,
       lean: 0,
       headPitch: 0,
+      headYaw: 0,
       leftArm: -0.95,
       rightArm: -0.95,
       rightArmRoll: 0,

@@ -8,7 +8,7 @@ vi.setConfig({ testTimeout: 60_000 })
 
 const SETTLE_S = 120
 function open(sessions: SessionRef[]): World {
-  const sim = new World()
+  const sim = new World({ roomStrolls: false })
   sim.apply({ type: 'hello', v: 1, snapshot: { rev: 0, generatedAtMs: 0, sessions, sources: [] } })
   return sim
 }
