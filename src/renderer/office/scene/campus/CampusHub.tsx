@@ -11,6 +11,7 @@ import {
 } from 'three'
 import type { MemoryNotes } from '../../../../shared/office/types'
 import type { CampusGeometry } from '../../logic/campus-geometry'
+import { sceneMotion } from '../../logic/scene-motion'
 
 const GLOW = '#38e1ff'
 const CORE = '#e6fbff'
@@ -91,6 +92,7 @@ export function CampusHub({ hub, memory, isReducedMotion }: CampusHubProps) {
   useFrame((state) => {
     const strength = pulse.strengthAt(state.clock.elapsedTime * 1000)
     if (strength === null) return
+    sceneMotion.mark()
     ringMaterials.forEach((material, index) => {
       material.opacity = RING_BASE_OPACITY + (1 - RING_BASE_OPACITY) * strength
       // A ring swells a little outward as it brightens; never under reduced motion.

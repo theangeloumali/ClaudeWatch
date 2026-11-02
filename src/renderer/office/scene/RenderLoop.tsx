@@ -12,6 +12,7 @@ import {
   type FramePace
 } from '../logic/frame-governor'
 import { levelForMachine } from '../logic/quality'
+import { sceneMotion } from '../logic/scene-motion'
 import { chooseQuality, machineHints, useQualityLevel, watchQuality } from '../quality-store'
 
 const SMOOTHING = 0.1
@@ -111,6 +112,7 @@ export function FrameGovernor({ pace, agents }: FrameGovernorProps) {
       poseVersionRef.current = officePoses.version()
       governor.keepMoving()
     }
+    if (sceneMotion.take()) governor.keepMoving()
     if (governor.isBoosted()) drawRef.current()
     // Out of focus the rate is the background's, which says nothing about the machine.
     if (!document.hasFocus()) return

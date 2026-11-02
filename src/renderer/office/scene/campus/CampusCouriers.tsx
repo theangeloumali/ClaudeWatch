@@ -13,6 +13,7 @@ import {
 } from '../../logic/campus-couriers'
 import type { CampusSpoke } from '../../logic/campus-geometry'
 import { cityClock } from '../../logic/city-clock'
+import { sceneMotion } from '../../logic/scene-motion'
 
 // On the asphalt's top face.
 const ROAD_TOP_M = 0.06
@@ -75,6 +76,7 @@ export function CampusCouriers({ spokes, chipOf, isReducedMotion }: CampusCourie
     }
     const walking = crew.step(nowMs)
     if (walking.length === 0 && shownRef.current === 0) return
+    if (walking.length > 0) sceneMotion.mark()
     walking.forEach((courier, slot) => {
       courierPose(courier, nowMs, pose)
       scratch.position.set(pose.x, ROAD_TOP_M, pose.z)

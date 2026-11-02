@@ -292,7 +292,14 @@ function OfficeScene(props: OfficeSceneProps) {
             isCampus ? CAMPUS_GROUND : isCyberpunkTheme ? theme.palette.ink : theme.palette.stone
           }
         />
-        {isCampus && <CampusLayers floors={props.allFloors} theme={theme} skyBox={skyBox} />}
+        {isCampus && (
+          <CampusLayers
+            floors={props.allFloors}
+            theme={theme}
+            skyBox={skyBox}
+            memory={props.campusCards?.memory}
+          />
+        )}
         {hasTown && <TownGround plan={town.plan} dress={dressOf(theme)} />}
         {hasTown && displayedVenues && (
           <VenueLayer
