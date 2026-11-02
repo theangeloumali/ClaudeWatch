@@ -2,7 +2,9 @@ import { useSyncExternalStore } from 'react'
 import { isJsonObject } from '../../../shared/json-object'
 import { browserStorage } from '../../office-live/browser-storage'
 import type { FloorGeometry, RoomGeometry, ZoneGeometry } from '../scene-model'
-import { listThemes } from '../themes/registry'
+import { CAMPUS_THEME_ID, getTheme, listThemes } from '../themes/registry'
+import type { OfficeTheme } from '../themes/types'
+import type { WorldLayout } from './world-layout-preference'
 import type { OfficeCompanyRow, OfficeProjectRow } from './zone-model'
 
 export const OFFICE_THEMES_STORAGE_KEY = 'claudewatch.office.themes'
@@ -54,6 +56,11 @@ export function resolveTheme(
     assignedThemeId(assignments.companies, zone.companyKey) ??
     defaultThemeId
   )
+}
+
+// Campus draws every floor in Night Campus; the chosen map theme returns with City.
+export function sceneThemeFor(chosen: OfficeTheme, layout: WorldLayout): OfficeTheme {
+  return layout === 'campus' ? getTheme(CAMPUS_THEME_ID) : chosen
 }
 
 // What a theme choice applies to: no keys is the floor, and a project carries its company's key too.
