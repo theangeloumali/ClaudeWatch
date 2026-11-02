@@ -85,7 +85,7 @@ The video's Tasks and Calendar tabs (our Needs-you queue already covers approval
   - Verify: typecheck and build; preview screenshots at 1440 and 1100 px wide; 0 console errors in Chrome DevTools on the Browser Office.
 - [x] Phase 5: Install for Angelo's look, then stop. Local dev-signed build per the release memory recipe, installed to `/Applications`.
   - Verify: frame budget check in Campus: draws and triangles at 20 agents, recorded against 300 and 600k. **Stop for his approval** (feedback memory 2026-10-12).
-- [ ] Phase 6: Constant motion
+- [x] Phase 6: Constant motion
   - Clock: new `renderer/office/logic/campus-motion.ts` holds the `campusClock` uniform and pure curve functions (`breath`, `rippleAt`, `packetSpeedFor`, `arcPoints`). `CampusLayers.tsx` writes the uniform once a frame.
   - Brain (`CampusHub.tsx`):
     - the core breathes;
@@ -104,7 +104,7 @@ The video's Tasks and Calendar tabs (our Needs-you queue already covers approval
     - the Brain count ticks;
     - the minimap hub pulses.
   - Verify: `npm run typecheck && npm run build`; two preview frames 1 s apart differ at the hub, roads and stars, and are identical under emulated reduced motion; Campus at 20 agents ≤ 300 draws / 600k triangles; renderer CPU idle-focused within 2 points of the round-1 baseline (`ps`, before and after)
-- [ ] Phase 7: Agents stroll their own room
+- [x] Phase 7: Agents stroll their own room
   - New `office/sim/room-strolls.ts`:
     - eligibility, seeded timers and the per-room away cap;
     - target sampling inside the room footprint, off desk slots, at least 2 m from the door, reachable.
@@ -120,7 +120,7 @@ The video's Tasks and Calendar tabs (our Needs-you queue already covers approval
     - the lounge switch disables strolls;
     - the existing `lounge-trips` and `seated-agents` suites stay green.
   - Verify: `npx vitest run src/office/sim` green; `npm run typecheck && npm run build`; a 60 s preview capture in Campus shows agents leaving and returning to their desks inside their room, none passing a door, with at least two-thirds of each room seated at any sampled frame
-- [ ] Phase 8: Free CC0 low-poly models
+- [x] Phase 8: Free CC0 low-poly models
   - Spike first, in an empty temp folder: download the Kenney Furniture Kit and a character pack, read the licence, and inspect the node and bone trees with `npx @gltf-transform/cli inspect`.
   - Optimise the models and commit the GLBs plus `assets/campus/LICENSE.txt`.
   - New files:
@@ -179,6 +179,8 @@ Phase 1 runs first: everything sits on the ring. Phases 2, 3 and 4 then run in p
 | none (needs filing) | Planned; no PR yet | https://www.youtube.com/watch?v=t0hGE-aaAds | "Follow up on the latest changes from the main branch and check on how we can implement the same fucking same UI for our offices" |
 
 ## Round 2 (2026-11-02): constant motion, room strolls, free models
+
+**Round 2 as built (2026-11-02):** typecheck, lint and `npm test` green (553 files, 5732 tests); build green, largest office-web file 428,584 B. Campus at 22 agents: 60 draws / 80.9k triangles overview, 68 / 80.9k close (round 1: 62 / 143k). Idle CPU in headless Chrome on the M5 Max: 25.2% of a core against 23.6% for round 1, after an infinite CSS pulse was found tripling the GPU process (fixed in 732397a0). Strolls seen in a 70 s preview capture. Packs: Kenney Furniture Kit 2.0 and Mini Characters 1.0, CC0.
 
 The Phases ledger above carries phases 6–10.
 
