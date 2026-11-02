@@ -1,3 +1,4 @@
+import type { WorldLayout } from './logic/world-layout-preference'
 import type {
   AccountRef,
   AgentView,
@@ -120,6 +121,8 @@ export interface OfficeFeed {
   getWorldDocumentStore?(): WorldDocumentStore | null
   // Local renderer simulation only; no body positions are sent to a provider or backend.
   setBodyObstacles?: (bodies: readonly BodyFootprint[]) => void
+  // City or Campus; the feed re-lays the world through its fade-and-reseat path.
+  setWorldLayout?: (layout: WorldLayout) => void
   // Set by a page that may only watch: the HUD then leaves out what would be refused.
   isViewOnly?: boolean
   subscribe(listener: (frame: OfficeFrame) => void): () => void

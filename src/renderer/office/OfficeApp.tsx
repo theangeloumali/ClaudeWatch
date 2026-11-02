@@ -44,6 +44,7 @@ import { OfficeContext } from './hud/OfficeContext'
 import { CurrentEvidenceStrip } from './hud/CurrentEvidenceStrip'
 import { ThemesList } from './hud/ThemesList'
 import { useWalking } from './player/use-walking'
+import { placePlayerAtOrigin } from './player/player-floor-routes'
 import { SceneErrorBoundary } from './SceneErrorBoundary'
 import type { OfficeFeed } from './scene-model'
 import {
@@ -69,6 +70,11 @@ import { useWorldEditing } from './editor/use-world-editing'
 import { VenuesPanel } from './hud/VenuesPanel'
 import { browserStorage } from '../office-live/browser-storage'
 import { readViewPreference, saveViewPreference } from './logic/view-preference'
+import {
+  readWorldLayoutPreference,
+  saveWorldLayoutPreference,
+  type WorldLayout
+} from './logic/world-layout-preference'
 
 // The scene component loads separately so the HUD can paint before Canvas mounts.
 const OfficeScene = lazy(() => import('./scene/OfficeScene'))
@@ -106,6 +112,15 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
     lastViewPreference.current = preference
     saveViewPreference(browserStorage(), preference)
   }, [state.viewMode, state.isListView, state.areRoofsVisible])
+  const [worldLayout, setWorldLayout] = useState<WorldLayout>(() =>
+    readWorldLayoutPreference(browserStorage())
+  )
+  const chooseWorldLayout = useCallback((layout: WorldLayout) => {
+    setWorldLayout(layout)
+    saveWorldLayoutPreference(browserStorage(), layout)
+  }, [])
+  useEffect(() => feed.setWorldLayout?.(worldLayout), [feed, worldLayout])
+  const isCampus = worldLayout === 'campus'
   const [hasWebGL] = useState(canCreateWebGL2)
   const [hasSceneFailed, setHasSceneFailed] = useState(false)
   const [metrics] = useState(createFrameMetrics)
@@ -201,6 +216,13 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
     dispatch,
     allFloors: frame?.floors
   })
+  // The player is made at a City door; any other layout, or a switch, starts it on the plaza.
+  const playerLayout = useRef<WorldLayout>('city')
+  useEffect(() => {
+    if (!player || playerLayout.current === worldLayout) return
+    playerLayout.current = worldLayout
+    placePlayerAtOrigin(player)
+  }, [player, worldLayout])
   const {
     agent: selectedAgent,
     session: selectedSession,
@@ -326,6 +348,7 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
               wallsMode={state.wallsMode}
               areRoofsVisible={state.areRoofsVisible}
               viewMode={state.viewMode}
+              worldLayout={worldLayout}
               focusedFloorId={state.focusedFloorId}
               focusedRoomId={focusedRoomId}
               cameraRequest={state.cameraRequest}
@@ -668,11 +691,14 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
             onZoom={(direction) => dispatch({ type: 'camera-zoomed', direction })}
             onFit={fitCamera}
             onReset={() => dispatch({ type: 'camera-reset' })}
-            onEditLayout={worldStore ? editing.open : undefined}
+            // Campus places every room itself, so there is nothing to edit there.
+            onEditLayout={worldStore && !isCampus ? editing.open : undefined}
             canWorkstation={canWorkstation && !inspectorPanel.layout.isExpanded}
             onWorkstation={frameWorkstation}
             viewMode={state.viewMode}
             onView={(view) => dispatch({ type: 'view-set', view })}
+            worldLayout={worldLayout}
+            onWorldLayout={chooseWorldLayout}
             arePanelsHidden={arePanelsHidden}
             onTogglePanels={
               isPanelHideAllowed ? () => dispatch({ type: 'panels-toggled' }) : undefined

@@ -11,6 +11,10 @@ import { mergeActiveWorldDocument } from '../../shared/office/world-document-lay
 import { buildEffectiveFloors } from './effective-world-floors'
 import { cityScenerySites } from '../../shared/office/city-scenery'
 import { cityVenueSite } from '../../shared/office/city-access'
+import { ringWorldDocument } from '../../shared/office/world-document-ring'
+
+// City honours saved editor positions; Campus re-rings every building and drops venues.
+export type EffectiveWorldLayout = 'city' | 'campus'
 
 // The session fields resolveEffectiveWorld reads; of `subagents`, only the count. Tokens,
 // activity and observation never change the world, so a message carrying only those reuses it.
@@ -29,25 +33,29 @@ export const EFFECTIVE_WORLD_SESSION_FIELDS = [
 export function effectiveWorldKey(
   baseLayout: LayoutMap,
   document: WorldDocument,
-  sessions: readonly SessionRef[]
+  sessions: readonly SessionRef[],
+  layout: EffectiveWorldLayout = 'city'
 ): string {
   const inputs = sessions.map((session) =>
     EFFECTIVE_WORLD_SESSION_FIELDS.map((field) =>
       field === 'subagents' ? session.subagents.length : session[field]
     )
   )
-  return JSON.stringify([baseLayout, document.revision, inputs])
+  return JSON.stringify([baseLayout, document.revision, inputs, layout])
 }
 
 // dry-new: buildLayout owns source allocation; this pure projection adds device-local physical storeys.
 export function resolveEffectiveWorld(
   baseLayout: LayoutMap,
   document: WorldDocument,
-  sessions: readonly SessionRef[]
+  sessions: readonly SessionRef[],
+  layout: EffectiveWorldLayout = 'city'
 ): LayoutMap {
   const baseline = buildLayout([...sessions], allocationLayout(document.allocation, baseLayout))
-  const defaults = createWorldDocument(baseline, sessions)
-  const requested = mergeActiveWorldDocument(defaults, document)
+  const isCampus = layout === 'campus'
+  const arrange = isCampus ? ringWorldDocument : (arranged: WorldDocument) => arranged
+  const defaults = arrange(createWorldDocument(baseline, sessions))
+  const requested = arrange(mergeActiveWorldDocument(defaults, document))
   const context = { layout: baseLayout, sessions }
   const errors = validateWorldDocument(requested, context)
   let effective = requested
@@ -67,7 +75,8 @@ export function resolveEffectiveWorld(
     ...floors.filter((floor) => (floor.elevation ?? 0) === 0),
     ...effective.venues.map(cityVenueSite)
   ]
-  const streetBlocks = cityScenerySites(groundSites)
+  // Campus has no town, so no filler lots for walkers to steer round.
+  const streetBlocks = isCampus ? [] : cityScenerySites(groundSites)
   return {
     version: 1,
     floors,

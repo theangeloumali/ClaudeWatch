@@ -26,6 +26,10 @@ import { cityEvents, type CityEventLog } from './city-events'
 import { toFloorGeometry } from './layout-geometry'
 import { officePoses, poseOf, structuralKey, type PoseStore } from './pose-store'
 import { createGamingCheck } from '../office/scene/worker-seat-presence'
+import {
+  readWorldLayoutPreference,
+  type WorldLayout
+} from '../office/logic/world-layout-preference'
 
 export interface FeedSource {
   ready(): Promise<void>
@@ -57,6 +61,7 @@ const BLURRED_FRAME_GAP_MS = 200
 export interface LiveFeed extends OfficeFeed {
   // Every agent's pose at the latest sim step; frames are sent only when structure changes.
   poses: PoseStore
+  setWorldLayout(layout: WorldLayout): void
 }
 
 const isObjectArray = (value: unknown): value is Record<string, unknown>[] =>
@@ -118,6 +123,8 @@ export function createLiveFeed(
   let stop: (() => void) | null = null
   let currentWorld: World | null = null
   let documentStore: WorldDocumentStore | null = null
+  let worldLayout = readWorldLayoutPreference(options.storage)
+  let relayout: (() => void) | null = null
 
   const start = (): (() => void) => {
     const saved = loadLayout(options.storage)
@@ -127,9 +134,9 @@ export function createLiveFeed(
     let resolvedLayout: LayoutMap | undefined
     const resolveLayout = (base: LayoutMap, sessions: readonly SessionRef[]): LayoutMap => {
       const document = documentStore?.get().document ?? createWorldDocument(base, sessions)
-      const nextKey = effectiveWorldKey(base, document, sessions)
+      const nextKey = effectiveWorldKey(base, document, sessions, worldLayout)
       if (nextKey !== resolvedKey || !resolvedLayout) {
-        resolvedLayout = resolveEffectiveWorld(base, document, sessions)
+        resolvedLayout = resolveEffectiveWorld(base, document, sessions, worldLayout)
         resolvedKey = nextKey
       }
       return resolvedLayout
@@ -172,6 +179,12 @@ export function createLiveFeed(
     let offDocument: (() => void) | undefined
     let documentRevision = -1
     let documentKey = ''
+    // The fade-and-reseat path a saved document change takes (vault: relayout re-routes walkers).
+    relayout = () => {
+      resolvedKey = ''
+      world.refreshLayout()
+      updateFloors()
+    }
     const updateFloors = (): void => {
       const nextFloors = toFloorGeometry(
         world.layout(),
@@ -224,9 +237,7 @@ export function createLiveFeed(
           if (nextKey === documentKey) return
           documentKey = nextKey
           documentRevision = state.revision
-          resolvedKey = ''
-          world.refreshLayout()
-          updateFloors()
+          relayout?.()
         })
       }
       world.apply(message)
@@ -310,12 +321,18 @@ export function createLiveFeed(
       documentStore?.dispose()
       documentStore = null
       if (currentWorld === world) currentWorld = null
+      relayout = null
     }
   }
 
   return {
     poses,
     getWorldDocumentStore: () => documentStore,
+    setWorldLayout(layout) {
+      if (layout === worldLayout) return
+      worldLayout = layout
+      relayout?.()
+    },
     setBodyObstacles: (bodies) => currentWorld?.setBodyObstacles(bodies),
     subscribe(listener) {
       listeners.add(listener)

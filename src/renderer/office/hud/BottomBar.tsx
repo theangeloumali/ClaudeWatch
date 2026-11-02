@@ -4,6 +4,7 @@ import { Plate } from '../../components/deck/Plate'
 import type { ZoomDirection } from '../logic/camera-bands'
 import { SETTINGS_KEY, WALK_KEYS } from '../logic/hotkeys'
 import type { WallsMode } from '../logic/room-layout'
+import type { WorldLayout } from '../logic/world-layout-preference'
 import { BAR_BUTTON_CLASS, KBD_CLASS } from './hud-styles'
 import { OfficeSettingsPanel } from './OfficeSettings'
 import { officeSettings } from '../logic/office-settings'
@@ -44,6 +45,9 @@ export interface BottomBarProps {
   canWorkstation?: boolean
   viewMode?: 'office' | 'city'
   onView?: (view: 'office' | 'city') => void
+  // Offered with onView: City and Campus are two layouts of the same city view.
+  worldLayout?: WorldLayout
+  onWorldLayout?: (layout: WorldLayout) => void
   onReset?: () => void
   onEditLayout?: () => void
   // Offered on wide and medium layouts only; a phone keeps its bottom sheet.
@@ -366,24 +370,63 @@ export function BottomBar(props: BottomBarProps) {
   )
 }
 
+interface ViewChoice {
+  id: string
+  label: string
+  title: string
+  isActive: boolean
+  choose: () => void
+}
+
+// City · Campus · Office; Office keeps whichever layout is active.
+function viewChoices(props: BottomBarProps): ViewChoice[] {
+  const isCity = props.viewMode === 'city'
+  const layout = props.worldLayout ?? 'city'
+  const cityIn = (next: WorldLayout) => () => {
+    props.onWorldLayout?.(next)
+    props.onView?.('city')
+  }
+  const office: ViewChoice = {
+    id: 'office',
+    label: 'Office',
+    title: 'Office reference: 35° elevation, 45° azimuth',
+    isActive: props.viewMode === 'office',
+    choose: () => props.onView?.('office')
+  }
+  const city: ViewChoice = {
+    id: 'city',
+    label: 'City',
+    title: 'Frame the city',
+    isActive: isCity && layout === 'city',
+    choose: cityIn('city')
+  }
+  if (!props.onWorldLayout) return [city, office]
+  const campus: ViewChoice = {
+    id: 'campus',
+    label: 'Campus',
+    title: 'Project rooms on a ring round the hub, at night',
+    isActive: isCity && layout === 'campus',
+    choose: cityIn('campus')
+  }
+  return [city, campus, office]
+}
+
 function ViewControls({ props }: { props: BottomBarProps }) {
   if (!props.onView) return null
   const isShowing3D = props.is3DAvailable && !props.isListView
   return (
     <div role="group" aria-label="View" className="flex gap-1">
-      {(['city', 'office'] as const).map((view) => (
+      {viewChoices(props).map((choice) => (
         <button
           type="button"
-          key={view}
+          key={choice.id}
           disabled={!isShowing3D}
-          aria-pressed={!props.isListView && props.viewMode === view}
-          title={
-            view === 'office' ? 'Office reference: 35° elevation, 45° azimuth' : 'Frame the city'
-          }
-          onClick={() => props.onView?.(view)}
+          aria-pressed={!props.isListView && choice.isActive}
+          title={choice.title}
+          onClick={choice.choose}
           className={BAR_BUTTON_CLASS}
         >
-          {view === 'office' ? 'Office' : 'City'}
+          {choice.label}
         </button>
       ))}
       {props.onWorkstation && (!props.isCompact || !props.isNarrow) && (

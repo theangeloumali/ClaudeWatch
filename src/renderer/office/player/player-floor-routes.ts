@@ -139,3 +139,16 @@ export function travelPlayerToFloor(
     allFloors
   })
 }
+
+// A layout switch moves every building, so the player restarts outdoors at the origin: Campus's
+// hub plaza, and City's open gate. No route is walked from where it stood.
+export function placePlayerAtOrigin(player: Player): void {
+  player.position = { x: 0, z: 0 }
+  player.path = []
+  player.goal = null
+  player.held.clear()
+  player.elevation = 0
+  player.physicalFloorId = null
+  delete player.connectorId
+  player.onGoal?.()
+}

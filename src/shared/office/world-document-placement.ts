@@ -1,4 +1,5 @@
 import { compactWorldDocument } from './world-document-packing'
+import { ringWorldDocument } from './world-document-ring'
 import { CITY_FRONTAGE_SETBACK_METRES, cityBlock, cityGrid } from './city-block-layout'
 import { WORLD_DOCUMENT_LIMITS } from './world-document-limits'
 import type { WorldDocument } from './world-document-types'
@@ -6,9 +7,10 @@ import type { WorldDocument } from './world-document-types'
 // Independent office IDs occupy street parcels; company membership never determines geography.
 export function arrangeWorldDocument(
   document: WorldDocument,
-  mode: 'central' | 'districts' | 'streets' = 'streets'
+  mode: 'central' | 'districts' | 'streets' | 'ring' = 'streets'
 ): WorldDocument {
   if (mode === 'central') return compactWorldDocument(document)
+  if (mode === 'ring') return ringWorldDocument(document)
   const arranged = structuredClone(document)
   const sites = [
     ...arranged.buildings.toSorted(
