@@ -120,3 +120,13 @@ it('offers no right-click layout editing in Campus, which places every room itse
   fireEvent.click(screen.getByRole('button', { name: 'Campus' }))
   expect(currentScene().onEditTarget).toBeUndefined()
 })
+
+it('draws the city, editor and all, when the sim could not ring the world for Campus', async () => {
+  const frame = navigationFrame()
+  const harness = createOfficeHarness(frame)
+  await screen.findByLabelText('Map integration scene')
+  fireEvent.click(screen.getByRole('button', { name: 'Campus' }))
+  expect(currentScene().onEditTarget).toBeUndefined()
+  harness.push({ ...frame, worldLayout: 'city' })
+  expect(currentScene().onEditTarget).toBeTypeOf('function')
+})

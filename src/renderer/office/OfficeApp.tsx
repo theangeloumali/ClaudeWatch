@@ -128,7 +128,8 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
     saveWorldLayoutPreference(browserStorage(), layout)
   }, [])
   useEffect(() => feed.setWorldLayout?.(worldLayout), [feed, worldLayout])
-  const isCampus = worldLayout === 'campus'
+  // The sim may have had to keep the city: Campus is drawn only once it really ringed the world.
+  const isCampus = worldLayout === 'campus' && state.frame?.worldLayout !== 'city'
   const [hasWebGL] = useState(canCreateWebGL2)
   const [hasSceneFailed, setHasSceneFailed] = useState(false)
   const [metrics] = useState(createFrameMetrics)
@@ -209,7 +210,7 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
     if (!frame || !zoneId) return undefined
     return frame.floors.flatMap((floor) => findZone(floor, zoneId) ?? [])[0]
   }, [frame, state.focusedZoneId])
-  const officeTheme = useOfficeTheme(focusedZone, worldLayout)
+  const officeTheme = useOfficeTheme(focusedZone, isCampus ? 'campus' : 'city')
   const { theme, cycleTheme } = officeTheme
   const themeAssignments = useThemeAssignments()
 
@@ -293,6 +294,7 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
     frame: state.frame,
     visibleFrame: frame,
     roles,
+    isAvailable: !isCampus,
     onSelectAgent: selectAgent
   })
   const { previewFloors, worldStore } = editing

@@ -76,14 +76,21 @@ function isGltfJson(value: unknown): value is GltfJson {
 
 // Reads one float or u16 accessor, interleaved or not, from the binary chunk; null for any
 // accessor it cannot read in full.
-function readAccessor(json: GltfJson, data: DataView, binStart: number, index: number) {
-  const accessor = json.accessors.at(index)
-  if (!accessor || index < 0) return null
+// `Array.at` reads a missing or fractional index as a real one, and a negative from the end.
+function itemAt<Item>(items: readonly Item[], index: unknown): Item | undefined {
+  return Number.isInteger(index) && typeof index === 'number' && index >= 0
+    ? items[index]
+    : undefined
+}
+
+function readAccessor(json: GltfJson, data: DataView, binStart: number, index: unknown) {
+  const accessor = itemAt(json.accessors, index)
+  if (!accessor) return null
   const isFloat = accessor.componentType === FLOAT
   if (!isFloat && accessor.componentType !== UNSIGNED_SHORT) return null
-  const view = json.bufferViews.at(accessor.bufferView)
+  const view = itemAt(json.bufferViews, accessor.bufferView)
   const components = COMPONENTS[accessor.type]
-  if (!view || accessor.bufferView < 0 || !components) return null
+  if (!view || !components) return null
   if (!Number.isInteger(accessor.count) || accessor.count < 0) return null
   const bytes = isFloat ? 4 : 2
   const stride = view.byteStride ?? components * bytes
@@ -103,8 +110,8 @@ function readAccessor(json: GltfJson, data: DataView, binStart: number, index: n
 }
 
 function decodePart(json: GltfJson, data: DataView, binStart: number, mesh: number, key: string) {
-  const primitive = json.meshes.at(mesh)?.primitives.at(0)
-  if (!primitive || mesh < 0) return null
+  const primitive = itemAt(json.meshes, mesh)?.primitives[0]
+  if (!primitive) return null
   const geometry = new BakedGeometry(key)
   for (const [name, attribute] of VERTEX_ATTRIBUTES) {
     const read = readAccessor(json, data, binStart, primitive.attributes[attribute])
@@ -129,14 +136,23 @@ export function decodeBakedGlb(buffer: ArrayBuffer, prefix: string): Map<string,
   const parsed = parseJson(new TextDecoder().decode(new Uint8Array(buffer, jsonStart, jsonLength)))
   if (!isGltfJson(parsed)) return null
   const binStart = jsonStart + jsonLength + CHUNK_HEADER_BYTES
+  return bakedParts(parsed, data, binStart, prefix)
+}
+
+function bakedParts(json: GltfJson, data: DataView, binStart: number, prefix: string) {
   const parts = new Map<string, BakedPart>()
-  for (const node of parsed.nodes) {
-    if (node.mesh === undefined) continue
-    const geometry = decodePart(parsed, data, binStart, node.mesh, `${prefix}:${node.name}`)
-    const box = geometry?.boundingBox
-    if (!geometry || !box) return null
-    const size: Vector = [box.max.x - box.min.x, box.max.y - box.min.y, box.max.z - box.min.z]
-    parts.set(node.name, { geometry, pivot: node.translation ?? [0, 0, 0], size })
+  try {
+    for (const node of json.nodes) {
+      if (node.mesh === undefined) continue
+      const geometry = decodePart(json, data, binStart, node.mesh, `${prefix}:${node.name}`)
+      const box = geometry?.boundingBox
+      if (!geometry || !box) return null
+      const size: Vector = [box.max.x - box.min.x, box.max.y - box.min.y, box.max.z - box.min.z]
+      parts.set(node.name, { geometry, pivot: node.translation ?? [0, 0, 0], size })
+    }
+  } catch {
+    // Only the outline of the JSON is checked; a deeper shape it lacks is a model it cannot read.
+    return null
   }
   return parts
 }

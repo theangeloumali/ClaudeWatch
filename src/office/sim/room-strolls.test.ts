@@ -160,6 +160,40 @@ describe('room strolls', () => {
     expect(at(view(sim, 'a'))).toEqual(at(desk))
   })
 
+  it.each(['office', 'campus'] as const)(
+    'lets a walker heading home through to a desk that moved to another room (%s)',
+    (layout) => {
+      const sessions = [session('a', 'p_a'), session('b', 'p_b')]
+      const document = createWorldDocument(buildLayout(sessions, undefined), sessions)
+      const sim = open(
+        sessions,
+        layout === 'campus'
+          ? {
+              resolveLayout: (base, current) =>
+                resolveEffectiveWorld(base, document, current, 'campus')
+            }
+          : {}
+      )
+      untilStroll(sim, 'a')
+      const strolls = sim['strolls']
+      for (let tick = 0; tick < 3000 && !strolls.get('a')?.isReturning; tick++) sim.step(100)
+      expect(strolls.get('a')?.isReturning).toBe(true)
+      patch(sim, [session('a', 'p_b')])
+      // It may stroll again once seated, so it is enough that it reached the new desk once.
+      const isSeated = run(sim, 120).some((views) => {
+        const moved = views.find((agent) => agent.agentKey === 'a')!
+        return (
+          moved.roomId !== undefined &&
+          moved.place === undefined &&
+          at(moved).x === at(deskOf(sim, moved)).x &&
+          at(moved).z === at(deskOf(sim, moved)).z
+        )
+      })
+      expect(isSeated).toBe(true)
+      expect(strolls.get('a')?.isReturning).not.toBe(true)
+    }
+  )
+
   it('never strolls with lounge trips off', () => {
     const sim = open([session('a')], { loungeTrips: false })
     for (const views of run(sim, SETTLE_S)) expect(views[0].place).toBeUndefined()

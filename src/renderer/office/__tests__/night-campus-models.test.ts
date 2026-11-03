@@ -78,6 +78,13 @@ describe('campus models', () => {
       glbOf(meshOf([{ bufferView: 0, componentType: 5126, count: 1_000, type: 'VEC3' }]))
     ],
     [
+      'a vertex attribute it does not carry',
+      glbOf({
+        ...meshOf([{ bufferView: 0, componentType: 5126, count: 0, type: 'VEC3' }]),
+        meshes: [{ primitives: [{ attributes: { POSITION: 0, NORMAL: 0 }, indices: 0 }] }]
+      })
+    ],
+    [
       'an accessor type it does not read',
       glbOf(meshOf([{ bufferView: 0, componentType: 5126, count: 1, type: 'MAT4' }]))
     ]

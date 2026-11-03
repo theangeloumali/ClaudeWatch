@@ -244,6 +244,9 @@ export class World {
     isInitial: boolean
   ): AgentRecord {
     const key = session.key
+    // A new desk is a new walk, not the way home from a stroll.
+    const stroll = this.strolls.get(key)
+    if (stroll) stroll.isReturning = false
     const agent = createAgent(
       session,
       {

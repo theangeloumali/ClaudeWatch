@@ -14,6 +14,7 @@ export function useWorldEditing({
   frame,
   visibleFrame,
   roles,
+  isAvailable,
   onSelectAgent
 }: {
   feed: OfficeFeed
@@ -23,6 +24,8 @@ export function useWorldEditing({
   visibleFrame: OfficeFrame | null
   // Set while names are hidden: the dialog, its menu and the preview show roles.
   roles: RoleBook | null
+  // False in Campus, which places every room itself: whatever was open closes.
+  isAvailable: boolean
   onSelectAgent: (key: string) => void
 }) {
   const [isOpen, setIsOpen] = useState(false)
@@ -30,6 +33,15 @@ export function useWorldEditing({
   const [menuTarget, setMenuTarget] = useState<SceneEditTarget | null>(null)
   const [focusField, setFocusField] = useState<string | undefined>()
   const [previewDocument, setPreviewDocument] = useState<WorldDocument | null>(null)
+  const [wasAvailable, setWasAvailable] = useState(isAvailable)
+  if (wasAvailable !== isAvailable) {
+    setWasAvailable(isAvailable)
+    if (!isAvailable) {
+      setIsOpen(false)
+      setMenuTarget(null)
+      setPreviewDocument(null)
+    }
+  }
   const worldStore = feed.getWorldDocumentStore?.()
   const realPreviewFloors = useMemo(() => {
     if (!previewDocument || !frame) return null

@@ -91,6 +91,7 @@ export function resolveEffectiveWorld(
     floors,
     effectiveVenues: effective.venues,
     streetBlocks,
+    worldLayout: layout,
     reservations: Object.fromEntries(
       Object.entries(baseline.reservations).map(([key, held]) => [
         key,

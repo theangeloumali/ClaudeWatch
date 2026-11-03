@@ -307,7 +307,8 @@ export function createLiveFeed(
         feedRevision,
         structureRevision,
         worldRevision: documentRevision,
-        venues: resolvedLayout?.effectiveVenues
+        venues: resolvedLayout?.effectiveVenues,
+        worldLayout: resolvedLayout?.worldLayout
       }
       for (const listener of listeners) listener(frame)
     }, TICK_MS)

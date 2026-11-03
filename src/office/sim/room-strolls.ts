@@ -84,7 +84,8 @@ export function keepsClearOfDoor(
   const room = floors
     .find((floor) => floor.id === from.floorId)
     ?.rooms.find((candidate) => candidate.id === from.roomId)
-  if (!room) return () => true
+  // Only its own room's door: a walker already outside it is on another way.
+  if (!room || !isInside(room, from)) return () => true
   // A desk inside the zone still lets its stroller walk home to it.
   const home = walk.destination ? doorDistance(room, walk.destination) : DOOR_CLEAR_METRES
   const nearest = Math.min(DOOR_CLEAR_METRES, doorDistance(room, from), home)

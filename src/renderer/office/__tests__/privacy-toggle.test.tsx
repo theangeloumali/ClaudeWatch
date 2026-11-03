@@ -229,6 +229,18 @@ describe('the Hide names setting', () => {
     expect(screen.getByText(/· finished its turn$/, line).textContent).toMatch(/^Project A-1 › /)
   })
 
+  it('closes an open layout editor on the switch to Campus, which places every room itself', async () => {
+    await openOffice()
+    fireEvent.click(screen.getByText('More controls', { selector: 'summary' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Edit layout' }))
+    expect(screen.getByRole('dialog', { name: 'Edit layout' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Campus' }))
+    // Campus counts once the sim's next frame has ringed the world.
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Edit layout' })).not.toBeInTheDocument()
+    )
+  })
+
   it('turning Hide names on drops the Campus toasts already shown', async () => {
     localStorage.setItem(WORLD_LAYOUT_PREFERENCE_KEY, JSON.stringify('campus'))
     const { feed, hello, patch } = liveFeed()

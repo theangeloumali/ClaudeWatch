@@ -20,4 +20,7 @@ it('draws the city when the rooms are too big to ring, never failing the Campus 
   }
   const campus = resolveEffectiveWorld(base, huge, sessions, 'campus')
   expect(campus).toEqual(resolveEffectiveWorld(base, huge, sessions, 'city'))
+  // The screen reads this to draw the city it got, not a Campus hub over it.
+  expect(campus.worldLayout).toBe('city')
+  expect(resolveEffectiveWorld(base, document, sessions, 'campus').worldLayout).toBe('campus')
 })

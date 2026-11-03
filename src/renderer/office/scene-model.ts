@@ -118,6 +118,8 @@ export interface OfficeFrame {
   structureRevision?: number
   worldRevision?: number
   venues?: readonly WorldVenue[]
+  // The layout the sim drew; Campus asked for may come back as the city.
+  worldLayout?: WorldLayout
 }
 
 export interface OfficeFeed {
