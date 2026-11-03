@@ -1,9 +1,10 @@
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { ComponentProps } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AccountRef, FeedMessage, SessionRef } from '../../../shared/office/types'
 import { createLiveFeed, type FeedSource } from '../../office-live/live-feed'
 import { buildOfficeLabels } from '../logic/office-labels'
+import { WORLD_LAYOUT_PREFERENCE_KEY } from '../logic/world-layout-preference'
 import {
   createOfficeSettingsStore,
   OFFICE_SETTINGS_STORAGE_KEY,
@@ -226,6 +227,28 @@ describe('the Hide names setting', () => {
 
     expect(shownText(document.body).match(REAL_NAMES)).toBeNull()
     expect(screen.getByText(/· finished its turn$/, line).textContent).toMatch(/^Project A-1 › /)
+  })
+
+  it('turning Hide names on drops the Campus toasts already shown', async () => {
+    localStorage.setItem(WORLD_LAYOUT_PREFERENCE_KEY, JSON.stringify('campus'))
+    const { feed, hello, patch } = liveFeed()
+    render(<OfficeApp feed={feed} />)
+    hello()
+    await screen.findByText('Scene drawn', {}, { timeout: 3000 })
+    const atMs = Date.now()
+    const observation = {
+      sourceId: 'claude',
+      observedAtMs: atMs,
+      staleAfterMs: 60_000,
+      coverage: 'own' as const
+    }
+    patch([{ ...SESSIONS[0], attention: 'done', updatedAtMs: atMs, observation }])
+    const toasts = await screen.findByRole('log', { name: 'Campus news' }, { timeout: 3000 })
+    await waitFor(() => expect(shownText(toasts)).toMatch(/Rocket App/))
+
+    setHideNames(true)
+
+    expect(shownText(document.body).match(REAL_NAMES)).toBeNull()
   })
 
   it('with names hidden, no agent key, session id or name-bearing teammate id reaches the DOM', async () => {

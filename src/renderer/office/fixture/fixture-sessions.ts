@@ -55,7 +55,7 @@ const CLAUDE_MODEL_IDS = [
 
 function claudeModelFor(session: FixtureSession, index: number): SelectedModelRef | undefined {
   if (session.provider !== 'claude') return undefined
-  return { providerId: 'anthropic', modelId: CLAUDE_MODEL_IDS[index % CLAUDE_MODEL_IDS.length] }
+  return { providerId: 'claude', modelId: CLAUDE_MODEL_IDS[index % CLAUDE_MODEL_IDS.length] }
 }
 
 export function companyKeyFor(project: FixtureProject): string {

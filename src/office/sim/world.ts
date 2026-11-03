@@ -24,10 +24,11 @@ import {
 import { buildLayout, deskOf, type FloorLayout, type LayoutMap, type LoungeLayout } from './layout'
 import { loungesByRoom } from './lounge'
 import { MovementRecovery } from './movement-recovery'
+import type { Point } from './path'
 import { placements, type Placement } from './placements'
 import { FloorRoutes, floorElevation } from './world-floor-routes'
 import { reconcileLeisure } from './world-leisure'
-import { reconcileStrolls, type StrollClock } from './room-strolls'
+import { keepsClearOfDoor, reconcileStrolls, type StrollClock } from './room-strolls'
 import { isSeatedElsewhere, seatAtDesk } from './world-recall'
 import { TickCrowd } from './tick-crowd'
 import {
@@ -328,9 +329,10 @@ export class World {
     let hasYielded = false
     const next = tickAgent(agent, SIM_TICK_MS, (from, to) => {
       const navigation = workerNavigation({ routes: this.routes, from })
-      const { isOpen } = navigation
+      const isClearOfDoor = keepsClearOfDoor(from, this.map.floors)
+      const isOpen = (point: Point) => navigation.isOpen(point) && isClearOfDoor(point)
       const body = agentBody(from)
-      const hasClosedStart = !isOpen(from)
+      const hasClosedStart = !navigation.isOpen(from)
       const leader = waitsForMovingBody({ body, to, obstacles, walkers, isOpen })
       if (leader && !this.waitEdges.has(from.agentKey)) {
         this.waitEdges.set(from.agentKey, leader)
@@ -355,8 +357,9 @@ export class World {
         obstacles,
         // A layout may build a wall under a walker or shrink away; let that walker escape it.
         isOpen: (point) =>
-          isOpen(point) ||
-          (hasClosedStart && Math.hypot(point.x - from.x, point.z - from.z) <= 0.140001)
+          isClearOfDoor(point) &&
+          (navigation.isOpen(point) ||
+            (hasClosedStart && Math.hypot(point.x - from.x, point.z - from.z) <= 0.140001))
       })
       hasYielded ||= Math.hypot(moved.x - to.x, moved.z - to.z) > 1e-8
       return { ...to, ...moved }

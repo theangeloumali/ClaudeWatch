@@ -52,6 +52,39 @@ describe('campus models', () => {
     expect(decodeBakedGlb(new Uint8Array([1, 2, 3, 4]).buffer, 'x')).toBeNull()
   })
 
+  // A GLB holding `json` and an 8-byte binary chunk; one node, one mesh, accessors as given.
+  function glbOf(json: unknown, jsonLength?: number): ArrayBuffer {
+    const text = new TextEncoder().encode(JSON.stringify(json).padEnd(64, ' '))
+    const buffer = new ArrayBuffer(12 + 8 + text.length + 8 + 8)
+    const data = new DataView(buffer)
+    data.setUint32(0, 0x46546c67, true)
+    data.setUint32(12, jsonLength ?? text.length, true)
+    new Uint8Array(buffer, 20, text.length).set(text)
+    return buffer
+  }
+  const meshOf = (accessors: unknown[]) => ({
+    nodes: [{ name: 'part', mesh: 0 }],
+    meshes: [{ primitives: [{ attributes: { POSITION: 0, NORMAL: 0, COLOR_0: 0 }, indices: 0 }] }],
+    accessors,
+    bufferViews: [{}]
+  })
+
+  it.each([
+    ['a JSON length past the end', glbOf(meshOf([]), 10_000)],
+    ['JSON that is not a glTF', glbOf('{"nodes":')],
+    ['an accessor index past the list', glbOf(meshOf([]))],
+    [
+      'a count running past the binary chunk',
+      glbOf(meshOf([{ bufferView: 0, componentType: 5126, count: 1_000, type: 'VEC3' }]))
+    ],
+    [
+      'an accessor type it does not read',
+      glbOf(meshOf([{ bufferView: 0, componentType: 5126, count: 1, type: 'MAT4' }]))
+    ]
+  ])('returns null, never throws, for %s', (_, buffer) => {
+    expect(decodeBakedGlb(buffer, 'x')).toBeNull()
+  })
+
   it('fits a part into its box, standing on the box floor', () => {
     const chair = CAMPUS_MODELS?.furniture.get('chair')
     if (!chair) throw new Error('chair missing')

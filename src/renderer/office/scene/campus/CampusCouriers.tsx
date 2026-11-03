@@ -74,6 +74,8 @@ export function CampusCouriers({ spokes, chipOf, isReducedMotion }: CampusCourie
       if (!isReducedMotion)
         crew.dispatch(request, spokesRef.current.get(request.buildingId)?.spoke, nowMs)
     }
+    // Reduced motion stills the road at once, couriers already out included.
+    if (isReducedMotion) crew.clear()
     const walking = crew.step(nowMs)
     if (walking.length === 0 && shownRef.current === 0) return
     if (walking.length > 0) sceneMotion.mark()

@@ -2,6 +2,7 @@ import { isAtRest } from '../../shared/office/attention'
 import { DESK_REACH_METRES, WORKER_BODY_RADIUS } from '../../shared/office/body-footprints'
 import { between, draw, hashOf, type Span } from '../../shared/office/seeded-draw'
 import { goStroll, isUrgent, LOUNGE_DELAY_MS, type AgentRecord } from './behaviour'
+import type { AgentView } from '../../shared/office/types'
 import type { FloorLayout, RoomLayout } from './layout'
 import { NAV_CELL_METRES, ROUTE_MARGIN_METRES } from './navigation'
 import type { Point } from './path'
@@ -69,6 +70,21 @@ const isInside = (room: RoomLayout, point: Point) =>
   Math.abs(point.x - room.x) <= room.width / 2 && Math.abs(point.z - room.z) <= room.depth / 2
 const doorDistance = (room: RoomLayout, point: Point) =>
   Math.hypot(point.x - room.door.x, point.z - room.door.z)
+
+// Body avoidance can shove a stroller off its route, so each step keeps out of the door zone;
+// one that set out inside it may only move away from the door.
+export function keepsClearOfDoor(
+  from: AgentView,
+  floors: readonly FloorLayout[]
+): (point: Point) => boolean {
+  if (from.place !== 'stroll') return () => true
+  const room = floors
+    .find((floor) => floor.id === from.floorId)
+    ?.rooms.find((candidate) => candidate.id === from.roomId)
+  if (!room) return () => true
+  const nearest = Math.min(DOOR_CLEAR_METRES, doorDistance(room, from))
+  return (point) => doorDistance(room, point) >= nearest - 1e-6
+}
 
 // The same agent and trip always draw the same share, so a replay strolls alike.
 const shareOf = (agent: AgentRecord, salt: string, trip: number) =>

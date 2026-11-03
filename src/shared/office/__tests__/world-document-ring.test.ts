@@ -3,7 +3,7 @@ import { buildLayout } from '../../../office/sim/layout'
 import { session } from '../../../office/sim/fixtures'
 import { createWorldDocument, validateWorldDocument } from '../world-document'
 import { arrangeWorldDocument } from '../world-document-placement'
-import { CAMPUS_HUB_RADIUS_M, ringWorldDocument } from '../world-document-ring'
+import { CAMPUS_HUB_RADIUS_M, campusRoadStart, ringWorldDocument } from '../world-document-ring'
 import type { WorldDocument, WorldFootprint } from '../world-document-types'
 
 function campusOf(count: number): {
@@ -81,6 +81,26 @@ describe('ringWorldDocument', () => {
       ring.buildings.filter((b) => Math.round(centreDistance(b.footprint)) === inner)
     ).toHaveLength(10)
     expect(outer).toBeGreaterThan(inner ?? 0)
+  })
+
+  it.each([13, 20, 31])('runs every road to the hub clear of the other rooms (%i)', (count) => {
+    const ring = ringWorldDocument(campusOf(count).document)
+    const ROAD_HALF_WIDTH_M = 1.1
+    for (const building of ring.buildings) {
+      const from = campusRoadStart(building.footprint)
+      const length = Math.hypot(from.x, from.z)
+      for (let along = 0; along <= length - CAMPUS_HUB_RADIUS_M; along += 0.25) {
+        const point = { x: from.x * (1 - along / length), z: from.z * (1 - along / length) }
+        for (const other of ring.buildings) {
+          if (other === building) continue
+          const o = other.footprint
+          const isInside =
+            Math.abs(point.x - o.x) < o.width / 2 + ROAD_HALF_WIDTH_M &&
+            Math.abs(point.z - o.z) < o.depth / 2 + ROAD_HALF_WIDTH_M
+          expect(isInside, `${building.id} road crosses ${other.id}`).toBe(false)
+        }
+      }
+    }
   })
 
   it('handles an empty world and a single building', () => {

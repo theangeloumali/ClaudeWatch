@@ -299,6 +299,12 @@ describe('buildRoomCards', () => {
     expect(card.faces.map((face) => face.agentKey)).toEqual(['a', 'a#1', 'a#2'])
   })
 
+  it('counts no one running while its activity cannot be seen', () => {
+    const down = [{ id: 'claude', ok: false, detail: 'down', checkedAtMs: 0, staleAfterMs: 1 }]
+    const [card] = buildRoomCards({ ...campus, sources: down }, () => null)
+    expect(card).toMatchObject({ agentCount: 5, runningCount: 0 })
+  })
+
   it('takes initials from the cast name, falling back to the agent label', () => {
     const [card] = buildRoomCards(campus, (agent) =>
       agent.agentKey === 'a' ? 'Ada Lovelace' : null

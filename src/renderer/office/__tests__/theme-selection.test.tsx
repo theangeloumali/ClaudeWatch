@@ -66,3 +66,12 @@ it('says the floor default changed when T cycles with no office in focus', () =>
   act(() => result.current.dismissNotice())
   expect(result.current.notice).toBe('')
 })
+
+it('draws the theme of the layout on screen, not the one storage last kept', () => {
+  localStorage.setItem('claudewatch.office.world-layout', JSON.stringify('campus'))
+  const city = renderHook(() => useOfficeTheme(undefined, 'city'))
+  expect(city.result.current.theme.id).not.toBe('night-campus')
+  localStorage.clear()
+  const campus = renderHook(() => useOfficeTheme(undefined, 'campus'))
+  expect(campus.result.current.theme.id).toBe('night-campus')
+})

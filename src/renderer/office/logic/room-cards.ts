@@ -1,5 +1,6 @@
 import type { AgentView, ProviderId } from '../../../shared/office/types'
 import type { OfficeFrame } from '../scene-model'
+import { isAgentActivityAvailable } from './activity-summary'
 import { membersByProject, projectZones, statusFor } from './name-cards'
 
 const MAX_ROOM_FACES = 3
@@ -53,7 +54,10 @@ export function buildRoomCards(
       z: zone.z,
       label: zone.label,
       agentCount: members.length,
-      runningCount: members.filter((agent) => statusFor(agent) === 'working').length,
+      // A status read from no fresh evidence would claim work nobody observed.
+      runningCount: members.filter(
+        (agent) => statusFor(agent) === 'working' && isAgentActivityAvailable(frame, agent)
+      ).length,
       faces,
       moreCount: members.length - faces.length
     }

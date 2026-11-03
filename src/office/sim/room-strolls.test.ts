@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentView, SessionRef } from '../../shared/office/types'
+import { createWorldDocument } from '../../shared/office/world-document'
+import { DEPARTURE_FADE_MS, type AgentView, type SessionRef } from '../../shared/office/types'
+import { resolveEffectiveWorld } from './effective-world'
 import { session, subagent } from './fixtures'
+import { buildLayout } from './layout'
 import { World } from './world'
 
 const DOOR_CLEAR_METRES = 2
@@ -18,7 +21,10 @@ const run = (sim: World, seconds: number) =>
   Array.from({ length: Math.round(seconds * 10) }, () => sim.step(100))
 const view = (sim: World, key: string) => sim.step(0).find((a) => a.agentKey === key)!
 const roomOf = (sim: World, agent: AgentView) =>
-  sim.layout().floors[0].rooms.find((room) => room.id === agent.roomId)!
+  sim
+    .layout()
+    .floors.find((floor) => floor.id === agent.floorId)!
+    .rooms.find((room) => room.id === agent.roomId)!
 const deskOf = (sim: World, agent: AgentView) =>
   roomOf(sim, agent).slots.find((slot) => slot.id === agent.slotId)!
 const at = (point: { x: number; z: number }) => ({
@@ -43,6 +49,25 @@ function untilStroll(sim: World, key: string, seconds = SETTLE_S): AgentView {
     if (agent.place === 'stroll') return agent
   }
   throw new Error(`${key} never strolled`)
+}
+
+function expectStrollersClearOfDoor(sim: World, seconds: number) {
+  let strollTicks = 0
+  for (const [tick, views] of run(sim, seconds).entries())
+    for (const agent of views.filter((candidate) => candidate.place === 'stroll')) {
+      strollTicks++
+      const distance = doorDistance(sim, agent)
+      // A desk inside the door zone (Campus has some) only lets its stroller walk away from it.
+      const limit = Math.min(
+        DOOR_CLEAR_METRES,
+        doorDistance(sim, { ...agent, ...deskOf(sim, agent) })
+      )
+      if (distance < limit - 1e-6)
+        throw new Error(
+          `${agent.agentKey} at tick ${tick} is ${distance.toFixed(2)} m from the door`
+        )
+    }
+  expect(strollTicks).toBeGreaterThan(0)
 }
 
 const withSubagents = (count: number): SessionRef => ({
@@ -177,6 +202,50 @@ describe('room strolls', () => {
     // The cap is only tested if some room really had agents out.
     expect(mostAway).toBeGreaterThanOrEqual(1)
     expect(new Set(previous.map((agent) => agent.roomId)).size).toBeGreaterThan(1)
+  })
+
+  // Body avoidance shoves walkers off their planned route, so the door rule is checked per step.
+  it.each([
+    ['one agent and five subagents', [withSubagents(5)]],
+    [
+      'two agents with subagents',
+      [withSubagents(3), { ...session('b'), subagents: [subagent('t0')] }]
+    ]
+  ])('keeps every stroller of a crowded room clear of its door: %s', (_label, sessions) => {
+    expectStrollersClearOfDoor(open(sessions), 300)
+  })
+
+  it('keeps strollers clear of the door under the Campus layout', () => {
+    const sessions = [withSubagents(5), session('b', 'p_b')]
+    const document = createWorldDocument(buildLayout(sessions, undefined), sessions)
+    const sim = open(sessions, {
+      resolveLayout: (base, current) => resolveEffectiveWorld(base, document, current, 'campus')
+    })
+    expectStrollersClearOfDoor(sim, 300)
+  })
+
+  it('strolls an agent whose source cannot tell when its turn ends', () => {
+    const observation = {
+      sourceId: 's',
+      observedAtMs: 0,
+      staleAfterMs: 1e9,
+      coverage: 'unknown' as const
+    }
+    const sim = open([{ ...session('a'), observation }])
+    expect(untilStroll(sim, 'a').place).toBe('stroll')
+  })
+
+  it('drops the stroll clock of an agent removed mid-stroll', () => {
+    const sim = open([session('a'), session('b')])
+    untilStroll(sim, 'a')
+    const clocks = sim['strolls']
+    expect(clocks.has('a')).toBe(true)
+    const before = clocks.size
+    sim.apply({ type: 'patch', v: 1, seq: ++seq, upserts: [], removed: ['a'] })
+    run(sim, DEPARTURE_FADE_MS / 1000 + 1)
+    expect(sim.step(0).map((agent) => agent.agentKey)).toEqual(['b'])
+    expect(clocks.has('a')).toBe(false)
+    expect(clocks.size).toBe(before - 1)
   })
 
   it('still takes a finished agent to the game corner', () => {

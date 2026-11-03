@@ -209,7 +209,7 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
     if (!frame || !zoneId) return undefined
     return frame.floors.flatMap((floor) => findZone(floor, zoneId) ?? [])[0]
   }, [frame, state.focusedZoneId])
-  const officeTheme = useOfficeTheme(focusedZone)
+  const officeTheme = useOfficeTheme(focusedZone, worldLayout)
   const { theme, cycleTheme } = officeTheme
   const themeAssignments = useThemeAssignments()
 
@@ -558,7 +558,13 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
           {campusHud && !isShowingList && (
             <div className="self-end px-2">
               <Suspense fallback={null}>
-                <ToastStack news={news} sessions={sessions ?? []} chips={campusHud.chips} />
+                {/* A toast keeps the words it arrived with; restart the stack when masking flips. */}
+                <ToastStack
+                  key={roles ? 'masked' : 'named'}
+                  news={news}
+                  sessions={sessions ?? []}
+                  chips={campusHud.chips}
+                />
               </Suspense>
             </div>
           )}

@@ -30,6 +30,7 @@ export interface CourierCrew {
   dispatch(request: CourierRequest, spoke: CampusSpoke | undefined, nowMs: number): boolean
   // The couriers still walking at `nowMs`: the same list every call, pruned in place.
   step(nowMs: number): readonly Courier[]
+  clear(): void
 }
 
 export function createCourierCrew(): CourierCrew {
@@ -54,6 +55,9 @@ export function createCourierCrew(): CourierCrew {
         if (nowMs - courier.startMs < COURIER_TRIP_MS) walking[kept++] = courier
       walking.length = kept
       return walking
+    },
+    clear() {
+      walking.length = 0
     }
   }
 }

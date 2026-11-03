@@ -82,6 +82,13 @@ describe('courier crew', () => {
     expect(crew.step(T0)).toHaveLength(COURIER_CAP)
   })
 
+  it('sends every courier home at once when reduced motion turns on mid-walk', () => {
+    const crew = createCourierCrew()
+    crew.dispatch({ id: 'c1', buildingId: 'b-1', atMs: T0 }, spoke('b-1'), T0)
+    crew.clear()
+    expect(crew.step(T0 + 100)).toEqual([])
+  })
+
   it('ignores a call from a room with no spoke', () => {
     const crew = createCourierCrew()
     expect(crew.dispatch({ id: 'c1', buildingId: 'gone', atMs: T0 }, undefined, T0)).toBe(false)

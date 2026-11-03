@@ -1,4 +1,4 @@
-import { CAMPUS_HUB_RADIUS_M } from '../../../shared/office/world-document-ring'
+import { CAMPUS_HUB_RADIUS_M, campusRoadStart } from '../../../shared/office/world-document-ring'
 import type { FloorGeometry, ZoneGeometry } from '../scene-model'
 
 interface CampusPoint {
@@ -26,16 +26,13 @@ function projectKeyOf(zones: readonly ZoneGeometry[]): string | null {
   return null
 }
 
-// One spoke per ground plate: from its edge point nearest the hub to the hub rim facing it.
+// One spoke per ground plate: from its hub-facing edge to the hub rim facing it.
 export function campusGeometry(floors: readonly FloorGeometry[]): CampusGeometry {
   const hub = { x: 0, z: 0, radius: CAMPUS_HUB_RADIUS_M }
   const spokes = floors
     .filter((floor) => (floor.elevation ?? 0) === 0)
     .map((floor) => {
-      const from = {
-        x: Math.min(Math.max(hub.x, floor.x - floor.width / 2), floor.x + floor.width / 2),
-        z: Math.min(Math.max(hub.z, floor.z - floor.depth / 2), floor.z + floor.depth / 2)
-      }
+      const from = campusRoadStart(floor)
       const distance = Math.hypot(from.x - hub.x, from.z - hub.z) || 1
       return {
         buildingId: floor.buildingId ?? floor.floorId,
