@@ -1,11 +1,16 @@
 import { useFrame } from '@react-three/fiber'
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, useRef } from 'react'
 import type { MemoryNotes } from '../../../../shared/office/types'
 import { usePrefersReducedMotion } from '../../hooks'
 import type { SceneBox } from '../../logic/camera-bands'
 import { campusRoomColors } from '../../logic/campus-colors'
 import { campusGeometry, type CampusSpoke } from '../../logic/campus-geometry'
-import { campusClock, type RunningRoom } from '../../logic/campus-motion'
+import {
+  campusClock,
+  runningByProject,
+  runningCountsKey,
+  type RunningRoom
+} from '../../logic/campus-motion'
 import type { FloorGeometry } from '../../scene-model'
 import type { OfficeTheme } from '../../themes/types'
 import { CampusArcs } from './CampusArcs'
@@ -39,23 +44,27 @@ export function CampusLayers({ floors, skyBox, memory, rooms }: CampusLayersProp
   const flash = useMemo(() => ({ value: 0 }), [])
   const { hub, spokes } = useMemo(() => campusGeometry(floors), [floors])
   const colors = useMemo(() => campusRoomColors(spokes), [spokes])
-  const chipOf = useCallback(
-    (spoke: CampusSpoke) =>
-      (spoke.projectKey !== null && colors.get(spoke.projectKey)?.chip) || UNCLAIMED_CHIP,
-    [colors]
-  )
   const chipOfProject = useCallback(
     (projectKey: string | null) =>
       (projectKey !== null && colors.get(projectKey)?.chip) || UNCLAIMED_CHIP,
     [colors]
   )
+  const chipOf = useCallback(
+    (spoke: CampusSpoke) => chipOfProject(spoke.projectKey),
+    [chipOfProject]
+  )
   const core = useMemo(() => ({ x: hub.x, y: BRAIN_CORE_Y_M, z: hub.z }), [hub.x, hub.z])
+  // `rooms` is a new array on every HUD rebuild; road speeds change only with the counts.
+  const roomsRef = useRef(rooms)
+  roomsRef.current = rooms
+  const runningKey = runningCountsKey(rooms)
+  const running = useMemo(() => runningByProject(roomsRef.current), [runningKey])
   return (
     <>
       <CampusStars box={skyBox} />
-      <CampusSpokes spokes={spokes} chipOf={chipOf} rooms={rooms} />
-      <CampusArcs spokes={spokes} chipOf={chipOf} hub={hub} coreY={BRAIN_CORE_Y_M} flash={flash} />
-      <CampusPackets spokes={spokes} core={core} chipOf={chipOfProject} rooms={rooms} />
+      <CampusSpokes spokes={spokes} chipOf={chipOf} running={running} />
+      <CampusArcs spokes={spokes} chipOf={chipOf} core={core} flash={flash} />
+      <CampusPackets spokes={spokes} core={core} chipOf={chipOfProject} running={running} />
       <CampusHub hub={hub} memory={memory} isReducedMotion={isReducedMotion} flash={flash} />
       <CampusCouriers spokes={spokes} chipOf={chipOf} isReducedMotion={isReducedMotion} />
     </>

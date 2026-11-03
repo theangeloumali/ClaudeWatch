@@ -8,7 +8,7 @@ export interface CityClock {
   tick(frameMs: number): void
 }
 
-const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)'
+export const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)'
 
 export function createCityClock(isReducedMotion: () => boolean): CityClock {
   let nowMs = Date.now()
@@ -30,4 +30,5 @@ function osReducedMotion(): () => boolean {
   return () => query.matches
 }
 
-export const cityClock = createCityClock(osReducedMotion())
+export const prefersReducedMotionNow = osReducedMotion()
+export const cityClock = createCityClock(prefersReducedMotionNow)

@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react'
 import { BufferAttribute, BufferGeometry, Color } from 'three'
-import type { CampusGeometry, CampusSpoke } from '../../logic/campus-geometry'
-import { arcPoints } from '../../logic/campus-motion'
+import type { CampusSpoke } from '../../logic/campus-geometry'
+import { arcPoints, type Vec3 } from '../../logic/campus-motion'
 import { ARC_RISE_M, ARC_ROOM_END_Y_M } from '../../logic/campus-packets'
 import { campusGlowMaterial } from './campus-shaders'
 
@@ -40,7 +40,7 @@ void main() {
 function arcGeometry(
   spokes: readonly CampusSpoke[],
   chipOf: (spoke: CampusSpoke) => string,
-  core: { x: number; y: number; z: number }
+  core: Vec3
 ): BufferGeometry | null {
   if (spokes.length === 0) return null
   const vertexCount = spokes.length * ARC_SEGMENTS * 2
@@ -80,18 +80,14 @@ function arcGeometry(
 interface CampusArcsProps {
   spokes: readonly CampusSpoke[]
   chipOf: (spoke: CampusSpoke) => string
-  hub: CampusGeometry['hub']
-  coreY: number
+  core: Vec3
   // 0..1, written by the Brain on a memory pulse.
   flash: { value: number }
 }
 
 // One curved line per room up to the Brain's core, every arc in one draw.
-export function CampusArcs({ spokes, chipOf, hub, coreY, flash }: CampusArcsProps) {
-  const geometry = useMemo(
-    () => arcGeometry(spokes, chipOf, { x: hub.x, y: coreY, z: hub.z }),
-    [spokes, chipOf, hub.x, hub.z, coreY]
-  )
+export function CampusArcs({ spokes, chipOf, core, flash }: CampusArcsProps) {
+  const geometry = useMemo(() => arcGeometry(spokes, chipOf, core), [spokes, chipOf, core])
   const material = useMemo(
     () => campusGlowMaterial(ARC_VERTEX, ARC_FRAGMENT, { uFlash: flash }),
     [flash]

@@ -1,3 +1,4 @@
+import { DESK_REACH_METRES } from '../../../shared/office/body-footprints'
 import type { RoomGeometry } from '../scene-model'
 
 // Any centred rectangle with a door: rooms, and company or project zones.
@@ -21,8 +22,7 @@ export interface WallSegment {
 export const WALL_HEIGHT_FULL = 1.3
 export const WALL_HEIGHT_LOW = 0.25
 export const ROOM_DOOR_WIDTH = 1.6
-// Distance from a seated agent to the centre of its desk.
-export const DESK_REACH = 0.62
+export const DESK_REACH = DESK_REACH_METRES
 // Cosine above which a wall counts as facing the camera in cutaway.
 const CUTAWAY_FACING_THRESHOLD = 0.2
 

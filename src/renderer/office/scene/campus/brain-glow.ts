@@ -1,4 +1,5 @@
 import { BufferAttribute, BufferGeometry, type Color } from 'three'
+import { draw } from '../../../../shared/office/seeded-draw'
 
 // Motes rise up the beam and fade at both ends; `seed` is (offset, angle, size).
 export const MOTE_VERTEX = /* glsl */ `
@@ -47,13 +48,8 @@ export function seededPoints(
 ): BufferGeometry {
   const seeds = new Float32Array(count * 3)
   const tints = new Float32Array(count * 3)
-  let state = salt >>> 0
-  const random = (): number => {
-    state = (Math.imul(state, 1664525) + 1013904223) >>> 0
-    return state / 2 ** 32
-  }
+  for (let index = 0; index < count * 3; index++) seeds[index] = draw(salt, index)
   for (let index = 0; index < count; index++) {
-    seeds.set([random(), random(), random()], index * 3)
     colors[index % colors.length].toArray(tints, index * 3)
   }
   const geometry = new BufferGeometry()

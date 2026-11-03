@@ -6,7 +6,7 @@ import { BAND_ZOOM } from '../logic/camera-bands'
 let percent = 100
 const listeners = new Set<() => void>()
 
-export function zoomPercentOf(zoom: number): number {
+function zoomPercentOf(zoom: number): number {
   return Math.round((zoom / BAND_ZOOM.floor) * 100)
 }
 

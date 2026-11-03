@@ -188,7 +188,8 @@ export function CampusHub({ hub, memory, isReducedMotion, flash }: CampusHubProp
       glow: new Color(GLOW),
       frames: ORBIT_TILTS.map((tilt, index) =>
         new Matrix4().makeRotationFromEuler(new Euler(tilt, index * 1.2, 0))
-      )
+      ),
+      lastTime: Number.NaN
     }),
     []
   )
@@ -196,6 +197,9 @@ export function CampusHub({ hub, memory, isReducedMotion, flash }: CampusHubProp
   useFrame((state) => {
     const time = campusClock.uTime.value
     const age = pulse.ageAt(state.clock.elapsedTime * 1000)
+    // A frozen clock (reduced motion) with no pulse running leaves every value as it was.
+    if (age === null && time === scratch.lastTime) return
+    scratch.lastTime = time
     const { object, point, tint, glow, frames } = scratch
     const lungs = breath(time, BREATH_S)
     coreRef.current?.scale.setScalar(breathScale(time, BREATH_S))

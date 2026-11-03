@@ -14,7 +14,7 @@ export interface MemoryIo {
   mtimeMs(path: string): Promise<number>
 }
 
-export const systemMemoryIo: MemoryIo = {
+const systemMemoryIo: MemoryIo = {
   list: (path) => readdir(path),
   realpath: (path) => realpath(path),
   mtimeMs: async (path) => (await stat(path)).mtimeMs

@@ -1,12 +1,6 @@
-import {
-  AdditiveBlending,
-  CanvasTexture,
-  MeshBasicMaterial,
-  PlaneGeometry,
-  RepeatWrapping,
-  SRGBColorSpace
-} from 'three'
-import { campusClock } from '../../logic/campus-motion'
+import { AdditiveBlending, MeshBasicMaterial, PlaneGeometry, RepeatWrapping } from 'three'
+import { breathGlsl, campusClock } from '../../logic/campus-motion'
+import { canvas2D, canvasTexture } from '../../scene/textures'
 import { MONITOR_COLORS } from '../../office-palette'
 import { BOOK_COLORS, NIGHT_CAMPUS_PALETTE } from './palette'
 
@@ -23,14 +17,11 @@ export interface CampusSurfaces {
 }
 
 function drawn(width: number, height: number, draw: (context: CanvasRenderingContext2D) => void) {
-  const canvas = document.createElement('canvas')
-  canvas.width = width
-  canvas.height = height
-  const context = canvas.getContext('2d')
-  if (!context) return null
+  const made = canvas2D(width, height)
+  if (!made) return null
+  const [canvas, context] = made
   draw(context)
-  const texture = new CanvasTexture(canvas)
-  texture.colorSpace = SRGBColorSpace
+  const texture = canvasTexture(canvas)
   texture.wrapS = RepeatWrapping
   texture.wrapT = RepeatWrapping
   return texture
@@ -97,7 +88,7 @@ function createSurfaces(): CampusSurfaces | null {
     ),
     // Idle desks hold the same page, dimmed and still.
     idleScreen: new MeshBasicMaterial({ map: code, color: '#4a5266', toneMapped: false }),
-    // Mirrors breath() in campus-motion, run on the GPU.
+    // In step with breath() in campus-motion.
     lampGlow: onCampusClock(
       new MeshBasicMaterial({
         map: pool,
@@ -109,7 +100,7 @@ function createSurfaces(): CampusSurfaces | null {
       }),
       'campus-lamp-breath',
       'vMapUv',
-      `diffuseColor.a *= 0.45 + 0.35 * (0.5 - 0.5 * cos(6.2832 * uTime / ${LAMP_BREATH_S}));`
+      `diffuseColor.a *= 0.45 + 0.35 * ${breathGlsl('uTime', LAMP_BREATH_S)};`
     ),
     sparkline: onCampusClock(
       new MeshBasicMaterial({

@@ -1,12 +1,7 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo } from 'react'
 import { BufferAttribute, BufferGeometry, Color } from 'three'
 import type { CampusSpoke } from '../../logic/campus-geometry'
-import {
-  packetSpeedFor,
-  runningCountsKey,
-  type RunningRoom,
-  type Vec3
-} from '../../logic/campus-motion'
+import { roadSpeedOf, type Vec3 } from '../../logic/campus-motion'
 import { campusPacketPaths, type PacketPath } from '../../logic/campus-packets'
 import { campusGlowMaterial, SOFT_DOT_FRAGMENT } from './campus-shaders'
 
@@ -85,15 +80,14 @@ function packetGeometry(
 function writeRoadSpeeds(
   geometry: BufferGeometry,
   paths: readonly PacketPath[],
-  rooms: readonly RunningRoom[] | undefined
+  running: ReadonlyMap<string, number>
 ): void {
-  const running = new Map(rooms?.map((room) => [room.projectKey, room.runningCount]))
   const packet = geometry.getAttribute('packet')
   let dot = 0
   for (const path of paths) {
     const dots = PACKETS_PER_PATH[path.kind] * TAIL_DOTS
     if (path.kind === 'road') {
-      const speed = packetSpeedFor(running.get(path.projectKey ?? '') ?? 0)
+      const speed = roadSpeedOf(running, path.projectKey)
       for (let index = dot; index < dot + dots; index++) packet.setY(index, speed)
     }
     dot += dots
@@ -105,22 +99,19 @@ interface CampusPacketsProps {
   spokes: readonly CampusSpoke[]
   core: Vec3
   chipOf: (projectKey: string | null) => string
-  rooms?: readonly RunningRoom[]
+  running: ReadonlyMap<string, number>
 }
 
 // Bright packets riding every road and arc into the Brain: one Points draw, moved by the shader.
-export function CampusPackets({ spokes, core, chipOf, rooms }: CampusPacketsProps) {
+export function CampusPackets({ spokes, core, chipOf, running }: CampusPacketsProps) {
   const paths = useMemo(() => campusPacketPaths(spokes, core), [spokes, core])
   const geometry = useMemo(() => packetGeometry(paths, chipOf), [paths, chipOf])
   const material = useMemo(() => campusGlowMaterial(PACKET_VERTEX, SOFT_DOT_FRAGMENT), [])
   useEffect(() => () => geometry?.dispose(), [geometry])
   useEffect(() => () => material.dispose(), [material])
-  const roomsRef = useRef(rooms)
-  roomsRef.current = rooms
-  const runningKey = runningCountsKey(rooms)
   useEffect(() => {
-    if (geometry) writeRoadSpeeds(geometry, paths, roomsRef.current)
-  }, [geometry, paths, runningKey])
+    if (geometry) writeRoadSpeeds(geometry, paths, running)
+  }, [geometry, paths, running])
   if (!geometry) return null
   // The shader places every dot, so the empty bounds would cull them all.
   return (

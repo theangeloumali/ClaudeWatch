@@ -1,3 +1,4 @@
+import { prefersReducedMotionNow } from '../logic/city-clock'
 import { contrastRatio } from '../themes/contrast'
 
 // Dark ink on a pale chip or skin, white on a deep one, whichever reads better.
@@ -13,7 +14,6 @@ export const GLASS_CLASS =
 export const GLASS_META_CLASS = 'font-mono text-[11px] text-white/70'
 
 const EASE_OUT = 'cubic-bezier(0.23, 1, 0.32, 1)'
-const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)'
 
 // A short glass nudge (a toast arriving, a count ticking); skipped under reduced motion and
 // where WAAPI is missing (jsdom).
@@ -23,6 +23,6 @@ export function playGlassMotion(
   durationMs: number
 ): void {
   if (!element || typeof element.animate !== 'function') return
-  if (window.matchMedia?.(REDUCED_MOTION_QUERY).matches) return
+  if (prefersReducedMotionNow()) return
   element.animate(keyframes, { duration: durationMs, easing: EASE_OUT })
 }

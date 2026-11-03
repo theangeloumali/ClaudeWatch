@@ -23,8 +23,13 @@ type Destination = Pick<
   AgentView,
   'floorId' | 'roomId' | 'slotId' | 'x' | 'z' | 'heading' | 'elevation' | 'physicalFloorId'
 >
-export const isUrgent = (attention: AgentAttention) =>
-  ['permission', 'question', 'error', 'limited'].includes(attention)
+const URGENT_ATTENTION: ReadonlySet<AgentAttention> = new Set([
+  'permission',
+  'question',
+  'error',
+  'limited'
+])
+export const isUrgent = (attention: AgentAttention) => URGENT_ATTENTION.has(attention)
 
 // How long a finished agent stays at its desk before it walks to its company's lounge.
 export const LOUNGE_DELAY_MS = 20_000

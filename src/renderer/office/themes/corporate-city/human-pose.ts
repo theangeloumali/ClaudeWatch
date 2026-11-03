@@ -195,7 +195,7 @@ export function applyHumanPose(rig: RobotRig, pose: RobotPose, options: ThemePos
     rig.body.current.position.y = MathUtils.lerp(target.bodyY, fromY, away)
     rig.body.current.rotation.set(target.bodyPitch, 0, target.bodyRoll)
   }
-  rig.head.current?.rotation.set(target.headPitch, 0, 0)
+  rig.head.current?.rotation.set(target.headPitch, pose.headYaw, 0)
   rig.leftArm.current?.rotation.set(target.leftArm, 0, 0)
   rig.rightArm.current?.rotation.set(target.rightArm, target.rightArmYaw, target.rightArmRoll)
   rig.leftElbow?.current?.rotation.set(target.leftElbow, 0, 0)

@@ -11,7 +11,8 @@ import {
   campusPropPlacements,
   campusRoomParts,
   campusRoomShell,
-  chartPlacement
+  chartPlacement,
+  type PropPlacement
 } from './room-parts'
 import { PROP_SCALE } from './room-props'
 
@@ -26,11 +27,15 @@ const SPARKLINE_SIZE: [number, number, number] = [0.82 * PROP_SCALE, 0.2 * PROP_
 const GLOW_BATCH = { [SHARED_BATCH]: 'campus-lamp-glow' }
 const SPARKLINE_BATCH = { [SHARED_BATCH]: 'campus-sparkline' }
 
-function RoomMotion({ floor }: { floor: FloorGeometry }) {
+function RoomMotion({
+  lamps,
+  chart
+}: {
+  lamps: readonly PropPlacement[]
+  chart: ReturnType<typeof chartPlacement>
+}) {
   const surfaces = campusSurfaces()
   if (!surfaces) return null
-  const chart = chartPlacement(floor)
-  const lamps = campusPropPlacements(floor).filter((placement) => placement.kind === 'lamp')
   return (
     <>
       {lamps.map((lamp, index) => (
@@ -66,12 +71,14 @@ export function NightCampusRoom({
   colors: CampusRoomColors
 }) {
   const room = useMemo(() => {
-    if (!CAMPUS_MODELS) return { parts: campusRoomParts(floor, colors), props: [] }
-    const props = campusPropPlacements(floor).map((placement) => ({
-      placement,
-      models: propModels(placement.kind)
-    }))
-    return { parts: campusRoomShell(floor, colors), props }
+    const placements = campusPropPlacements(floor)
+    const motion = {
+      lamps: placements.filter((placement) => placement.kind === 'lamp'),
+      chart: chartPlacement(floor)
+    }
+    if (!CAMPUS_MODELS) return { parts: campusRoomParts(floor, colors), props: [], motion }
+    const props = placements.map((placement) => ({ placement, models: propModels(placement.kind) }))
+    return { parts: campusRoomShell(floor, colors), props, motion }
   }, [floor, colors])
   return (
     <group position={[0, floorElevation(floor), 0]}>
@@ -92,7 +99,7 @@ export function NightCampusRoom({
           <Parts key={index} parts={placement.parts} />
         )
       )}
-      <RoomMotion floor={floor} />
+      <RoomMotion {...room.motion} />
     </group>
   )
 }

@@ -2,9 +2,9 @@ import type { AgentView, ProviderId } from '../../../shared/office/types'
 import type { OfficeFrame } from '../scene-model'
 import { membersByProject, projectZones, statusFor } from './name-cards'
 
-export const MAX_ROOM_FACES = 3
+const MAX_ROOM_FACES = 3
 
-export interface RoomFace {
+interface RoomFace {
   agentKey: string
   provider: ProviderId
   initials: string
@@ -22,7 +22,7 @@ export interface RoomCard {
   moreCount: number
 }
 
-export function initialsOf(name: string): string {
+function initialsOf(name: string): string {
   const words = name
     .trim()
     .split(/[\s_-]+/)

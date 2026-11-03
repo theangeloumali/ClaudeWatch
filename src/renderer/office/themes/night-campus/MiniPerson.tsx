@@ -1,20 +1,21 @@
 import { HumanFrame } from '../corporate-city/HumanFrame'
 import type { RobotModelProps } from '../types'
+import { BakedMaterial } from './BakedMesh'
 import { CAMPUS_MODELS } from './glb-props'
 import { MINI_BODY_FLAG, MINI_JOINT_OF, MINI_SCALE, miniRigPositions } from './mini-pose'
 import { NIGHT_CAMPUS_SKINS } from './palette'
 
 const MINI_BODY_DATA = { [MINI_BODY_FLAG]: true }
 const SCALE: [number, number, number] = [MINI_SCALE, MINI_SCALE, MINI_SCALE]
-const UNTINTED = '#ffffff'
+const MINI_AT = CAMPUS_MODELS && miniRigPositions(CAMPUS_MODELS.person)
 
 // One Kenney mesh at the joint origin; cloth is greyscale, so the provider colour tints it.
-function Piece({ name, color = UNTINTED }: { name: string; color?: string }) {
+function Piece({ name, color }: { name: string; color?: string }) {
   const part = CAMPUS_MODELS?.person.get(name)
   if (!part) return null
   return (
     <mesh geometry={part.geometry} scale={SCALE}>
-      <meshStandardMaterial vertexColors color={color} roughness={0.8} metalness={0.15} />
+      <BakedMaterial color={color} />
     </mesh>
   )
 }
@@ -22,10 +23,10 @@ function Piece({ name, color = UNTINTED }: { name: string; color?: string }) {
 // The Kenney mini character on the RobotRig groups, posed by the human pose. Knees, the eye and
 // the reading prop are empty groups it does not draw.
 export function MiniPerson(props: RobotModelProps) {
-  if (!CAMPUS_MODELS) return <HumanFrame {...props} />
+  if (!MINI_AT) return <HumanFrame {...props} />
   const { agent, rig } = props
   const cloth = NIGHT_CAMPUS_SKINS[agent.provider].body
-  const at = miniRigPositions(CAMPUS_MODELS.person)
+  const at = MINI_AT
   const leftArm = MINI_JOINT_OF.leftArm
   const rightArm = MINI_JOINT_OF.rightArm
   return (

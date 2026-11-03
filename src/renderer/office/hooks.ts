@@ -11,12 +11,11 @@ import {
   useThemeAssignments,
   type ThemeTarget
 } from './logic/office-themes'
+import { REDUCED_MOTION_QUERY } from './logic/city-clock'
 import { readWorldLayoutPreference } from './logic/world-layout-preference'
 import type { ZoneGeometry } from './scene-model'
 import { getTheme, listThemes, themeForTeam } from './themes/registry'
 import type { OfficeTheme } from './themes/types'
-
-const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)'
 
 export function usePrefersReducedMotion(): boolean {
   const [isReduced, setIsReduced] = useState(

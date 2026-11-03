@@ -39,7 +39,7 @@ export function farSides(azimuth: number): readonly [WallSide, WallSide] {
 }
 
 // Fixed to the world: a rotated camera sees the same two walls, possibly from the front.
-export const BACK_WALL_SIDES = farSides(ISO_START_AZIMUTH)
+const BACK_WALL_SIDES = farSides(ISO_START_AZIMUTH)
 
 // Yaw turning a prop's local +z (out of the wall) into the room.
 const INWARD_YAW: Record<WallSide, number> = {

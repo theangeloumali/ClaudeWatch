@@ -27,11 +27,7 @@ export function campusPacketPaths(spokes: readonly CampusSpoke[], core: Vec3): P
         kind: 'road' as const,
         projectKey: spoke.projectKey,
         from: roadFrom,
-        control: {
-          x: (roadFrom.x + roadTo.x) / 2,
-          y: ROAD_PACKET_Y_M,
-          z: (roadFrom.z + roadTo.z) / 2
-        },
+        control: arcControl(roadFrom, roadTo, 0),
         to: roadTo
       },
       {

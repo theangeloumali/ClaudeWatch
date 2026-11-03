@@ -33,6 +33,10 @@ export function breath(timeS: number, periodS: number): number {
   return 0.5 - 0.5 * Math.cos((2 * Math.PI * timeS) / periodS)
 }
 
+// breath() as a GLSL expression, for shaders that keep in step with it.
+export const breathGlsl = (timeExpression: string, periodS: number): string =>
+  `(0.5 - 0.5 * cos(6.2831853 * ${timeExpression} / ${periodS.toFixed(4)}))`
+
 // A wave from the core to the rim: `share` of the rim radius it has reached, fading as it goes.
 export function rippleAt(
   timeS: number,
@@ -94,4 +98,17 @@ export function runningCountsKey(rooms: readonly RunningRoom[] | undefined): str
     .map((room) => `${room.projectKey}=${room.runningCount}`)
     .sort()
     .join(',')
+}
+
+export function runningByProject(
+  rooms: readonly RunningRoom[] | undefined
+): ReadonlyMap<string, number> {
+  return new Map(rooms?.map((room) => [room.projectKey, room.runningCount]))
+}
+
+export function roadSpeedOf(
+  running: ReadonlyMap<string, number>,
+  projectKey: string | null
+): number {
+  return packetSpeedFor(running.get(projectKey ?? '') ?? 0)
 }

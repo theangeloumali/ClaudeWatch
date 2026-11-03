@@ -1,5 +1,5 @@
 // dry-new: the seeded draws live in shared so the sim, a node-side module, can use them too.
-export { between, draw, hashOf, type Span } from '../../../shared/office/seeded-draw'
+export { between, draw, hashOf } from '../../../shared/office/seeded-draw'
 
 export interface Rect {
   x: number

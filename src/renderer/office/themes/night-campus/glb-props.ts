@@ -167,13 +167,13 @@ export function fitTransform(part: BakedPart, box: FitBox) {
 }
 
 // A box standing `height` tall that keeps the part's own proportions.
-export function standing(part: BakedPart, at: Vector, height: number): FitBox {
+function standing(part: BakedPart, at: Vector, height: number): FitBox {
   const grow = height / part.size[1]
   return { at, size: [part.size[0] * grow, height, part.size[2] * grow] }
 }
 
 const [SCREEN_ACROSS, SCREEN_HEIGHT, SCREEN_ALONG] = WORKSTATIONS.corporate.screen
-export const DESK_TOP_M = 0.57
+const DESK_TOP_M = 0.57
 const MONITOR_DEPTH_M = 0.13
 
 // The corporate desk's footprint in its slot frame: chair at the origin, desk ahead on +z.

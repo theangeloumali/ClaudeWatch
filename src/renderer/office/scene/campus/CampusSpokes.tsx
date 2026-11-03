@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo } from 'react'
 import { BoxGeometry, BufferAttribute, BufferGeometry, Color } from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import type { CampusSpoke } from '../../logic/campus-geometry'
-import { packetSpeedFor, runningCountsKey, type RunningRoom } from '../../logic/campus-motion'
+import { packetSpeedFor, roadSpeedOf } from '../../logic/campus-motion'
 import { campusGlowMaterial } from './campus-shaders'
 
 const ROAD_WIDTH_M = 2.2
@@ -128,12 +128,11 @@ function trailGeometry(
 function writeSpeeds(
   trails: BufferGeometry,
   spokes: readonly CampusSpoke[],
-  rooms: readonly RunningRoom[] | undefined
+  running: ReadonlyMap<string, number>
 ): void {
-  const running = new Map(rooms?.map((room) => [room.projectKey, room.runningCount]))
   const speed = trails.getAttribute('speed')
   spokes.forEach((spoke, index) => {
-    const value = packetSpeedFor(running.get(spoke.projectKey ?? '') ?? 0)
+    const value = roadSpeedOf(running, spoke.projectKey)
     for (let vertex = index * 4; vertex < index * 4 + 4; vertex++) speed.setX(vertex, value)
   })
   speed.needsUpdate = true
@@ -142,24 +141,21 @@ function writeSpeeds(
 interface CampusSpokesProps {
   spokes: readonly CampusSpoke[]
   chipOf: (spoke: CampusSpoke) => string
-  // Running agents per room: a busier room's road runs faster.
-  rooms?: readonly RunningRoom[]
+  // Running agents per project: a busier room's road runs faster.
+  running: ReadonlyMap<string, number>
 }
 
 // Rebuilt only when the ring changes; the packets run in the shader, so nothing asks for a frame.
-export function CampusSpokes({ spokes, chipOf, rooms }: CampusSpokesProps) {
+export function CampusSpokes({ spokes, chipOf, running }: CampusSpokesProps) {
   const roads = useMemo(() => roadGeometry(spokes), [spokes])
   const trails = useMemo(() => trailGeometry(spokes, chipOf), [spokes, chipOf])
   const packetMaterial = useMemo(() => campusGlowMaterial(PACKET_VERTEX, PACKET_FRAGMENT), [])
   useEffect(() => () => roads?.dispose(), [roads])
   useEffect(() => () => trails?.dispose(), [trails])
   useEffect(() => () => packetMaterial.dispose(), [packetMaterial])
-  const roomsRef = useRef(rooms)
-  roomsRef.current = rooms
-  const runningKey = runningCountsKey(rooms)
   useEffect(() => {
-    if (trails) writeSpeeds(trails, spokes, roomsRef.current)
-  }, [trails, spokes, runningKey])
+    if (trails) writeSpeeds(trails, spokes, running)
+  }, [trails, spokes, running])
   return (
     <>
       {roads && (

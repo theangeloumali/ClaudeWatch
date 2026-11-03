@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { BufferAttribute, BufferGeometry } from 'three'
+import { draw } from '../../../../shared/office/seeded-draw'
 import type { SceneBox } from '../../logic/camera-bands'
 import { campusGlowMaterial } from './campus-shaders'
 
@@ -33,16 +34,9 @@ void main() {
 `
 
 // Deterministic, so the sky is the same on every load and in every screenshot.
-function seededRandom(seed: number): () => number {
-  let state = seed >>> 0
-  return () => {
-    state = (Math.imul(state, 1664525) + 1013904223) >>> 0
-    return state / 2 ** 32
-  }
-}
-
 function starGeometry(box: SceneBox): BufferGeometry {
-  const random = seededRandom(0x5eed)
+  let nth = 0
+  const random = (): number => draw(0x5eed, nth++)
   const positions = new Float32Array(STAR_COUNT * 3)
   const colors = new Float32Array(STAR_COUNT * 3)
   const phases = new Float32Array(STAR_COUNT)

@@ -1,5 +1,5 @@
 import { isAtRest } from '../../shared/office/attention'
-import { WORKER_BODY_RADIUS } from '../../shared/office/body-footprints'
+import { DESK_REACH_METRES, WORKER_BODY_RADIUS } from '../../shared/office/body-footprints'
 import { between, draw, hashOf, type Span } from '../../shared/office/seeded-draw'
 import { goStroll, isUrgent, LOUNGE_DELAY_MS, type AgentRecord } from './behaviour'
 import type { FloorLayout, RoomLayout } from './layout'
@@ -11,9 +11,9 @@ const WORKING_EVERY_MS: Span = { min: 45_000, max: 120_000 }
 const RESTING_EVERY_MS: Span = { min: 15_000, max: 40_000 }
 const DWELL_MS: Span = { min: 5_000, max: 12_000 }
 const DOOR_CLEAR_METRES = 2
-// A body and its chair clear of every seat and of the desk drawn 0.62 m either way of it.
+// A body and its chair clear of every seat and of the desk drawn a desk reach either way of it.
 const SEAT_CLEAR_METRES = 1
-const DESK_REACH_METRES = 0.62
+const SEAT_REACHES = [0, DESK_REACH_METRES, -DESK_REACH_METRES]
 const SPOT_STEP_METRES = 0.5
 const WALL_INSET_METRES = WORKER_BODY_RADIUS + ROUTE_MARGIN_METRES + NAV_CELL_METRES
 const SPOT_GAP_METRES = 2 * WORKER_BODY_RADIUS
@@ -46,7 +46,7 @@ function spotsIn(room: RoomLayout): Point[] {
   const isClear = (spot: Point) =>
     doorDistance(room, spot) >= DOOR_CLEAR_METRES &&
     seats.every((seat) =>
-      [0, DESK_REACH_METRES, -DESK_REACH_METRES].every(
+      SEAT_REACHES.every(
         (reach) =>
           Math.hypot(
             spot.x - (seat.x + Math.sin(seat.heading) * reach),
@@ -135,7 +135,7 @@ function goHome(agent: AgentRecord, clock: StrollClock | undefined, context: Str
 // their dwell is over, they are needed, they leave, or trips are switched off.
 export function reconcileStrolls(context: StrollContext): void {
   const { agents, clocks, nowMs } = context
-  let due: AgentRecord | undefined
+  let due: { agent: AgentRecord; clock: StrollClock } | undefined
   for (const agent of agents.values()) {
     const key = agent.view.agentKey
     const clock = clocks.get(key)
@@ -157,15 +157,14 @@ export function reconcileStrolls(context: StrollContext): void {
     const every = isAtRest(agent.view) ? RESTING_EVERY_MS : WORKING_EVERY_MS
     if (ready.atMs === undefined)
       ready.atMs = nowMs + between(every, shareOf(agent, 'wait', ready.trip))
-    else if (!due && nowMs >= ready.atMs) due = agent
+    else if (!due && nowMs >= ready.atMs) due = { agent, clock: ready }
   }
   if (!due) return
-  const key = due.view.agentKey
-  const clock = clocks.get(key)
-  if (!clock) return
-  const route = hasRoomToLeave(due, agents) ? routeOut(due, clock.trip, context) : undefined
+  const { agent, clock } = due
+  const key = agent.view.agentKey
+  const route = hasRoomToLeave(agent, agents) ? routeOut(agent, clock.trip, context) : undefined
   clock.atMs = undefined
   if (!route) return
   context.clearPassage(key)
-  agents.set(key, goStroll(due, route.heading, route.path))
+  agents.set(key, goStroll(agent, route.heading, route.path))
 }
