@@ -134,7 +134,7 @@ The video's Tasks and Calendar tabs (our Needs-you queue already covers approval
   - The previous app is kept as `~/Applications/ClaudeWatch-1.4.1-campus-r1.app`; the new one is installed to `/Applications`.
   - Stop for his approval (feedback memory 2026-10-12).
   - Verify: `codesign --verify --deep --strict /Applications/ClaudeWatch.app` passes and the app opens to Campus
-- [ ] Phase 10: Merge settle (after his approval)
+- [x] Phase 10: Merge settle (after his approval)
   - The old Phase 6 scope, plus tests for `campus-motion.ts`, packet speed, the glTF rig mapping and prop baking.
   - Then:
     - `npm test` and lint;
@@ -146,6 +146,18 @@ The video's Tasks and Calendar tabs (our Needs-you queue already covers approval
     - the vault entry;
     - a PR when he says so.
   - Verify: `npm test && npm run lint` green, and every completion-mandate step recorded
+  - Done 2026-11-03, after his approval ("I think this is all good for now. Let's merge and create a new build for this"):
+    - /simplify: four cleanup reviews; Campus layers share one running-count map, one seeded draw and one baked material, and unused exports went.
+    - Review: Kai (no veto) and Maya, then Codex for its three turns, then Maya again as the final review. Every finding was fixed with a test that failed first:
+      - a toast keeping a real name after Hide names;
+      - strollers pushed into the door zone, and walkers heading home left untracked;
+      - outer-ring roads crossing inner rooms;
+      - a ring too big for the world, now drawn as the city on screen too;
+      - the decoder throwing or misreading bad bytes;
+      - stroll starvation after a refused route;
+      - right-click editing and an open editor in Campus.
+    - `npm test`: 5,760 passed. Lint, typecheck and knip are clean.
+    - Demo: `recordings/campus-map-demo.mp4` (local only), with a motion pass.
 
 ## Parallel vs sequential
 
@@ -322,8 +334,8 @@ Phases 1–5 shipped the Campus map, and Angelo has used the build installed in 
 
 ### Round 2 tickets
 
-| Ticket              | Status                                              | Source link                                 | Conversation                                                                                                                                                                                |
-| ------------------- | --------------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| none (needs filing) | Round 2 Phase 6 (motion) planned; no PR yet         | https://www.youtube.com/watch?v=t0hGE-aaAds | "Okay I think this is a good start but this can still be improved, like having a lot of animations and motion graphics here that can make this fucking alive."                              |
-| none (needs filing) | Answered: free CC0 packs, not paid; swap in Phase 8 | https://www.youtube.com/watch?v=t0hGE-aaAds | "Can we somehow replicate their models or is it a paid model?"                                                                                                                              |
-| none (needs filing) | Round 2 Phase 7 (room strolls) planned              | https://www.youtube.com/watch?v=t0hGE-aaAds | "Also I want the AI agents not to just be sitting. If possible as much as possible, they can roam around the room or whatever instead of just them fucking sitting without doing anything." |
+| Ticket              | Status                                               | Source link                                 | Conversation                                                                                                                                                                                |
+| ------------------- | ---------------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| none (needs filing) | Approved 2026-11-03; merged to main in the Campus PR | https://www.youtube.com/watch?v=t0hGE-aaAds | "Okay I think this is a good start but this can still be improved, like having a lot of animations and motion graphics here that can make this fucking alive."                              |
+| none (needs filing) | Answered: free CC0 packs; merged in the Campus PR    | https://www.youtube.com/watch?v=t0hGE-aaAds | "Can we somehow replicate their models or is it a paid model?"                                                                                                                              |
+| none (needs filing) | Approved 2026-11-03; merged in the Campus PR         | https://www.youtube.com/watch?v=t0hGE-aaAds | "Also I want the AI agents not to just be sitting. If possible as much as possible, they can roam around the room or whatever instead of just them fucking sitting without doing anything." |
