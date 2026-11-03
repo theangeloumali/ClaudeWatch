@@ -329,7 +329,11 @@ export class World {
     let hasYielded = false
     const next = tickAgent(agent, SIM_TICK_MS, (from, to) => {
       const navigation = workerNavigation({ routes: this.routes, from })
-      const isClearOfDoor = keepsClearOfDoor(from, this.map.floors)
+      const walk = {
+        isReturning: this.strolls.get(from.agentKey)?.isReturning === true,
+        destination: agent.path.at(-1)
+      }
+      const isClearOfDoor = keepsClearOfDoor(from, walk, this.map.floors)
       const isOpen = (point: Point) => navigation.isOpen(point) && isClearOfDoor(point)
       const body = agentBody(from)
       const hasClosedStart = !navigation.isOpen(from)

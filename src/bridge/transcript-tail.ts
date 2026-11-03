@@ -119,7 +119,10 @@ export async function readTranscript(
   const { size, mtimeMs } = listed ?? (await io.stat(path))
   let tail = memory.read.get(path)
   if (tail?.size !== size || tail.mtimeMs !== mtimeMs) {
-    tail = { size, mtimeMs, state: parseTranscript(await io.readTail(path)) }
+    const state = parseTranscript(await io.readTail(path))
+    // A tail of tool output alone holds no reply; the model it last named is still the one.
+    const model = state.model ?? tail?.state.model
+    tail = { size, mtimeMs, state: { ...state, ...(model && { model }) } }
     memory.read.set(path, tail)
   }
   return { ...tail.state, mtimeMs }

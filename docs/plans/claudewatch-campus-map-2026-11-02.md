@@ -119,7 +119,7 @@ The video's Tasks and Calendar tabs (our Needs-you queue already covers approval
     - the cap holds;
     - the lounge switch disables strolls;
     - the existing `lounge-trips` and `seated-agents` suites stay green.
-  - Verify: `npx vitest run src/office/sim` green; `npm run typecheck && npm run build`; a 60 s preview capture in Campus shows agents leaving and returning to their desks inside their room, none passing a door, with at least two-thirds of each room seated at any sampled frame
+  - Verify: `npx vitest run src/office/sim` green; `npm run typecheck && npm run build`; a 60 s preview capture in Campus shows agents leaving and returning to their desks inside their room, none passing a door, with at most a third of each room (rounded up) away at any sampled frame
 - [x] Phase 8: Free CC0 low-poly models
   - Spike first, in an empty temp folder: download the Kenney Furniture Kit and a character pack, read the licence, and inspect the node and bone trees with `npx @gltf-transform/cli inspect`.
   - Optimise the models and commit the GLBs plus `assets/campus/LICENSE.txt`.
@@ -314,7 +314,7 @@ Phases 1–5 shipped the Campus map, and Angelo has used the build installed in 
 
 1. `npm run typecheck && npm run build` green at each phase close.
 2. Preview in Campus, quality pinned to balanced: frames 1 s apart differ at the Brain, roads and stars; they're identical under reduced motion.
-3. Strolls: over 60 s, agents walk to spots inside their own room and return, never through a door. At least two-thirds of each room stay seated. A needs-you agent goes straight home.
+3. Strolls: over 60 s, agents walk to spots inside their own room and return, never through a door or within 2 m of it. At most a third of each room (rounded up) is away at once, so a one-agent room may stroll. A needs-you agent goes straight home.
 4. Live sessions: a busy room's packets run faster than an idle room's, and a tool call still sends a courier.
 5. Budget: ≤ 300 draws and ≤ 600k triangles at 20 agents; idle-focused CPU within 2 points of the baseline.
 6. After the model swap, at close zoom: people face the viewer, sit and type at their own desks, and stroll; the map rotates.

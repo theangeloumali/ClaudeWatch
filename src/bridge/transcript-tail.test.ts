@@ -3,7 +3,13 @@ import { describe, expect, it, vi } from 'vitest'
 import { sessionFromRegistry } from './claude'
 import { diff } from './reducer'
 import { liveSubagents, listAgentFiles } from './subagents'
-import { claudeModel, parseTranscript, projectSlug, transcriptPath } from './transcript-tail'
+import {
+  claudeModel,
+  parseTranscript,
+  projectSlug,
+  readTranscript,
+  transcriptPath
+} from './transcript-tail'
 import { fixtureIo, hostPath, registryEntry, session } from './__fixtures__/helpers'
 
 const root = hostPath('/claude')
@@ -49,6 +55,16 @@ describe('the model a transcript reports', () => {
   it('ignores synthetic replies and anything that is not a plain model name', () => {
     const tail = [reply('claude-opus-4-1'), reply('<synthetic>'), reply({ id: 1 }), reply('a\nb')]
     expect(parseTranscript(tail.join('\n')).model).toBe('claude-opus-4-1')
+  })
+
+  it('keeps the model it last saw when the tail it reads next holds no reply', async () => {
+    const path = join(root, 'projects', 'p', 'model.jsonl')
+    const toolOutput = JSON.stringify({ type: 'user', message: { content: [] } })
+    const files: Record<string, string | null> = { [path]: reply('claude-opus-4-1') }
+    const io = fixtureIo(files)
+    expect((await readTranscript(path, io, { size: 1, mtimeMs: 1 })).model).toBe('claude-opus-4-1')
+    files[path] = toolOutput
+    expect((await readTranscript(path, io, { size: 2, mtimeMs: 2 })).model).toBe('claude-opus-4-1')
   })
 
   it('reaches the session as its selected model, and only when known', () => {

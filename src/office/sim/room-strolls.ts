@@ -23,6 +23,8 @@ const SPOT_GAP_METRES = 2 * WORKER_BODY_RADIUS
 export interface StrollClock {
   atMs: number | undefined
   trip: number
+  // Called home and still walking there: away, and kept out of the door zone, until seated.
+  isReturning: boolean
 }
 
 export interface StrollContext {
@@ -75,14 +77,17 @@ const doorDistance = (room: RoomLayout, point: Point) =>
 // one that set out inside it may only move away from the door.
 export function keepsClearOfDoor(
   from: AgentView,
+  walk: { isReturning: boolean; destination: Point | undefined },
   floors: readonly FloorLayout[]
 ): (point: Point) => boolean {
-  if (from.place !== 'stroll') return () => true
+  if (from.place !== 'stroll' && !walk.isReturning) return () => true
   const room = floors
     .find((floor) => floor.id === from.floorId)
     ?.rooms.find((candidate) => candidate.id === from.roomId)
   if (!room) return () => true
-  const nearest = Math.min(DOOR_CLEAR_METRES, doorDistance(room, from))
+  // A desk inside the zone still lets its stroller walk home to it.
+  const home = walk.destination ? doorDistance(room, walk.destination) : DOOR_CLEAR_METRES
+  const nearest = Math.min(DOOR_CLEAR_METRES, doorDistance(room, from), home)
   return (point) => doorDistance(room, point) >= nearest - 1e-6
 }
 
@@ -105,14 +110,15 @@ const sameRoom = (agent: AgentRecord, other: AgentRecord) =>
   other.view.roomId === agent.view.roomId &&
   other.state !== 'leaving'
 
-// At most a third of a room away at once, the game corner's sitters included.
-function hasRoomToLeave(agent: AgentRecord, agents: Map<string, AgentRecord>): boolean {
+// At most a third of a room away at once, the game corner's sitters and walkers home included.
+function hasRoomToLeave(agent: AgentRecord, context: StrollContext): boolean {
   let members = 0
   let away = 0
-  for (const other of agents.values()) {
+  for (const other of context.agents.values()) {
     if (!sameRoom(agent, other)) continue
     members++
-    if (other.view.place === 'stroll' || other.view.place === 'lounge') away++
+    const isReturning = context.clocks.get(other.view.agentKey)?.isReturning === true
+    if (other.view.place === 'stroll' || other.view.place === 'lounge' || isReturning) away++
   }
   return away < Math.ceil(members / 3)
 }
@@ -143,6 +149,7 @@ function goHome(agent: AgentRecord, clock: StrollClock | undefined, context: Str
   if (clock) {
     clock.atMs = undefined
     clock.trip++
+    clock.isReturning = true
   }
   context.agents.set(agent.view.agentKey, context.callHome(agent) ?? agent)
 }
@@ -155,6 +162,7 @@ export function reconcileStrolls(context: StrollContext): void {
   for (const agent of agents.values()) {
     const key = agent.view.agentKey
     const clock = clocks.get(key)
+    if (clock?.isReturning && agent.path.length === 0) clock.isReturning = false
     if (agent.view.place === 'stroll') {
       const isCalled = !clock || !context.hasTrips || agent.state === 'leaving'
       if (isCalled || isUrgent(agent.view.attention)) goHome(agent, clock, context)
@@ -168,7 +176,7 @@ export function reconcileStrolls(context: StrollContext): void {
       if (clock) clock.atMs = undefined
       continue
     }
-    const ready = clock ?? { atMs: undefined, trip: 0 }
+    const ready = clock ?? { atMs: undefined, trip: 0, isReturning: false }
     clocks.set(key, ready)
     const every = isAtRest(agent.view) ? RESTING_EVERY_MS : WORKING_EVERY_MS
     if (ready.atMs === undefined)
@@ -178,7 +186,7 @@ export function reconcileStrolls(context: StrollContext): void {
   if (!due) return
   const { agent, clock } = due
   const key = agent.view.agentKey
-  const route = hasRoomToLeave(agent, agents) ? routeOut(agent, clock.trip, context) : undefined
+  const route = hasRoomToLeave(agent, context) ? routeOut(agent, clock.trip, context) : undefined
   clock.atMs = undefined
   if (!route) return
   context.clearPassage(key)

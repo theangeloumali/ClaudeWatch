@@ -54,8 +54,17 @@ export function resolveEffectiveWorld(
   const baseline = buildLayout([...sessions], allocationLayout(document.allocation, baseLayout))
   const isCampus = layout === 'campus'
   const arrange = isCampus ? ringWorldDocument : (arranged: WorldDocument) => arranged
-  const defaults = arrange(createWorldDocument(baseline, sessions))
-  const requested = arrange(mergeActiveWorldDocument(defaults, document))
+  let defaults: WorldDocument
+  let requested: WorldDocument
+  try {
+    defaults = arrange(createWorldDocument(baseline, sessions))
+    requested = arrange(mergeActiveWorldDocument(defaults, document))
+  } catch (error) {
+    // Rooms too big to ring inside the world limits keep their city places instead.
+    if (isCampus && error instanceof RangeError)
+      return resolveEffectiveWorld(baseLayout, document, sessions, 'city')
+    throw error
+  }
   const context = { layout: baseLayout, sessions }
   const errors = validateWorldDocument(requested, context)
   let effective = requested

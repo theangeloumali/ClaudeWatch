@@ -51,10 +51,26 @@ function untilStroll(sim: World, key: string, seconds = SETTLE_S): AgentView {
   throw new Error(`${key} never strolled`)
 }
 
+// Strollers out and walking home: an agent stays tracked from setting out until it is at its desk.
+function strollTracker(sim: World) {
+  const tracked = new Set<string>()
+  return (views: readonly AgentView[]): AgentView[] =>
+    views.filter((agent) => {
+      if (agent.place === 'stroll') tracked.add(agent.agentKey)
+      else if (!tracked.has(agent.agentKey)) return false
+      else if (Math.hypot(agent.x - deskOf(sim, agent).x, agent.z - deskOf(sim, agent).z) < 0.05) {
+        tracked.delete(agent.agentKey)
+        return false
+      }
+      return true
+    })
+}
+
 function expectStrollersClearOfDoor(sim: World, seconds: number) {
   let strollTicks = 0
+  const strollers = strollTracker(sim)
   for (const [tick, views] of run(sim, seconds).entries())
-    for (const agent of views.filter((candidate) => candidate.place === 'stroll')) {
+    for (const agent of strollers(views)) {
       strollTicks++
       const distance = doorDistance(sim, agent)
       // A desk inside the door zone (Campus has some) only lets its stroller walk away from it.
@@ -186,10 +202,12 @@ describe('room strolls', () => {
     const sim = open([withSubagents(6)])
     let previous = sim.step(0)
     let mostAway = 0
+    const strollers = strollTracker(sim)
     for (const views of run(sim, SETTLE_S * 2)) {
+      const strolling = new Set(strollers(views).map((agent) => agent.agentKey))
       for (const roomId of new Set(views.map((agent) => agent.roomId))) {
         const members = views.filter((agent) => agent.roomId === roomId)
-        const away = members.filter((a) => a.place === 'stroll' || a.place === 'lounge').length
+        const away = members.filter((a) => strolling.has(a.agentKey) || a.place === 'lounge').length
         expect(away).toBeLessThanOrEqual(Math.ceil(members.length / 3))
         mostAway = Math.max(mostAway, away)
       }
@@ -215,13 +233,30 @@ describe('room strolls', () => {
     expectStrollersClearOfDoor(open(sessions), 300)
   })
 
-  it('keeps strollers clear of the door under the Campus layout', () => {
-    const sessions = [withSubagents(5), session('b', 'p_b')]
+  it('counts a stroller walking home as away until it reaches its desk', () => {
+    const sim = open([withSubagents(9), session('b', 'p_b')])
+    const strollers = strollTracker(sim)
+    for (const views of run(sim, 600)) {
+      const strolling = new Set(strollers(views).map((agent) => agent.agentKey))
+      for (const roomId of new Set(views.map((agent) => agent.roomId))) {
+        const members = views.filter((agent) => agent.roomId === roomId)
+        const away = members.filter((a) => strolling.has(a.agentKey) || a.place === 'lounge')
+        expect(away.length).toBeLessThanOrEqual(Math.ceil(members.length / 3))
+      }
+    }
+  })
+
+  it.each([5, 8])('keeps strollers clear of the door under the Campus layout (%i)', (count) => {
+    const sessions = [
+      withSubagents(count),
+      { ...session('b', 'p_b'), subagents: [subagent('t0'), subagent('t1')] },
+      session('c', 'p_c')
+    ]
     const document = createWorldDocument(buildLayout(sessions, undefined), sessions)
     const sim = open(sessions, {
       resolveLayout: (base, current) => resolveEffectiveWorld(base, document, current, 'campus')
     })
-    expectStrollersClearOfDoor(sim, 300)
+    expectStrollersClearOfDoor(sim, 600)
   })
 
   it('strolls an agent whose source cannot tell when its turn ends', () => {
