@@ -7,6 +7,10 @@ import react from '@vitejs/plugin-react'
 function officeChunk(id: string): string | undefined {
   // The simulation and the shared office model import each other, so they ship as one chunk.
   if (id.includes('/src/office/sim/') || id.includes('/src/shared/office/')) return 'simulation'
+  // The HUD panels are leaves of the page, so they split off cleanly when office.js nears the guard.
+  if (id.includes('/src/renderer/office/hud/')) return 'office-hud'
+  // The inlined Campus models are large, static data: their own chunk keeps office.js small.
+  if (id.includes('/src/renderer/office/assets/campus/')) return 'campus-models'
   if (!id.includes('/node_modules/')) return undefined
   if (id.includes('/three/build/three.core')) return 'three-core'
   if (id.includes('/node_modules/three/')) return 'three-webgl'
@@ -19,6 +23,8 @@ function officeChunk(id: string): string | undefined {
 export default defineConfig({
   root: resolve(__dirname, 'src/renderer'),
   plugins: [react()],
+  // Campus models are imported `?inline` (night-campus/glb-props.ts).
+  assetsInclude: ['**/*.glb'],
   resolve: {
     alias: {
       '@renderer': resolve(__dirname, 'src/renderer')

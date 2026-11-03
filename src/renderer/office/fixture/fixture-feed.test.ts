@@ -37,6 +37,21 @@ describe('seeded preview sessions', () => {
     expect(sessionTokens(later.sessions[1].usage)).toBeGreaterThan(before)
   })
 
+  it('names a real Claude model on every Claude session and none elsewhere', () => {
+    const claudeIds = new Set(
+      frame.sessions
+        .filter((session) => session.provider === 'claude')
+        .map((session) => session.selectedModel?.modelId)
+    )
+    expect([...claudeIds].sort()).toEqual([
+      'claude-haiku-4-5-20251001',
+      'claude-opus-4-1-20250805',
+      'claude-sonnet-4-5-20250929'
+    ])
+    for (const session of frame.sessions.filter((each) => each.provider !== 'claude'))
+      expect(session.selectedModel).toBeUndefined()
+  })
+
   it('has a lead with two named teammates, each with a pane and tokens of its own', () => {
     const lead = frame.sessions.find(
       (session) => session.subagents.filter((member) => member.kind === 'teammate').length === 2
@@ -95,6 +110,15 @@ describe('the seeded preview runs the office sim', () => {
   }
   const isOn = (agent: AgentView, seats: { x: number; z: number }[]): boolean =>
     seats.some((seat) => seat.x === agent.x && seat.z === agent.z)
+
+  it('counts memory notes from the first frame and bumps them so the Brain pulses', () => {
+    const frames = watch(45)
+    const first = frames[0].frame.memory
+    expect(first?.notes).toBeGreaterThan(0)
+    const last = frames.at(-1)?.frame.memory
+    expect(last?.notes).toBeGreaterThan(first?.notes ?? 0)
+    expect(last?.changedAt).toBeGreaterThan(first?.changedAt ?? 0)
+  })
 
   it('seats every agent at its desk on the first frame', () => {
     const [{ frame: first }] = watch(0.1)

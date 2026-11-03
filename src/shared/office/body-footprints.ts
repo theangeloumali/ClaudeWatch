@@ -27,6 +27,8 @@ export interface BodyStepOptions extends BodyPlacementOptions {
 }
 
 export const WORKER_BODY_RADIUS = 0.65
+// Distance from a seated agent to the centre of its desk.
+export const DESK_REACH_METRES = 0.62
 export const SUBAGENT_BODY_RADIUS = 0.55
 export const CITIZEN_BODY_RADIUS = 0.55
 export const PLAYER_BODY_RADIUS = 0.55

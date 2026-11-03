@@ -6,15 +6,16 @@ import {
   everyOfficeNotice,
   officeThemes,
   resolveTheme,
+  sceneThemeFor,
   themeChangeNotice,
   useThemeAssignments,
   type ThemeTarget
 } from './logic/office-themes'
+import { REDUCED_MOTION_QUERY } from './logic/city-clock'
+import type { WorldLayout } from './logic/world-layout-preference'
 import type { ZoneGeometry } from './scene-model'
 import { getTheme, listThemes, themeForTeam } from './themes/registry'
 import type { OfficeTheme } from './themes/types'
-
-const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)'
 
 export function usePrefersReducedMotion(): boolean {
   const [isReduced, setIsReduced] = useState(
@@ -51,7 +52,7 @@ function assignTheme(target: ThemeTarget, themeId: string | null): void {
 
 // `theme` is the floor's theme, which an office without a choice of its own follows. Every
 // change, by any route, leaves a notice naming what changed.
-export function useOfficeTheme(focusedZone?: ZoneGeometry) {
+export function useOfficeTheme(focusedZone?: ZoneGeometry, layout: WorldLayout = 'city') {
   const assignments = useThemeAssignments()
   const [hasChosenTheme, setHasChosenTheme] = useState(false)
   const [notice, setNotice] = useState('')
@@ -103,7 +104,7 @@ export function useOfficeTheme(focusedZone?: ZoneGeometry) {
   const dismissNotice = useCallback(() => setNotice(''), [])
 
   return {
-    theme,
+    theme: sceneThemeFor(theme, layout),
     chooseTheme,
     chooseMapTheme,
     cycleTheme,

@@ -54,6 +54,19 @@ export function CameraTools({ isDisabled, onRotate, onTilt, onZoom, onFit }: Cam
           />
         </>
       )}
+      <ZoomTools isDisabled={isDisabled} onZoom={onZoom} onFit={onFit} />
+    </div>
+  )
+}
+
+// Shared with the Campus minimap, so both drive the one camera zoom.
+export function ZoomTools({
+  isDisabled,
+  onZoom,
+  onFit
+}: Pick<CameraToolsProps, 'isDisabled' | 'onZoom' | 'onFit'>) {
+  return (
+    <>
       <CameraButton
         label="Zoom out"
         shortcut="-"
@@ -75,7 +88,7 @@ export function CameraTools({ isDisabled, onRotate, onTilt, onZoom, onFit }: Cam
         isDisabled={isDisabled}
         onClick={onFit}
       />
-    </div>
+    </>
   )
 }
 

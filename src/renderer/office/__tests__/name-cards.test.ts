@@ -1,3 +1,4 @@
+import { buildRoomCards } from '../logic/room-cards'
 import { describe, expect, it } from 'vitest'
 import type { AgentView } from '../../../shared/office/types'
 import { ACTIVITY_UNAVAILABLE_LABEL, PLAYING_GAMES_LABEL } from '../logic/activity-summary'
@@ -255,5 +256,64 @@ describe('buildProjectStacks', () => {
         text: 'PropApp · 3 agents · 1 Working · 1 Needs you · 1 Idle/Done'
       })
     ])
+  })
+})
+
+describe('buildRoomCards', () => {
+  const project = makeZone({
+    id: 'project:p',
+    kind: 'project',
+    projectKey: 'p_1',
+    label: 'Research'
+  })
+  const quiet = makeZone({ id: 'project:q', kind: 'project', projectKey: 'p_2', label: 'Ops' })
+  const company = makeZone({ id: 'company', kind: 'company', children: [project, quiet] })
+  const crew = [
+    makeAgent({ agentKey: 'a', activity: 'editing', label: 'office renderer' }),
+    makeAgent({ agentKey: 'a#1', isSubagent: true, activity: 'reading', label: 'Explore' }),
+    makeAgent({ agentKey: 'a#2', isSubagent: true, attention: 'permission', label: 'Plan' }),
+    makeAgent({ agentKey: 'a#3', isSubagent: true, activity: 'idle', label: 'Review' }),
+    makeAgent({ agentKey: 'a#4', isSubagent: true, activity: 'idle', label: 'Docs' })
+  ]
+  const campus = makeFrame({
+    floors: [
+      makeFloor({
+        floorId: 'f1',
+        zones: [company],
+        rooms: [makeRoom({ id: 'r1', sessionKey: 'a' })]
+      })
+    ],
+    sessions: [makeSession({ key: 'a', projectKey: 'p_1' })],
+    agents: [...crew, crew[0]]
+  })
+
+  it('counts agents and running agents once, capping faces at three', () => {
+    const [card] = buildRoomCards(campus, () => null)
+    expect(card).toMatchObject({
+      projectKey: 'p_1',
+      label: 'Research',
+      agentCount: 5,
+      runningCount: 2,
+      moreCount: 2
+    })
+    expect(card.faces.map((face) => face.agentKey)).toEqual(['a', 'a#1', 'a#2'])
+  })
+
+  it('counts no one running while its activity cannot be seen', () => {
+    const down = [{ id: 'claude', ok: false, detail: 'down', checkedAtMs: 0, staleAfterMs: 1 }]
+    const [card] = buildRoomCards({ ...campus, sources: down }, () => null)
+    expect(card).toMatchObject({ agentCount: 5, runningCount: 0 })
+  })
+
+  it('takes initials from the cast name, falling back to the agent label', () => {
+    const [card] = buildRoomCards(campus, (agent) =>
+      agent.agentKey === 'a' ? 'Ada Lovelace' : null
+    )
+    expect(card.faces.map((face) => face.initials)).toEqual(['AL', 'E', 'P'])
+  })
+
+  it('keeps a card for a room with nobody in it', () => {
+    const empty = buildRoomCards(campus, () => null).find((card) => card.projectKey === 'p_2')
+    expect(empty).toMatchObject({ agentCount: 0, runningCount: 0, faces: [], moreCount: 0 })
   })
 })

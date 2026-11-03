@@ -11,6 +11,8 @@ export interface LayoutMap {
   // Derived alongside floors; automatic adaptation never changes the saved document.
   effectiveVenues?: readonly WorldVenue[]
   streetBlocks?: { x: number; z: number; width: number; depth: number }[]
+  // The arrangement actually used: Campus falls back to the city when its ring cannot fit.
+  worldLayout?: 'city' | 'campus'
   reservations: Record<
     string,
     { floorId: string; plate: number; bay: number; companyKey: string; projectKey: string }

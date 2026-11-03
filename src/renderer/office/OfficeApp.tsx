@@ -18,9 +18,11 @@ import { canRespond } from './logic/interactions'
 import { INITIAL_OFFICE_STATE, officeReducer } from './logic/office-reducer'
 import { buildThemeRows, countThemeChoices, useThemeAssignments } from './logic/office-themes'
 import { findZone } from './logic/zone-model'
+import { campusPanelStep } from './logic/campus-panel-default'
 import { canHidePanels, HUD_GRID_STYLE } from './logic/hud-layout'
 import { buildOperationsModel } from './logic/operations-model'
 import { createFrameMetrics } from './frame-metrics'
+import type { ZoomDirection } from './logic/camera-bands'
 import { AgentActions } from './hud/AgentActions'
 import { PlayerControls } from './hud/PlayerControls'
 import { AttentionRail } from './hud/AttentionRail'
@@ -31,7 +33,8 @@ import { FollowButton } from './hud/FollowButton'
 import { HealthBanner } from './hud/HealthBanner'
 import { LeadersCard } from './hud/LeadersCard'
 import { CompanyCards } from './hud/CompanyCards'
-import { headerWithNewsLine, NewsLine } from './hud/NewsLine'
+import { headerWithNewsLine, NEWS_LINE_HEIGHT_PX, NewsLine } from './hud/NewsLine'
+import { useCampusHud } from './hud/use-campus-hud'
 import { Inspector } from './hud/Inspector'
 import { useInspectorPanel } from './hud/use-inspector-panel'
 import { ListView } from './hud/ListView'
@@ -44,6 +47,7 @@ import { OfficeContext } from './hud/OfficeContext'
 import { CurrentEvidenceStrip } from './hud/CurrentEvidenceStrip'
 import { ThemesList } from './hud/ThemesList'
 import { useWalking } from './player/use-walking'
+import { placePlayerAtStart } from './player/player-floor-routes'
 import { SceneErrorBoundary } from './SceneErrorBoundary'
 import type { OfficeFeed } from './scene-model'
 import {
@@ -69,9 +73,19 @@ import { useWorldEditing } from './editor/use-world-editing'
 import { VenuesPanel } from './hud/VenuesPanel'
 import { browserStorage } from '../office-live/browser-storage'
 import { readViewPreference, saveViewPreference } from './logic/view-preference'
+import {
+  readWorldLayoutPreference,
+  saveWorldLayoutPreference,
+  type WorldLayout
+} from './logic/world-layout-preference'
 
 // The scene component loads separately so the HUD can paint before Canvas mounts.
 const OfficeScene = lazy(() => import('./scene/OfficeScene'))
+// Campus-only HUD, loaded on first use to keep the Office bundle in budget.
+const ToastStack = lazy(() => import('./hud/ToastStack').then((m) => ({ default: m.ToastStack })))
+const RunsOnChips = lazy(() =>
+  import('./hud/RunsOnChips').then((m) => ({ default: m.RunsOnChips }))
+)
 const SPEECH_BUBBLE_MS = 1500
 
 interface OfficeAppProps {
@@ -106,6 +120,16 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
     lastViewPreference.current = preference
     saveViewPreference(browserStorage(), preference)
   }, [state.viewMode, state.isListView, state.areRoofsVisible])
+  const [worldLayout, setWorldLayout] = useState<WorldLayout>(() =>
+    readWorldLayoutPreference(browserStorage())
+  )
+  const chooseWorldLayout = useCallback((layout: WorldLayout) => {
+    setWorldLayout(layout)
+    saveWorldLayoutPreference(browserStorage(), layout)
+  }, [])
+  useEffect(() => feed.setWorldLayout?.(worldLayout), [feed, worldLayout])
+  // The sim may have had to keep the city: Campus is drawn only once it really ringed the world.
+  const isCampus = worldLayout === 'campus' && state.frame?.worldLayout !== 'city'
   const [hasWebGL] = useState(canCreateWebGL2)
   const [hasSceneFailed, setHasSceneFailed] = useState(false)
   const [metrics] = useState(createFrameMetrics)
@@ -128,6 +152,19 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
 
   const isPanelHideAllowed = canHidePanels(inspectorController.layout.viewportWidth)
   const arePanelsHidden = state.arePanelsHidden && isPanelHideAllowed
+  const isCampusView = isCampus && state.viewMode === 'city'
+  const campusPanels = useRef<{ wasCampus: boolean; wereHiddenBefore?: boolean }>({
+    wasCampus: false
+  })
+  useEffect(() => {
+    const step = campusPanelStep({
+      ...campusPanels.current,
+      isCampus: isCampusView,
+      arePanelsHidden: state.arePanelsHidden
+    })
+    campusPanels.current = { wasCampus: isCampusView, wereHiddenBefore: step.wereHiddenBefore }
+    if (step.shouldToggle) dispatch({ type: 'panels-toggled' })
+  }, [isCampusView, state.arePanelsHidden])
   const is3DAvailable = hasWebGL && !hasSceneFailed
   const isShowingList = state.isListView || !is3DAvailable
   useFeedSubscription(feed, dispatch)
@@ -173,7 +210,7 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
     if (!frame || !zoneId) return undefined
     return frame.floors.flatMap((floor) => findZone(floor, zoneId) ?? [])[0]
   }, [frame, state.focusedZoneId])
-  const officeTheme = useOfficeTheme(focusedZone)
+  const officeTheme = useOfficeTheme(focusedZone, isCampus ? 'campus' : 'city')
   const { theme, cycleTheme } = officeTheme
   const themeAssignments = useThemeAssignments()
 
@@ -182,6 +219,7 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
   const { sessions, queue, towerFloors, companies, ledger, agentFacts, activity } = lists
   const { floorAgents, cards, stacks, companyList } = lists
   const { announcement, news } = useAttentionAnnouncement(queue, sessions)
+  const campusHud = useCampusHud(frame, isCampus, themeAssignments, theme.id, roles !== null)
   const { measureTotals } = inspectorPanel
   const measureHeader = useCallback(
     (height: number) => measureTotals(headerWithNewsLine(height)),
@@ -201,6 +239,13 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
     dispatch,
     allFloors: frame?.floors
   })
+  // The player is made at a City door; any other layout, or a switch, starts it on the plaza.
+  const playerLayout = useRef<WorldLayout>('city')
+  useEffect(() => {
+    if (!player || playerLayout.current === worldLayout) return
+    playerLayout.current = worldLayout
+    placePlayerAtStart(player, worldLayout)
+  }, [player, worldLayout])
   const {
     agent: selectedAgent,
     session: selectedSession,
@@ -249,6 +294,7 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
     frame: state.frame,
     visibleFrame: frame,
     roles,
+    isAvailable: !isCampus,
     onSelectAgent: selectAgent
   })
   const { previewFloors, worldStore } = editing
@@ -258,6 +304,10 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
   )
   const onSceneError = useCallback(() => setHasSceneFailed(true), [])
   const fitCamera = useCallback(() => dispatch({ type: 'camera-fit' }), [])
+  const zoomCamera = useCallback(
+    (direction: ZoomDirection) => dispatch({ type: 'camera-zoomed', direction }),
+    []
+  )
   const openFloor = useCallback(
     (floorId: string) => dispatch({ type: 'floor-opened', floorId }),
     []
@@ -326,6 +376,7 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
               wallsMode={state.wallsMode}
               areRoofsVisible={state.areRoofsVisible}
               viewMode={state.viewMode}
+              worldLayout={worldLayout}
               focusedFloorId={state.focusedFloorId}
               focusedRoomId={focusedRoomId}
               cameraRequest={state.cameraRequest}
@@ -347,7 +398,8 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
               onNearPlayerAgent={setNearPlayerAgentKey}
               onBodyObstacles={feed.setBodyObstacles}
               onFocusFloor={openFloor}
-              onEditTarget={editing.openMenu}
+              onEditTarget={isCampus ? undefined : editing.openMenu}
+              campusCards={campusHud?.cards}
             />
           </Suspense>
         </SceneErrorBoundary>
@@ -375,7 +427,12 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
             onToggleList={() => dispatch({ type: 'list-toggled' })}
             onHeightChange={measureHeader}
           />
-          <NewsLine news={news} />
+          {/* Campus moves the news into toasts; the spacer keeps the measured header height. */}
+          {campusHud ? (
+            <div aria-hidden="true" style={{ height: NEWS_LINE_HEIGHT_PX }} />
+          ) : (
+            <NewsLine news={news} />
+          )}
         </div>
         <div
           ref={navigationRef}
@@ -405,6 +462,9 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
                       ? undefined
                       : (point) => dispatch({ type: 'camera-pointed', ...point })
                   }
+                  campus={campusHud?.minimap}
+                  onZoom={zoomCamera}
+                  onFit={fitCamera}
                 />
               )}
               {!isShowingList && (
@@ -497,6 +557,19 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
             <FocusNotice message={officeTheme.notice} onDismiss={officeTheme.dismissNotice} />
             {state.isMetricsVisible && !isShowingList && <MetricsOverlay metrics={metrics} />}
           </div>
+          {campusHud && !isShowingList && (
+            <div className="self-end px-2">
+              <Suspense fallback={null}>
+                {/* A toast keeps the words it arrived with; restart the stack when masking flips. */}
+                <ToastStack
+                  key={roles ? 'masked' : 'named'}
+                  news={news}
+                  sessions={sessions ?? []}
+                  chips={campusHud.chips}
+                />
+              </Suspense>
+            </div>
+          )}
           <div className="flex min-h-0 w-full flex-1 items-center justify-center">
             {isConnecting || (frame && frame.sessions.length === 0) ? (
               <div className="pointer-events-auto">
@@ -618,6 +691,11 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
           {frame && !arePanelsHidden && (
             <CurrentEvidenceStrip frame={frame} agentKey={state.selectedAgentKey} feed={feed} />
           )}
+          {campusHud && !isShowingList && (
+            <Suspense fallback={null}>
+              <RunsOnChips chips={campusHud.runsOn} />
+            </Suspense>
+          )}
           <BottomBar
             isCompact
             isNarrow={inspectorPanel.isNarrow}
@@ -665,14 +743,17 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
             onToggleMetrics={() => dispatch({ type: 'metrics-toggled' })}
             onRotate={(direction) => dispatch({ type: 'camera-rotated', direction })}
             onTilt={(direction) => dispatch({ type: 'camera-tilted', direction })}
-            onZoom={(direction) => dispatch({ type: 'camera-zoomed', direction })}
+            onZoom={zoomCamera}
             onFit={fitCamera}
             onReset={() => dispatch({ type: 'camera-reset' })}
-            onEditLayout={worldStore ? editing.open : undefined}
+            // Campus places every room itself, so there is nothing to edit there.
+            onEditLayout={worldStore && !isCampus ? editing.open : undefined}
             canWorkstation={canWorkstation && !inspectorPanel.layout.isExpanded}
             onWorkstation={frameWorkstation}
             viewMode={state.viewMode}
             onView={(view) => dispatch({ type: 'view-set', view })}
+            worldLayout={worldLayout}
+            onWorldLayout={chooseWorldLayout}
             arePanelsHidden={arePanelsHidden}
             onTogglePanels={
               isPanelHideAllowed ? () => dispatch({ type: 'panels-toggled' }) : undefined

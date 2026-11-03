@@ -78,6 +78,22 @@ describe('hide the panels', () => {
     }
   )
 
+  it('Campus opens with the panels hidden and leaving it brings them back', async () => {
+    renderOffice(1440)
+    await screen.findByText('Scene drawn')
+    const toggle = screen.getByRole('button', { name: 'Hide panels' })
+    fireEvent.click(screen.getByRole('button', { name: 'Campus' }))
+    expect(toggle).toHaveAttribute('aria-pressed', 'true')
+    expect(sidePanels()).toEqual([null, null, null])
+
+    fireEvent.click(toggle)
+    expect(screen.getByRole('region', { name: 'Minimap' })).toBeInTheDocument()
+    fireEvent.click(toggle)
+    fireEvent.click(screen.getByRole('button', { name: 'City' }))
+    expect(toggle).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByRole('region', { name: 'Minimap' })).toBeInTheDocument()
+  })
+
   it('phones keep the bottom sheet', async () => {
     renderOffice(1440)
     await screen.findByText('Scene drawn')

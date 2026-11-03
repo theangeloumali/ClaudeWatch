@@ -2,9 +2,14 @@ import type { Point } from '../../../office/sim/path'
 import { streetPath } from '../../../office/sim/street-path'
 import { entranceApproach } from '../../../shared/office/entrance-approach'
 import { placeBody, PLAYER_BODY_RADIUS } from '../../../shared/office/body-footprints'
+import { CAMPUS_HUB_RADIUS_M } from '../../../shared/office/world-document-ring'
+import type { WorldLayout } from '../logic/world-layout-preference'
 import type { FloorGeometry } from '../scene-model'
 import { walkGround, walkPath } from './walk-ground'
 import type { FloorWaypoint, Player } from './walking'
+
+// Just past the hub rim, so the player stands on the plaza, not inside the Brain.
+const PLAZA_EDGE_STEP_M = 1
 
 // dry-new: camera floor selection is not a physical route; walking owns connector travel.
 export function playerConnector(floor: FloorGeometry): Point {
@@ -138,4 +143,23 @@ export function travelPlayerToFloor(
     toFloor: targetFloor,
     allFloors
   })
+}
+
+// A layout switch moves every building, so the player restarts outdoors with no route: City's
+// open gate at the origin, or Campus's plaza edge right of the hub (clear of the room cards),
+// facing the Brain.
+export function placePlayerAtStart(player: Player, layout: WorldLayout): void {
+  player.position = { x: 0, z: 0 }
+  if (layout === 'campus') {
+    const reach = (CAMPUS_HUB_RADIUS_M + PLAZA_EDGE_STEP_M) * Math.SQRT1_2
+    player.position = { x: reach, z: -reach }
+    player.heading = Math.atan2(-reach, reach)
+  }
+  player.path = []
+  player.goal = null
+  player.held.clear()
+  player.elevation = 0
+  player.physicalFloorId = null
+  delete player.connectorId
+  player.onGoal?.()
 }

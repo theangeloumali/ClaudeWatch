@@ -1,4 +1,11 @@
-import { useRef, type CSSProperties, type KeyboardEvent, type MouseEvent } from 'react'
+import {
+  lazy,
+  Suspense,
+  useRef,
+  type CSSProperties,
+  type KeyboardEvent,
+  type MouseEvent
+} from 'react'
 import { clamp } from '../../../shared/range'
 import { cn } from '../../lib/utils'
 import { percentAlong, type MinimapModel } from '../logic/minimap-model'
@@ -6,6 +13,10 @@ import { officeView, type MapPoint } from '../logic/office-view'
 import type { Bounds } from '../logic/zone-framing'
 import type { MinimapProps } from './Minimap'
 import { useMinimapLive } from './use-minimap-live'
+
+const CampusMapLayer = lazy(() =>
+  import('./CampusMap').then((module) => ({ default: module.CampusMapLayer }))
+)
 
 interface MinimapSurfaceProps extends Pick<
   MinimapProps,
@@ -60,8 +71,10 @@ function MapArea({
   const targetLayers = { floor: viewMode === 'city' ? 'z-30' : 'z-0', room: 'z-10' }
   const footprints = [
     ...model.floors.map((floor) => ({ ...floor, id: floor.floorId, kind: 'floor' as const })),
-    ...model.rooms.map((room) => ({ ...room, kind: 'room' as const }))
+    ...model.rooms.map((room) => ({ ...room, kind: 'room' as const, color: null }))
   ]
+  // Campus rooms are rounded tiles; a fixed share of the map keeps the corner visible at any zoom.
+  const corner = model.campus ? Math.min(width, depth) * 0.025 : 0
   const pan = (point: MapPoint): void => {
     const destination = clampTo(bounds, point)
     pendingRef.current = { point: destination, atMs: Date.now() }
@@ -151,14 +164,21 @@ function MapArea({
                 y={footprint.bounds.minZ}
                 width={footprint.bounds.maxX - footprint.bounds.minX}
                 height={footprint.bounds.maxZ - footprint.bounds.minZ}
+                rx={corner}
                 vectorEffect="non-scaling-stroke"
                 strokeWidth={footprint.isSelected ? 2 : 1}
+                style={footprint.color ? { fill: footprint.color } : undefined}
                 className={cn(
                   'fill-surface-hover',
                   footprint.isSelected ? 'stroke-brass' : 'stroke-border-strong'
                 )}
               />
             ))}
+            {model.campus && (
+              <Suspense>
+                <CampusMapLayer campus={model.campus} dotRadius={radius * 2} />
+              </Suspense>
+            )}
             {onPan && (
               <polygon
                 data-view-footprint=""

@@ -1,0 +1,10 @@
+Campus models
+
+campus-furniture.glb is baked from "Furniture Kit" (2.0) and campus-person.glb from
+"Mini Characters" (1.0), both created and distributed by Kenney (www.kenney.nl).
+
+License: Creative Commons Zero, CC0
+http://creativecommons.org/publicdomain/zero/1.0/
+
+The bake flattens each model to one untextured mesh with its colours in the vertices, and
+splits the character into one rigid mesh per joint. Thanks to Kenney for the packs.

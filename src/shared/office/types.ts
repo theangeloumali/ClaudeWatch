@@ -137,6 +137,13 @@ export interface ProjectTokens {
   tokens: number
 }
 
+// Memory notes on disk, counted by folder listing only: numbers, never a name or a word.
+export interface MemoryNotes {
+  notes: number
+  // The newest note's file time in ms; 0 when there are none.
+  changedAt: number
+}
+
 export interface OfficeSnapshot {
   rev: number
   generatedAtMs: number
@@ -144,6 +151,7 @@ export interface OfficeSnapshot {
   sources: SourceHealth[]
   accounts?: AccountRef[]
   projectsToday?: ProjectTokens[]
+  memory?: MemoryNotes
 }
 
 export type FeedMessage =
@@ -158,6 +166,8 @@ export type FeedMessage =
       sources?: SourceHealth[]
       // Present only when a project's total for today changed.
       projectsToday?: ProjectTokens[]
+      // Present only when the memory-note count or its newest time changed.
+      memory?: MemoryNotes
     }
   | { type: 'resync' }
 
@@ -177,8 +187,9 @@ export interface AgentView {
   provider: ProviderId
   isSubagent: boolean
   label: string
-  // Absent means the agent is at its own desk; 'leaving' while it walks out or fades (seating-5).
-  place?: 'lounge' | 'leaving'
+  // Absent means the agent is at its own desk; 'stroll' while it wanders its own room;
+  // 'leaving' while it walks out or fades (seating-5).
+  place?: 'lounge' | 'stroll' | 'leaving'
   // How far a departing agent has faded out where it stands, 0–1; absent while fully here.
   fade?: number
   // Times the sim seated it away from where it faded, absent until the first. One step can

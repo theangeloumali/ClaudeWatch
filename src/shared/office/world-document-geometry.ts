@@ -1,5 +1,5 @@
 import { canSweepBody } from './body-sweep'
-import { SUBAGENT_BODY_RADIUS, WORKER_BODY_RADIUS } from './body-footprints'
+import { DESK_REACH_METRES, SUBAGENT_BODY_RADIUS, WORKER_BODY_RADIUS } from './body-footprints'
 import type {
   WorldDesk,
   WorldFootprint,
@@ -58,8 +58,8 @@ export function deskHasClearance(room: WorldRoom, desk: WorldDesk): boolean {
   const radius = deskRadius(desk)
   const hasWallClearance = contains(room.size, { ...desk, width: radius * 2, depth: radius * 2 })
   const furniture = {
-    x: desk.x - Math.sin(desk.heading) * 0.62,
-    z: desk.z - Math.cos(desk.heading) * 0.62
+    x: desk.x - Math.sin(desk.heading) * DESK_REACH_METRES,
+    z: desk.z - Math.cos(desk.heading) * DESK_REACH_METRES
   }
   return (
     hasWallClearance &&

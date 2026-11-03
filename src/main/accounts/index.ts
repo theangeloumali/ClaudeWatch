@@ -8,7 +8,7 @@ import { loadLedger, saveLedger } from './ledger-file'
 import { listOrcaAccounts } from './orca-accounts'
 
 export { AccountLedger } from './account-ledger'
-export { type OfficeAccounts, withAccounts, withoutAccounts } from './office-feed'
+export { type OfficeAccounts, withAccounts, withMemoryNotes, withoutAccounts } from './office-feed'
 
 interface AccountLedgerPlaces {
   isWatching: boolean

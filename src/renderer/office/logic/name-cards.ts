@@ -1,6 +1,6 @@
 import type { AgentView } from '../../../shared/office/types'
 import { parseAgentKey } from '../../../shared/office/agent-key'
-import type { OfficeFrame } from '../scene-model'
+import type { OfficeFrame, ZoneGeometry } from '../scene-model'
 import { physicalFloorId } from '../scene/all-floor-model'
 import { createGamingCheck } from '../scene/worker-seat-presence'
 import { agentCountLabel, sessionForAgent } from './floor-model'
@@ -52,7 +52,7 @@ export interface ProjectStack {
 // One DOM node per card; screen-space culling (card-culling.ts) decides which are shown.
 export const MAX_NAME_CARDS = 40
 
-function statusFor(agent: AgentView): CardStatus {
+export function statusFor(agent: AgentView): CardStatus {
   switch (agent.attention) {
     case 'permission':
       return 'permission'
@@ -143,11 +143,12 @@ export function buildNameCards(
     .slice(0, MAX_NAME_CARDS)
 }
 
-// One summary per project for the stacked badge shown when its cards crowd together.
-export function buildProjectStacks(frame: OfficeFrame, floorId: string | null): ProjectStack[] {
-  const floors = frame.floors.filter((floor) => floorId === null || floor.floorId === floorId)
-  // Group once, so each project does not rescan every agent.
-  const membersByProject = new Map<string, AgentView[]>()
+// Agents grouped by project, each counted once however many floors it spans.
+export function membersByProject(
+  frame: OfficeFrame,
+  floorId: string | null
+): Map<string, AgentView[]> {
+  const groups = new Map<string, AgentView[]>()
   const seenAgents = new Set<string>()
   for (const agent of frame.agents) {
     if (floorId !== null && physicalFloorId(agent) !== floorId) continue
@@ -155,39 +156,54 @@ export function buildProjectStacks(frame: OfficeFrame, floorId: string | null): 
     seenAgents.add(agent.agentKey)
     const projectKey = sessionForAgent(frame, agent)?.projectKey
     if (!projectKey) continue
-    const members = membersByProject.get(projectKey)
+    const members = groups.get(projectKey)
     if (members) members.push(agent)
-    else membersByProject.set(projectKey, [agent])
+    else groups.set(projectKey, [agent])
   }
+  return groups
+}
+
+// Each project zone once; a split project keeps its first zone.
+export function projectZones(frame: OfficeFrame, floorId: string | null): ZoneGeometry[] {
   const seenProjects = new Set<string>()
-  return floors
+  return frame.floors
+    .filter((floor) => floorId === null || floor.floorId === floorId)
     .flatMap((floor) => floor.zones)
     .flatMap((company) => company.children.filter((child) => child.kind === 'project'))
-    .flatMap((zone) => {
-      const members = zone.projectKey ? membersByProject.get(zone.projectKey) : undefined
-      if (!zone.projectKey || !members || seenProjects.has(zone.projectKey)) return []
+    .filter((zone) => {
+      if (!zone.projectKey || seenProjects.has(zone.projectKey)) return false
       seenProjects.add(zone.projectKey)
-      const parts = [
-        zone.label,
-        agentCountLabel(members.length),
-        activitySummaryText(
-          summariseActivity(
-            members,
-            isActivityAvailable(
-              frame,
-              members.map((member) => member.provider)
-            )
+      return true
+    })
+}
+
+// One summary per project for the stacked badge shown when its cards crowd together.
+export function buildProjectStacks(frame: OfficeFrame, floorId: string | null): ProjectStack[] {
+  const groups = membersByProject(frame, floorId)
+  return projectZones(frame, floorId).flatMap((zone) => {
+    const members = zone.projectKey ? groups.get(zone.projectKey) : undefined
+    if (!zone.projectKey || !members) return []
+    const parts = [
+      zone.label,
+      agentCountLabel(members.length),
+      activitySummaryText(
+        summariseActivity(
+          members,
+          isActivityAvailable(
+            frame,
+            members.map((member) => member.provider)
           )
         )
-      ]
-      return [
-        {
-          projectKey: zone.projectKey,
-          zoneId: zone.id,
-          x: zone.x,
-          z: zone.z,
-          text: parts.join(' · ')
-        }
-      ]
-    })
+      )
+    ]
+    return [
+      {
+        projectKey: zone.projectKey,
+        zoneId: zone.id,
+        x: zone.x,
+        z: zone.z,
+        text: parts.join(' · ')
+      }
+    ]
+  })
 }

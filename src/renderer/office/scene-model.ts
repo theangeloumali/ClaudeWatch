@@ -1,8 +1,10 @@
+import type { WorldLayout } from './logic/world-layout-preference'
 import type {
   AccountRef,
   AgentView,
   FocusResult,
   InteractionResult,
+  MemoryNotes,
   PeekResult,
   PermissionDecision,
   ProjectTokens,
@@ -108,18 +110,24 @@ export interface OfficeFrame {
   accounts?: AccountRef[]
   // Today's tokens per project from the accounts ledger; absent on a host without one.
   projectsToday?: readonly ProjectTokens[]
+  // Memory notes on disk, a bare count; absent until the first scan.
+  memory?: MemoryNotes
   feedReceivedAtMs?: number
   feedRevision?: number
   // Moves when the agents change in anything but their poses; absent from feeds that keep none.
   structureRevision?: number
   worldRevision?: number
   venues?: readonly WorldVenue[]
+  // The layout the sim drew; Campus asked for may come back as the city.
+  worldLayout?: WorldLayout
 }
 
 export interface OfficeFeed {
   getWorldDocumentStore?(): WorldDocumentStore | null
   // Local renderer simulation only; no body positions are sent to a provider or backend.
   setBodyObstacles?: (bodies: readonly BodyFootprint[]) => void
+  // City or Campus; the feed re-lays the world through its fade-and-reseat path.
+  setWorldLayout?: (layout: WorldLayout) => void
   // Set by a page that may only watch: the HUD then leaves out what would be refused.
   isViewOnly?: boolean
   subscribe(listener: (frame: OfficeFrame) => void): () => void

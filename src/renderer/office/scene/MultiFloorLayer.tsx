@@ -9,7 +9,11 @@ import {
   type ThemeAssignments,
   type ThemeZoneGroup
 } from '../logic/office-themes'
-import { getTheme } from '../themes/registry'
+import { campusRoomColors } from '../logic/campus-colors'
+import { campusGeometry } from '../logic/campus-geometry'
+import { CAMPUS_THEME_ID, getTheme } from '../themes/registry'
+import { NightCampusRoom } from '../themes/night-campus/NightCampusRoom'
+import { UNKEYED_ROOM_COLORS } from '../themes/night-campus/palette'
 import { BatchedScene } from './BatchedScene'
 import { crewBatchRevision, type CitySpire } from './batch-revision'
 import { FloorView } from './FloorView'
@@ -20,11 +24,24 @@ import { AUTHORED_WORKER_LIMIT } from './scene-density'
 import { PhysicalBuildingShell } from './PhysicalBuildingShell'
 import { TokenSpires } from './TokenSpire'
 
+// Night Campus owns every zone and room, whatever was assigned to them in City.
+function campusZoneGroups(floor: FloorGeometry): ThemeZoneGroup[] {
+  const groups = groupZonesByTheme(floor, () => CAMPUS_THEME_ID)
+  const merged: ThemeZoneGroup = {
+    themeId: CAMPUS_THEME_ID,
+    companies: groups.flatMap((group) => group.companies),
+    projects: groups.flatMap((group) => group.projects),
+    rooms: groups.flatMap((group) => group.rooms)
+  }
+  return merged.companies.length + merged.projects.length + merged.rooms.length > 0 ? [merged] : []
+}
+
 export function physicalZoneGroups(options: {
   floor: FloorGeometry
   assignments: ThemeAssignments
   theme: OfficeTheme
 }): ThemeZoneGroup[] {
+  if (options.theme.id === CAMPUS_THEME_ID) return campusZoneGroups(options.floor)
   const groups = groupZonesByTheme(options.floor, (zone) =>
     resolveTheme(zone, options.assignments, options.theme.id)
   )
@@ -98,6 +115,19 @@ export function MultiFloorLayer({
     const stage = spireStages?.get(buildingId) ?? 0
     return stage > 0 ? [{ buildingId, stage, theme: themeOf(buildingFloors) }] : []
   })
+  // Campus rooms are open cutaways: no shell, no roof, each in its project's ring colour.
+  const isCampus = floorTheme.id === CAMPUS_THEME_ID
+  const roomColors = useMemo(() => {
+    if (!isCampus) return null
+    const geometry = campusGeometry(floors)
+    const byProject = campusRoomColors(geometry.spokes)
+    return new Map(
+      geometry.spokes.map((spoke) => [
+        spoke.buildingId,
+        (spoke.projectKey && byProject.get(spoke.projectKey)) || UNKEYED_ROOM_COLORS
+      ])
+    )
+  }, [isCampus, floors])
   const focused = floors.find((floor) => floor.floorId === focusedFloorId) ?? floors[0]
   // Opening roofs keeps storeys in place; explicit drill-down still clips higher floors.
   const isWithinDrillDown = (floor: FloorGeometry) =>
@@ -131,25 +161,34 @@ export function MultiFloorLayer({
   }
   return (
     <>
-      {[...buildings].map(([buildingId, buildingFloors]) => (
-        <PhysicalBuildingShell
-          key={buildingId}
-          floors={buildingFloors}
-          theme={themeOf(buildingFloors)}
-          focusedFloorId={viewMode === 'office' ? focused?.floorId : null}
-          areRoofsVisible={areRoofsVisible}
-          wallsMode={wallsMode}
-          isOverview={isOverview}
-          onFocusFloor={onFocusFloor}
-          onEditTarget={onEditTarget}
-        />
-      ))}
+      {!isCampus &&
+        [...buildings].map(([buildingId, buildingFloors]) => (
+          <PhysicalBuildingShell
+            key={buildingId}
+            floors={buildingFloors}
+            theme={themeOf(buildingFloors)}
+            focusedFloorId={viewMode === 'office' ? focused?.floorId : null}
+            areRoofsVisible={areRoofsVisible}
+            wallsMode={wallsMode}
+            isOverview={isOverview}
+            onFocusFloor={onFocusFloor}
+            onEditTarget={onEditTarget}
+          />
+        ))}
       {floors.map((floor) => {
         const isInteriorVisible =
           isWithinDrillDown(floor) &&
-          (!areRoofsVisible || (viewMode === 'office' && floor.floorId === focused?.floorId))
+          (isCampus ||
+            !areRoofsVisible ||
+            (viewMode === 'office' && floor.floorId === focused?.floorId))
         return (
           <group key={floor.floorId} visible={isInteriorVisible}>
+            {roomColors && (
+              <NightCampusRoom
+                floor={floor}
+                colors={roomColors.get(buildingKeyOf(floor)) ?? UNKEYED_ROOM_COLORS}
+              />
+            )}
             <FloorView
               openInteriors
               isOverview={isOverview}

@@ -3,7 +3,7 @@ import type { AgentActivity, CurrentTool, SubagentRef } from '../shared/office/t
 import { type BridgeIo, isLabel, isMissing, jsonObject } from './io'
 import { isStillWorking, OPEN_TOOL_HOLD_MS, quietFor, SUBAGENT_FRESH_MS } from './liveness'
 import { toolActivity } from './tool-category'
-import { readTranscript, rememberedAgentType } from './transcript-tail'
+import { claudeModel, readTranscript, rememberedAgentType } from './transcript-tail'
 
 export interface AgentFile {
   id: string
@@ -44,12 +44,16 @@ export async function listAgentFiles(transcript: string, io: BridgeIo): Promise<
   return found.sort((a, b) => a.id.localeCompare(b.id))
 }
 
-// The tool still open at the end of an agent's record, if any.
-async function openTool(file: AgentFile, io: BridgeIo): Promise<CurrentTool | null> {
+// The tool still open at the end of an agent's record, if any, and the model it last ran on.
+async function openState(
+  file: AgentFile,
+  io: BridgeIo
+): Promise<{ tool: CurrentTool | null; model?: string }> {
   try {
-    return (await readTranscript(file.path, io, file)).tool
+    const { tool, model } = await readTranscript(file.path, io, file)
+    return { tool, ...(model && { model }) }
   } catch (error) {
-    if (isMissing(error)) return null
+    if (isMissing(error)) return { tool: null }
     throw error
   }
 }
@@ -71,11 +75,18 @@ export async function liveSubagents(
     const quietMs = quietFor(now, file.mtimeMs)
     if (quietMs === null || quietMs >= OPEN_TOOL_HOLD_MS) continue
     try {
-      const tool = await openTool(file, io)
+      const { tool, model } = await openState(file, io)
       if (!isStillWorking(quietMs, SUBAGENT_FRESH_MS, tool !== null)) continue
       const type = await agentTypeOf(file, io)
       const activity: AgentActivity = tool ? toolActivity(tool.category) : 'thinking'
-      if (type) agents.push({ id: file.id, type, activity })
+      if (type) {
+        agents.push({
+          id: file.id,
+          type,
+          activity,
+          ...(model && { selectedModel: claudeModel(model) })
+        })
+      }
     } catch (error) {
       if (!isMissing(error)) throw error
     }

@@ -55,6 +55,7 @@ export class DoorWorld {
     this.world = new World({
       resolveLayout,
       loungeTrips: options.hasLoungingPeers ?? false,
+      roomStrolls: false,
       now: () => this.clock
     })
     this.world.apply({

@@ -24,9 +24,11 @@ import {
 import { buildLayout, deskOf, type FloorLayout, type LayoutMap, type LoungeLayout } from './layout'
 import { loungesByRoom } from './lounge'
 import { MovementRecovery } from './movement-recovery'
+import type { Point } from './path'
 import { placements, type Placement } from './placements'
 import { FloorRoutes, floorElevation } from './world-floor-routes'
 import { reconcileLeisure } from './world-leisure'
+import { keepsClearOfDoor, reconcileStrolls, type StrollClock } from './room-strolls'
 import { isSeatedElsewhere, seatAtDesk } from './world-recall'
 import { TickCrowd } from './tick-crowd'
 import {
@@ -50,6 +52,7 @@ export class World {
   // Agents fading where they stand, with how long each has faded. A leaver goes; any other
   // reappears at its desk: a newcomer, a desk moved off its floor, or a recall (FOUND 7).
   private readonly fading = new Map<string, number>()
+  private readonly strolls = new Map<string, StrollClock>()
   // Unseen, so no body until their desk takes them: newcomers fading in, recalls fully faded.
   private readonly arrivals = new Set<string>()
   // Each agent's count of seats away from where it faded, which its views carry.
@@ -70,11 +73,13 @@ export class World {
   private ready = false
   private hasLoungeTrips: boolean
 
-  // `loungeTrips: false` keeps finished agents at their desks.
+  // `loungeTrips: false` keeps finished agents at their desks; `roomStrolls: false` keeps the
+  // rest seated between corner trips, for suites that measure seating alone.
   constructor(
     private readonly options: {
       saved?: LayoutMap
       loungeTrips?: boolean
+      roomStrolls?: boolean
       resolveLayout?: (baseLayout: LayoutMap, sessions: readonly SessionRef[]) => LayoutMap
       now?: () => number
     } = {}
@@ -177,6 +182,7 @@ export class World {
             })
           : previousAgent
       // In the lounge, or fading in or out: it goes to the desk the map gives it now.
+      // A stroller stays out at a desk that stays put, and walks to one that moved.
       if (
         existing &&
         existing.state !== 'leaving' &&
@@ -238,6 +244,9 @@ export class World {
     isInitial: boolean
   ): AgentRecord {
     const key = session.key
+    // A new desk is a new walk, not the way home from a stroll.
+    const stroll = this.strolls.get(key)
+    if (stroll) stroll.isReturning = false
     const agent = createAgent(
       session,
       {
@@ -293,6 +302,17 @@ export class World {
       isFading: (key) => this.fading.has(key),
       callHome: (agent) => this.callHome(agent)
     })
+    reconcileStrolls({
+      agents: this.agents,
+      clocks: this.strolls,
+      nowMs: this.nowMs,
+      hasTrips: this.hasLoungeTrips && (this.options.roomStrolls ?? true),
+      floors: this.map.floors,
+      routes: this.routes,
+      isFading: (key) => this.fading.has(key),
+      clearPassage: (key) => this.passages.clear(key),
+      callHome: (agent) => this.callHome(agent)
+    })
   }
 
   // Takes effect at the next step: agents in the lounge walk back, or waiting ones set out.
@@ -312,9 +332,14 @@ export class World {
     let hasYielded = false
     const next = tickAgent(agent, SIM_TICK_MS, (from, to) => {
       const navigation = workerNavigation({ routes: this.routes, from })
-      const { isOpen } = navigation
+      const walk = {
+        isReturning: this.strolls.get(from.agentKey)?.isReturning === true,
+        destination: agent.path.at(-1)
+      }
+      const isClearOfDoor = keepsClearOfDoor(from, walk, this.map.floors)
+      const isOpen = (point: Point) => navigation.isOpen(point) && isClearOfDoor(point)
       const body = agentBody(from)
-      const hasClosedStart = !isOpen(from)
+      const hasClosedStart = !navigation.isOpen(from)
       const leader = waitsForMovingBody({ body, to, obstacles, walkers, isOpen })
       if (leader && !this.waitEdges.has(from.agentKey)) {
         this.waitEdges.set(from.agentKey, leader)
@@ -339,8 +364,9 @@ export class World {
         obstacles,
         // A layout may build a wall under a walker or shrink away; let that walker escape it.
         isOpen: (point) =>
-          isOpen(point) ||
-          (hasClosedStart && Math.hypot(point.x - from.x, point.z - from.z) <= 0.140001)
+          isClearOfDoor(point) &&
+          (navigation.isOpen(point) ||
+            (hasClosedStart && Math.hypot(point.x - from.x, point.z - from.z) <= 0.140001))
       })
       hasYielded ||= Math.hypot(moved.x - to.x, moved.z - to.z) > 1e-8
       return { ...to, ...moved }
@@ -413,6 +439,7 @@ export class World {
     this.passages.clear(key)
     this.fading.delete(key)
     this.reseats.delete(key)
+    this.strolls.delete(key)
   }
 
   step(dtMs: number): AgentView[] {

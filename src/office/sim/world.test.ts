@@ -3,8 +3,8 @@ import { World } from './world'
 import { session } from './fixtures'
 
 // An office that was open and empty when session `a` started, so `a` fades in at its desk.
-function world() {
-  const world = new World()
+function world(options: ConstructorParameters<typeof World>[0] = {}) {
+  const world = new World(options)
   world.apply({
     type: 'hello',
     v: 1,
@@ -322,7 +322,7 @@ it('keeps a seated agent at its desk when the floor shrinks and its company slid
   expect({ x: after.x, z: after.z }).toEqual(seatOf(sim, after))
 })
 it('brings a new arrival to rest exactly on its seat', () => {
-  const sim = world()
+  const sim = world({ roomStrolls: false })
   for (let i = 0; i < 2000; i++) sim.step(100)
   const [arrived] = sim.step(0)
   const seat = sim

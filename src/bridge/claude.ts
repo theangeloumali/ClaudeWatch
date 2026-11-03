@@ -2,7 +2,7 @@ import type { SessionRef, SubagentRef } from '../shared/office/types'
 import { displayName, folderName } from './io'
 import { placementOf } from './project-root'
 import type { RegistryEntry } from './registry'
-import type { TranscriptState } from './transcript-tail'
+import { claudeModel, type TranscriptState } from './transcript-tail'
 
 const NO_TOOL: TranscriptState = { tool: null, error: false, limit: null }
 import { toolActivity } from './tool-category'
@@ -49,6 +49,7 @@ export function sessionFromRegistry(
           ? 'error'
           : 'none',
     currentTool: transcript.tool,
+    ...(transcript.model && { selectedModel: claudeModel(transcript.model) }),
     subagents,
     startedAtMs,
     updatedAtMs: entry.updatedAtMs,

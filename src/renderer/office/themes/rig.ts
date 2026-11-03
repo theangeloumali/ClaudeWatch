@@ -37,7 +37,7 @@ export function applyThemePose(rig: RobotRig, pose: RobotPose, options: ThemePos
     rig.body.current.rotation.z = pose.sway
     rig.body.current.rotation.x = pose.lean
   }
-  rig.head.current?.rotation.set(pose.headPitch, 0, 0)
+  rig.head.current?.rotation.set(pose.headPitch, pose.headYaw, 0)
   rig.leftArm.current?.rotation.set(pose.leftArm, 0, 0)
   rig.rightArm.current?.rotation.set(pose.rightArm, 0, pose.rightArmRoll)
   if (rig.gear.current) rig.gear.current.rotation.z += pose.gearSpeed * options.delta

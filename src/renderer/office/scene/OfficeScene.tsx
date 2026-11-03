@@ -53,6 +53,14 @@ import { CityBeacons } from './CityBeacons'
 import { markClipBox } from './city-marks'
 import { CityParticles } from './CityParticles'
 import { DoneFlags } from './DoneFlags'
+import { CampusLayers } from './campus/CampusLayers'
+import { campusSkyBox } from '../logic/campus-geometry'
+import type { WorldLayout } from '../logic/world-layout-preference'
+import { RoomCardLayer, RoomCardProjector, useRoomCardAnchors, type CampusCards } from './RoomCards'
+
+// Campus is a night scene: the sky, and a ground a shade darker so the plates read on it.
+const CAMPUS_BACKGROUND = '#0b1020'
+const CAMPUS_GROUND = '#070a15'
 
 interface OfficeSceneProps {
   // The floor's default: zones without a company or project theme inherit it.
@@ -76,6 +84,7 @@ interface OfficeSceneProps {
   wallsMode: WallsMode
   areRoofsVisible?: boolean
   viewMode?: 'city' | 'office'
+  worldLayout?: WorldLayout
   focusedFloorId?: string | null
   focusedRoomId?: string | null
   cameraRequest: CameraRequest | null
@@ -99,6 +108,8 @@ interface OfficeSceneProps {
   onBodyObstacles?: (bodies: readonly BodyFootprint[]) => void
   onEditTarget?: (target: SceneEditTarget) => void
   onFocusFloor?: (floorId: string) => void
+  // Campus only: the room cards and the Brain card replace the office stacks and labels.
+  campusCards?: CampusCards
 }
 
 // Orthographic distance only sets clipping, not size; zoom sets size.
@@ -124,6 +135,9 @@ function OfficeScene(props: OfficeSceneProps) {
   const isOpeningCyberpunkOffices = isCyberpunkTheme && props.areRoofsVisible === false
   // The owner's switches: a feature that is off is not mounted, so it costs no frame work.
   const settings = useOfficeSettings()
+  const isCampus = props.worldLayout === 'campus'
+  // Campus has no town at all, whatever the owner's town switch says.
+  const hasTown = settings.town && !isCampus
   const player = settings.player ? props.player : null
   const playerMarker = useRef<HTMLDivElement>(null)
   const playerPrompt = useRef<HTMLDivElement>(null)
@@ -163,15 +177,20 @@ function OfficeScene(props: OfficeSceneProps) {
           : !roomWorkers || roomWorkers.has(card.agentKey))
     )
   }, [props.cards, props.viewMode, props.focusedRoomId, agents, selectedAgentKey])
-  const visibleStacks = props.viewMode === 'city' || props.focusedRoomId ? [] : props.stacks
+  const campusCards = isCampus ? props.campusCards : undefined
+  const roomCardAnchors = useRoomCardAnchors()
+  const visibleStacks =
+    campusCards || props.viewMode === 'city' || props.focusedRoomId ? [] : props.stacks
   const visibleOfficeLabels = useMemo(
     () =>
-      officeLabels.filter((label) =>
-        props.viewMode === 'city'
-          ? label.kind !== 'room'
-          : label.isSelected || label.kind !== 'room'
-      ),
-    [officeLabels, props.viewMode]
+      campusCards
+        ? []
+        : officeLabels.filter((label) =>
+            props.viewMode === 'city'
+              ? label.kind !== 'room'
+              : label.isSelected || label.kind !== 'room'
+          ),
+    [officeLabels, props.viewMode, campusCards]
   )
   // The detail level in use: how sharply and how often the scene is drawn.
   const quality = useQualitySettings()
@@ -203,11 +222,11 @@ function OfficeScene(props: OfficeSceneProps) {
     [isWalking, quality.idleFps, quality.walkFps]
   )
   // What the player and the citizens go round: the town's lots.
-  const solids = useMemo(() => (settings.town ? town.plan.lots : []), [town, settings.town])
+  const solids = useMemo(() => (hasTown ? town.plan.lots : []), [town, hasTown])
   // How far the scene reaches: the town to its last road, or the floor alone without one.
   const reach = useMemo(
-    () => (settings.town ? town.plan.extent : sceneExtent(townFloor, [])),
-    [town.plan, townFloor, settings.town]
+    () => (hasTown ? town.plan.extent : sceneExtent(townFloor, [])),
+    [town.plan, townFloor, hasTown]
   )
   const walkTo = useMemo(
     () =>
@@ -219,7 +238,7 @@ function OfficeScene(props: OfficeSceneProps) {
   const sceneBox = useMemo(
     () => ({
       // The railway ring stands outside the city: Horizon's planes must reach it (N5).
-      ...(settings.town ? railwayReach(reach, town.plan) : reach),
+      ...(hasTown ? railwayReach(reach, town.plan) : reach),
       minY: 0,
       maxY: Math.max(
         MAX_LOT_HEIGHT_M,
@@ -227,9 +246,13 @@ function OfficeScene(props: OfficeSceneProps) {
         ...town.plan.lots.map((lot) => lot.maxHeight)
       )
     }),
-    [reach, surfaces, town.plan, settings.town]
+    [reach, surfaces, town.plan, hasTown]
   )
-  const clipBox = useMemo(() => markClipBox(sceneBox), [sceneBox])
+  const skyBox = useMemo(() => campusSkyBox(sceneBox), [sceneBox])
+  const clipBox = useMemo(
+    () => markClipBox(isCampus ? skyBox : sceneBox),
+    [isCampus, skyBox, sceneBox]
+  )
   const liveSessionKeys = useMemo(
     () => new Set(props.sessions.map((session) => session.key)),
     [props.sessions]
@@ -251,7 +274,9 @@ function OfficeScene(props: OfficeSceneProps) {
       >
         <color
           attach="background"
-          args={[isCyberpunkTheme ? theme.palette.ink : SCENE_BACKGROUND]}
+          args={[
+            isCampus ? CAMPUS_BACKGROUND : isCyberpunkTheme ? theme.palette.ink : SCENE_BACKGROUND
+          ]}
         />
         <hemisphereLight
           args={
@@ -261,9 +286,23 @@ function OfficeScene(props: OfficeSceneProps) {
           }
         />
         <directionalLight position={[10, 20, 6]} intensity={isCyberpunkTheme ? 0.85 : 1.8} />
-        <Horizon box={clipBox} color={isCyberpunkTheme ? theme.palette.ink : theme.palette.stone} />
-        {settings.town && <TownGround plan={town.plan} dress={dressOf(theme)} />}
-        {settings.town && displayedVenues && (
+        <Horizon
+          box={clipBox}
+          color={
+            isCampus ? CAMPUS_GROUND : isCyberpunkTheme ? theme.palette.ink : theme.palette.stone
+          }
+        />
+        {isCampus && (
+          <CampusLayers
+            floors={props.allFloors}
+            theme={theme}
+            skyBox={skyBox}
+            memory={props.campusCards?.memory}
+            rooms={props.campusCards?.rooms}
+          />
+        )}
+        {hasTown && <TownGround plan={town.plan} dress={dressOf(theme)} />}
+        {hasTown && displayedVenues && (
           <VenueLayer
             venues={displayedVenues}
             palette={theme.palette}
@@ -299,10 +338,7 @@ function OfficeScene(props: OfficeSceneProps) {
         </BatchedScene>
         {!props.isLayoutPreview && (
           <>
-            <CitySigns
-              venues={settings.town ? displayedVenues : undefined}
-              palette={theme.palette}
-            />
+            <CitySigns venues={hasTown ? displayedVenues : undefined} palette={theme.palette} />
             <LeaderCrowns agents={agents} sessions={props.sessions} palette={theme.palette} />
             <ConstructionRig floors={props.allFloors} theme={theme} />
             {band !== 'building' && (
@@ -312,7 +348,7 @@ function OfficeScene(props: OfficeSceneProps) {
             )}
           </>
         )}
-        {settings.town && (
+        {hasTown && (
           <>
             <TownView
               town={town}
@@ -332,14 +368,14 @@ function OfficeScene(props: OfficeSceneProps) {
             )}
           </>
         )}
-        {settings.town && (
+        {hasTown && (
           <RailwayLayer
             plan={town.plan}
             palette={theme.palette}
             hasTrains={settings.vehicles && !props.isLayoutPreview}
           />
         )}
-        {!props.isLayoutPreview && settings.citizens && settings.town && (
+        {!props.isLayoutPreview && settings.citizens && hasTown && (
           <MoverLayer
             floor={townFloor}
             plan={town.plan}
@@ -387,6 +423,15 @@ function OfficeScene(props: OfficeSceneProps) {
           agents={agents}
           visibleFloors={props.visibleFloors}
         />
+        {campusCards && (
+          <RoomCardProjector
+            rooms={campusCards.rooms}
+            hub={campusCards.hub}
+            anchors={roomCardAnchors}
+            hasInspector={selectedAgentKey !== null}
+            inspectorLayout={props.inspectorLayout}
+          />
+        )}
         <OfficeNameProjector
           labels={visibleOfficeLabels}
           anchors={officeAnchors}
@@ -441,6 +486,15 @@ function OfficeScene(props: OfficeSceneProps) {
           band={band}
           selectedAgentKey={props.selectedAgentKey}
           anchors={anchors}
+        />
+      )}
+      {!props.isLayoutPreview && campusCards && (
+        <RoomCardLayer
+          rooms={campusCards.rooms}
+          colors={campusCards.colors}
+          skins={theme.robot.skins}
+          memory={campusCards.memory}
+          anchors={roomCardAnchors}
         />
       )}
       <OfficeNameLayer labels={visibleOfficeLabels} anchors={officeAnchors} />
