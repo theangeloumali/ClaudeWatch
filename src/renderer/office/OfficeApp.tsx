@@ -396,7 +396,7 @@ export function OfficeApp({ feed, hasHiddenTitleBar = false }: OfficeAppProps) {
               onNearPlayerAgent={setNearPlayerAgentKey}
               onBodyObstacles={feed.setBodyObstacles}
               onFocusFloor={openFloor}
-              onEditTarget={editing.openMenu}
+              onEditTarget={isCampus ? undefined : editing.openMenu}
               campusCards={campusHud?.cards}
             />
           </Suspense>

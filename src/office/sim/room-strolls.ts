@@ -186,9 +186,17 @@ export function reconcileStrolls(context: StrollContext): void {
   if (!due) return
   const { agent, clock } = due
   const key = agent.view.agentKey
-  const route = hasRoomToLeave(agent, context) ? routeOut(agent, clock.trip, context) : undefined
+  if (!hasRoomToLeave(agent, context)) {
+    clock.atMs = undefined
+    return
+  }
+  const route = routeOut(agent, clock.trip, context)
   clock.atMs = undefined
-  if (!route) return
+  // A refused route moves on a trip, so the next try draws another spot.
+  if (!route) {
+    clock.trip++
+    return
+  }
   context.clearPassage(key)
   agents.set(key, goStroll(agent, route.heading, route.path))
 }

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createWorldDocument } from '../../shared/office/world-document'
 import { DEPARTURE_FADE_MS, type AgentView, type SessionRef } from '../../shared/office/types'
 import { resolveEffectiveWorld } from './effective-world'
@@ -257,6 +257,20 @@ describe('room strolls', () => {
       resolveLayout: (base, current) => resolveEffectiveWorld(base, document, current, 'campus')
     })
     expectStrollersClearOfDoor(sim, 600)
+  })
+
+  it('draws a new spot after a route it could not walk, so one bad spot never pins it', () => {
+    const sim = open([session('a')])
+    run(sim, 5)
+    const routes = sim['routes']
+    const walk = routes.toFloor.bind(routes)
+    let refused: { x: number; z: number } | undefined
+    vi.spyOn(routes, 'toFloor').mockImplementation((from, floor, to) => {
+      refused ??= to
+      return to.x === refused.x && to.z === refused.z ? [] : walk(from, floor, to)
+    })
+    expect(untilStroll(sim, 'a', SETTLE_S * 4).place).toBe('stroll')
+    expect(refused).toBeDefined()
   })
 
   it('strolls an agent whose source cannot tell when its turn ends', () => {

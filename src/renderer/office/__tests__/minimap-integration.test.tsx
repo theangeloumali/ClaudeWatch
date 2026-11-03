@@ -111,3 +111,12 @@ it('does not globally disable camera shortcuts when the minimap is open', async 
   fireEvent.keyDown(document.body, { key: 'q' })
   expect(currentScene().cameraRequest).toMatchObject({ kind: 'rotate', direction: -1 })
 })
+
+it('offers no right-click layout editing in Campus, which places every room itself', async () => {
+  createOfficeHarness(navigationFrame())
+  await screen.findByLabelText('Map integration scene')
+  fireEvent.click(screen.getByRole('button', { name: 'City' }))
+  expect(currentScene().onEditTarget).toBeTypeOf('function')
+  fireEvent.click(screen.getByRole('button', { name: 'Campus' }))
+  expect(currentScene().onEditTarget).toBeUndefined()
+})
